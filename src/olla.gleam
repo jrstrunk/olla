@@ -3,9 +3,11 @@ import gleam/erlang/process
 import gleam/http/request
 import gleam/io
 import gleam/result
+import gleam/string_tree
 import lustre
 import mist
 import server_component
+import simplifile
 import snag
 import viewer
 import wisp
@@ -22,7 +24,7 @@ type Context {
 pub fn main() {
   io.println("Olla is starting!")
 
-  let config = config.Config(port: 8400)
+  let config = config.Config(port: 8401)
 
   use viewer_actor <- result.map(
     lustre.start_actor(viewer.app(), config)
@@ -58,6 +60,14 @@ fn handler(req, context: Context) {
 
 fn handle_wisp_request(req, _context: Context) {
   case request.path_segments(req) {
+    ["view"] ->
+      simplifile.read("priv/static/audit.html")
+      |> fn(body) {
+        let assert Ok(body) = body
+        body
+      }
+      |> string_tree.from_string
+      |> wisp.html_response(200)
     _ -> wisp.not_found()
   }
 }

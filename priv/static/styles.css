@@ -1,3 +1,47 @@
 h1 {
-  color: red; 
+  color: red;
+}
+
+.allow-indent {
+  white-space: pre;
+}
+
+.hover-container {
+  position: relative;
+}
+
+.line-hover-discussion {
+  visibility: hidden;
+  margin-left: opacity 0.3s;
+  opacity: opacity 0.3s;
+  position: absolute;
+  z-index: 1;
+  background-color: rgb(85, 85, 85);
+  color: rgb(255, 255, 255);
+  text-align: center;
+  padding: 5px;
+  border-radius: 6px;
+  bottom: 50%;
+  left: -2%;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.loc {
+  margin: 0;
+}
+
+.loc:hover .line-hover-discussion {
+  visibility: visible;
+  opacity: 1;
+}
+
+.line-hover-discussion:hover {
+  visibility: visible;
+  opacity: 1;
+}
+
+
+.code-snippet {
+  padding-left: 1.5em;
 }

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Olla</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/lustre-server-component.mjs"></script>
+</head>
+
+<body><div id="loc0" class="hover-container"><p class="allow-indent loc">contract SecondSwap_StepVesting is SecondSwap_Vesting {<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc1" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;using SafeERC20 for IERC20;<span class="line-hover-discussion">D!</span></p></div>
+<p class="loc">&nbsp;</p>
+<div id="loc3" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;// ... Code omitted for brevity<span class="line-hover-discussion">D!</span></p></div>
+<p class="loc">&nbsp;</p>
+<div id="loc5" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;struct Vesting {<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc6" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uint256 stepsClaimed;<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc7" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uint256 amountClaimed;<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc8" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uint256 totalAmount;<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc9" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;}<span class="line-hover-discussion">D!</span></p></div>
+<p class="loc">&nbsp;</p>
+<div id="loc11" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;// ... Code omitted for brevity<span class="line-hover-discussion">D!</span></p></div>
+<p class="loc">&nbsp;</p>
+<div id="loc13" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;function claimable(address _beneficiary) public view returns (uint256, uint256) {<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc14" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (block.timestamp &lt; startTime) {<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc15" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return (0, 0);<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc16" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<span class="line-hover-discussion">D!</span></p></div>
+<p class="loc">&nbsp;</p>
+<div id="loc18" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Vesting memory vesting = _vestings[_beneficiary];<span class="line-hover-discussion">D!</span></p></div>
+<p class="loc">&nbsp;</p>
+<div id="loc20" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (vesting.totalAmount == 0) {<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc21" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return (0, 0);<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc22" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<span class="line-hover-discussion">D!</span></p></div>
+<p class="loc">&nbsp;</p>
+<div id="loc24" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uint256 elapsedTime = block.timestamp - startTime;<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc25" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uint256 currentStep = Math.min(elapsedTime / stepDuration, numOfSteps);<span class="line-hover-discussion">D!</span></p></div>
+<p class="loc">&nbsp;</p>
+<div id="loc27" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uint256 claimableSteps = currentStep - vesting.stepsClaimed;<span class="line-hover-discussion">D!</span></p></div>
+<p class="loc">&nbsp;</p>
+<div id="loc29" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uint256 claimableAmount = <span class="line-hover-discussion">D!</span></p></div>
+<div id="loc30" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((vesting.totalAmount - vesting.amountClaimed) * (currentStep - vesting.stepsClaimed)) <span class="line-hover-discussion">D!</span></p></div>
+<div id="loc31" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/ (numOfSteps - vesting.stepsClaimed);<span class="line-hover-discussion">D!</span></p></div>
+<p class="loc">&nbsp;</p>
+<div id="loc33" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return (claimableAmount, claimableSteps);<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc34" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;}<span class="line-hover-discussion">D!</span></p></div>
+<p class="loc">&nbsp;</p>
+<div id="loc36" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;// ... Code omitted for brevity<span class="line-hover-discussion">D!</span></p></div>
+<p class="loc">&nbsp;</p>
+<div id="loc38" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;function _createVesting(<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc39" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;address _beneficiary,<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc40" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uint256 _totalAmount,<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc41" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uint256 _stepsClaimed,<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc42" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bool _isInternal<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc43" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;) internal {<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc44" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// This function has been trimmed down for brevity<span class="line-hover-discussion">D!</span></p></div>
+<p class="loc">&nbsp;</p>
+<div id="loc46" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (_vestings[_beneficiary].totalAmount == 0) {<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc47" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_vestings[_beneficiary] = Vesting({<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc48" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stepsClaimed: _stepsClaimed,<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc49" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;amountClaimed: 0,<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc50" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;totalAmount: _totalAmount<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc51" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;});<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc52" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;} else {<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc53" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_vestings[_beneficiary].totalAmount += _totalAmount;<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc54" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc55" class="hover-container"><p class="allow-indent loc">&nbsp;&nbsp;&nbsp;&nbsp;}<span class="line-hover-discussion">D!</span></p></div>
+<div id="loc56" class="hover-container"><p class="allow-indent loc">}<span class="line-hover-discussion">D!</span></p></div></body>
+
+ </html>
