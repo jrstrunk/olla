@@ -97,29 +97,36 @@ pub fn render_with_skeleton(name: String, skeleton: element.Element(msg)) {
   )
 }
 
-pub fn render_as_page(component name: String) {
+pub fn as_document(body: element.Element(msg)) {
+  html.html([], [
+    html.head([], [
+      html.link([attribute.rel("stylesheet"), attribute.href("/styles.css")]),
+      html.script(
+        [
+          attribute.type_("module"),
+          attribute.src("/lustre-server-component.mjs"),
+        ],
+        "",
+      ),
+    ]),
+    html.body([], [body]),
+  ])
+}
+
+pub fn html_response(html: element.Element(msg)) {
   response.new(200)
   |> response.prepend_header("content-type", "text/html")
   |> response.set_body(
-    html.html([], [
-      html.head([], [
-        html.link([attribute.rel("stylesheet"), attribute.href("/styles.css")]),
-        html.script(
-          [
-            attribute.type_("module"),
-            attribute.src("/lustre-server-component.mjs"),
-          ],
-          "",
-        ),
-      ]),
-      html.body([], [
-        server_component.component([server_component.route("/" <> name)]),
-      ]),
-    ])
+    html
     |> element.to_document_string_builder
     |> bytes_tree.from_string_tree
     |> mist.Bytes,
   )
+}
+
+pub fn render_as_page(component name: String) {
+  as_document(server_component.component([server_component.route("/" <> name)]))
+  |> html_response
 }
 
 pub fn get_connection(
