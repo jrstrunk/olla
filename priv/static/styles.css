@@ -2,19 +2,17 @@ h1 {
   color: red;
 }
 
-.allow-indent {
-  white-space: pre;
-}
-
-.hover-container {
-  position: relative;
+.code-snippet-hover {
+  position: absolute;
+  width: 100%;
+  z-index: -1;
 }
 
 .line-hover-discussion {
   visibility: hidden;
   margin-left: opacity 0.3s;
   opacity: opacity 0.3s;
-  position: absolute;
+  position: relative;
   z-index: 1;
   background-color: rgb(85, 85, 85);
   color: rgb(255, 255, 255);
@@ -29,6 +27,7 @@ h1 {
 
 .loc {
   margin: 0;
+  white-space: pre;
 }
 
 .loc:hover .line-hover-discussion {
@@ -40,7 +39,6 @@ h1 {
   visibility: visible;
   opacity: 1;
 }
-
 
 .code-snippet {
   padding-left: 1.5em;
