@@ -458,6 +458,7 @@ var LustreServerComponent = class extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
+    this.shadowRoot.innerHTML = '<slot name="skeleton"></slot>';
     this.#observer = new MutationObserver((mutations) => {
       const changed = [];
       for (const mutation of mutations) {
