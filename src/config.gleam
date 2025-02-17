@@ -22,31 +22,31 @@ pub fn get_persist_path(for local_path) {
 
 pub fn get_full_page_path(for page_path) {
   let assert Ok(priv) = erlang.priv_directory("o11a")
-  [priv, "static", "audits", page_path]
+  [priv, "audits", page_path]
   |> list.fold("/", filepath.join)
 }
 
 pub fn get_full_page_skeleton_path(for page_path) {
   let assert Ok(priv) = erlang.priv_directory("o11a")
-  [priv, "static", "audits", page_path <> "_skeleton.html"]
+  [priv, "audits", page_path <> "_skeleton.html"]
   |> list.fold("/", filepath.join)
 }
 
 pub fn get_full_page_db_path(for page_path) {
   let assert Ok(priv) = erlang.priv_directory("o11a")
-  [priv, "static", "audits", page_path <> ".db"]
+  [priv, "audits", page_path <> ".db"]
   |> list.fold("/", filepath.join)
 }
 
 pub fn get_all_audit_file_paths() {
   let assert Ok(priv) = erlang.priv_directory("o11a")
   let assert Ok(files) =
-    [priv, "static", "audits"]
+    [priv, "audits"]
     |> list.fold("/", filepath.join)
     |> simplifile.get_files
 
   list.map(files, fn(file_path) {
-    case string.split(file_path, on: "static/audits/") {
+    case string.split(file_path, on: "audits/") {
       [_, file_path] -> file_path
       [unknown, ..] -> unknown
       [] -> ""

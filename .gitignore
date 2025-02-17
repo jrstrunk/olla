@@ -2,5 +2,5 @@
 *.ez
 /build
 erl_crash.dump
-/priv/static/audits
+/priv/audits
 /priv/persist
