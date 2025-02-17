@@ -97,6 +97,22 @@ pub fn render_with_skeleton(name: String, skeleton: element.Element(msg)) {
   )
 }
 
+pub fn render_with_prerendered_skeleton(name: String, skeleton: String) {
+  element.element(
+    "lustre-server-component",
+    [server_component.route("/" <> name)],
+    [
+      html.div(
+        [
+          attribute.attribute("slot", "skeleton"),
+          attribute.attribute("dangerous-unescaped-html", skeleton),
+        ],
+        [],
+      ),
+    ],
+  )
+}
+
 pub fn as_document(body: element.Element(msg)) {
   html.html([], [
     html.head([], [
@@ -143,7 +159,7 @@ pub fn get_connection(
 
 pub fn serve_lustre_framework() {
   // let assert Ok(priv) = erlang.priv_directory("lustre")
-  let assert Ok(priv) = erlang.priv_directory("olla")
+  let assert Ok(priv) = erlang.priv_directory("o11a")
   let path = priv <> "/static/lustre_server_component.mjs"
   let assert Ok(script) = mist.send_file(path, offset: 0, limit: None)
 
@@ -155,7 +171,7 @@ pub fn serve_lustre_framework() {
 }
 
 pub fn serve_css(style_sheet_name) {
-  let assert Ok(priv) = erlang.priv_directory("olla")
+  let assert Ok(priv) = erlang.priv_directory("o11a")
   let path = priv <> "/static/" <> style_sheet_name
   let assert Ok(css) = mist.send_file(path, offset: 0, limit: None)
 

@@ -25,7 +25,7 @@ pub fn build(
   val_encoder val_encoder: fn(val) -> String,
   val_decoder val_decoder: fn(String) -> val,
 ) {
-  let assert Ok(priv) = erlang.priv_directory("olla")
+  let assert Ok(priv) = erlang.priv_directory("o11a")
   let path =
     [priv, "persist", name <> ".db"]
     |> list.fold(from: "/", with: filepath.join)
