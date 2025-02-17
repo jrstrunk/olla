@@ -1,6 +1,5 @@
 import config
 import filepath
-import gleam/erlang
 import gleam/erlang/process
 import gleam/http/request
 import gleam/io
@@ -71,11 +70,8 @@ fn handle_wisp_request(req, _context: Context) {
       )
 
     [file_path] -> {
-      let assert Ok(priv) = erlang.priv_directory("o11a")
-
       case
-        [priv, "static", "skeleton", file_path <> ".html"]
-        |> list.fold("", filepath.join)
+        config.get_full_page_skeleton_path(file_path)
         |> simplifile.read
       {
         Ok(skeleton) -> {

@@ -1,11 +1,9 @@
-import filepath
+import config
 import gleam/erlang/process
 import gleam/list
-import gleam/string
 import lib/concurrent_dict
 import lustre
 import server/discussion
-import simplifile
 import user_interface/page
 
 pub type DiscussionGateway =
@@ -15,19 +13,7 @@ pub type DiscussionGateway =
   )
 
 pub fn start_discussion_gateway() -> DiscussionGateway {
-  // let assert Ok(priv) = erlang.priv_directory("o11a")
-  let assert Ok(files) =
-    ["priv", "static", "audit"]
-    |> list.fold("", filepath.join)
-    |> simplifile.get_files
-
-  list.map(files, fn(file_path) {
-    case string.split(file_path, on: "priv/static/audit/") {
-      [_, file_path] -> file_path
-      [unknown, ..] -> unknown
-      [] -> ""
-    }
-  })
+  config.get_all_audit_file_paths()
   |> list.map(fn(page_path) {
     let assert Ok(page_notes) = discussion.get_page_notes(page_path)
     let assert Ok(actor) =

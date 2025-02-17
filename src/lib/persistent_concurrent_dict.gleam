@@ -1,7 +1,6 @@
+import config
 import filepath
 import gleam/dynamic/decode
-import gleam/erlang
-import gleam/list
 import gleam/result
 import gleam/string
 import lib/concurrent_dict
@@ -25,10 +24,7 @@ pub fn build(
   val_encoder val_encoder: fn(val) -> String,
   val_decoder val_decoder: fn(String) -> val,
 ) {
-  let assert Ok(priv) = erlang.priv_directory("o11a")
-  let path =
-    [priv, "persist", name <> ".db"]
-    |> list.fold(from: "/", with: filepath.join)
+  let path = config.get_persist_path(for: name <> ".db")
 
   let assert Ok(Nil) =
     filepath.directory_name(path)

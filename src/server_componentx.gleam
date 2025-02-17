@@ -1,5 +1,5 @@
+import config
 import gleam/bytes_tree
-import gleam/erlang
 import gleam/erlang/process
 import gleam/http/response
 import gleam/int
@@ -158,9 +158,7 @@ pub fn get_connection(
 }
 
 pub fn serve_lustre_framework() {
-  // let assert Ok(priv) = erlang.priv_directory("lustre")
-  let assert Ok(priv) = erlang.priv_directory("o11a")
-  let path = priv <> "/static/lustre_server_component.mjs"
+  let path = config.get_priv_path(for: "static/lustre_server_component.mjs")
   let assert Ok(script) = mist.send_file(path, offset: 0, limit: None)
 
   process.sleep(1000)
@@ -171,8 +169,7 @@ pub fn serve_lustre_framework() {
 }
 
 pub fn serve_css(style_sheet_name) {
-  let assert Ok(priv) = erlang.priv_directory("o11a")
-  let path = priv <> "/static/" <> style_sheet_name
+  let path = config.get_priv_path(for: "static/" <> style_sheet_name)
   let assert Ok(css) = mist.send_file(path, offset: 0, limit: None)
 
   response.new(200)

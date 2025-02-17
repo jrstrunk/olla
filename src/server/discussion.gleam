@@ -1,3 +1,4 @@
+import config
 import gleam/dict
 import gleam/dynamic/decode
 import gleam/int
@@ -5,6 +6,7 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
+import lib/sqlightx
 import snag
 import sqlight
 import tempo
@@ -168,8 +170,13 @@ pub fn add_note(page_notes: PageNotes, note: Note) {
 }
 
 fn connect_to_page_db(page_path) {
+  let full_page_path = config.get_full_page_path(for: page_path)
+
+  let db_path = full_page_path <> ".db"
+
   use conn <- result.try(
-    sqlight.open(page_path <> ".db") |> snag.map_error(string.inspect),
+    sqlight.open(db_path)
+    |> sqlightx.describe_connection_error(db_path),
   )
 
   use Nil <- result.map(
