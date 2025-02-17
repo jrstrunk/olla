@@ -1,8 +1,8 @@
-import config
 import gleam/erlang/process
 import gleam/list
 import lib/concurrent_dict
 import lustre
+import o11a/config
 import server/discussion
 import user_interface/page
 

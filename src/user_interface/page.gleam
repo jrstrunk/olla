@@ -7,7 +7,10 @@ import lustre/attribute
 import lustre/effect
 import lustre/element
 import lustre/element/html
+import o11a/config
 import server/discussion
+import simplifile
+import snag
 import text
 
 pub const name = "o11a-discussions"
@@ -41,6 +44,11 @@ fn view(model: Model) -> element.Element(Msg) {
 
 pub fn skeleton() {
   html.div([attribute.class("code-snippet")], loc_hmtl(text.file_body, True))
+}
+
+pub fn generate_skeleton(from source: String) {
+  html.div([attribute.class("code-snippet")], loc_hmtl(source, True))
+  |> element.to_string
 }
 
 fn loc_hmtl(solidity_source text: String, skeleton skeleton: Bool) {
@@ -81,17 +89,25 @@ fn loc_hmtl(solidity_source text: String, skeleton skeleton: Bool) {
     }
   })
 }
-// This could be used to generate a skeleton for the page. Not sure if generating
-// the skeleton on the fly or reading a pre-rendered version from disk is faster.
-// pub fn skeleton(page_id page_id) {
-//   case simplifile.read(from: "priv/static/" <> page_id <> "_skeleton.html") {
-//     Ok(prerendered_html) -> html.div([attribute.attribute("dangerous-unescaped-html", prerendered_html)], [])
-//     Error(_) -> html.div([], [])
-//   }
-// }
 
-// pub fn generate_skeleton(from source: String, with page_id: String) {
-//   html.div([attribute.class("code-snippet")], loc_hmtl(source, skeleton: True))
-//   |> element.to_string
-//   |> simplifile.write(to: "priv/static/" <> page_id <> "_skeleton.html")
-// }
+pub fn get_skeleton(for page_path) {
+  let skeleton_path = config.get_full_page_skeleton_path(for: page_path)
+  case simplifile.read(skeleton_path) {
+    Ok(skeleton) -> Ok(skeleton)
+
+    Error(simplifile.Enoent) ->
+      case config.get_full_page_path(for: page_path) |> simplifile.read {
+        Ok(page_source) -> {
+          let skeleton = generate_skeleton(from: page_source)
+
+          let assert Ok(Nil) = simplifile.write(skeleton, to: skeleton_path)
+
+          Ok(skeleton)
+        }
+
+        Error(msg) -> string.inspect(msg) |> snag.error
+      }
+
+    Error(msg) -> string.inspect(msg) |> snag.error
+  }
+}

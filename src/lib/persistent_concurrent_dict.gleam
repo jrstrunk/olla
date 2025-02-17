@@ -1,9 +1,9 @@
-import config
 import filepath
 import gleam/dynamic/decode
 import gleam/result
 import gleam/string
 import lib/concurrent_dict
+import o11a/config
 import simplifile
 import snag
 import sqlight

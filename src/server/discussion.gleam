@@ -1,4 +1,3 @@
-import config
 import gleam/dict
 import gleam/dynamic/decode
 import gleam/int
@@ -7,6 +6,7 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import lib/sqlightx
+import o11a/config
 import snag
 import sqlight
 import tempo

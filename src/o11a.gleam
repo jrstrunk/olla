@@ -1,15 +1,16 @@
-import config
 import filepath
 import gleam/erlang/process
 import gleam/http/request
 import gleam/io
 import gleam/list
 import gleam/string_tree
+import lib/server_componentx
 import lustre/element
 import mist
-import server_componentx
-import simplifile
+import o11a/config
+import snag
 import user_interface/gateway
+import user_interface/page
 import wisp
 import wisp/wisp_mist
 
@@ -70,10 +71,7 @@ fn handle_wisp_request(req, _context: Context) {
       )
 
     [file_path] -> {
-      case
-        config.get_full_page_skeleton_path(file_path)
-        |> simplifile.read
-      {
+      case page.get_skeleton(for: file_path) {
         Ok(skeleton) -> {
           server_componentx.render_with_prerendered_skeleton(
             filepath.join("component", file_path),
@@ -84,7 +82,10 @@ fn handle_wisp_request(req, _context: Context) {
           |> wisp.html_response(200)
         }
 
-        Error(_) -> wisp.not_found()
+        Error(snag) ->
+          snag.pretty_print(snag)
+          |> string_tree.from_string
+          |> wisp.html_response(500)
       }
     }
 

@@ -1,4 +1,3 @@
-import config
 import gleam/bytes_tree
 import gleam/erlang/process
 import gleam/http/response
@@ -12,6 +11,7 @@ import lustre/element
 import lustre/element/html
 import lustre/server_component
 import mist
+import o11a/config
 
 pub type ServerComponentState(msg) {
   ServerComponentState(
