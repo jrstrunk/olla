@@ -9,7 +9,7 @@ pub fn new() {
   let assert Ok(table) =
     lamb.create(
       tempo.format_utc(tempo.ISO8601Micro),
-      lamb.Private,
+      lamb.Public,
       lamb.Set,
       True,
     )

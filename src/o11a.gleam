@@ -39,7 +39,6 @@ pub fn main() {
 }
 
 fn handler(req, context: Context) {
-  io.debug("Handling request")
   case request.path_segments(req) {
     ["lustre-server-component.mjs"] ->
       server_componentx.serve_lustre_framework()
@@ -73,7 +72,9 @@ fn handle_wisp_request(req, _context: Context) {
         200,
       )
 
-    [file_path] -> {
+    file_path_segments -> {
+      let file_path = list.fold(file_path_segments, "", filepath.join)
+
       case page.get_skeleton(for: file_path) {
         Ok(skeleton) -> {
           server_componentx.render_with_prerendered_skeleton(
@@ -91,7 +92,5 @@ fn handle_wisp_request(req, _context: Context) {
           |> wisp.html_response(500)
       }
     }
-
-    _ -> wisp.not_found()
   }
 }
