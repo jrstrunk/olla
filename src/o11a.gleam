@@ -3,6 +3,7 @@ import gleam/erlang/process
 import gleam/http/request
 import gleam/io
 import gleam/list
+import gleam/result
 import gleam/string_tree
 import lib/server_componentx
 import lustre/element
@@ -23,7 +24,9 @@ pub fn main() {
 
   let config = config.Config(port: 8400)
 
-  let context = Context(discussion_gateway: gateway.start_discussion_gateway())
+  use discussion_gateway <- result.map(gateway.start_discussion_gateway())
+
+  let context = Context(discussion_gateway:)
 
   let assert Ok(_) =
     handler(_, context)

@@ -1,6 +1,7 @@
 import gleam/dict
 import gleam/int
 import gleam/list
+import gleam/result
 import gleam/string
 import lustre
 import lustre/attribute
@@ -11,7 +12,6 @@ import o11a/config
 import server/discussion
 import simplifile
 import snag
-import text
 
 pub const name = "o11a-discussions"
 
@@ -24,7 +24,7 @@ pub type Msg {
 }
 
 pub type Model {
-  Model(page_notes: discussion.PageNotes)
+  Model(preprocessed_source: List(String), page_notes: discussion.PageNotes)
 }
 
 pub fn init(init_model) -> #(Model, effect.Effect(Msg)) {
@@ -38,23 +38,57 @@ pub fn update(model: Model, _msg: Msg) -> #(Model, effect.Effect(Msg)) {
 fn view(model: Model) -> element.Element(Msg) {
   html.div([], [
     html.h1([], [html.text(model.page_notes.page_path)]),
-    html.div([attribute.class("code-snippet")], loc_hmtl(text.file_body, False)),
+    html.div(
+      [attribute.class("code-snippet")],
+      loc_hmtl(model.preprocessed_source, False),
+    ),
   ])
 }
 
-pub fn skeleton() {
-  html.div([attribute.class("code-snippet")], loc_hmtl(text.file_body, True))
+pub fn get_skeleton(for page_path) {
+  let skeleton_path = config.get_full_page_skeleton_path(for: page_path)
+
+  case simplifile.read(skeleton_path) {
+    Ok(skeleton) -> Ok(skeleton)
+
+    Error(simplifile.Enoent) ->
+      case generate_skeleton(for: page_path) {
+        Ok(skeleton) -> Ok(skeleton)
+
+        Error(msg) -> string.inspect(msg) |> snag.error
+      }
+
+    Error(msg) -> string.inspect(msg) |> snag.error
+  }
 }
 
-pub fn generate_skeleton(from source: String) {
-  html.div([attribute.class("code-snippet")], loc_hmtl(source, True))
-  |> element.to_string
+/// Generates a skeleton page for the given page path, and writes it to disk.
+fn generate_skeleton(for page_path) {
+  use source <- result.try(preprocess_source(for: page_path))
+  let skeleton =
+    html.div([attribute.class("code-snippet")], loc_hmtl(source, True))
+    |> element.to_string
+
+  use Nil <- result.map(
+    simplifile.write(
+      skeleton,
+      to: config.get_full_page_skeleton_path(for: page_path),
+    )
+    |> snag.map_error(simplifile.describe_error),
+  )
+
+  skeleton
 }
 
-fn loc_hmtl(solidity_source text: String, skeleton skeleton: Bool) {
-  text
-  |> string.split(on: "\n")
-  |> list.index_map(fn(original_line, index) {
+pub fn preprocess_source(for page_path) {
+  config.get_full_page_path(for: page_path)
+  |> simplifile.read
+  |> result.map(string.split(_, on: "\n"))
+  |> snag.map_error(simplifile.describe_error)
+}
+
+fn loc_hmtl(preprocessed_source text: List(String), skeleton skeleton: Bool) {
+  list.index_map(text, fn(original_line, index) {
     case original_line {
       "" -> html.p([attribute.class("loc")], [html.text(" ")])
       _ -> {
@@ -88,26 +122,4 @@ fn loc_hmtl(solidity_source text: String, skeleton skeleton: Bool) {
       }
     }
   })
-}
-
-pub fn get_skeleton(for page_path) {
-  let skeleton_path = config.get_full_page_skeleton_path(for: page_path)
-  case simplifile.read(skeleton_path) {
-    Ok(skeleton) -> Ok(skeleton)
-
-    Error(simplifile.Enoent) ->
-      case config.get_full_page_path(for: page_path) |> simplifile.read {
-        Ok(page_source) -> {
-          let skeleton = generate_skeleton(from: page_source)
-
-          let assert Ok(Nil) = simplifile.write(skeleton, to: skeleton_path)
-
-          Ok(skeleton)
-        }
-
-        Error(msg) -> string.inspect(msg) |> snag.error
-      }
-
-    Error(msg) -> string.inspect(msg) |> snag.error
-  }
 }
