@@ -2,3 +2,6 @@
 *.ez
 /build
 erl_crash.dump
+/priv/static/skeleton
+/priv/static/audit
+/priv/persist
