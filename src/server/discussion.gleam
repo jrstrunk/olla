@@ -14,12 +14,15 @@ import tempo/datetime
 
 pub type Note {
   Note(
+    note_id: String,
     parent_id: String,
     note_type: NoteType,
+    significance: NoteSignificance,
     user_id: String,
     title: String,
     body: String,
-    votes: Int,
+    upvotes: List(String),
+    downvotes: List(String),
     time: tempo.DateTime,
     thread_id: Option(String),
   )
@@ -27,15 +30,6 @@ pub type Note {
 
 pub type NoteCollection =
   dict.Dict(String, List(Note))
-
-fn add_note_to_collection(collection, note: Note) {
-  dict.upsert(collection, note.parent_id, fn(notes) {
-    case notes {
-      None -> [note]
-      Some(notes) -> [note, ..notes]
-    }
-  })
-}
 
 pub type NoteType {
   FunctionTestNote
@@ -63,6 +57,32 @@ pub fn note_type_from_int(note_type) {
   }
 }
 
+pub type NoteSignificance {
+  Regular
+  Question
+  FindingLead
+  FindingComfirmation
+}
+
+pub fn note_significance_to_int(note_significance) {
+  case note_significance {
+    Regular -> 1
+    Question -> 2
+    FindingLead -> 3
+    FindingComfirmation -> 4
+  }
+}
+
+pub fn note_significance_from_int(note_significance) {
+  case note_significance {
+    1 -> Regular
+    2 -> Question
+    3 -> FindingLead
+    4 -> FindingComfirmation
+    _ -> panic as "Invalid note significance found"
+  }
+}
+
 pub type PageNotes {
   PageNotes(
     page_path: String,
@@ -77,30 +97,42 @@ pub type PageNotes {
 pub fn get_page_notes(page_path) {
   use conn <- result.try(connect_to_page_db(page_path))
 
-  use notes <- result.map(
-    sqlight.query(select_query, with: [], on: conn, expecting: {
-      use parent_id <- decode.field(0, decode.string)
-      use note_type <- decode.field(1, decode.int)
-      use user_id <- decode.field(2, decode.string)
-      use title <- decode.field(3, decode.string)
-      use body <- decode.field(4, decode.string)
-      use votes <- decode.field(5, decode.int)
-      use time <- decode.field(6, decode.int)
-      use thread_id <- decode.field(7, decode.optional(decode.string))
-
-      Note(
-        parent_id:,
-        note_type: note_type_from_int(note_type),
-        user_id:,
-        title:,
-        body:,
-        votes:,
-        time: datetime.from_unix_seconds(time),
-        thread_id:,
-      )
-      |> decode.success
-    })
+  use unweighted_notes <- result.try(
+    sqlight.query(
+      select_all_notes_query,
+      with: [],
+      on: conn,
+      expecting: note_decoder(),
+    )
     |> snag.map_error(string.inspect),
+  )
+
+  use notes <- result.try(
+    list.map(unweighted_notes, fn(note) {
+      use upvotes <- result.try(
+        sqlight.query(
+          select_upvotes_query,
+          with: select_upvotes_data(note),
+          on: conn,
+          expecting: select_votes_decoder,
+        )
+        |> snag.map_error(string.inspect),
+      )
+
+      use downvotes <- result.try(
+        sqlight.query(
+          select_downvotes_query,
+          with: select_downvotes_data(note),
+          on: conn,
+          expecting: select_votes_decoder,
+        )
+        |> snag.map_error(string.inspect),
+      )
+
+      Note(..note, upvotes:, downvotes:)
+      |> Ok
+    })
+    |> result.all,
   )
 
   let notes = list.group(notes, fn(note) { note.note_type })
@@ -121,6 +153,18 @@ pub fn get_page_notes(page_path) {
       |> result.unwrap([])
       |> list.group(fn(note) { note.parent_id }),
   )
+  |> Ok
+}
+
+pub fn empty_page_notes(page_path) {
+  PageNotes(
+    page_path:,
+    conn: None,
+    function_test_notes: dict.new(),
+    function_invariant_notes: dict.new(),
+    line_comment_notes: dict.new(),
+    thread_notes: dict.new(),
+  )
 }
 
 pub fn add_note(page_notes: PageNotes, note: Note) {
@@ -132,7 +176,7 @@ pub fn add_note(page_notes: PageNotes, note: Note) {
   })
 
   use Nil <- result.map(
-    sqlight.exec(insert_query(note), on: conn)
+    sqlightx.insert(insert_note_query, on: conn, with: insert_note_data(note))
     |> snag.map_error(string.inspect),
   )
 
@@ -169,6 +213,15 @@ pub fn add_note(page_notes: PageNotes, note: Note) {
   }
 }
 
+fn add_note_to_collection(collection, note: Note) {
+  dict.upsert(collection, note.parent_id, fn(notes) {
+    case notes {
+      None -> [note]
+      Some(notes) -> [note, ..notes]
+    }
+  })
+}
+
 fn connect_to_page_db(page_path) {
   let full_page_path = config.get_full_page_path(for: page_path)
 
@@ -179,57 +232,150 @@ fn connect_to_page_db(page_path) {
     |> sqlightx.describe_connection_error(db_path),
   )
 
-  use Nil <- result.map(
-    sqlight.exec(create_table_stmt, on: conn)
+  use Nil <- result.try(
+    sqlight.exec(create_note_table_stmt, on: conn)
     |> snag.map_error(string.inspect),
   )
 
-  conn
+  use Nil <- result.try(
+    sqlight.exec(create_upvote_table_stmt, on: conn)
+    |> snag.map_error(string.inspect),
+  )
+
+  use Nil <- result.try(
+    sqlight.exec(create_downvote_table_stmt, on: conn)
+    |> snag.map_error(string.inspect),
+  )
+
+  Ok(conn)
 }
 
-const create_table_stmt = "
+const create_note_table_stmt = "
 CREATE TABLE IF NOT EXISTS notes (
+  note_id TEXT PRIMARY KEY,
   parent_id TEXT NOT NULL,
   note_type INTEGER NOT NULL,
+  significance INTEGER NOT NULL,
   user_id TEXT NOT NULL,
   title TEXT NOT NULL,
   body TEXT NOT NULL,
-  votes INTEGER NOT NULL,
   time INTEGER NOT NULL,
   thread_id TEXT
 )"
 
-fn insert_query(note: Note) {
-  "INSERT INTO notes (parent_id, note_type, user_id, title, body, votes, time, thread_id) VALUES ('"
-  <> note.parent_id
-  <> "', "
-  <> note_type_to_int(note.note_type) |> int.to_string
-  <> ", '"
-  <> note.user_id
-  <> "', '"
-  <> note.title
-  <> "', '"
-  <> note.body
-  <> "', '"
-  <> int.to_string(note.votes)
-  <> "', '"
-  <> datetime.to_unix_seconds(note.time) |> int.to_string
-  <> "', "
-  <> case note.thread_id {
-    None -> "NULL"
-    Some(thread_id) -> "'" <> thread_id <> "'"
-  }
-  <> ")"
+const insert_note_query = "
+INSERT INTO notes (
+  note_id, 
+  parent_id, 
+  note_type, 
+  significance,
+  user_id, 
+  title, 
+  body, 
+  time, 
+  thread_id
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+
+fn insert_note_data(note: Note) {
+  [
+    sqlight.text(note.note_id),
+    sqlight.text(note.parent_id),
+    sqlight.int(note_type_to_int(note.note_type)),
+    sqlight.int(note_significance_to_int(note.significance)),
+    sqlight.text(note.user_id),
+    sqlight.text(note.title),
+    sqlight.text(note.body),
+    sqlight.int(datetime.to_unix_milli(note.time)),
+    sqlight.nullable(sqlight.text, note.thread_id),
+  ]
 }
 
-const select_query = "
+const select_all_notes_query = "
 SELECT
+  note_id,
   parent_id,
   note_type,
+  significance,
   user_id,
   title,
   body,
-  votes,
   time,
   thread_id
 FROM notes"
+
+fn note_decoder() {
+  use note_id <- decode.field(0, decode.string)
+  use parent_id <- decode.field(1, decode.string)
+  use note_type <- decode.field(2, decode.int)
+  use significance <- decode.field(3, decode.int)
+  use user_id <- decode.field(4, decode.string)
+  use title <- decode.field(5, decode.string)
+  use body <- decode.field(6, decode.string)
+  use time <- decode.field(7, decode.int)
+  use thread_id <- decode.field(8, decode.optional(decode.string))
+
+  Note(
+    note_id:,
+    parent_id:,
+    note_type: note_type_from_int(note_type),
+    significance: note_significance_from_int(significance),
+    user_id:,
+    title:,
+    body:,
+    upvotes: [],
+    downvotes: [],
+    time: datetime.from_unix_milli(time),
+    thread_id:,
+  )
+  |> decode.success
+}
+
+const create_upvote_table_stmt = "
+CREATE TABLE IF NOT EXISTS upvotes (
+  note_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  PRIMARY KEY (note_id, user_id)
+)"
+
+const create_downvote_table_stmt = "
+CREATE TABLE IF NOT EXISTS downvotes (
+  note_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  PRIMARY KEY (note_id, user_id)
+)"
+
+const insert_upvote_query = "
+INSERT INTO upvotes (note_id, user_id) VALUES (?, ?)"
+
+const insert_downvote_query = "
+INSERT INTO downvotes (note_id, user_id) VALUES (?, ?)"
+
+fn insert_upvote_data(note_id, user_id) {
+  [sqlight.text(note_id), sqlight.text(user_id)]
+}
+
+fn insert_downvote_data(note_id, user_id) {
+  [sqlight.text(note_id), sqlight.text(user_id)]
+}
+
+const select_upvotes_query = "
+SELECT
+  user_id
+FROM upvotes
+WHERE note_id = ?"
+
+const select_downvotes_query = "
+SELECT
+  user_id
+FROM downvotes
+WHERE note_id = ?"
+
+fn select_upvotes_data(note: Note) {
+  [sqlight.text(note.note_id)]
+}
+
+fn select_downvotes_data(note: Note) {
+  [sqlight.text(note.note_id)]
+}
+
+const select_votes_decoder = decode.string

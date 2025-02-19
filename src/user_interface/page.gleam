@@ -1,3 +1,4 @@
+import given
 import gleam/dict
 import gleam/int
 import gleam/list
@@ -16,11 +17,11 @@ import snag
 pub const name = "o11a-discussions"
 
 pub fn app() -> lustre.App(Model, Model, Msg) {
-  lustre.component(init, update, view, dict.new())
+  lustre.component(init, update, view(_, False), dict.new())
 }
 
 pub type Msg {
-  Msg
+  UserSubmittedNote
 }
 
 pub type Model {
@@ -35,14 +36,16 @@ pub fn update(model: Model, _msg: Msg) -> #(Model, effect.Effect(Msg)) {
   #(model, effect.none())
 }
 
-fn view(model: Model) -> element.Element(Msg) {
-  html.div([], [
-    html.h1([], [html.text(model.page_notes.page_path)]),
-    html.div(
-      [attribute.class("code-snippet")],
-      loc_hmtl(model.preprocessed_source, False),
-    ),
-  ])
+fn view(model: Model, is_skeleton is_skeleton) -> element.Element(Msg) {
+  html.div(
+    [attribute.class("code-snippet")],
+    list.index_map(model.preprocessed_source, fn(line, index) {
+      case line {
+        "" -> html.p([attribute.class("loc")], [html.text(" ")])
+        _ -> loc_view(model, line, index + 1, is_skeleton)
+      }
+    }),
+  )
 }
 
 pub fn get_skeleton(for page_path) {
@@ -51,33 +54,36 @@ pub fn get_skeleton(for page_path) {
   case simplifile.read(skeleton_path) {
     Ok(skeleton) -> Ok(skeleton)
 
-    Error(simplifile.Enoent) ->
-      case generate_skeleton(for: page_path) {
+    Error(simplifile.Enoent) -> {
+      // Generates a skeleton page for the given page path, and writes it to disk.
+      let skeleton: Result(String, snag.Snag) = {
+        use source <- result.try(preprocess_source(for: page_path))
+
+        let skeleton =
+          Model(
+            preprocessed_source: source,
+            page_notes: discussion.empty_page_notes(page_path),
+          )
+          |> view(is_skeleton: True)
+          |> element.to_string
+
+        use Nil <- result.map(
+          simplifile.write(skeleton, to: skeleton_path)
+          |> snag.map_error(simplifile.describe_error),
+        )
+
+        skeleton
+      }
+
+      case skeleton {
         Ok(skeleton) -> Ok(skeleton)
 
         Error(msg) -> string.inspect(msg) |> snag.error
       }
+    }
 
     Error(msg) -> string.inspect(msg) |> snag.error
   }
-}
-
-/// Generates a skeleton page for the given page path, and writes it to disk.
-fn generate_skeleton(for page_path) {
-  use source <- result.try(preprocess_source(for: page_path))
-  let skeleton =
-    html.div([attribute.class("code-snippet")], loc_hmtl(source, True))
-    |> element.to_string
-
-  use Nil <- result.map(
-    simplifile.write(
-      skeleton,
-      to: config.get_full_page_skeleton_path(for: page_path),
-    )
-    |> snag.map_error(simplifile.describe_error),
-  )
-
-  skeleton
 }
 
 pub fn preprocess_source(for page_path) {
@@ -87,39 +93,24 @@ pub fn preprocess_source(for page_path) {
   |> snag.map_error(simplifile.describe_error)
 }
 
-fn loc_hmtl(preprocessed_source text: List(String), skeleton skeleton: Bool) {
-  list.index_map(text, fn(original_line, index) {
-    case original_line {
-      "" -> html.p([attribute.class("loc")], [html.text(" ")])
-      _ -> {
-        let line = original_line
-
-        case skeleton {
-          True ->
-            html.p(
-              [
-                attribute.class("loc"),
-                attribute.id("loc" <> int.to_string(index)),
-              ],
-              [html.text(line)],
-            )
-          False ->
-            html.div([attribute.class("hover-container")], [
-              html.p(
-                [
-                  attribute.class("loc"),
-                  attribute.id("loc" <> int.to_string(index)),
-                ],
-                [
-                  html.text(line),
-                  html.span([attribute.class("line-hover-discussion")], [
-                    html.text("!"),
-                  ]),
-                ],
-              ),
-            ])
-        }
-      }
-    }
+fn loc_view(_model: Model, line_text, line_number, is_skeleton is_skeleton) {
+  use <- given.that(is_skeleton, return: fn() {
+    html.p(
+      [attribute.class("loc"), attribute.id("L" <> int.to_string(line_number))],
+      [html.text(line_text)],
+    )
   })
+
+  html.div([attribute.class("hover-container")], [
+    html.p(
+      [attribute.class("loc"), attribute.id("L" <> int.to_string(line_number))],
+      [
+        html.text(line_text),
+        html.span([attribute.class("line-hover-discussion")], [
+          html.text("!"),
+          // html.input([event.on_submit()]),
+        ]),
+      ],
+    ),
+  ])
 }

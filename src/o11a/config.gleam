@@ -28,7 +28,7 @@ pub fn get_full_page_path(for page_path) {
 
 pub fn get_full_page_skeleton_path(for page_path) {
   let assert Ok(priv) = erlang.priv_directory("o11a")
-  [priv, "audits", page_path <> "_skeleton.html"]
+  [priv, "audits", page_path <> ".skeleton.html"]
   |> list.fold("/", filepath.join)
 }
 

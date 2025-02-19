@@ -32,7 +32,6 @@ pub fn socket_init(
   ServerComponentState(msg),
   option.Option(process.Selector(lustre.Patch(msg))),
 ) {
-  // process.sleep(1000)
   let self = process.new_subject()
   let selector = process.selecting(process.new_selector(), self, fn(a) { a })
 
