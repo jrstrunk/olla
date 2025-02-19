@@ -21,6 +21,7 @@ pub type Note {
     body: String,
     time: tempo.DateTime,
     thread_id: Option(String),
+    last_edit_time: Option(tempo.DateTime),
   )
 }
 
@@ -249,6 +250,7 @@ CREATE TABLE IF NOT EXISTS notes (
   body TEXT NOT NULL,
   time INTEGER NOT NULL,
   thread_id TEXT,
+  last_edit_time INTEGER,
   PRIMARY KEY (user_id, time)
 )"
 
@@ -261,8 +263,9 @@ INSERT INTO notes (
   title, 
   body, 
   time, 
-  thread_id
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+  thread_id,
+  last_edit_time
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
 fn insert_note_data(note: Note) {
   [
@@ -274,6 +277,7 @@ fn insert_note_data(note: Note) {
     sqlight.text(note.body),
     sqlight.int(datetime.to_unix_milli(note.time)),
     sqlight.nullable(sqlight.text, note.thread_id),
+    sqlight.nullable(sqlight.int, note.last_edit_time |> option.map(datetime.to_unix_milli)),
   ]
 }
 
@@ -286,7 +290,8 @@ SELECT
   title,
   body,
   time,
-  thread_id
+  thread_id,
+  last_edit_time
 FROM notes"
 
 fn note_decoder() {
@@ -298,6 +303,7 @@ fn note_decoder() {
   use body <- decode.field(5, decode.string)
   use time <- decode.field(6, decode.int)
   use thread_id <- decode.field(7, decode.optional(decode.string))
+  use last_edit_time <- decode.field(8, decode.optional(decode.int))
 
   Note(
     parent_id:,
@@ -308,6 +314,7 @@ fn note_decoder() {
     body:,
     time: datetime.from_unix_milli(time),
     thread_id:,
+    last_edit_time: last_edit_time |> option.map(datetime.from_unix_milli),
   )
   |> decode.success
 }
