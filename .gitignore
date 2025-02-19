@@ -1,6 +1,8 @@
 *.beam
 *.ez
-/build
+server/build
+common/build
+client/build
 erl_crash.dump
-/priv/audits
-/priv/persist
+server/priv/audits
+server/priv/persist

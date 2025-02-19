@@ -277,7 +277,10 @@ fn insert_note_data(note: Note) {
     sqlight.text(note.body),
     sqlight.int(datetime.to_unix_milli(note.time)),
     sqlight.nullable(sqlight.text, note.thread_id),
-    sqlight.nullable(sqlight.int, note.last_edit_time |> option.map(datetime.to_unix_milli)),
+    sqlight.nullable(
+      sqlight.int,
+      note.last_edit_time |> option.map(datetime.to_unix_milli),
+    ),
   ]
 }
 
