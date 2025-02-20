@@ -1,11 +1,29 @@
 .code-snippet {
-  padding-left: 1.5em;
+  padding-left: 0;
 }
 
 .code-snippet-hover {
   position: absolute;
   width: 100%;
   z-index: -1;
+}
+
+.faded-code-extras {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  opacity: 0.4;
+  font-style: italic;
+}
+
+.line-number {
+  display: inline-block;
+  margin-right: 1.5rem;
+  width: 2.5rem;
+  text-align: right;
 }
 
 .loc {
@@ -19,20 +37,12 @@
   padding: 0;
   width: 30rem; */
   margin-left: 2.5rem;
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  -khtml-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
   white-space: nowrap;
   overflow: hidden;
   position: relative;
-  font-style: italic;
 }
 
 .inline-comment-text {
-  opacity: 0.4;
   position: absolute;
   z-index: 1;
 }
