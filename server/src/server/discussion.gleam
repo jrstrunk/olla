@@ -325,7 +325,7 @@ fn note_decoder() {
 const create_upvote_table_stmt = "
 CREATE TABLE IF NOT EXISTS upvotes (
   note_user_id INTEGER NOT NULL,
-  note_time INTEGER NOT NULL
+  note_time INTEGER NOT NULL,
   user_id INTEGER NOT NULL,
   PRIMARY KEY (note_user_id, note_time, user_id)
 )"
@@ -333,7 +333,7 @@ CREATE TABLE IF NOT EXISTS upvotes (
 const create_downvote_table_stmt = "
 CREATE TABLE IF NOT EXISTS downvotes (
   note_user_id INTEGER NOT NULL,
-  note_time INTEGER NOT NULL
+  note_time INTEGER NOT NULL,
   user_id INTEGER NOT NULL,
   PRIMARY KEY (note_user_id, note_time, user_id)
 )"

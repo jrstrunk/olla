@@ -101,14 +101,23 @@ fn loc_view(_model: Model, line_text, line_number, is_skeleton is_skeleton) {
     )
   })
 
+  let comment_text =
+    "this is a comment that keeps on going on and on and on and on and on and on and it just keeps on going and it wont stop ever at all forever and ever and on and ever and on and ever and on"
+
   html.div([attribute.class("hover-container")], [
     html.p(
       [attribute.class("loc"), attribute.id("L" <> int.to_string(line_number))],
       [
         html.text(line_text),
-        html.span([attribute.class("line-hover-discussion")], [
-          html.text("!"),
-          // html.input([event.on_submit()]),
+        html.span([attribute.class("loc"), attribute.class("inline-comment")], [
+          html.span([attribute.class("line-hover-discussion")], [
+            html.text(comment_text),
+            // html.input([event.on_submit()]),
+          ]),
+          html.span(
+            [attribute.class("loc"), attribute.class("inline-comment-text")],
+            [html.text(comment_text |> string.slice(at_index: 0, length: 30))],
+          ),
         ]),
       ],
     ),

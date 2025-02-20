@@ -12,11 +12,13 @@ pub fn collect_errors(results: List(Result(a, snag.Snag))) {
     [single_error] ->
       { "1 collected error: " <> snag.line_print(single_error) } |> snag.error
 
-    multiple_errors ->
+    [first_error, ..rest_errors] ->
       list.fold(
-        multiple_errors,
-        list.length(multiple_errors) |> int.to_string <> " collected errors: ",
-        fn(acc, e) { acc <> ", then error: " <> snag.line_print(e) },
+        rest_errors,
+        { list.length(rest_errors) + 1 } |> int.to_string
+          <> " collected errors <- "
+          <> snag.line_print(first_error),
+        fn(acc, e) { acc <> ", then " <> snag.line_print(e) },
       )
       |> snag.error
   }

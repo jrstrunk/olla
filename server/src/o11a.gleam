@@ -22,7 +22,7 @@ type Context {
 pub fn main() {
   io.println("o11a is starting!")
 
-  let config = config.Config(port: 8400)
+  let config = config.Config(port: 8430)
 
   use discussion_gateway <- result.map(gateway.start_discussion_gateway())
 
@@ -54,6 +54,7 @@ fn handler(req, context: Context) {
 
       server_componentx.get_connection(req, actor)
     }
+
     _ -> wisp_mist.handler(handle_wisp_request(_, context), "secret")(req)
   }
 }
