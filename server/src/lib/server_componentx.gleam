@@ -92,7 +92,7 @@ pub fn render_with_skeleton(name: String, skeleton: element.Element(msg)) {
   element.element(
     "lustre-server-component",
     [server_component.route("/" <> name)],
-    [html.div([], [skeleton])],
+    [html.div([attribute.attribute("slot", "skeleton")], [skeleton])],
   )
 }
 
@@ -100,8 +100,23 @@ pub fn render_with_prerendered_skeleton(name: String, skeleton: String) {
   element.element(
     "lustre-server-component",
     [server_component.route("/" <> name)],
-    [html.div([attribute.attribute("dangerous-unescaped-html", skeleton)], [])],
+    [
+      html.div(
+        [
+          attribute.attribute("slot", "skeleton"),
+          attribute.attribute("dangerous-unescaped-html", skeleton),
+        ],
+        [],
+      ),
+    ],
   )
+}
+
+pub fn hide_skeleton() {
+  html.slot([
+    attribute.name("skeleton"),
+    attribute.style([#("display", "none")]),
+  ])
 }
 
 pub fn as_document(body: element.Element(msg)) {

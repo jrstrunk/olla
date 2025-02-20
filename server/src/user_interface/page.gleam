@@ -37,15 +37,12 @@ pub fn update(model: Model, _msg: Msg) -> #(Model, effect.Effect(Msg)) {
 }
 
 fn view(model: Model, is_skeleton is_skeleton) -> element.Element(Msg) {
-  html.div(
-    [attribute.class("code-snippet")],
-    list.index_map(model.preprocessed_source, fn(line, index) {
-      case line {
-        "" -> html.p([attribute.class("loc")], [html.text(" ")])
-        _ -> loc_view(model, line, index + 1, is_skeleton)
-      }
-    }),
-  )
+  html.div([attribute.class("code-snippet")], [
+    server_componentx.hide_skeleton(),
+    ..list.index_map(model.preprocessed_source, fn(line, index) {
+      loc_view(model, line, index + 1, is_skeleton)
+    })
+  ])
 }
 
 pub fn get_skeleton(for page_path) {
