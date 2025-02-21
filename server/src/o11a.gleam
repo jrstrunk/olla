@@ -22,7 +22,7 @@ type Context {
 pub fn main() {
   io.println("o11a is starting!")
 
-  let config = config.Config(port: 8402)
+  let config = config.Config(port: 8400)
 
   use discussion_gateway <- result.map(gateway.start_discussion_gateway())
 

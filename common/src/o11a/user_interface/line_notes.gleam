@@ -3,10 +3,11 @@ import gleam/dynamic
 import gleam/list
 import gleam/string
 import lustre
+import lustre/attribute
 import lustre/effect
 import lustre/element
 import lustre/element/html
-import o11a/server/discussion
+import o11a/note
 
 pub const component_name = "line-notes"
 
@@ -17,7 +18,7 @@ pub fn component() {
     view,
     dict.from_list([
       #("line-notes", fn(dy) {
-        case discussion.decode_notes(dy) {
+        case note.decode_notes(dy) {
           Ok(notes) -> Ok(ServerUpdatedNotes(notes))
           Error(_) ->
             Error([dynamic.DecodeError("line-notes", string.inspect(dy), [])])
@@ -32,11 +33,11 @@ fn init(_) -> #(Model, effect.Effect(Msg)) {
 }
 
 pub type Model {
-  Model(notes: List(discussion.Note))
+  Model(notes: List(note.Note))
 }
 
 pub type Msg {
-  ServerUpdatedNotes(List(discussion.Note))
+  ServerUpdatedNotes(List(note.Note))
 }
 
 fn update(_model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
@@ -47,7 +48,11 @@ fn update(_model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 
 fn view(model: Model) -> element.Element(Msg) {
   html.div(
-    [],
-    list.map(model.notes, fn(note) { html.p([], [html.text(note.message)]) }),
+    [attribute.class("line-notes-list")],
+    list.map(model.notes, fn(note) {
+      html.p([attribute.class("line-notes-list-item")], [
+        html.text(note.message),
+      ])
+    }),
   )
 }

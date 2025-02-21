@@ -1,0 +1,173 @@
+import gleam/dict
+import gleam/dynamic
+import gleam/dynamic/decode
+import gleam/int
+import gleam/json
+import gleam/option.{type Option}
+import gleam/result
+import gleam/string
+import tempo
+import tempo/datetime
+
+pub type Note {
+  Note(
+    parent_id: String,
+    note_type: NoteType,
+    significance: NoteSignificance,
+    user_id: Int,
+    message: String,
+    expanded_message: Option(String),
+    time: tempo.DateTime,
+    thread_id: Option(String),
+    last_edit_time: Option(tempo.DateTime),
+  )
+}
+
+pub type NoteId =
+  #(Int, Int)
+
+pub type NoteCollection =
+  dict.Dict(String, List(Note))
+
+pub type NoteType {
+  FunctionTestNote
+  FunctionInvariantNote
+  LineCommentNote
+  ThreadNote
+}
+
+pub fn note_type_to_int(note_type) {
+  case note_type {
+    FunctionTestNote -> 1
+    FunctionInvariantNote -> 2
+    LineCommentNote -> 3
+    ThreadNote -> 4
+  }
+}
+
+pub fn note_type_from_int(note_type) {
+  let msg = "Invalid note type found " <> int.to_string(note_type)
+  case note_type {
+    1 -> FunctionTestNote
+    2 -> FunctionInvariantNote
+    3 -> LineCommentNote
+    4 -> ThreadNote
+    _ -> panic as msg
+  }
+}
+
+pub type NoteSignificance {
+  Regular
+  UnansweredQuestion
+  AnsweredQuestion
+  FindingLead
+  FindingComfirmation
+  FindingLeadInvalid
+}
+
+pub fn note_significance_to_int(note_significance) {
+  case note_significance {
+    Regular -> 1
+    UnansweredQuestion -> 2
+    AnsweredQuestion -> 3
+    FindingLead -> 4
+    FindingComfirmation -> 5
+    FindingLeadInvalid -> 6
+  }
+}
+
+pub fn note_significance_from_int(note_significance) {
+  case note_significance {
+    1 -> Regular
+    2 -> UnansweredQuestion
+    3 -> AnsweredQuestion
+    4 -> FindingLead
+    5 -> FindingComfirmation
+    6 -> FindingLeadInvalid
+    _ -> panic as "Invalid note significance found"
+  }
+}
+
+pub type NoteVote {
+  UpVote(user_id: Int)
+  DownVote(user_id: Int)
+}
+
+/// A dictionary mapping each note id to a list of votes for it. The data is
+/// stored here instead of in the notes data so it can easily and quickly be
+/// updated.
+pub type NoteVoteCollection =
+  dict.Dict(NoteId, List(NoteVote))
+
+pub fn get_note_id(note: Note) {
+  #(note.user_id, note.time |> datetime.to_unix_milli)
+}
+
+pub fn encode_note(note: Note) {
+  json.object([
+    #("parent_id", json.string(note.parent_id)),
+    #("note_type", json.int(note.note_type |> note_type_to_int)),
+    #("significance", json.int(note.significance |> note_significance_to_int)),
+    #("user_id", json.int(note.user_id)),
+    #("message", json.string(note.message)),
+    #("expanded_message", json.nullable(note.expanded_message, json.string)),
+    #("time", json.int(note.time |> datetime.to_unix_milli)),
+    #("thread_id", json.nullable(note.thread_id, json.string)),
+    #(
+      "last_edit_time",
+      json.nullable(
+        note.last_edit_time |> option.map(datetime.to_unix_milli),
+        json.int,
+      ),
+    ),
+  ])
+}
+
+pub fn decode_note(note: dynamic.Dynamic) {
+  use note <- result.try(decode.run(note, decode.string))
+
+  json.parse(note, json_note_decoder())
+  |> result.replace_error([
+    decode.DecodeError("json-encoded note", string.inspect(note), []),
+  ])
+}
+
+pub fn decode_notes(notes: dynamic.Dynamic) {
+  use notes <- result.try(decode.run(notes, decode.string))
+
+  json.parse(notes, decode.list(json_note_decoder()))
+  |> result.replace_error([
+    decode.DecodeError("json-encoded note", string.inspect(notes), []),
+  ])
+}
+
+fn json_note_decoder() {
+  use parent_id <- decode.field("parent_id", decode.string)
+  use note_type <- decode.field("note_type", decode.int)
+  use significance <- decode.field("significance", decode.int)
+  use user_id <- decode.field("user_id", decode.int)
+  use message <- decode.field("message", decode.string)
+  use expanded_message <- decode.field(
+    "expanded_message",
+    decode.optional(decode.string),
+  )
+  use time <- decode.field("time", decode.int)
+  use thread_id <- decode.field("thread_id", decode.optional(decode.string))
+  use last_edit_time <- decode.field(
+    "last_edit_time",
+    decode.optional(decode.int),
+  )
+
+  Note(
+    parent_id:,
+    note_type: note_type_from_int(note_type),
+    significance: note_significance_from_int(significance),
+    user_id:,
+    message:,
+    expanded_message:,
+    time: datetime.from_unix_milli(time),
+    thread_id:,
+    last_edit_time: last_edit_time |> option.map(datetime.from_unix_milli),
+  )
+  |> decode.success
+}

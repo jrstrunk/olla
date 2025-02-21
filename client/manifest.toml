@@ -27,7 +27,7 @@ packages = [
   { name = "glint", version = "1.2.0", build_tools = ["gleam"], requirements = ["gleam_community_ansi", "gleam_community_colour", "gleam_stdlib", "snag"], otp_app = "glint", source = "hex", outer_checksum = "EA4B47B5A6147CA524AE81862EE1BE1C5A194757B26897233BD26BD3F7A54930" },
   { name = "glisten", version = "7.0.1", build_tools = ["gleam"], requirements = ["gleam_erlang", "gleam_otp", "gleam_stdlib", "logging", "telemetry"], otp_app = "glisten", source = "hex", outer_checksum = "1A53CF9FB3231A93FF7F1BD519A43DC968C1722F126CDD278403A78725FC5189" },
   { name = "gramps", version = "3.0.0", build_tools = ["gleam"], requirements = ["gleam_crypto", "gleam_erlang", "gleam_http", "gleam_stdlib"], otp_app = "gramps", source = "hex", outer_checksum = "630BDE35E465511945253A06EBCDE8D5E4B8B1988F4AC6B8FAC297DEF55B4CA2" },
-  { name = "gtempo", version = "6.1.2", build_tools = ["gleam"], requirements = ["gleam_regexp", "gleam_stdlib"], otp_app = "gtempo", source = "hex", outer_checksum = "65886F22AE3E45B02C8DF22AA7A1DF330F1900B4AE281C857D66B7E437736836" },
+  { name = "gtempo", version = "6.1.3", build_tools = ["gleam"], requirements = ["gleam_regexp", "gleam_stdlib"], otp_app = "gtempo", source = "hex", outer_checksum = "9987DEF21364A38E29AB56A7E0BCC83AF12707DF1FAAA7EA9AD4B6DCE6528733" },
   { name = "hpack_erl", version = "0.3.0", build_tools = ["rebar3"], requirements = [], otp_app = "hpack", source = "hex", outer_checksum = "D6137D7079169D8C485C6962DFE261AF5B9EF60FBC557344511C1E65E3D95FB0" },
   { name = "lamb", version = "0.6.1", build_tools = ["gleam"], requirements = ["gleam_erlang", "gleam_stdlib"], otp_app = "lamb", source = "hex", outer_checksum = "A74714DE60B3BADB623DFFF910C843793AE660222A9AD63C70053D33C0C3D311" },
   { name = "logging", version = "1.3.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "logging", source = "hex", outer_checksum = "1098FBF10B54B44C2C7FDF0B01C1253CAFACDACABEFB4B0D027803246753E06D" },
@@ -35,7 +35,8 @@ packages = [
   { name = "lustre_dev_tools", version = "1.6.5", build_tools = ["gleam"], requirements = ["argv", "filepath", "fs", "gleam_community_ansi", "gleam_crypto", "gleam_deque", "gleam_erlang", "gleam_http", "gleam_httpc", "gleam_json", "gleam_otp", "gleam_package_interface", "gleam_regexp", "gleam_stdlib", "glint", "glisten", "lustre", "mist", "repeatedly", "simplifile", "term_size", "tom", "wisp"], otp_app = "lustre_dev_tools", source = "hex", outer_checksum = "3B362BDCBB56B22BF9DFF6765E4C2CD8171374ACE8EA1B75EA3D6F1FB4937094" },
   { name = "marceau", version = "1.3.0", build_tools = ["gleam"], requirements = [], otp_app = "marceau", source = "hex", outer_checksum = "2D1C27504BEF45005F5DFB18591F8610FB4BFA91744878210BDC464412EC44E9" },
   { name = "mist", version = "4.0.6", build_tools = ["gleam"], requirements = ["gleam_erlang", "gleam_http", "gleam_otp", "gleam_stdlib", "gleam_yielder", "glisten", "gramps", "hpack_erl", "logging"], otp_app = "mist", source = "hex", outer_checksum = "ED319E5A7F2056E08340B6976EA5E717F3C3BB36056219AF826D280D9C077952" },
-  { name = "o11a", version = "1.0.0", build_tools = ["gleam"], requirements = ["filepath", "given", "gleam_erlang", "gleam_http", "gleam_json", "gleam_otp", "gleam_regexp", "gleam_stdlib", "gtempo", "lamb", "lustre", "mist", "simplifile", "snag", "sqlight", "wisp"], source = "local", path = "../server" },
+  { name = "o11a", version = "1.0.0", build_tools = ["gleam"], requirements = ["filepath", "given", "gleam_erlang", "gleam_http", "gleam_json", "gleam_otp", "gleam_regexp", "gleam_stdlib", "gtempo", "lamb", "lustre", "mist", "o11a_common", "simplifile", "snag", "sqlight", "wisp"], source = "local", path = "../server" },
+  { name = "o11a_common", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_json", "gleam_stdlib", "gtempo", "lustre"], source = "local", path = "../common" },
   { name = "platform", version = "1.0.0", build_tools = ["gleam"], requirements = [], otp_app = "platform", source = "hex", outer_checksum = "8339420A95AD89AAC0F82F4C3DB8DD401041742D6C3F46132A8739F6AEB75391" },
   { name = "repeatedly", version = "2.1.2", build_tools = ["gleam"], requirements = [], otp_app = "repeatedly", source = "hex", outer_checksum = "93AE1938DDE0DC0F7034F32C1BF0D4E89ACEBA82198A1FE21F604E849DA5F589" },
   { name = "simplifile", version = "2.2.0", build_tools = ["gleam"], requirements = ["filepath", "gleam_stdlib"], otp_app = "simplifile", source = "hex", outer_checksum = "0DFABEF7DC7A9E2FF4BB27B108034E60C81BEBFCB7AB816B9E7E18ED4503ACD8" },
@@ -50,6 +51,8 @@ packages = [
 [requirements]
 gleam_stdlib = { version = ">= 0.44.0 and < 2.0.0" }
 gleeunit = { version = ">= 1.0.0 and < 2.0.0" }
+gtempo = { version = ">= 6.1.3 and < 7.0.0" }
 lustre = { version = ">= 4.6.4 and < 5.0.0" }
 lustre_dev_tools = { version = ">= 1.6.5 and < 2.0.0" }
 o11a = { path = "../server" }
+o11a_common = { path = "../common" }

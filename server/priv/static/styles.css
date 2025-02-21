@@ -43,22 +43,14 @@
 .loc {
   margin: 0;
   white-space: pre;
-  position: relative;
 }
 
 .inline-comment {
-  /* display: inline-block;
-  padding: 0;
-  width: 30rem; */
+  display: inline;
   margin-left: 2.5rem;
   white-space: nowrap;
   overflow: hidden;
   position: relative;
-}
-
-.inline-comment-text {
-  position: absolute;
-  z-index: 1;
 }
 
 .inline-comment-text::after {
@@ -70,20 +62,34 @@
   height: 100%;
   background: linear-gradient(to right, transparent, white);
   pointer-events: none;
+  z-index: 2;
 }
 
-.line-hover-discussion {
-  visibility: hidden;
-  margin-left: opacity 0.3s;
-  opacity: opacity 0.3s;
+/* Line Notes Component */
+line-notes {
   position: absolute;
   z-index: 99;
+  top: 0;
+  left: 0;
+  width: 30rem;
+  text-wrap: wrap;
+  background-color: white;
+  border-radius: 6px;
+  border: 1px solid black;
+  visibility: hidden;
   opacity: 0;
-  transition: opacity 0.3s;
 }
 
-.inline-comment:hover > .line-hover-discussion,
-.line-hover-discussion:hover {
+.inline-comment:hover > line-notes,
+line-notes:hover {
   visibility: visible;
   opacity: 1;
+}
+
+.line-notes-list {
+  border-radius: 6px;
+}
+
+.line-notes-item {
+  color: red;
 }

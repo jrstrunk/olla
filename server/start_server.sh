@@ -1,0 +1,1 @@
+cd ../client && gleam run -m lustre/dev build component o11a/client/line_notes --outdir="../server/priv/static" && gleam run -m lustre/dev build component o11a/client/function_notes --outdir="../server/priv/static" && cd ../server && gleam run

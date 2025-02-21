@@ -12,6 +12,7 @@ import lustre/effect
 import lustre/element
 import lustre/element/html
 import o11a/config
+import o11a/note
 import o11a/server/discussion
 import o11a/user_interface/line_notes
 import simplifile
@@ -115,8 +116,12 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
     ])
   })
 
-  let line_comments =
-    dict.get(model.page_notes.line_comment_notes, line_id) |> result.unwrap([])
+  let line_comments = case line_number == 21 {
+    True ->
+      dict.get(model.page_notes.line_comment_notes, line_id)
+      |> result.unwrap([])
+    False -> []
+  }
 
   let inline_comment_preview_text = case line_comments |> list.take(1) {
     [comment] -> comment.message |> string.slice(at_index: 0, length: 30)
@@ -130,7 +135,6 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
     html.text(line_text),
     html.span(
       [
-        attribute.class("loc"),
         attribute.class("inline-comment"),
         attribute.class("fade-in"),
         attribute.style([
@@ -138,27 +142,21 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
         ]),
       ],
       [
-        html.span([attribute.class("line-hover-discussion")], [
-          element.element(
-            line_notes.component_name,
-            [
-              attribute.attribute(
-                "line-notes",
-                list.map(line_comments, discussion.encode_note)
-                  |> json.preprocessed_array
-                  |> json.to_string,
-              ),
-              // event listeners & includes go here
-            ],
-            [],
-          ),
+        html.span([attribute.class("loc faded-code-extras")], [
+          html.text(inline_comment_preview_text),
         ]),
-        html.span(
+        element.element(
+          line_notes.component_name,
           [
-            attribute.class("loc"),
-            attribute.class("inline-comment-text faded-code-extras"),
+            attribute.attribute(
+              "line-notes",
+              list.map(line_comments, note.encode_note)
+                |> json.preprocessed_array
+                |> json.to_string,
+            ),
+            // event listeners & includes go here
           ],
-          [html.text(inline_comment_preview_text)],
+          [],
         ),
       ],
     ),

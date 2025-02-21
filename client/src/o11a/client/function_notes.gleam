@@ -1,7 +1,4 @@
 import gleam/dict
-import gleam/dynamic
-import gleam/io
-import gleam/result
 import lustre
 import o11a/user_interface/function_notes
 
