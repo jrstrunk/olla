@@ -9,9 +9,9 @@ import lib/server_componentx
 import lustre/element
 import mist
 import o11a/config
-import snag
 import o11a/user_interface/gateway
 import o11a/user_interface/page
+import snag
 import wisp
 import wisp/wisp_mist
 

@@ -1,6 +1,7 @@
 import given
 import gleam/dict
 import gleam/int
+import gleam/json
 import gleam/list
 import gleam/result
 import gleam/string
@@ -12,6 +13,7 @@ import lustre/element
 import lustre/element/html
 import o11a/config
 import o11a/server/discussion
+import o11a/user_interface/line_notes
 import simplifile
 import snag
 
@@ -91,11 +93,12 @@ pub fn preprocess_source(for page_path) {
   |> snag.map_error(simplifile.describe_error)
 }
 
-fn loc_view(_model: Model, line_text, line_number, is_skeleton is_skeleton) {
+fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
   let line_number = int.to_string(line_number)
+  let line_id = "L" <> line_number
 
   use <- given.that(is_skeleton, return: fn() {
-    html.p([attribute.class("loc"), attribute.id("L" <> line_number)], [
+    html.p([attribute.class("loc"), attribute.id(line_id)], [
       html.span([attribute.class("line-number faded-code-extras")], [
         html.text(line_number),
       ]),
@@ -104,7 +107,7 @@ fn loc_view(_model: Model, line_text, line_number, is_skeleton is_skeleton) {
   })
 
   use <- given.that(line_text == "", return: fn() {
-    html.p([attribute.class("loc")], [
+    html.p([attribute.class("loc"), attribute.id(line_id)], [
       html.span([attribute.class("line-number faded-code-extras")], [
         html.text(line_number),
       ]),
@@ -112,26 +115,42 @@ fn loc_view(_model: Model, line_text, line_number, is_skeleton is_skeleton) {
     ])
   })
 
-  let comment_text =
-    "this is a comment that keeps on going on and on and on and on and on and on and it just keeps on going and it wont stop ever at all forever and ever and on and ever and on and ever and on"
+  let line_comments =
+    dict.get(model.page_notes.line_comment_notes, line_id) |> result.unwrap([])
+
+  let inline_comment_preview_text = case line_comments |> list.take(1) {
+    [comment] -> comment.message |> string.slice(at_index: 0, length: 30)
+    _ -> ""
+  }
 
   html.div([attribute.class("hover-container")], [
-    html.p([attribute.class("loc"), attribute.id("L" <> line_number)], [
+    html.p([attribute.class("loc"), attribute.id(line_id)], [
       html.span([attribute.class("line-number faded-code-extras")], [
         html.text(line_number),
       ]),
       html.text(line_text),
       html.span([attribute.class("loc"), attribute.class("inline-comment")], [
         html.span([attribute.class("line-hover-discussion")], [
-          html.text(comment_text),
-          // html.input([event.on_submit()]),
+          element.element(
+            line_notes.component_name,
+            [
+              attribute.property(
+                "line-notes",
+                list.map(line_comments, discussion.encode_note)
+                  |> json.preprocessed_array
+                  |> json.to_string,
+              ),
+              // event listeners & includes go here
+            ],
+            [],
+          ),
         ]),
         html.span(
           [
             attribute.class("loc"),
             attribute.class("inline-comment-text faded-code-extras"),
           ],
-          [html.text(comment_text |> string.slice(at_index: 0, length: 30))],
+          [html.text(inline_comment_preview_text)],
         ),
       ]),
     ]),
