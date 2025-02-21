@@ -69,8 +69,8 @@
 line-notes {
   position: absolute;
   z-index: 99;
-  top: 0;
-  left: 0;
+  bottom: 1.4rem;
+  left: 0rem;
   width: 30rem;
   text-wrap: wrap;
   background-color: white;
@@ -81,7 +81,8 @@ line-notes {
 }
 
 .inline-comment:hover > line-notes,
-line-notes:hover {
+line-notes:hover,
+line-notes:focus-within {
   visibility: visible;
   opacity: 1;
 }

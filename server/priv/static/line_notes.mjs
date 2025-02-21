@@ -120,48 +120,48 @@ var BitArray = class _BitArray {
   }
 };
 var UtfCodepoint = class {
-  constructor(value) {
-    this.value = value;
+  constructor(value3) {
+    this.value = value3;
   }
 };
 function byteArrayToInt(byteArray, start2, end, isBigEndian, isSigned) {
   const byteSize = end - start2;
   if (byteSize <= 6) {
-    let value = 0;
+    let value3 = 0;
     if (isBigEndian) {
       for (let i = start2; i < end; i++) {
-        value = value * 256 + byteArray[i];
+        value3 = value3 * 256 + byteArray[i];
       }
     } else {
       for (let i = end - 1; i >= start2; i--) {
-        value = value * 256 + byteArray[i];
+        value3 = value3 * 256 + byteArray[i];
       }
     }
     if (isSigned) {
       const highBit = 2 ** (byteSize * 8 - 1);
-      if (value >= highBit) {
-        value -= highBit * 2;
+      if (value3 >= highBit) {
+        value3 -= highBit * 2;
       }
     }
-    return value;
+    return value3;
   } else {
-    let value = 0n;
+    let value3 = 0n;
     if (isBigEndian) {
       for (let i = start2; i < end; i++) {
-        value = (value << 8n) + BigInt(byteArray[i]);
+        value3 = (value3 << 8n) + BigInt(byteArray[i]);
       }
     } else {
       for (let i = end - 1; i >= start2; i--) {
-        value = (value << 8n) + BigInt(byteArray[i]);
+        value3 = (value3 << 8n) + BigInt(byteArray[i]);
       }
     }
     if (isSigned) {
       const highBit = 1n << BigInt(byteSize * 8 - 1);
-      if (value >= highBit) {
-        value -= highBit * 2n;
+      if (value3 >= highBit) {
+        value3 -= highBit * 2n;
       }
     }
-    return Number(value);
+    return Number(value3);
   }
 }
 function byteArrayToFloat(byteArray, start2, end, isBigEndian) {
@@ -183,9 +183,9 @@ var Result = class _Result extends CustomType {
   }
 };
 var Ok = class extends Result {
-  constructor(value) {
+  constructor(value3) {
     super();
-    this[0] = value;
+    this[0] = value3;
   }
   // @internal
   isOk() {
@@ -306,6 +306,14 @@ var Some = class extends CustomType {
 };
 var None = class extends CustomType {
 };
+function to_result(option, e) {
+  if (option instanceof Some) {
+    let a = option[0];
+    return new Ok(a);
+  } else {
+    return new Error(e);
+  }
+}
 function map(option, fun) {
   if (option instanceof Some) {
     let x = option[0];
@@ -1023,14 +1031,15 @@ var unequalDictSymbol = Symbol();
 
 // build/dev/javascript/gleam_stdlib/gleam_stdlib.mjs
 var Nil = void 0;
+var NOT_FOUND = {};
 function identity(x) {
   return x;
 }
 function to_string(term) {
   return term.toString();
 }
-function float_to_string(float3) {
-  const string5 = float3.toString().replace("+", "");
+function float_to_string(float4) {
+  const string5 = float4.toString().replace("+", "");
   if (string5.indexOf(".") >= 0) {
     return string5;
   } else {
@@ -1063,6 +1072,13 @@ function pop_grapheme(string5) {
     return new Error(Nil);
   }
 }
+function concat(xs) {
+  let result = "";
+  for (const x of xs) {
+    result = result + x;
+  }
+  return result;
+}
 var unicode_whitespaces = [
   " ",
   // Space
@@ -1091,8 +1107,15 @@ function new_map() {
 function map_to_list(map6) {
   return List.fromArray(map6.entries());
 }
-function map_insert(key, value, map6) {
-  return map6.set(key, value);
+function map_get(map6, key) {
+  const value3 = map6.get(key, NOT_FOUND);
+  if (value3 === NOT_FOUND) {
+    return new Error(Nil);
+  }
+  return new Ok(value3);
+}
+function map_insert(key, value3, map6) {
+  return map6.set(key, value3);
 }
 function classify_dynamic(data) {
   if (typeof data === "string") {
@@ -1120,6 +1143,40 @@ function classify_dynamic(data) {
   } else {
     const type = typeof data;
     return type.charAt(0).toUpperCase() + type.slice(1);
+  }
+}
+function decoder_error(expected, got) {
+  return decoder_error_no_classify(expected, classify_dynamic(got));
+}
+function decoder_error_no_classify(expected, got) {
+  return new Error(
+    List.fromArray([new DecodeError(expected, got, List.fromArray([]))])
+  );
+}
+function decode_string(data) {
+  return typeof data === "string" ? new Ok(data) : decoder_error("String", data);
+}
+function decode_int(data) {
+  return Number.isInteger(data) ? new Ok(data) : decoder_error("Int", data);
+}
+function decode_field(value3, name2) {
+  const not_a_map_error = () => decoder_error("Dict", value3);
+  if (value3 instanceof Dict || value3 instanceof WeakMap || value3 instanceof Map) {
+    const entry = map_get(value3, name2);
+    return new Ok(entry.isOk() ? new Some(entry[0]) : new None());
+  } else if (value3 === null) {
+    return not_a_map_error();
+  } else if (Object.getPrototypeOf(value3) == Object.prototype) {
+    return try_get_field(value3, name2, () => new Ok(new None()));
+  } else {
+    return try_get_field(value3, name2, not_a_map_error);
+  }
+}
+function try_get_field(value3, field3, or_else) {
+  try {
+    return field3 in value3 ? new Ok(new Some(value3[field3])) : or_else();
+  } catch {
+    return or_else();
   }
 }
 function inspect(v) {
@@ -1201,10 +1258,10 @@ function inspectString(str) {
 function inspectDict(map6) {
   let body = "dict.from_list([";
   let first2 = true;
-  map6.forEach((value, key) => {
+  map6.forEach((value3, key) => {
     if (!first2)
       body = body + ", ";
-    body = body + "#(" + inspect(key) + ", " + inspect(value) + ")";
+    body = body + "#(" + inspect(key) + ", " + inspect(value3) + ")";
     first2 = false;
   });
   return body + "])";
@@ -1221,8 +1278,8 @@ function inspectObject(v) {
 }
 function inspectCustomType(record) {
   const props = Object.keys(record).map((label) => {
-    const value = inspect(record[label]);
-    return isNaN(parseInt(label)) ? `${label}: ${value}` : value;
+    const value3 = inspect(record[label]);
+    return isNaN(parseInt(label)) ? `${label}: ${value3}` : value3;
   }).join(", ");
   return props ? `${record.constructor.name}(${props})` : record.constructor.name;
 }
@@ -1237,8 +1294,8 @@ function inspectUtfCodepoint(codepoint2) {
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/dict.mjs
-function insert(dict2, key, value) {
-  return map_insert(key, value, dict2);
+function insert(dict2, key, value3) {
+  return map_insert(key, value3, dict2);
 }
 function from_list_loop(loop$list, loop$initial) {
   while (true) {
@@ -1248,10 +1305,10 @@ function from_list_loop(loop$list, loop$initial) {
       return initial;
     } else {
       let key = list3.head[0];
-      let value = list3.head[1];
+      let value3 = list3.head[1];
       let rest = list3.tail;
       loop$list = rest;
-      loop$initial = insert(initial, key, value);
+      loop$initial = insert(initial, key, value3);
     }
   }
 }
@@ -1408,6 +1465,15 @@ function inspect2(term) {
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/result.mjs
+function map3(result, fun) {
+  if (result.isOk()) {
+    let x = result[0];
+    return new Ok(fun(x));
+  } else {
+    let e = result[0];
+    return new Error(e);
+  }
+}
 function map_error(result, fun) {
   if (result.isOk()) {
     let x = result[0];
@@ -1447,6 +1513,83 @@ var DecodeError = class extends CustomType {
     this.path = path;
   }
 };
+function map_errors(result, f) {
+  return map_error(
+    result,
+    (_capture) => {
+      return map2(_capture, f);
+    }
+  );
+}
+function string(data) {
+  return decode_string(data);
+}
+function do_any(decoders) {
+  return (data) => {
+    if (decoders.hasLength(0)) {
+      return new Error(
+        toList([new DecodeError("another type", classify_dynamic(data), toList([]))])
+      );
+    } else {
+      let decoder = decoders.head;
+      let decoders$1 = decoders.tail;
+      let $ = decoder(data);
+      if ($.isOk()) {
+        let decoded = $[0];
+        return new Ok(decoded);
+      } else {
+        return do_any(decoders$1)(data);
+      }
+    }
+  };
+}
+function push_path(error, name2) {
+  let name$1 = identity(name2);
+  let decoder = do_any(
+    toList([
+      decode_string,
+      (x) => {
+        return map3(decode_int(x), to_string);
+      }
+    ])
+  );
+  let name$2 = (() => {
+    let $ = decoder(name$1);
+    if ($.isOk()) {
+      let name$22 = $[0];
+      return name$22;
+    } else {
+      let _pipe = toList(["<", classify_dynamic(name$1), ">"]);
+      let _pipe$1 = concat(_pipe);
+      return identity(_pipe$1);
+    }
+  })();
+  let _record = error;
+  return new DecodeError(
+    _record.expected,
+    _record.found,
+    prepend(name$2, error.path)
+  );
+}
+function field(name2, inner_type) {
+  return (value3) => {
+    let missing_field_error = new DecodeError("field", "nothing", toList([]));
+    return try$(
+      decode_field(value3, name2),
+      (maybe_inner) => {
+        let _pipe = maybe_inner;
+        let _pipe$1 = to_result(_pipe, toList([missing_field_error]));
+        let _pipe$2 = try$(_pipe$1, inner_type);
+        return map_errors(
+          _pipe$2,
+          (_capture) => {
+            return push_path(_capture, name2);
+          }
+        );
+      }
+    );
+  };
+}
 
 // build/dev/javascript/gleam_stdlib/gleam_stdlib_decode_ffi.mjs
 function index2(data, key) {
@@ -1460,9 +1603,9 @@ function index2(data, key) {
   }
   if ((key === 0 || key === 1 || key === 2) && data instanceof List) {
     let i = 0;
-    for (const value of data) {
+    for (const value3 of data) {
       if (i === key)
-        return new Ok(new Some(value));
+        return new Ok(new Some(value3));
       i++;
     }
     return new Error("Indexable");
@@ -1497,7 +1640,7 @@ function int(data) {
     return new Ok(data);
   return new Error(0);
 }
-function string(data) {
+function string2(data) {
   if (typeof data === "string")
     return new Ok(data);
   return new Error(0);
@@ -1598,6 +1741,11 @@ function optional(inner) {
     }
   );
 }
+function decode_error(expected, found) {
+  return toList([
+    new DecodeError2(expected, classify_dynamic(found), toList([]))
+  ]);
+}
 function run_dynamic_function(data, name2, f) {
   let $ = f(data);
   if ($.isOk()) {
@@ -1611,14 +1759,28 @@ function run_dynamic_function(data, name2, f) {
     ];
   }
 }
+function decode_bool2(data) {
+  let $ = isEqual(identity(true), data);
+  if ($) {
+    return [true, toList([])];
+  } else {
+    let $1 = isEqual(identity(false), data);
+    if ($1) {
+      return [false, toList([])];
+    } else {
+      return [false, decode_error("Bool", data)];
+    }
+  }
+}
 function decode_int2(data) {
   return run_dynamic_function(data, "Int", int);
 }
+var bool = /* @__PURE__ */ new Decoder(decode_bool2);
 var int2 = /* @__PURE__ */ new Decoder(decode_int2);
 function decode_string2(data) {
-  return run_dynamic_function(data, "String", string);
+  return run_dynamic_function(data, "String", string2);
 }
-var string2 = /* @__PURE__ */ new Decoder(decode_string2);
+var string3 = /* @__PURE__ */ new Decoder(decode_string2);
 function list2(inner) {
   return new Decoder(
     (data) => {
@@ -1626,7 +1788,7 @@ function list2(inner) {
         data,
         inner.function,
         (p2, k) => {
-          return push_path(p2, toList([k]));
+          return push_path2(p2, toList([k]));
         },
         0,
         toList([])
@@ -1634,9 +1796,9 @@ function list2(inner) {
     }
   );
 }
-function push_path(layer, path) {
+function push_path2(layer, path) {
   let decoder = one_of(
-    string2,
+    string3,
     toList([
       (() => {
         let _pipe = int2;
@@ -1679,7 +1841,7 @@ function index3(loop$path, loop$position, loop$inner, loop$data, loop$handle_mis
     let handle_miss = loop$handle_miss;
     if (path.hasLength(0)) {
       let _pipe = inner(data);
-      return push_path(_pipe, reverse(position));
+      return push_path2(_pipe, reverse(position));
     } else {
       let key = path.head;
       let path$1 = path.tail;
@@ -1701,7 +1863,7 @@ function index3(loop$path, loop$position, loop$inner, loop$data, loop$handle_mis
           default$,
           toList([new DecodeError2(kind, classify_dynamic(data), toList([]))])
         ];
-        return push_path(_pipe, reverse(position));
+        return push_path2(_pipe, reverse(position));
       }
     }
   }
@@ -1721,7 +1883,7 @@ function subfield(field_path, field_decoder, next) {
             default$,
             toList([new DecodeError2("Field", "Nothing", toList([]))])
           ];
-          return push_path(_pipe, reverse(position));
+          return push_path2(_pipe, reverse(position));
         }
       );
       let out = $[0];
@@ -1733,11 +1895,29 @@ function subfield(field_path, field_decoder, next) {
     }
   );
 }
-function field(field_name, field_decoder, next) {
+function field2(field_name, field_decoder, next) {
   return subfield(toList([field_name]), field_decoder, next);
 }
 
+// build/dev/javascript/gleam_stdlib/gleam/bool.mjs
+function lazy_guard(requirement, consequence, alternative) {
+  if (requirement) {
+    return consequence();
+  } else {
+    return alternative();
+  }
+}
+
 // build/dev/javascript/gleam_json/gleam_json_ffi.mjs
+function object(entries) {
+  return Object.fromEntries(entries);
+}
+function identity2(x) {
+  return x;
+}
+function do_null() {
+  return null;
+}
 function decode(string5) {
   try {
     const result = JSON.parse(string5);
@@ -1857,6 +2037,26 @@ function do_parse(json, decoder) {
 function parse(json, decoder) {
   return do_parse(json, decoder);
 }
+function string4(input2) {
+  return identity2(input2);
+}
+function int3(input2) {
+  return identity2(input2);
+}
+function null$() {
+  return do_null();
+}
+function nullable(input2, inner_type) {
+  if (input2 instanceof Some) {
+    let value3 = input2[0];
+    return inner_type(value3);
+  } else {
+    return null$();
+  }
+}
+function object2(entries) {
+  return object(entries);
+}
 
 // build/dev/javascript/lustre/lustre/effect.mjs
 var Effect = class extends CustomType {
@@ -1865,6 +2065,20 @@ var Effect = class extends CustomType {
     this.all = all2;
   }
 };
+function custom(run2) {
+  return new Effect(
+    toList([
+      (actions) => {
+        return run2(actions.dispatch, actions.emit, actions.select, actions.root);
+      }
+    ])
+  );
+}
+function event(name2, data) {
+  return custom((_, emit3, _1, _2) => {
+    return emit3(name2, data);
+  });
+}
 function none() {
   return new Effect(toList([]));
 }
@@ -1900,6 +2114,13 @@ var Attribute = class extends CustomType {
     this[0] = x0;
     this[1] = x1;
     this.as_property = as_property;
+  }
+};
+var Event = class extends CustomType {
+  constructor(x0, x1) {
+    super();
+    this[0] = x0;
+    this[1] = x1;
   }
 };
 function attribute_to_event_handler(attribute2) {
@@ -1960,11 +2181,31 @@ function handlers(element2) {
 }
 
 // build/dev/javascript/lustre/lustre/attribute.mjs
-function attribute(name2, value) {
-  return new Attribute(name2, identity(value), false);
+function attribute(name2, value3) {
+  return new Attribute(name2, identity(value3), false);
+}
+function on(name2, handler) {
+  return new Event("on" + name2, handler);
+}
+function style(properties) {
+  return attribute(
+    "style",
+    fold(
+      properties,
+      "",
+      (styles, _use1) => {
+        let name$1 = _use1[0];
+        let value$1 = _use1[1];
+        return styles + name$1 + ":" + value$1 + ";";
+      }
+    )
+  );
 }
 function class$(name2) {
   return attribute("class", name2);
+}
+function value(val) {
+  return attribute("value", val);
 }
 
 // build/dev/javascript/lustre/lustre/element.mjs
@@ -2003,6 +2244,13 @@ function element(tag, attrs, children2) {
 }
 function text(content) {
   return new Text(content);
+}
+function fragment(elements2) {
+  return element(
+    "lustre-fragment",
+    toList([style(toList([["display", "contents"]]))]),
+    elements2
+  );
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/set.mjs
@@ -2214,15 +2462,15 @@ function createElementNode({ prev, next, dispatch, stack }) {
   const delegated = [];
   for (const attr of next.attrs) {
     const name2 = attr[0];
-    const value = attr[1];
+    const value3 = attr[1];
     if (attr.as_property) {
-      if (el[name2] !== value)
-        el[name2] = value;
+      if (el[name2] !== value3)
+        el[name2] = value3;
       if (canMorph)
         prevAttributes.delete(name2);
     } else if (name2.startsWith("on")) {
       const eventName = name2.slice(2);
-      const callback = dispatch(value, eventName === "input");
+      const callback = dispatch(value3, eventName === "input");
       if (!handlersForEl.has(eventName)) {
         el.addEventListener(eventName, lustreGenericEventHandler);
       }
@@ -2236,25 +2484,25 @@ function createElementNode({ prev, next, dispatch, stack }) {
         el.addEventListener(eventName, lustreGenericEventHandler);
       }
       handlersForEl.set(eventName, callback);
-      el.setAttribute(name2, value);
+      el.setAttribute(name2, value3);
       if (canMorph) {
         prevHandlers.delete(eventName);
         prevAttributes.delete(name2);
       }
     } else if (name2.startsWith("delegate:data-") || name2.startsWith("delegate:aria-")) {
-      el.setAttribute(name2, value);
-      delegated.push([name2.slice(10), value]);
+      el.setAttribute(name2, value3);
+      delegated.push([name2.slice(10), value3]);
     } else if (name2 === "class") {
-      className = className === null ? value : className + " " + value;
+      className = className === null ? value3 : className + " " + value3;
     } else if (name2 === "style") {
-      style2 = style2 === null ? value : style2 + value;
+      style2 = style2 === null ? value3 : style2 + value3;
     } else if (name2 === "dangerous-unescaped-html") {
-      innerHTML = value;
+      innerHTML = value3;
     } else {
-      if (el.getAttribute(name2) !== value)
-        el.setAttribute(name2, value);
+      if (el.getAttribute(name2) !== value3)
+        el.setAttribute(name2, value3);
       if (name2 === "value" || name2 === "selected")
-        el[name2] = value;
+        el[name2] = value3;
       if (canMorph)
         prevAttributes.delete(name2);
     }
@@ -2281,9 +2529,9 @@ function createElementNode({ prev, next, dispatch, stack }) {
   if (next.tag === "slot") {
     window.queueMicrotask(() => {
       for (const child of el.assignedElements()) {
-        for (const [name2, value] of delegated) {
+        for (const [name2, value3] of delegated) {
           if (!child.hasAttribute(name2)) {
-            child.setAttribute(name2, value);
+            child.setAttribute(name2, value3);
           }
         }
       }
@@ -2331,25 +2579,25 @@ function createElementNode({ prev, next, dispatch, stack }) {
   return el;
 }
 var registeredHandlers = /* @__PURE__ */ new WeakMap();
-function lustreGenericEventHandler(event) {
-  const target = event.currentTarget;
+function lustreGenericEventHandler(event2) {
+  const target = event2.currentTarget;
   if (!registeredHandlers.has(target)) {
-    target.removeEventListener(event.type, lustreGenericEventHandler);
+    target.removeEventListener(event2.type, lustreGenericEventHandler);
     return;
   }
   const handlersForEventTarget = registeredHandlers.get(target);
-  if (!handlersForEventTarget.has(event.type)) {
-    target.removeEventListener(event.type, lustreGenericEventHandler);
+  if (!handlersForEventTarget.has(event2.type)) {
+    target.removeEventListener(event2.type, lustreGenericEventHandler);
     return;
   }
-  handlersForEventTarget.get(event.type)(event);
+  handlersForEventTarget.get(event2.type)(event2);
 }
-function lustreServerEventHandler(event) {
-  const el = event.currentTarget;
-  const tag = el.getAttribute(`data-lustre-on-${event.type}`);
+function lustreServerEventHandler(event2) {
+  const el = event2.currentTarget;
+  const tag = el.getAttribute(`data-lustre-on-${event2.type}`);
   const data = JSON.parse(el.getAttribute("data-lustre-data") || "{}");
   const include = JSON.parse(el.getAttribute("data-lustre-include") || "[]");
-  switch (event.type) {
+  switch (event2.type) {
     case "input":
     case "change":
       include.push("target.value");
@@ -2360,7 +2608,7 @@ function lustreServerEventHandler(event) {
     data: include.reduce(
       (data2, property) => {
         const path = property.split(".");
-        for (let i = 0, o = data2, e = event; i < path.length; i++) {
+        for (let i = 0, o = data2, e = event2; i < path.length; i++) {
           if (i === path.length - 1) {
             o[path[i]] = e[path[i]];
           } else {
@@ -2491,8 +2739,8 @@ var LustreClientApplication = class _LustreClientApplication {
         this.#queue = [];
         this.#model = action[0][0];
         const vdom = this.#view(this.#model);
-        const dispatch = (handler, immediate = false) => (event) => {
-          const result = handler(event);
+        const dispatch = (handler, immediate = false) => (event2) => {
+          const result = handler(event2);
           if (result instanceof Ok) {
             this.send(new Dispatch(result[0], immediate));
           }
@@ -2511,10 +2759,10 @@ var LustreClientApplication = class _LustreClientApplication {
         this.#tickScheduled = window.setTimeout(() => this.#tick());
       }
     } else if (action instanceof Emit2) {
-      const event = action[0];
+      const event2 = action[0];
       const data = action[1];
       this.root.dispatchEvent(
-        new CustomEvent(event, {
+        new CustomEvent(event2, {
           detail: data,
           bubbles: true,
           composed: true
@@ -2548,8 +2796,8 @@ var LustreClientApplication = class _LustreClientApplication {
     this.#tickScheduled = void 0;
     this.#flush(effects);
     const vdom = this.#view(this.#model);
-    const dispatch = (handler, immediate = false) => (event) => {
-      const result = handler(event);
+    const dispatch = (handler, immediate = false) => (event2) => {
+      const result = handler(event2);
       if (result instanceof Ok) {
         this.send(new Dispatch(result[0], immediate));
       }
@@ -2567,8 +2815,8 @@ var LustreClientApplication = class _LustreClientApplication {
     while (effects.length > 0) {
       const effect = effects.shift();
       const dispatch = (msg) => this.send(new Dispatch(msg));
-      const emit2 = (event, data) => this.root.dispatchEvent(
-        new CustomEvent(event, {
+      const emit3 = (event2, data) => this.root.dispatchEvent(
+        new CustomEvent(event2, {
           detail: data,
           bubbles: true,
           composed: true
@@ -2577,7 +2825,7 @@ var LustreClientApplication = class _LustreClientApplication {
       const select = () => {
       };
       const root = this.root;
-      effect({ dispatch, emit: emit2, select, root });
+      effect({ dispatch, emit: emit3, select, root });
     }
     if (this.#queue.length > 0) {
       this.#flush(effects);
@@ -2620,12 +2868,12 @@ var make_lustre_client_component = ({ init: init3, update: update2, view: view2,
             get() {
               return this[key];
             },
-            set(value) {
+            set(value3) {
               const prev = this[key];
-              if (this.#connected && isEqual(prev, value))
+              if (this.#connected && isEqual(prev, value3))
                 return;
-              this[key] = value;
-              const decoded = decoder(value);
+              this[key] = value3;
+              const decoded = decoder(value3);
               if (decoded instanceof Error)
                 return;
               this.#queue.push(decoded[0]);
@@ -2678,8 +2926,8 @@ var make_lustre_client_component = ({ init: init3, update: update2, view: view2,
           this.#queue = [];
           this.#model = action[0][0];
           const vdom = view2(this.#model);
-          const dispatch = (handler, immediate = false) => (event) => {
-            const result = handler(event);
+          const dispatch = (handler, immediate = false) => (event2) => {
+            const result = handler(event2);
             if (result instanceof Ok) {
               this.send(new Dispatch(result[0], immediate));
             }
@@ -2702,10 +2950,10 @@ var make_lustre_client_component = ({ init: init3, update: update2, view: view2,
           );
         }
       } else if (action instanceof Emit2) {
-        const event = action[0];
+        const event2 = action[0];
         const data = action[1];
         this.dispatchEvent(
-          new CustomEvent(event, {
+          new CustomEvent(event2, {
             detail: data,
             bubbles: true,
             composed: true
@@ -2729,8 +2977,8 @@ var make_lustre_client_component = ({ init: init3, update: update2, view: view2,
       this.#tickScheduled = void 0;
       this.#flush(effects2);
       const vdom = view2(this.#model);
-      const dispatch = (handler, immediate = false) => (event) => {
-        const result = handler(event);
+      const dispatch = (handler, immediate = false) => (event2) => {
+        const result = handler(event2);
         if (result instanceof Ok) {
           this.send(new Dispatch(result[0], immediate));
         }
@@ -2748,8 +2996,8 @@ var make_lustre_client_component = ({ init: init3, update: update2, view: view2,
       while (effects2.length > 0) {
         const effect = effects2.shift();
         const dispatch = (msg) => this.send(new Dispatch(msg));
-        const emit2 = (event, data) => this.dispatchEvent(
-          new CustomEvent(event, {
+        const emit3 = (event2, data) => this.dispatchEvent(
+          new CustomEvent(event2, {
             detail: data,
             bubbles: true,
             composed: true
@@ -2758,7 +3006,7 @@ var make_lustre_client_component = ({ init: init3, update: update2, view: view2,
         const select = () => {
         };
         const root = this.shadowRoot;
-        effect({ dispatch, emit: emit2, select, root });
+        effect({ dispatch, emit: emit3, select, root });
       }
       if (this.#queue.length > 0) {
         this.#flush(effects2);
@@ -2855,9 +3103,9 @@ var LustreServerApplication = class _LustreServerApplication {
       this.#queue.push(action[0]);
       this.#tick();
     } else if (action instanceof Emit2) {
-      const event = new Emit(action[0], action[1]);
+      const event2 = new Emit(action[0], action[1]);
       for (const [_, renderer] of this.#renderers) {
-        renderer(event);
+        renderer(event2);
       }
     } else if (action instanceof Event2) {
       const handler = this.#handlers.get(action[0]);
@@ -2908,8 +3156,8 @@ var LustreServerApplication = class _LustreServerApplication {
     while (effects.length > 0) {
       const effect = effects.shift();
       const dispatch = (msg) => this.send(new Dispatch(msg));
-      const emit2 = (event, data) => this.root.dispatchEvent(
-        new CustomEvent(event, {
+      const emit3 = (event2, data) => this.root.dispatchEvent(
+        new CustomEvent(event2, {
           detail: data,
           bubbles: true,
           composed: true
@@ -2918,7 +3166,7 @@ var LustreServerApplication = class _LustreServerApplication {
       const select = () => {
       };
       const root = null;
-      effect({ dispatch, emit: emit2, select, root });
+      effect({ dispatch, emit: emit3, select, root });
     }
     if (this.#queue.length > 0) {
       this.#flush(effects);
@@ -2928,27 +3176,56 @@ var LustreServerApplication = class _LustreServerApplication {
 var start_server_application = LustreServerApplication.start;
 var is_browser = () => globalThis.window && window.document;
 
-// build/dev/javascript/lustre/lustre/element/html.mjs
-function text2(content) {
-  return text(content);
-}
-function div(attrs, children2) {
-  return element("div", attrs, children2);
-}
-function p(attrs, children2) {
-  return element("p", attrs, children2);
-}
-
 // build/dev/javascript/gtempo/gtempo/internal.mjs
 var imprecise_day_microseconds = 864e8;
+function imprecise_days(days2) {
+  return days2 * imprecise_day_microseconds;
+}
+function as_days_imprecise(microseconds2) {
+  return divideInt(microseconds2, imprecise_day_microseconds);
+}
+var hour_microseconds = 36e8;
+var minute_microseconds = 6e7;
+var second_microseconds = 1e6;
+
+// build/dev/javascript/gtempo/tempo_ffi.mjs
+function now() {
+  return Date.now() * 1e3;
+}
+function local_offset() {
+  return -(/* @__PURE__ */ new Date()).getTimezoneOffset();
+}
+function now_monotonic() {
+  return Math.trunc(performance.now() * 1e3);
+}
+var unique = 1;
+function now_unique() {
+  return unique++;
+}
 
 // build/dev/javascript/gtempo/tempo.mjs
+var Instant = class extends CustomType {
+  constructor(timestamp_utc_us, offset_local_us, monotonic_us, unique2) {
+    super();
+    this.timestamp_utc_us = timestamp_utc_us;
+    this.offset_local_us = offset_local_us;
+    this.monotonic_us = monotonic_us;
+    this.unique = unique2;
+  }
+};
 var DateTime = class extends CustomType {
   constructor(date2, time2, offset2) {
     super();
     this.date = date2;
     this.time = time2;
     this.offset = offset2;
+  }
+};
+var NaiveDateTime = class extends CustomType {
+  constructor(date2, time2) {
+    super();
+    this.date = date2;
+    this.time = time2;
   }
 };
 var Offset = class extends CustomType {
@@ -2989,6 +3266,13 @@ var Nov = class extends CustomType {
 };
 var Dec = class extends CustomType {
 };
+var MonthYear = class extends CustomType {
+  constructor(month, year) {
+    super();
+    this.month = month;
+    this.year = year;
+  }
+};
 var Time = class extends CustomType {
   constructor(hour, minute, second, microsecond) {
     super();
@@ -2998,14 +3282,36 @@ var Time = class extends CustomType {
     this.microsecond = microsecond;
   }
 };
+var Duration = class extends CustomType {
+  constructor(microseconds2) {
+    super();
+    this.microseconds = microseconds2;
+  }
+};
 function datetime(date2, time2, offset2) {
   return new DateTime(date2, time2, offset2);
+}
+function datetime_drop_offset(datetime2) {
+  return new NaiveDateTime(datetime2.date, datetime2.time);
+}
+function naive_datetime_get_date(naive_datetime2) {
+  return naive_datetime2.date;
+}
+function naive_datetime_get_time(naive_datetime2) {
+  return naive_datetime2.time;
+}
+function offset_to_duration(offset2) {
+  let _pipe = -offset2.minutes * 6e7;
+  return new Duration(_pipe);
 }
 function date_get_year(date2) {
   return date2.year;
 }
 function date_get_month(date2) {
   return date2.month;
+}
+function date_get_month_year(date2) {
+  return new MonthYear(date2.month, date2.year);
 }
 function date_get_day(date2) {
   return date2.day;
@@ -3094,6 +3400,70 @@ function date_from_unix_seconds(unix_ts) {
   let month = $[0];
   return new Date2(y$1, month, d);
 }
+function instant_as_local_date(instant) {
+  return date_from_unix_seconds(
+    divideInt(instant.timestamp_utc_us + instant.offset_local_us, 1e6)
+  );
+}
+function date_from_unix_micro(unix_ts) {
+  return date_from_unix_seconds(divideInt(unix_ts, 1e6));
+}
+function month_year_prior(month_year) {
+  let $ = month_year.month;
+  if ($ instanceof Jan) {
+    return new MonthYear(new Dec(), month_year.year - 1);
+  } else if ($ instanceof Feb) {
+    return new MonthYear(new Jan(), month_year.year);
+  } else if ($ instanceof Mar) {
+    return new MonthYear(new Feb(), month_year.year);
+  } else if ($ instanceof Apr) {
+    return new MonthYear(new Mar(), month_year.year);
+  } else if ($ instanceof May) {
+    return new MonthYear(new Apr(), month_year.year);
+  } else if ($ instanceof Jun) {
+    return new MonthYear(new May(), month_year.year);
+  } else if ($ instanceof Jul) {
+    return new MonthYear(new Jun(), month_year.year);
+  } else if ($ instanceof Aug) {
+    return new MonthYear(new Jul(), month_year.year);
+  } else if ($ instanceof Sep) {
+    return new MonthYear(new Aug(), month_year.year);
+  } else if ($ instanceof Oct) {
+    return new MonthYear(new Sep(), month_year.year);
+  } else if ($ instanceof Nov) {
+    return new MonthYear(new Oct(), month_year.year);
+  } else {
+    return new MonthYear(new Nov(), month_year.year);
+  }
+}
+function month_year_next(month_year) {
+  let $ = month_year.month;
+  if ($ instanceof Jan) {
+    return new MonthYear(new Feb(), month_year.year);
+  } else if ($ instanceof Feb) {
+    return new MonthYear(new Mar(), month_year.year);
+  } else if ($ instanceof Mar) {
+    return new MonthYear(new Apr(), month_year.year);
+  } else if ($ instanceof Apr) {
+    return new MonthYear(new May(), month_year.year);
+  } else if ($ instanceof May) {
+    return new MonthYear(new Jun(), month_year.year);
+  } else if ($ instanceof Jun) {
+    return new MonthYear(new Jul(), month_year.year);
+  } else if ($ instanceof Jul) {
+    return new MonthYear(new Aug(), month_year.year);
+  } else if ($ instanceof Aug) {
+    return new MonthYear(new Sep(), month_year.year);
+  } else if ($ instanceof Sep) {
+    return new MonthYear(new Oct(), month_year.year);
+  } else if ($ instanceof Oct) {
+    return new MonthYear(new Nov(), month_year.year);
+  } else if ($ instanceof Nov) {
+    return new MonthYear(new Dec(), month_year.year);
+  } else {
+    return new MonthYear(new Jan(), month_year.year + 1);
+  }
+}
 function is_leap_year(year) {
   let $ = remainderInt(year, 4) === 0;
   if ($) {
@@ -3167,6 +3537,94 @@ function date_to_unix_seconds(date2) {
   let day_sec = (date_get_day(date2) - 1) * 86400;
   return year_sec + month_sec + day_sec;
 }
+function date_to_unix_micro(date2) {
+  return date_to_unix_seconds(date2) * 1e6;
+}
+function month_year_days_of(my) {
+  let $ = my.month;
+  if ($ instanceof Jan) {
+    return 31;
+  } else if ($ instanceof Mar) {
+    return 31;
+  } else if ($ instanceof May) {
+    return 31;
+  } else if ($ instanceof Jul) {
+    return 31;
+  } else if ($ instanceof Aug) {
+    return 31;
+  } else if ($ instanceof Oct) {
+    return 31;
+  } else if ($ instanceof Dec) {
+    return 31;
+  } else {
+    let $1 = my.month;
+    if ($1 instanceof Apr) {
+      return 30;
+    } else if ($1 instanceof Jun) {
+      return 30;
+    } else if ($1 instanceof Sep) {
+      return 30;
+    } else if ($1 instanceof Nov) {
+      return 30;
+    } else {
+      let $2 = is_leap_year(my.year);
+      if ($2) {
+        return 29;
+      } else {
+        return 28;
+      }
+    }
+  }
+}
+function date_subtract(loop$date, loop$days) {
+  while (true) {
+    let date2 = loop$date;
+    let days2 = loop$days;
+    let $ = days2 < date2.day;
+    if ($) {
+      return new Date2(date2.year, date2.month, date2.day - days2);
+    } else {
+      let prior_month = month_year_prior(
+        (() => {
+          let _pipe = date2;
+          return date_get_month_year(_pipe);
+        })()
+      );
+      loop$date = new Date2(
+        prior_month.year,
+        prior_month.month,
+        month_year_days_of(prior_month)
+      );
+      loop$days = days2 - date_get_day(date2);
+    }
+  }
+}
+function month_days_of(month, year) {
+  return month_year_days_of(new MonthYear(month, year));
+}
+function date_add(loop$date, loop$days) {
+  while (true) {
+    let date2 = loop$date;
+    let days2 = loop$days;
+    let days_left_this_month = month_days_of(date2.month, date2.year) - date2.day;
+    let $ = days2 <= days_left_this_month;
+    if ($) {
+      return new Date2(date2.year, date2.month, date2.day + days2);
+    } else {
+      let next_month = month_year_next(
+        (() => {
+          let _pipe = date2;
+          return date_get_month_year(_pipe);
+        })()
+      );
+      loop$date = new Date2(next_month.year, next_month.month, 1);
+      loop$days = days2 - days_left_this_month - 1;
+    }
+  }
+}
+function time_to_microseconds(time2) {
+  return time2.hour * hour_microseconds + time2.minute * minute_microseconds + time2.second * second_microseconds + time2.microsecond;
+}
 function time_from_microseconds(microseconds2) {
   let in_range_micro = remainderInt(
     microseconds2,
@@ -3189,7 +3647,178 @@ function time_from_microseconds(microseconds2) {
   let microsecond = adj_micro - hour * 36e8 - minute * 6e7 - second * 1e6;
   return new Time(hour, minute, second, microsecond);
 }
+function time_from_unix_micro(unix_ts) {
+  let _pipe = unix_ts - date_to_unix_micro(date_from_unix_micro(unix_ts));
+  return time_from_microseconds(_pipe);
+}
+function instant_as_local_time(instant) {
+  return time_from_unix_micro(
+    instant.timestamp_utc_us + instant.offset_local_us
+  );
+}
+function instant_as_local_datetime(instant) {
+  return new DateTime(
+    instant_as_local_date(instant),
+    instant_as_local_time(instant),
+    new Offset(divideInt(instant.offset_local_us, 6e7))
+  );
+}
+function time_to_duration(time2) {
+  let _pipe = time_to_microseconds(time2);
+  return new Duration(_pipe);
+}
+function time_add(a, b) {
+  let _pipe = time_to_microseconds(a) + b.microseconds;
+  return time_from_microseconds(_pipe);
+}
+function time_subtract(a, b) {
+  let _pipe = time_to_microseconds(a) - b.microseconds;
+  return time_from_microseconds(_pipe);
+}
+function duration(microseconds2) {
+  return new Duration(microseconds2);
+}
+function duration_days(days2) {
+  let _pipe = days2;
+  let _pipe$1 = imprecise_days(_pipe);
+  return duration(_pipe$1);
+}
+function duration_increase(a, b) {
+  return new Duration(a.microseconds + b.microseconds);
+}
+function duration_decrease(a, b) {
+  return new Duration(a.microseconds - b.microseconds);
+}
+function duration_absolute(duration2) {
+  let $ = duration2.microseconds < 0;
+  if ($) {
+    let _pipe = -duration2.microseconds;
+    return new Duration(_pipe);
+  } else {
+    return duration2;
+  }
+}
+function duration_as_days(duration2) {
+  let _pipe = duration2.microseconds;
+  return as_days_imprecise(_pipe);
+}
+function duration_as_microseconds(duration2) {
+  return duration2.microseconds;
+}
+function offset_local_micro() {
+  return local_offset() * 6e7;
+}
+function now2() {
+  return new Instant(
+    now(),
+    offset_local_micro(),
+    now_monotonic(),
+    now_unique()
+  );
+}
 var utc = /* @__PURE__ */ new Offset(0);
+function naive_datetime_subtract(datetime2, duration_to_subtract) {
+  return lazy_guard(
+    duration_to_subtract.microseconds < 0,
+    () => {
+      let _pipe = datetime2;
+      return naive_datetime_add(_pipe, duration_absolute(duration_to_subtract));
+    },
+    () => {
+      let days_to_sub = duration_as_days(duration_to_subtract);
+      let time_to_sub = duration_decrease(
+        duration_to_subtract,
+        duration_days(days_to_sub)
+      );
+      let new_time_as_micro = (() => {
+        let _pipe = datetime2.time;
+        let _pipe$1 = time_to_duration(_pipe);
+        let _pipe$2 = duration_decrease(_pipe$1, time_to_sub);
+        return duration_as_microseconds(_pipe$2);
+      })();
+      let $ = (() => {
+        let $1 = new_time_as_micro < 0;
+        if ($1) {
+          return [
+            new_time_as_micro + imprecise_day_microseconds,
+            days_to_sub + 1
+          ];
+        } else {
+          return [new_time_as_micro, days_to_sub];
+        }
+      })();
+      let new_time_as_micro$1 = $[0];
+      let days_to_sub$1 = $[1];
+      let time_to_sub$1 = new Duration(
+        time_to_microseconds(datetime2.time) - new_time_as_micro$1
+      );
+      let new_date$1 = (() => {
+        let _pipe = datetime2.date;
+        return date_subtract(_pipe, days_to_sub$1);
+      })();
+      let new_time$1 = (() => {
+        let _pipe = datetime2.time;
+        return time_subtract(_pipe, time_to_sub$1);
+      })();
+      return new NaiveDateTime(new_date$1, new_time$1);
+    }
+  );
+}
+function naive_datetime_add(datetime2, duration_to_add) {
+  return lazy_guard(
+    duration_to_add.microseconds < 0,
+    () => {
+      let _pipe = datetime2;
+      return naive_datetime_subtract(_pipe, duration_absolute(duration_to_add));
+    },
+    () => {
+      let days_to_add = duration_as_days(duration_to_add);
+      let time_to_add = duration_decrease(
+        duration_to_add,
+        duration_days(days_to_add)
+      );
+      let new_time_as_micro = (() => {
+        let _pipe = datetime2.time;
+        let _pipe$1 = time_to_duration(_pipe);
+        let _pipe$2 = duration_increase(_pipe$1, time_to_add);
+        return duration_as_microseconds(_pipe$2);
+      })();
+      let $ = (() => {
+        let $1 = new_time_as_micro >= imprecise_day_microseconds;
+        if ($1) {
+          return [
+            new_time_as_micro - imprecise_day_microseconds,
+            days_to_add + 1
+          ];
+        } else {
+          return [new_time_as_micro, days_to_add];
+        }
+      })();
+      let new_time_as_micro$1 = $[0];
+      let days_to_add$1 = $[1];
+      let time_to_add$1 = new Duration(
+        new_time_as_micro$1 - time_to_microseconds(datetime2.time)
+      );
+      let new_date$1 = (() => {
+        let _pipe = datetime2.date;
+        return date_add(_pipe, days_to_add$1);
+      })();
+      let new_time$1 = (() => {
+        let _pipe = datetime2.time;
+        return time_add(_pipe, time_to_add$1);
+      })();
+      return new NaiveDateTime(new_date$1, new_time$1);
+    }
+  );
+}
+function datetime_apply_offset(datetime2) {
+  let applied = (() => {
+    let _pipe = datetime2;
+    let _pipe$1 = datetime_drop_offset(_pipe);
+    return naive_datetime_add(_pipe$1, offset_to_duration(datetime2.offset));
+  })();
+  return new NaiveDateTime(applied.date, applied.time);
+}
 
 // build/dev/javascript/gtempo/tempo/date.mjs
 function from_unix_seconds(unix_ts) {
@@ -3220,6 +3849,77 @@ function from_unix_milli3(unix_ts) {
     from_unix_milli(unix_ts),
     from_unix_milli2(unix_ts),
     utc
+  );
+}
+function apply_offset(datetime2) {
+  return datetime_apply_offset(datetime2);
+}
+function to_unix_milli2(datetime2) {
+  let utc_dt = (() => {
+    let _pipe = datetime2;
+    return apply_offset(_pipe);
+  })();
+  return to_unix_milli(
+    (() => {
+      let _pipe = utc_dt;
+      return naive_datetime_get_date(_pipe);
+    })()
+  ) + divideInt(
+    time_to_microseconds(
+      (() => {
+        let _pipe = utc_dt;
+        return naive_datetime_get_time(_pipe);
+      })()
+    ),
+    1e3
+  );
+}
+
+// build/dev/javascript/gtempo/tempo/instant.mjs
+function now3() {
+  return now2();
+}
+function as_local_datetime(instant) {
+  return instant_as_local_datetime(instant);
+}
+
+// build/dev/javascript/lustre/lustre/element/html.mjs
+function text2(content) {
+  return text(content);
+}
+function div(attrs, children2) {
+  return element("div", attrs, children2);
+}
+function hr(attrs) {
+  return element("hr", attrs, toList([]));
+}
+function p(attrs, children2) {
+  return element("p", attrs, children2);
+}
+function input(attrs) {
+  return element("input", attrs, toList([]));
+}
+
+// build/dev/javascript/lustre/lustre/event.mjs
+function emit2(event2, data) {
+  return event(event2, data);
+}
+function on2(name2, handler) {
+  return on(name2, handler);
+}
+function value2(event2) {
+  let _pipe = event2;
+  return field("target", field("value", string))(
+    _pipe
+  );
+}
+function on_input(msg) {
+  return on2(
+    "input",
+    (event2) => {
+      let _pipe = value2(event2);
+      return map3(_pipe, msg);
+    }
   );
 }
 
@@ -3258,6 +3958,17 @@ var FindingComfirmation = class extends CustomType {
 };
 var FindingLeadInvalid = class extends CustomType {
 };
+function note_type_to_int(note_type) {
+  if (note_type instanceof FunctionTestNote) {
+    return 1;
+  } else if (note_type instanceof FunctionInvariantNote) {
+    return 2;
+  } else if (note_type instanceof LineCommentNote) {
+    return 3;
+  } else {
+    return 4;
+  }
+}
 function note_type_from_int(note_type) {
   let msg = "Invalid note type found " + to_string(note_type);
   if (note_type === 1) {
@@ -3270,6 +3981,21 @@ function note_type_from_int(note_type) {
     return new ThreadNote();
   } else {
     throw makeError("panic", "o11a/note", 55, "note_type_from_int", msg, {});
+  }
+}
+function note_significance_to_int(note_significance) {
+  if (note_significance instanceof Regular) {
+    return 1;
+  } else if (note_significance instanceof UnansweredQuestion) {
+    return 2;
+  } else if (note_significance instanceof AnsweredQuestion) {
+    return 3;
+  } else if (note_significance instanceof FindingLead) {
+    return 4;
+  } else if (note_significance instanceof FindingComfirmation) {
+    return 5;
+  } else {
+    return 6;
   }
 }
 function note_significance_from_int(note_significance) {
@@ -3296,40 +4022,88 @@ function note_significance_from_int(note_significance) {
     );
   }
 }
+function encode_note(note) {
+  return object2(
+    toList([
+      ["parent_id", string4(note.parent_id)],
+      [
+        "note_type",
+        int3(
+          (() => {
+            let _pipe = note.note_type;
+            return note_type_to_int(_pipe);
+          })()
+        )
+      ],
+      [
+        "significance",
+        int3(
+          (() => {
+            let _pipe = note.significance;
+            return note_significance_to_int(_pipe);
+          })()
+        )
+      ],
+      ["user_id", int3(note.user_id)],
+      ["message", string4(note.message)],
+      ["expanded_message", nullable(note.expanded_message, string4)],
+      [
+        "time",
+        int3(
+          (() => {
+            let _pipe = note.time;
+            return to_unix_milli2(_pipe);
+          })()
+        )
+      ],
+      ["thread_id", nullable(note.thread_id, string4)],
+      [
+        "last_edit_time",
+        nullable(
+          (() => {
+            let _pipe = note.last_edit_time;
+            return map(_pipe, to_unix_milli2);
+          })(),
+          int3
+        )
+      ]
+    ])
+  );
+}
 function json_note_decoder() {
-  return field(
+  return field2(
     "parent_id",
-    string2,
+    string3,
     (parent_id) => {
-      return field(
+      return field2(
         "note_type",
         int2,
         (note_type) => {
-          return field(
+          return field2(
             "significance",
             int2,
             (significance) => {
-              return field(
+              return field2(
                 "user_id",
                 int2,
                 (user_id) => {
-                  return field(
+                  return field2(
                     "message",
-                    string2,
+                    string3,
                     (message) => {
-                      return field(
+                      return field2(
                         "expanded_message",
-                        optional(string2),
+                        optional(string3),
                         (expanded_message) => {
-                          return field(
+                          return field2(
                             "time",
                             int2,
                             (time2) => {
-                              return field(
+                              return field2(
                                 "thread_id",
-                                optional(string2),
+                                optional(string3),
                                 (thread_id) => {
-                                  return field(
+                                  return field2(
                                     "last_edit_time",
                                     optional(int2),
                                     (last_edit_time) => {
@@ -3372,7 +4146,7 @@ function json_note_decoder() {
 }
 function decode_notes(notes) {
   return try$(
-    run(notes, string2),
+    run(notes, string3),
     (notes2) => {
       let _pipe = parse(notes2, list2(json_note_decoder()));
       return replace_error(
@@ -3391,9 +4165,17 @@ function decode_notes(notes) {
 
 // build/dev/javascript/o11a_common/o11a/user_interface/line_notes.mjs
 var Model2 = class extends CustomType {
-  constructor(notes) {
+  constructor(line_id, notes, current_note_draft) {
     super();
+    this.line_id = line_id;
     this.notes = notes;
+    this.current_note_draft = current_note_draft;
+  }
+};
+var ServerSetLineId = class extends CustomType {
+  constructor(x0) {
+    super();
+    this[0] = x0;
   }
 };
 var ServerUpdatedNotes = class extends CustomType {
@@ -3402,28 +4184,142 @@ var ServerUpdatedNotes = class extends CustomType {
     this[0] = x0;
   }
 };
-function init2(_) {
-  return [new Model2(toList([])), none()];
-}
-function update(_, msg) {
-  {
-    let notes = msg[0];
-    return [new Model2(notes), none()];
+var UserWroteNote = class extends CustomType {
+  constructor(x0) {
+    super();
+    this[0] = x0;
   }
+};
+var UserSubmittedNote = class extends CustomType {
+};
+function init2(_) {
+  return [new Model2("", toList([]), ""), none()];
+}
+function on_ctrl_enter(msg) {
+  return on2(
+    "keydown",
+    (event2) => {
+      let decoder = field2(
+        "ctrlKey",
+        bool,
+        (ctrl_key) => {
+          return field2(
+            "key",
+            string3,
+            (key) => {
+              return success([ctrl_key, key]);
+            }
+          );
+        }
+      );
+      let empty_error = toList([new DecodeError("", "", toList([]))]);
+      return try$(
+        (() => {
+          let _pipe = run(event2, decoder);
+          return replace_error(_pipe, empty_error);
+        })(),
+        (_use0) => {
+          let ctrl_key = _use0[0];
+          let key = _use0[1];
+          if (ctrl_key && key === "Enter") {
+            return new Ok(msg);
+          } else {
+            return new Error(empty_error);
+          }
+        }
+      );
+    }
+  );
 }
 function view(model) {
   return div(
     toList([class$("line-notes-list")]),
-    map2(
-      model.notes,
-      (note) => {
-        return p(
-          toList([class$("line-notes-list-item")]),
-          toList([text2(note.message)])
-        );
-      }
-    )
+    toList([
+      fragment(
+        map2(
+          model.notes,
+          (note) => {
+            return fragment(
+              toList([
+                p(
+                  toList([class$("line-notes-list-item")]),
+                  toList([text2(note.message)])
+                ),
+                hr(toList([]))
+              ])
+            );
+          }
+        )
+      ),
+      p(
+        toList([]),
+        toList([text2("Add a comment to " + model.line_id)])
+      ),
+      input(
+        toList([
+          on_input((var0) => {
+            return new UserWroteNote(var0);
+          }),
+          on_ctrl_enter(new UserSubmittedNote()),
+          value(model.current_note_draft)
+        ])
+      )
+    ])
   );
+}
+var component_name = "line-notes";
+var user_submitted_note_event = "user-submitted-line-note";
+function update(model, msg) {
+  if (msg instanceof ServerSetLineId) {
+    let line_id = msg[0];
+    return [
+      (() => {
+        let _record = model;
+        return new Model2(line_id, _record.notes, _record.current_note_draft);
+      })(),
+      none()
+    ];
+  } else if (msg instanceof ServerUpdatedNotes) {
+    let notes = msg[0];
+    return [
+      (() => {
+        let _record = model;
+        return new Model2(_record.line_id, notes, _record.current_note_draft);
+      })(),
+      none()
+    ];
+  } else if (msg instanceof UserWroteNote) {
+    let draft = msg[0];
+    return [
+      (() => {
+        let _record = model;
+        return new Model2(_record.line_id, _record.notes, draft);
+      })(),
+      none()
+    ];
+  } else {
+    let note = new Note(
+      model.line_id,
+      new LineCommentNote(),
+      new Regular(),
+      0,
+      model.current_note_draft,
+      new None(),
+      (() => {
+        let _pipe = now3();
+        return as_local_datetime(_pipe);
+      })(),
+      new None(),
+      new None()
+    );
+    return [
+      (() => {
+        let _record = model;
+        return new Model2(_record.line_id, _record.notes, "");
+      })(),
+      emit2(user_submitted_note_event, encode_note(note))
+    ];
+  }
 }
 function component2() {
   return component(
@@ -3451,12 +4347,31 @@ function component2() {
               );
             }
           }
+        ],
+        [
+          "line-id",
+          (dy) => {
+            let $ = run(dy, string3);
+            if ($.isOk()) {
+              let line_id = $[0];
+              return new Ok(new ServerSetLineId(line_id));
+            } else {
+              return new Error(
+                toList([
+                  new DecodeError(
+                    "line-id",
+                    inspect2(dy),
+                    toList([])
+                  )
+                ])
+              );
+            }
+          }
         ]
       ])
     )
   );
 }
-var component_name = "line-notes";
 
 // build/dev/javascript/o11a_client/o11a/client/line_notes.mjs
 function register() {

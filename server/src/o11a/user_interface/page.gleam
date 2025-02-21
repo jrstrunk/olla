@@ -1,6 +1,9 @@
 import given
 import gleam/dict
+import gleam/dynamic
+import gleam/dynamic/decode
 import gleam/int
+import gleam/io
 import gleam/json
 import gleam/list
 import gleam/result
@@ -11,12 +14,15 @@ import lustre/attribute
 import lustre/effect
 import lustre/element
 import lustre/element/html
+import lustre/event
+import lustre/server_component
 import o11a/config
 import o11a/note
 import o11a/server/discussion
 import o11a/user_interface/line_notes
 import simplifile
 import snag
+import tempo/datetime
 
 pub const name = "o11a-discussions"
 
@@ -25,7 +31,7 @@ pub fn app() -> lustre.App(Model, Model, Msg) {
 }
 
 pub type Msg {
-  UserSubmittedNote
+  UserSubmittedNote(note: note.Note)
 }
 
 pub type Model {
@@ -36,8 +42,14 @@ pub fn init(init_model) -> #(Model, effect.Effect(Msg)) {
   #(init_model, effect.none())
 }
 
-pub fn update(model: Model, _msg: Msg) -> #(Model, effect.Effect(Msg)) {
-  #(model, effect.none())
+pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
+  case msg {
+    UserSubmittedNote(note) -> {
+      io.debug("User submitted note")
+      let assert Ok(page_notes) = discussion.add_note(model.page_notes, note)
+      #(Model(..model, page_notes:), effect.none())
+    }
+  }
 }
 
 fn view(model: Model, is_skeleton is_skeleton) -> element.Element(Msg) {
@@ -116,16 +128,16 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
     ])
   })
 
-  let line_comments = case line_number == 21 {
-    True ->
-      dict.get(model.page_notes.line_comment_notes, line_id)
-      |> result.unwrap([])
-    False -> []
-  }
+  let line_comments =
+    dict.get(model.page_notes.line_comment_notes, line_id)
+    |> result.unwrap([])
+    |> list.sort(fn(a, b) { datetime.compare(a.time, b.time) })
 
-  let inline_comment_preview_text = case line_comments |> list.take(1) {
+  let inline_comment_preview_text = case
+    line_comments |> list.reverse |> list.take(1)
+  {
     [comment] -> comment.message |> string.slice(at_index: 0, length: 30)
-    _ -> ""
+    _ -> "+"
   }
 
   html.p([attribute.class("loc"), attribute.id(line_id)], [
@@ -154,11 +166,30 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
                 |> json.preprocessed_array
                 |> json.to_string,
             ),
-            // event listeners & includes go here
+            attribute.attribute("line-id", line_id),
+            on_user_submitted_line_note(UserSubmittedNote),
+            server_component.include(["detail"]),
           ],
           [],
         ),
       ],
     ),
   ])
+}
+
+pub fn on_user_submitted_line_note(msg) {
+  use event <- event.on(line_notes.user_submitted_note_event)
+
+  let empty_error = [dynamic.DecodeError("", "", [])]
+
+  use note <- result.try(
+    decode.run(
+      event,
+      decode.field("detail", note.json_note_decoder(), decode.success),
+    )
+    |> result.replace_error(empty_error),
+  )
+
+  msg(note)
+  |> Ok
 }

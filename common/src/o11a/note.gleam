@@ -125,7 +125,10 @@ pub fn encode_note(note: Note) {
 
 pub fn decode_note(note: dynamic.Dynamic) {
   use note <- result.try(decode.run(note, decode.string))
+  parse_note(note)
+}
 
+pub fn parse_note(note: String) {
   json.parse(note, json_note_decoder())
   |> result.replace_error([
     decode.DecodeError("json-encoded note", string.inspect(note), []),
@@ -141,7 +144,7 @@ pub fn decode_notes(notes: dynamic.Dynamic) {
   ])
 }
 
-fn json_note_decoder() {
+pub fn json_note_decoder() {
   use parent_id <- decode.field("parent_id", decode.string)
   use note_type <- decode.field("note_type", decode.int)
   use significance <- decode.field("significance", decode.int)
