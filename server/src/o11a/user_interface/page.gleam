@@ -94,13 +94,13 @@ pub fn preprocess_source(for page_path) {
 }
 
 fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
-  let line_number = int.to_string(line_number)
-  let line_id = "L" <> line_number
+  let line_number_text = int.to_string(line_number)
+  let line_id = "L" <> line_number_text
 
   use <- given.that(is_skeleton, return: fn() {
     html.p([attribute.class("loc"), attribute.id(line_id)], [
       html.span([attribute.class("line-number faded-code-extras")], [
-        html.text(line_number),
+        html.text(line_number_text),
       ]),
       html.text(line_text),
     ])
@@ -109,7 +109,7 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
   use <- given.that(line_text == "", return: fn() {
     html.p([attribute.class("loc"), attribute.id(line_id)], [
       html.span([attribute.class("line-number faded-code-extras")], [
-        html.text(line_number),
+        html.text(line_number_text),
       ]),
       html.text(" "),
     ])
@@ -123,13 +123,21 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
     _ -> ""
   }
 
-  html.div([], [
-    html.p([attribute.class("loc"), attribute.id(line_id)], [
-      html.span([attribute.class("line-number faded-code-extras")], [
-        html.text(line_number),
-      ]),
-      html.text(line_text),
-      html.span([attribute.class("loc"), attribute.class("inline-comment")], [
+  html.p([attribute.class("loc"), attribute.id(line_id)], [
+    html.span([attribute.class("line-number faded-code-extras")], [
+      html.text(line_number_text),
+    ]),
+    html.text(line_text),
+    html.span(
+      [
+        attribute.class("loc"),
+        attribute.class("inline-comment"),
+        attribute.class("fade-in"),
+        attribute.style([
+          #("animation-delay", int.to_string(line_number * 4) <> "ms"),
+        ]),
+      ],
+      [
         html.span([attribute.class("line-hover-discussion")], [
           element.element(
             line_notes.component_name,
@@ -152,7 +160,7 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
           ],
           [html.text(inline_comment_preview_text)],
         ),
-      ]),
-    ]),
+      ],
+    ),
   ])
 }

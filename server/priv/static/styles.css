@@ -19,6 +19,20 @@
   font-style: italic;
 }
 
+.fade-in {
+  opacity: 0;
+  animation: fadeIn 100ms ease-in forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .line-number {
   display: inline-block;
   margin-right: 1.5rem;
@@ -64,12 +78,6 @@
   opacity: opacity 0.3s;
   position: absolute;
   z-index: 99;
-  background-color: rgb(85, 85, 85);
-  color: rgb(255, 255, 255);
-  text-align: center;
-  padding: 5px;
-  border-radius: 6px;
-  /* left: -21%; */
   opacity: 0;
   transition: opacity 0.3s;
 }
