@@ -10,8 +10,8 @@ import lustre/element
 import mist
 import o11a/config
 import snag
-import user_interface/gateway
-import user_interface/page
+import o11a/user_interface/gateway
+import o11a/user_interface/page
 import wisp
 import wisp/wisp_mist
 
@@ -22,7 +22,7 @@ type Context {
 pub fn main() {
   io.println("o11a is starting!")
 
-  let config = config.Config(port: 8430)
+  let config = config.Config(port: 8400)
 
   use discussion_gateway <- result.map(gateway.start_discussion_gateway())
 

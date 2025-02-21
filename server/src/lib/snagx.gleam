@@ -18,7 +18,7 @@ pub fn collect_errors(results: List(Result(a, snag.Snag))) {
         { list.length(rest_errors) + 1 } |> int.to_string
           <> " collected errors <- "
           <> snag.line_print(first_error),
-        fn(acc, e) { acc <> ", then " <> snag.line_print(e) },
+        fn(acc, e) { acc <> ", and " <> snag.line_print(e) },
       )
       |> snag.error
   }

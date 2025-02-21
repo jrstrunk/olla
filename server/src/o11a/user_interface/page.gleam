@@ -11,7 +11,7 @@ import lustre/effect
 import lustre/element
 import lustre/element/html
 import o11a/config
-import server/discussion
+import o11a/server/discussion
 import simplifile
 import snag
 

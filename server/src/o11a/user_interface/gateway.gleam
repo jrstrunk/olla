@@ -6,9 +6,9 @@ import lib/concurrent_dict
 import lib/snagx
 import lustre
 import o11a/config
-import server/discussion
+import o11a/server/discussion
+import o11a/user_interface/page
 import snag
-import user_interface/page
 
 pub type DiscussionGateway =
   concurrent_dict.ConcurrentDict(
