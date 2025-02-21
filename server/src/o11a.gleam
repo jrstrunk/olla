@@ -22,7 +22,7 @@ type Context {
 pub fn main() {
   io.println("o11a is starting!")
 
-  let config = config.Config(port: 8400)
+  let config = config.Config(port: 8402)
 
   use discussion_gateway <- result.map(gateway.start_discussion_gateway())
 
@@ -44,6 +44,8 @@ fn handler(req, context: Context) {
       server_componentx.serve_lustre_framework()
 
     ["styles.css"] -> server_componentx.serve_css("styles.css")
+
+    ["line_notes.mjs"] -> server_componentx.serve_js("line_notes.mjs")
 
     ["component", ..component_path_segments] -> {
       let assert Ok(actor) =
@@ -83,7 +85,8 @@ fn handle_wisp_request(req, _context: Context) {
             skeleton,
           )
           |> server_componentx.as_document
-          |> element.to_string_builder
+          // |> element.to_string_builder
+          |> element.to_document_string_builder
           |> wisp.html_response(200)
         }
 

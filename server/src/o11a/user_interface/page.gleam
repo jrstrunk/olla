@@ -123,7 +123,7 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
     _ -> ""
   }
 
-  html.div([attribute.class("hover-container")], [
+  html.div([], [
     html.p([attribute.class("loc"), attribute.id(line_id)], [
       html.span([attribute.class("line-number faded-code-extras")], [
         html.text(line_number),
@@ -134,7 +134,7 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
           element.element(
             line_notes.component_name,
             [
-              attribute.property(
+              attribute.attribute(
                 "line-notes",
                 list.map(line_comments, discussion.encode_note)
                   |> json.preprocessed_array

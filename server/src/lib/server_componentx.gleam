@@ -124,6 +124,10 @@ pub fn as_document(body: element.Element(msg)) {
     html.head([], [
       html.link([attribute.rel("stylesheet"), attribute.href("/styles.css")]),
       html.script(
+        [attribute.type_("module"), attribute.src("/line_notes.mjs")],
+        "",
+      ),
+      html.script(
         [
           attribute.type_("module"),
           attribute.src("/lustre-server-component.mjs"),
@@ -181,4 +185,13 @@ pub fn serve_css(style_sheet_name) {
   response.new(200)
   |> response.prepend_header("content-type", "text/css")
   |> response.set_body(css)
+}
+
+pub fn serve_js(js_file_name) {
+  let path = config.get_priv_path(for: "static/" <> js_file_name)
+  let assert Ok(js) = mist.send_file(path, offset: 0, limit: None)
+
+  response.new(200)
+  |> response.prepend_header("content-type", "text/javascript")
+  |> response.set_body(js)
 }

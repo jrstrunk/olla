@@ -1,14 +1,9 @@
-import gleam/dict
-import gleam/dynamic
-import gleam/io
-import gleam/result
-import lustre
 import o11a/user_interface/line_notes
 
 pub const name = line_notes.component_name
 
 pub fn register() {
-  lustre.component(todo, todo, todo, dict.from_list([#(todo, todo)]))
+  line_notes.component()
   // |> lustre.register(name)
   // 
   // We could then call lustre register like so to register the component 

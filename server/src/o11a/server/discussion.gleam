@@ -387,42 +387,50 @@ pub fn encode_note(note: Note) {
 pub fn decode_note(note: dynamic.Dynamic) {
   use note <- result.try(decode.run(note, decode.string))
 
-  let decoder = {
-    use parent_id <- decode.field("parent_id", decode.string)
-    use note_type <- decode.field("note_type", decode.int)
-    io.debug(note_type)
-    use significance <- decode.field("significance", decode.int)
-    use user_id <- decode.field("user_id", decode.int)
-    use message <- decode.field("message", decode.string)
-    use expanded_message <- decode.field(
-      "expanded_message",
-      decode.optional(decode.string),
-    )
-    use time <- decode.field("time", decode.int)
-    use thread_id <- decode.field("thread_id", decode.optional(decode.string))
-    use last_edit_time <- decode.field(
-      "last_edit_time",
-      decode.optional(decode.int),
-    )
-
-    Note(
-      parent_id:,
-      note_type: note_type_from_int(note_type),
-      significance: note_significance_from_int(significance),
-      user_id:,
-      message:,
-      expanded_message:,
-      time: datetime.from_unix_milli(time),
-      thread_id:,
-      last_edit_time: last_edit_time |> option.map(datetime.from_unix_milli),
-    )
-    |> decode.success
-  }
-
-  json.parse(note, decoder)
+  json.parse(note, json_note_decoder())
   |> result.replace_error([
     decode.DecodeError("json-encoded note", string.inspect(note), []),
   ])
+}
+
+pub fn decode_notes(notes: dynamic.Dynamic) {
+  use notes <- result.try(decode.run(notes, decode.string))
+
+  json.parse(notes, decode.list(json_note_decoder()))
+  |> result.replace_error([
+    decode.DecodeError("json-encoded note", string.inspect(notes), []),
+  ])
+}
+
+fn json_note_decoder() {
+  use parent_id <- decode.field("parent_id", decode.string)
+  use note_type <- decode.field("note_type", decode.int)
+  use significance <- decode.field("significance", decode.int)
+  use user_id <- decode.field("user_id", decode.int)
+  use message <- decode.field("message", decode.string)
+  use expanded_message <- decode.field(
+    "expanded_message",
+    decode.optional(decode.string),
+  )
+  use time <- decode.field("time", decode.int)
+  use thread_id <- decode.field("thread_id", decode.optional(decode.string))
+  use last_edit_time <- decode.field(
+    "last_edit_time",
+    decode.optional(decode.int),
+  )
+
+  Note(
+    parent_id:,
+    note_type: note_type_from_int(note_type),
+    significance: note_significance_from_int(significance),
+    user_id:,
+    message:,
+    expanded_message:,
+    time: datetime.from_unix_milli(time),
+    thread_id:,
+    last_edit_time: last_edit_time |> option.map(datetime.from_unix_milli),
+  )
+  |> decode.success
 }
 
 fn connect_to_page_db(page_path) {
