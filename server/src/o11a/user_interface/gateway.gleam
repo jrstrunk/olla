@@ -1,3 +1,4 @@
+import gleam/dict
 import gleam/erlang/process
 import gleam/list
 import gleam/result
@@ -17,21 +18,31 @@ pub type DiscussionGateway =
   )
 
 pub fn start_discussion_gateway() -> Result(DiscussionGateway, snag.Snag) {
-  config.get_all_audit_file_paths()
-  |> list.map(fn(page_path) {
-    use preprocessed_source <- result.try(page.preprocess_source(for: page_path))
-    use page_notes <- result.try(discussion.get_page_notes(page_path))
-    use actor <- result.map(
-      lustre.start_actor(
-        page.app(),
-        page.Model(preprocessed_source:, page_notes:),
-      )
-      |> snag.map_error(string.inspect),
-    )
+  let page_paths = config.get_all_audit_page_paths()
 
-    #(page_path, actor)
+  dict.keys(page_paths)
+  |> list.map(fn(audit_name) {
+    use discussion <- result.try(discussion.get_audit_discussion(audit_name))
+
+    dict.get(page_paths, audit_name)
+    |> result.unwrap([])
+    |> list.map(fn(page_path) {
+      use preprocessed_source <- result.try(page.preprocess_source(
+        for: page_path,
+      ))
+      use actor <- result.map(
+        lustre.start_actor(
+          page.app(),
+          page.Model(page_path:, preprocessed_source:, discussion:),
+        )
+        |> snag.map_error(string.inspect),
+      )
+      #(page_path, actor)
+    })
+    |> snagx.collect_errors
   })
   |> snagx.collect_errors
+  |> result.map(list.flatten)
   |> result.map(concurrent_dict.from_list)
 }
 

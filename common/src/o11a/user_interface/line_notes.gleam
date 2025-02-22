@@ -74,7 +74,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
           user_id: 0,
           message: model.current_note_draft,
           expanded_message: None,
-          time: instant.now() |> instant.as_local_datetime,
+          time: instant.now() |> instant.as_utc_datetime,
           thread_id: None,
           last_edit_time: None,
         )
@@ -98,7 +98,7 @@ fn view(model: Model) -> element.Element(Msg) {
         ])
       }),
     ),
-    html.p([], [html.text("Add a comment to " <> model.line_id)]),
+    html.span([], [html.text("Add a new comment: ")]),
     html.input([
       event.on_input(UserWroteNote),
       on_ctrl_enter(UserSubmittedNote),

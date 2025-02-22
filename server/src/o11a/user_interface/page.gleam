@@ -8,6 +8,7 @@ import gleam/json
 import gleam/list
 import gleam/result
 import gleam/string
+import lib/persistent_concurrent_duplicate_dict as pcd_dict
 import lib/server_componentx
 import lustre
 import lustre/attribute
@@ -35,7 +36,11 @@ pub type Msg {
 }
 
 pub type Model {
-  Model(preprocessed_source: List(String), page_notes: discussion.PageNotes)
+  Model(
+    page_path: String,
+    preprocessed_source: List(String),
+    discussion: discussion.Discussion,
+  )
 }
 
 pub fn init(init_model) -> #(Model, effect.Effect(Msg)) {
@@ -46,8 +51,8 @@ pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
     UserSubmittedNote(note) -> {
       io.debug("User submitted note")
-      let assert Ok(page_notes) = discussion.add_note(model.page_notes, note)
-      #(Model(..model, page_notes:), effect.none())
+      let assert Ok(Nil) = discussion.add_note(model.discussion, note)
+      #(model, effect.none())
     }
   }
 }
@@ -74,8 +79,9 @@ pub fn get_skeleton(for page_path) {
 
         let skeleton =
           Model(
+            page_path:,
             preprocessed_source: source,
-            page_notes: discussion.empty_page_notes(page_path),
+            discussion: discussion.empty_discussion(page_path),
           )
           |> view(is_skeleton: True)
           |> element.to_string
@@ -108,10 +114,11 @@ pub fn preprocess_source(for page_path) {
 
 fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
   let line_number_text = int.to_string(line_number)
-  let line_id = "L" <> line_number_text
+  let line_tag = "L" <> line_number_text
+  let line_id = model.page_path <> "#" <> line_tag
 
   use <- given.that(is_skeleton, return: fn() {
-    html.p([attribute.class("loc"), attribute.id(line_id)], [
+    html.p([attribute.class("loc"), attribute.id(line_tag)], [
       html.span([attribute.class("line-number faded-code-extras")], [
         html.text(line_number_text),
       ]),
@@ -120,7 +127,7 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
   })
 
   use <- given.that(line_text == "", return: fn() {
-    html.p([attribute.class("loc"), attribute.id(line_id)], [
+    html.p([attribute.class("loc"), attribute.id(line_tag)], [
       html.span([attribute.class("line-number faded-code-extras")], [
         html.text(line_number_text),
       ]),
@@ -129,7 +136,7 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
   })
 
   let line_comments =
-    dict.get(model.page_notes.line_comment_notes, line_id)
+    pcd_dict.get(model.discussion.line_comment_notes, line_id)
     |> result.unwrap([])
     |> list.sort(fn(a, b) { datetime.compare(a.time, b.time) })
 
@@ -140,7 +147,7 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
     _ -> "+"
   }
 
-  html.p([attribute.class("loc"), attribute.id(line_id)], [
+  html.p([attribute.class("loc"), attribute.id(line_tag)], [
     html.span([attribute.class("line-number faded-code-extras")], [
       html.text(line_number_text),
     ]),

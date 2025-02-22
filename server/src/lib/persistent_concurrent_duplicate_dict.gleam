@@ -1,13 +1,13 @@
 import filepath
 import gleam/dynamic/decode
+import gleam/int
 import gleam/list
-import gleam/regexp
+import gleam/option
 import gleam/result
 import gleam/string
 import lib/concurrent_duplicate_dict
 import lib/snagx
 import lib/sqlightx
-import o11a/config
 import simplifile
 import snag
 import sqlight
@@ -17,7 +17,7 @@ pub opaque type PersistentConcurrentDuplicateDict(key, val) {
     conn: sqlight.Connection,
     insert_query: String,
     key_encoder: fn(key) -> String,
-    val_encoder: fn(val) -> List(sqlight.Value),
+    val_encoder: fn(val) -> List(Value),
     data: concurrent_duplicate_dict.ConcurrentDuplicateDict(key, val),
   )
 }
@@ -29,14 +29,21 @@ pub opaque type PersistentConcurrentDuplicateDict(key, val) {
 /// The value decoder should be a decoder that expects indexed fields in the same
 /// order as the schema.
 pub fn build(
-  name name: String,
+  path path: String,
   key_encoder key_encoder: fn(key) -> String,
   key_decoder key_decoder: fn(String) -> key,
-  field_schema field_schema: String,
-  val_encoder val_encoder: fn(val) -> List(sqlight.Value),
+  example example: val,
+  val_encoder val_encoder: fn(val) -> List(Value),
   val_decoder val_decoder: decode.Decoder(val),
 ) {
-  let path = config.get_persist_path(for: name <> ".db")
+  let encoded_example = val_encoder(example)
+  let field_schema = build_schema(encoded_example)
+  let column_names = build_column_names(encoded_example)
+  let column_binds =
+    encoded_example
+    |> list.length
+    |> list.repeat("?", _)
+    |> string.join(", ")
 
   let assert Ok(Nil) =
     filepath.directory_name(path)
@@ -57,10 +64,6 @@ pub fn build(
     |> snag.map_error(string.inspect)
     |> snag.context("Unable to create table schema"),
   )
-
-  use column_names <- result.try(get_column_names_from_field_schema(
-    field_schema,
-  ))
 
   // Sadly to keep to keep interface abstraction, we have to gather all keys
   // first, then query for each key's data. This avoids the user having to
@@ -100,16 +103,11 @@ pub fn build(
 
   let data = concurrent_duplicate_dict.from_nested_list(data_list)
 
-  let user_defined_column_count =
-    column_names
-    |> string.split(",")
-    |> list.length
-
   let insert_query =
     "INSERT INTO persist (pcdd_key, "
     <> column_names
     <> ") VALUES (?, "
-    <> list.repeat("?", user_defined_column_count) |> string.join(", ")
+    <> column_binds
     <> ")"
 
   PersistentConcurrentDuplicateDict(
@@ -119,18 +117,6 @@ pub fn build(
     val_encoder:,
     data:,
   )
-}
-
-fn get_column_names_from_field_schema(field_schema) {
-  use column_name_regex <- result.map(
-    regexp.compile(
-      "\\s+((?:TEXT|INTEGER|REAL|BLOB|NULL|PRIMARY KEY|NOT NULL)[^,]*)",
-      regexp.Options(case_insensitive: True, multi_line: True),
-    )
-    |> snag.map_error(string.inspect),
-  )
-
-  regexp.replace(column_name_regex, field_schema, "")
 }
 
 pub fn get(pcd: PersistentConcurrentDuplicateDict(key, val), key) {
@@ -145,11 +131,130 @@ pub fn insert(pcdd: PersistentConcurrentDuplicateDict(key, val), key, val) {
     sqlight.query(
       pcdd.insert_query,
       on: pcdd.conn,
-      with: [sqlight.text(encoded_key), ..encoded_vals],
+      with: [
+        sqlight.text(encoded_key),
+        ..list.map(encoded_vals, translate_persist_type)
+      ],
       expecting: decode.success(Nil),
     )
     |> snag.map_error(string.inspect),
   )
 
   concurrent_duplicate_dict.insert(pcdd.data, key, val)
+}
+
+/// Creates an empty dictionary that will fail to store any data, but can 
+/// satisfy type requirements and will always return no data.
+pub fn empty() {
+  let assert Ok(conn) = sqlight.open(":memory:")
+  PersistentConcurrentDuplicateDict(
+    conn:,
+    insert_query: "",
+    key_encoder: string.inspect,
+    val_encoder: fn(_) { [] },
+    data: concurrent_duplicate_dict.new(),
+  )
+}
+
+pub opaque type Value {
+  Integer(Int)
+  Real(Float)
+  Text(String)
+  NullableInteger(option.Option(Int))
+  NullableReal(option.Option(Float))
+  NullableText(option.Option(String))
+}
+
+pub fn int(int: Int) {
+  Integer(int)
+}
+
+pub fn float(float: Float) {
+  Real(float)
+}
+
+pub fn text(text: String) {
+  Text(text)
+}
+
+pub fn int_nullable(int: option.Option(Int)) {
+  NullableInteger(int)
+}
+
+pub fn float_nullable(float: option.Option(Float)) {
+  NullableReal(float)
+}
+
+pub fn text_nullable(text: option.Option(String)) {
+  NullableText(text)
+}
+
+fn build_schema(encoded_example: List(Value)) {
+  list.index_map(encoded_example, fn(persist_type, index) {
+    case persist_type {
+      Integer(..) -> "val" <> int.to_string(index) <> " INTEGER NOT NULL"
+      Real(..) -> "val" <> int.to_string(index) <> " REAL NOT NULL"
+      Text(..) -> "val" <> int.to_string(index) <> " TEXT NOT NULL"
+      NullableInteger(..) -> "val" <> int.to_string(index) <> " INTEGER"
+      NullableReal(..) -> "val" <> int.to_string(index) <> " REAL"
+      NullableText(..) -> "val" <> int.to_string(index) <> " TEXT"
+    }
+  })
+  |> string.join(", ")
+}
+
+fn build_column_names(encoded_example: List(Value)) {
+  list.index_map(encoded_example, fn(_, index) { "val" <> int.to_string(index) })
+  |> string.join(", ")
+}
+
+fn translate_persist_type(persist_type: Value) {
+  case persist_type {
+    Integer(int) -> sqlight.int(int)
+    Real(real) -> sqlight.float(real)
+    Text(text) -> sqlight.text(text)
+    NullableInteger(int) -> sqlight.nullable(sqlight.int, int)
+    NullableReal(real) -> sqlight.nullable(sqlight.float, real)
+    NullableText(text) -> sqlight.nullable(sqlight.text, text)
+  }
+}
+
+pub fn test_round_trip(
+  example: a,
+  encoder: fn(a) -> List(Value),
+  decoder: decode.Decoder(a),
+) {
+  let assert Ok(conn) = sqlight.open(":memory:")
+
+  let encoded_example = encoder(example)
+
+  let assert Ok(Nil) =
+    sqlight.exec(
+      "CREATE TABLE persist (" <> build_schema(encoded_example) <> ")",
+      on: conn,
+    )
+
+  let assert Ok(_) =
+    sqlight.query(
+      "INSERT INTO persist VALUES ("
+        <> list.length(encoded_example)
+      |> list.repeat("?", _)
+      |> string.join(", ")
+        <> ")",
+      with: encoded_example |> list.map(translate_persist_type),
+      on: conn,
+      expecting: decode.success(Nil),
+    )
+
+  let assert Ok([out]) =
+    sqlight.query(
+      "SELECT * FROM persist",
+      with: [],
+      on: conn,
+      expecting: decoder,
+    )
+
+  let assert Ok(Nil) = sqlight.close(conn)
+
+  out
 }

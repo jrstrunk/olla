@@ -8,6 +8,7 @@ import gleam/result
 import gleam/string
 import tempo
 import tempo/datetime
+import tempo/instant
 
 pub type Note {
   Note(
@@ -46,13 +47,12 @@ pub fn note_type_to_int(note_type) {
 }
 
 pub fn note_type_from_int(note_type) {
-  let msg = "Invalid note type found " <> int.to_string(note_type)
   case note_type {
     1 -> FunctionTestNote
     2 -> FunctionInvariantNote
     3 -> LineCommentNote
     4 -> ThreadNote
-    _ -> panic as msg
+    _ -> panic as "Invalid note type found"
   }
 }
 
@@ -88,9 +88,28 @@ pub fn note_significance_from_int(note_significance) {
   }
 }
 
+pub type NoteVoteSigficance {
+  UpVote
+  DownVote
+}
+
+pub fn note_vote_sigficance_to_int(note_vote_sigficance) {
+  case note_vote_sigficance {
+    UpVote -> 1
+    DownVote -> 2
+  }
+}
+
+pub fn note_vote_sigficance_from_int(note_vote_sigficance) {
+  case note_vote_sigficance {
+    1 -> UpVote
+    2 -> DownVote
+    _ -> panic as "Invalid note vote significance found"
+  }
+}
+
 pub type NoteVote {
-  UpVote(user_id: Int)
-  DownVote(user_id: Int)
+  NoteVote(note_id: String, user_id: Int, sigficance: NoteVoteSigficance)
 }
 
 /// A dictionary mapping each note id to a list of votes for it. The data is
@@ -100,7 +119,9 @@ pub type NoteVoteCollection =
   dict.Dict(NoteId, List(NoteVote))
 
 pub fn get_note_id(note: Note) {
-  #(note.user_id, note.time |> datetime.to_unix_milli)
+  int.to_string(note.user_id)
+  <> "-"
+  <> int.to_string(note.time |> datetime.to_unix_milli)
 }
 
 pub fn encode_note(note: Note) {
@@ -173,4 +194,25 @@ pub fn json_note_decoder() {
     last_edit_time: last_edit_time |> option.map(datetime.from_unix_milli),
   )
   |> decode.success
+}
+
+pub fn example_note() {
+  Note(
+    parent_id: "Example",
+    note_type: LineCommentNote,
+    significance: Regular,
+    user_id: 0,
+    message: "Wow bro great finding that is really cool",
+    expanded_message: option.None,
+    time: instant.now()
+      |> instant.as_utc_datetime
+      |> datetime.to_unix_milli
+      |> datetime.from_unix_milli,
+    thread_id: option.None,
+    last_edit_time: option.None,
+  )
+}
+
+pub fn example_note_vote() {
+  NoteVote(note_id: "Example", user_id: 0, sigficance: UpVote)
 }

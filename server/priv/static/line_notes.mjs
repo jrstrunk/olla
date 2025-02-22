@@ -3400,10 +3400,8 @@ function date_from_unix_seconds(unix_ts) {
   let month = $[0];
   return new Date2(y$1, month, d);
 }
-function instant_as_local_date(instant) {
-  return date_from_unix_seconds(
-    divideInt(instant.timestamp_utc_us + instant.offset_local_us, 1e6)
-  );
+function instant_as_utc_date(instant) {
+  return date_from_unix_seconds(divideInt(instant.timestamp_utc_us, 1e6));
 }
 function date_from_unix_micro(unix_ts) {
   return date_from_unix_seconds(divideInt(unix_ts, 1e6));
@@ -3651,17 +3649,8 @@ function time_from_unix_micro(unix_ts) {
   let _pipe = unix_ts - date_to_unix_micro(date_from_unix_micro(unix_ts));
   return time_from_microseconds(_pipe);
 }
-function instant_as_local_time(instant) {
-  return time_from_unix_micro(
-    instant.timestamp_utc_us + instant.offset_local_us
-  );
-}
-function instant_as_local_datetime(instant) {
-  return new DateTime(
-    instant_as_local_date(instant),
-    instant_as_local_time(instant),
-    new Offset(divideInt(instant.offset_local_us, 6e7))
-  );
+function instant_as_utc_time(instant) {
+  return time_from_unix_micro(instant.timestamp_utc_us);
 }
 function time_to_duration(time2) {
   let _pipe = time_to_microseconds(time2);
@@ -3717,6 +3706,13 @@ function now2() {
   );
 }
 var utc = /* @__PURE__ */ new Offset(0);
+function instant_as_utc_datetime(instant) {
+  return new DateTime(
+    instant_as_utc_date(instant),
+    instant_as_utc_time(instant),
+    utc
+  );
+}
 function naive_datetime_subtract(datetime2, duration_to_subtract) {
   return lazy_guard(
     duration_to_subtract.microseconds < 0,
@@ -3879,8 +3875,8 @@ function to_unix_milli2(datetime2) {
 function now3() {
   return now2();
 }
-function as_local_datetime(instant) {
-  return instant_as_local_datetime(instant);
+function as_utc_datetime(instant) {
+  return instant_as_utc_datetime(instant);
 }
 
 // build/dev/javascript/lustre/lustre/element/html.mjs
@@ -3895,6 +3891,9 @@ function hr(attrs) {
 }
 function p(attrs, children2) {
   return element("p", attrs, children2);
+}
+function span(attrs, children2) {
+  return element("span", attrs, children2);
 }
 function input(attrs) {
   return element("input", attrs, toList([]));
@@ -3970,7 +3969,6 @@ function note_type_to_int(note_type) {
   }
 }
 function note_type_from_int(note_type) {
-  let msg = "Invalid note type found " + to_string(note_type);
   if (note_type === 1) {
     return new FunctionTestNote();
   } else if (note_type === 2) {
@@ -3980,7 +3978,14 @@ function note_type_from_int(note_type) {
   } else if (note_type === 4) {
     return new ThreadNote();
   } else {
-    throw makeError("panic", "o11a/note", 55, "note_type_from_int", msg, {});
+    throw makeError(
+      "panic",
+      "o11a/note",
+      55,
+      "note_type_from_int",
+      "Invalid note type found",
+      {}
+    );
   }
 }
 function note_significance_to_int(note_significance) {
@@ -4251,10 +4256,7 @@ function view(model) {
           }
         )
       ),
-      p(
-        toList([]),
-        toList([text2("Add a comment to " + model.line_id)])
-      ),
+      span(toList([]), toList([text2("Add a new comment: ")])),
       input(
         toList([
           on_input((var0) => {
@@ -4307,7 +4309,7 @@ function update(model, msg) {
       new None(),
       (() => {
         let _pipe = now3();
-        return as_local_datetime(_pipe);
+        return as_utc_datetime(_pipe);
       })(),
       new None(),
       new None()

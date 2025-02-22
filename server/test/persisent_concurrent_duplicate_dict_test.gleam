@@ -1,18 +1,17 @@
 import gleam/dynamic/decode
 import gleam/function
 import gleam/option.{type Option}
-import lib/persistent_concurrent_duplicate_dict
-import sqlight
+import lib/persistent_concurrent_duplicate_dict as pcdd
 
-pub fn persistent_concurrent_duplicate_dict_test() {
+pub fn pcdd_test() {
   let assert Ok(pcdd) =
-    persistent_concurrent_duplicate_dict.build(
-      "test_pcdd",
+    pcdd.build(
+      "priv/persist/test_pcdd",
       function.identity,
       function.identity,
-      "msg TEXT NOT NULL, expanded_msg TEXT",
+      #("hello", option.None),
       fn(val: #(String, Option(String))) {
-        [sqlight.text(val.0), sqlight.nullable(sqlight.text, val.1)]
+        [pcdd.text(val.0), pcdd.text_nullable(val.1)]
       },
       {
         use msg <- decode.field(0, decode.string)
@@ -23,23 +22,21 @@ pub fn persistent_concurrent_duplicate_dict_test() {
 
   let test_val = #("hello", option.None)
 
-  let assert Ok(Nil) =
-    persistent_concurrent_duplicate_dict.insert(pcdd, "first_msg", test_val)
+  let assert Ok(Nil) = pcdd.insert(pcdd, "first_msg", test_val)
 
-  let assert Ok([#("hello", option.None), ..]) =
-    persistent_concurrent_duplicate_dict.get(pcdd, "first_msg")
+  let assert Ok([#("hello", option.None), ..]) = pcdd.get(pcdd, "first_msg")
 
-  let assert Error(Nil) = persistent_concurrent_duplicate_dict.get(pcdd, "foo")
+  let assert Error(Nil) = pcdd.get(pcdd, "foo")
 
   // Reconstruct the persistent concurrent dict from the persisted data
   let assert Ok(pcdd) =
-    persistent_concurrent_duplicate_dict.build(
-      "test_pcdd",
+    pcdd.build(
+      "priv/persist/test_pcdd",
       function.identity,
       function.identity,
-      "msg TEXT NOT NULL, expanded_msg TEXT",
+      #("hello", option.None),
       fn(val: #(String, Option(String))) {
-        [sqlight.text(val.0), sqlight.nullable(sqlight.text, val.1)]
+        [pcdd.text(val.0), pcdd.text_nullable(val.1)]
       },
       {
         use msg <- decode.field(0, decode.string)
@@ -48,10 +45,9 @@ pub fn persistent_concurrent_duplicate_dict_test() {
       },
     )
 
-  let assert Ok(Nil) =
-    persistent_concurrent_duplicate_dict.insert(pcdd, "first_msg", test_val)
+  let assert Ok(Nil) = pcdd.insert(pcdd, "first_msg", test_val)
 
   // The value should already be there
   let assert Ok([#("hello", option.None), #("hello", option.None), ..]) =
-    persistent_concurrent_duplicate_dict.get(pcdd, "first_msg")
+    pcdd.get(pcdd, "first_msg")
 }
