@@ -1,5 +1,7 @@
 import gleam/list
 import lamb
+import lamb/query
+import lamb/query/term
 import tempo
 
 pub type ConcurrentDuplicateDict(key, val) =
@@ -43,4 +45,18 @@ pub fn get(table: ConcurrentDuplicateDict(key, val), key) {
     [] -> Error(Nil)
     values -> Ok(values)
   }
+}
+
+pub fn keys(table: ConcurrentDuplicateDict(key, val)) -> List(key) {
+  let query =
+    query.new()
+    |> query.index(term.var(0))
+    |> query.map(fn(index, _record) { index })
+
+  lamb.search(table, query)
+  |> list.unique
+}
+
+pub fn to_list(table: ConcurrentDuplicateDict(key, val)) -> List(#(key, val)) {
+  lamb.search(table, query.new())
 }

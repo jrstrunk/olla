@@ -143,6 +143,14 @@ pub fn insert(pcdd: PersistentConcurrentDuplicateDict(key, val), key, val) {
   concurrent_duplicate_dict.insert(pcdd.data, key, val)
 }
 
+pub fn keys(pcd: PersistentConcurrentDuplicateDict(key, val)) {
+  concurrent_duplicate_dict.keys(pcd.data)
+}
+
+pub fn to_list(pcd: PersistentConcurrentDuplicateDict(key, val)) {
+  concurrent_duplicate_dict.to_list(pcd.data)
+}
+
 /// Creates an empty dictionary that will fail to store any data, but can 
 /// satisfy type requirements and will always return no data.
 pub fn empty() {
