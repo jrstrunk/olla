@@ -65,6 +65,7 @@ pub type NoteSignificance {
   FindingLead
   FindingComfirmation
   FindingRejection
+  DevelperQuestion
 }
 
 pub fn note_significance_to_int(note_significance) {
@@ -77,6 +78,7 @@ pub fn note_significance_to_int(note_significance) {
     FindingLead -> 6
     FindingComfirmation -> 7
     FindingRejection -> 8
+    DevelperQuestion -> 9
   }
 }
 
@@ -90,6 +92,7 @@ pub fn note_significance_from_int(note_significance) {
     6 -> FindingLead
     7 -> FindingComfirmation
     8 -> FindingRejection
+    9 -> DevelperQuestion
     _ -> panic as "Invalid note significance found"
   }
 }
