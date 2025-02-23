@@ -25,8 +25,6 @@ import simplifile
 import snag
 import tempo/datetime
 
-pub const name = "o11a-discussions"
-
 pub fn app() -> lustre.App(Model, Model, Msg) {
   lustre.component(init, update, view(_, False), dict.new())
 }

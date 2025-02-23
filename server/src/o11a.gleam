@@ -75,6 +75,8 @@ fn handle_wisp_request(req, _context: Context) {
         200,
       )
 
+    [audit_name, "dashboard"] -> todo
+
     file_path_segments -> {
       let file_path = list.fold(file_path_segments, "", filepath.join)
 

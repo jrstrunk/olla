@@ -54,7 +54,7 @@ pub type Msg {
   ServerSetLineId(String)
   ServerUpdatedNotes(List(note.Note))
   UserWroteNote(String)
-  UserSubmittedNote
+  UserSubmittedNote(parent_id: String, note_type: note.NoteType)
 }
 
 fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
@@ -65,19 +65,57 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       Model(..model, current_note_draft: draft),
       effect.none(),
     )
-    UserSubmittedNote -> {
+    UserSubmittedNote(parent_id:, note_type:) -> {
       let note =
         note.Note(
-          parent_id: model.line_id,
-          note_type: note.LineCommentNote,
+          parent_id:,
+          note_type:,
           significance: note.Regular,
           user_id: 0,
-          message: model.current_note_draft,
+          message: "",
           expanded_message: None,
           time: instant.now() |> instant.as_utc_datetime,
           thread_id: None,
           last_edit_time: None,
         )
+
+      let note = case model.current_note_draft {
+        "todo " <> rest ->
+          note.Note(
+            ..note,
+            significance: note.ToDo,
+            message: rest,
+            thread_id: option.Some(note.get_note_id(note)),
+          )
+        "done " <> rest ->
+          note.Note(..note, significance: note.ToDoDone, message: rest)
+        "? " <> rest ->
+          note.Note(
+            ..note,
+            significance: note.Question,
+            message: rest,
+            thread_id: option.Some(note.get_note_id(note)),
+          )
+        ", " <> rest ->
+          note.Note(..note, significance: note.Answer, message: rest)
+        "! " <> rest ->
+          note.Note(
+            ..note,
+            significance: note.FindingLead,
+            message: rest,
+            thread_id: option.Some(note.get_note_id(note)),
+          )
+        ". " <> rest ->
+          note.Note(..note, significance: note.FindingRejection, message: rest)
+        "!! " <> rest ->
+          note.Note(
+            ..note,
+            significance: note.FindingComfirmation,
+            message: rest,
+          )
+        _ -> note
+      }
+
       #(
         Model(..model, current_note_draft: ""),
         event.emit(user_submitted_note_event, note.encode_note(note)),
@@ -101,7 +139,10 @@ fn view(model: Model) -> element.Element(Msg) {
     html.span([], [html.text("Add a new comment: ")]),
     html.input([
       event.on_input(UserWroteNote),
-      on_ctrl_enter(UserSubmittedNote),
+      on_ctrl_enter(UserSubmittedNote(
+        parent_id: model.line_id,
+        note_type: note.LineCommentNote,
+      )),
       attribute.value(model.current_note_draft),
     ]),
   ])

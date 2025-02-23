@@ -58,32 +58,38 @@ pub fn note_type_from_int(note_type) {
 
 pub type NoteSignificance {
   Regular
-  UnansweredQuestion
-  AnsweredQuestion
+  Question
+  Answer
+  ToDo
+  ToDoDone
   FindingLead
   FindingComfirmation
-  FindingLeadInvalid
+  FindingRejection
 }
 
 pub fn note_significance_to_int(note_significance) {
   case note_significance {
     Regular -> 1
-    UnansweredQuestion -> 2
-    AnsweredQuestion -> 3
-    FindingLead -> 4
-    FindingComfirmation -> 5
-    FindingLeadInvalid -> 6
+    Question -> 2
+    Answer -> 3
+    ToDo -> 4
+    ToDoDone -> 5
+    FindingLead -> 6
+    FindingComfirmation -> 7
+    FindingRejection -> 8
   }
 }
 
 pub fn note_significance_from_int(note_significance) {
   case note_significance {
     1 -> Regular
-    2 -> UnansweredQuestion
-    3 -> AnsweredQuestion
-    4 -> FindingLead
-    5 -> FindingComfirmation
-    6 -> FindingLeadInvalid
+    2 -> Question
+    3 -> Answer
+    4 -> ToDo
+    5 -> ToDoDone
+    6 -> FindingLead
+    7 -> FindingComfirmation
+    8 -> FindingRejection
     _ -> panic as "Invalid note significance found"
   }
 }
