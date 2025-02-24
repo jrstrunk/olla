@@ -3947,15 +3947,21 @@ var ThreadNote = class extends CustomType {
 };
 var Regular = class extends CustomType {
 };
-var UnansweredQuestion = class extends CustomType {
+var Question = class extends CustomType {
 };
-var AnsweredQuestion = class extends CustomType {
+var Answer = class extends CustomType {
+};
+var ToDo = class extends CustomType {
+};
+var ToDoDone = class extends CustomType {
 };
 var FindingLead = class extends CustomType {
 };
 var FindingComfirmation = class extends CustomType {
 };
-var FindingLeadInvalid = class extends CustomType {
+var FindingRejection = class extends CustomType {
+};
+var DevelperQuestion = class extends CustomType {
 };
 function note_type_to_int(note_type) {
   if (note_type instanceof FunctionTestNote) {
@@ -3991,41 +3997,61 @@ function note_type_from_int(note_type) {
 function note_significance_to_int(note_significance) {
   if (note_significance instanceof Regular) {
     return 1;
-  } else if (note_significance instanceof UnansweredQuestion) {
+  } else if (note_significance instanceof Question) {
     return 2;
-  } else if (note_significance instanceof AnsweredQuestion) {
+  } else if (note_significance instanceof Answer) {
     return 3;
-  } else if (note_significance instanceof FindingLead) {
+  } else if (note_significance instanceof ToDo) {
     return 4;
-  } else if (note_significance instanceof FindingComfirmation) {
+  } else if (note_significance instanceof ToDoDone) {
     return 5;
-  } else {
+  } else if (note_significance instanceof FindingLead) {
     return 6;
+  } else if (note_significance instanceof FindingComfirmation) {
+    return 7;
+  } else if (note_significance instanceof FindingRejection) {
+    return 8;
+  } else {
+    return 9;
   }
 }
 function note_significance_from_int(note_significance) {
   if (note_significance === 1) {
     return new Regular();
   } else if (note_significance === 2) {
-    return new UnansweredQuestion();
+    return new Question();
   } else if (note_significance === 3) {
-    return new AnsweredQuestion();
+    return new Answer();
   } else if (note_significance === 4) {
-    return new FindingLead();
+    return new ToDo();
   } else if (note_significance === 5) {
-    return new FindingComfirmation();
+    return new ToDoDone();
   } else if (note_significance === 6) {
-    return new FindingLeadInvalid();
+    return new FindingLead();
+  } else if (note_significance === 7) {
+    return new FindingComfirmation();
+  } else if (note_significance === 8) {
+    return new FindingRejection();
+  } else if (note_significance === 9) {
+    return new DevelperQuestion();
   } else {
     throw makeError(
       "panic",
       "o11a/note",
-      87,
+      96,
       "note_significance_from_int",
       "Invalid note significance found",
       {}
     );
   }
+}
+function get_note_id(note) {
+  return to_string(note.user_id) + "-" + to_string(
+    (() => {
+      let _pipe = note.time;
+      return to_unix_milli2(_pipe);
+    })()
+  );
 }
 function encode_note(note) {
   return object2(
@@ -4196,6 +4222,11 @@ var UserWroteNote = class extends CustomType {
   }
 };
 var UserSubmittedNote = class extends CustomType {
+  constructor(parent_id, note_type) {
+    super();
+    this.parent_id = parent_id;
+    this.note_type = note_type;
+  }
 };
 function init2(_) {
   return [new Model2("", toList([]), ""), none()];
@@ -4262,7 +4293,9 @@ function view(model) {
           on_input((var0) => {
             return new UserWroteNote(var0);
           }),
-          on_ctrl_enter(new UserSubmittedNote()),
+          on_ctrl_enter(
+            new UserSubmittedNote(model.line_id, new LineCommentNote())
+          ),
           value(model.current_note_draft)
         ])
       )
@@ -4300,12 +4333,14 @@ function update(model, msg) {
       none()
     ];
   } else {
+    let parent_id = msg.parent_id;
+    let note_type = msg.note_type;
     let note = new Note(
-      model.line_id,
-      new LineCommentNote(),
+      parent_id,
+      note_type,
       new Regular(),
       0,
-      model.current_note_draft,
+      "",
       new None(),
       (() => {
         let _pipe = now3();
@@ -4314,12 +4349,116 @@ function update(model, msg) {
       new None(),
       new None()
     );
+    let note$1 = (() => {
+      let $ = model.current_note_draft;
+      if ($.startsWith("todo ")) {
+        let rest = $.slice(5);
+        let _record = note;
+        return new Note(
+          _record.parent_id,
+          _record.note_type,
+          new ToDo(),
+          _record.user_id,
+          rest,
+          _record.expanded_message,
+          _record.time,
+          new Some(get_note_id(note)),
+          _record.last_edit_time
+        );
+      } else if ($.startsWith("done ")) {
+        let rest = $.slice(5);
+        let _record = note;
+        return new Note(
+          _record.parent_id,
+          _record.note_type,
+          new ToDoDone(),
+          _record.user_id,
+          rest,
+          _record.expanded_message,
+          _record.time,
+          _record.thread_id,
+          _record.last_edit_time
+        );
+      } else if ($.startsWith("? ")) {
+        let rest = $.slice(2);
+        let _record = note;
+        return new Note(
+          _record.parent_id,
+          _record.note_type,
+          new Question(),
+          _record.user_id,
+          rest,
+          _record.expanded_message,
+          _record.time,
+          new Some(get_note_id(note)),
+          _record.last_edit_time
+        );
+      } else if ($.startsWith(", ")) {
+        let rest = $.slice(2);
+        let _record = note;
+        return new Note(
+          _record.parent_id,
+          _record.note_type,
+          new Answer(),
+          _record.user_id,
+          rest,
+          _record.expanded_message,
+          _record.time,
+          _record.thread_id,
+          _record.last_edit_time
+        );
+      } else if ($.startsWith("! ")) {
+        let rest = $.slice(2);
+        let _record = note;
+        return new Note(
+          _record.parent_id,
+          _record.note_type,
+          new FindingLead(),
+          _record.user_id,
+          rest,
+          _record.expanded_message,
+          _record.time,
+          new Some(get_note_id(note)),
+          _record.last_edit_time
+        );
+      } else if ($.startsWith(". ")) {
+        let rest = $.slice(2);
+        let _record = note;
+        return new Note(
+          _record.parent_id,
+          _record.note_type,
+          new FindingRejection(),
+          _record.user_id,
+          rest,
+          _record.expanded_message,
+          _record.time,
+          _record.thread_id,
+          _record.last_edit_time
+        );
+      } else if ($.startsWith("!! ")) {
+        let rest = $.slice(3);
+        let _record = note;
+        return new Note(
+          _record.parent_id,
+          _record.note_type,
+          new FindingComfirmation(),
+          _record.user_id,
+          rest,
+          _record.expanded_message,
+          _record.time,
+          _record.thread_id,
+          _record.last_edit_time
+        );
+      } else {
+        return note;
+      }
+    })();
     return [
       (() => {
         let _record = model;
         return new Model2(_record.line_id, _record.notes, "");
       })(),
-      emit2(user_submitted_note_event, encode_note(note))
+      emit2(user_submitted_note_event, encode_note(note$1))
     ];
   }
 }

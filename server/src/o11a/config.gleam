@@ -36,6 +36,13 @@ pub fn get_full_page_skeleton_path(for page_path) {
   |> list.fold("/", filepath.join)
 }
 
+/// Gets the full path to the dashboard skeleton
+pub fn get_full_dashboard_skeleton_path(for audit_name) {
+  let assert Ok(priv) = erlang.priv_directory("o11a")
+  [priv, "audits", audit_name, "dashboard.skeleton.html"]
+  |> list.fold("/", filepath.join)
+}
+
 /// Gets the full path to the audit root directory
 pub fn get_audit_path(for audit_name) {
   let assert Ok(priv) = erlang.priv_directory("o11a")

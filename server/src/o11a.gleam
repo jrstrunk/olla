@@ -9,6 +9,7 @@ import lib/server_componentx
 import lustre/element
 import mist
 import o11a/config
+import o11a/user_interface/audit_dashboard
 import o11a/user_interface/gateway
 import o11a/user_interface/page
 import snag
@@ -16,7 +17,10 @@ import wisp
 import wisp/wisp_mist
 
 type Context {
-  Context(discussion_gateway: gateway.DiscussionGateway)
+  Context(
+    dashboard_gateway: gateway.DashboardGateway,
+    page_gateway: gateway.PageGateway,
+  )
 }
 
 pub fn main() {
@@ -24,9 +28,11 @@ pub fn main() {
 
   let config = config.Config(port: 8400)
 
-  use discussion_gateway <- result.map(gateway.start_discussion_gateway())
+  use #(dashboard_gateway, page_gateway) <- result.map(
+    gateway.start_discussion_gateway(),
+  )
 
-  let context = Context(discussion_gateway:)
+  let context = Context(dashboard_gateway:, page_gateway:)
 
   let assert Ok(_) =
     handler(_, context)
@@ -47,12 +53,19 @@ fn handler(req, context: Context) {
 
     ["line_notes.mjs"] -> server_componentx.serve_js("line_notes.mjs")
 
-    ["component", ..component_path_segments] -> {
+    ["component-page", ..component_path_segments] -> {
       let assert Ok(actor) =
         gateway.get_page_actor(
-          context.discussion_gateway,
+          context.page_gateway,
           list.fold(component_path_segments, "", filepath.join),
         )
+
+      server_componentx.get_connection(req, actor)
+    }
+
+    ["component-dashboard", audit_name] -> {
+      let assert Ok(actor) =
+        gateway.get_dashboard_actor(context.dashboard_gateway, audit_name)
 
       server_componentx.get_connection(req, actor)
     }
@@ -75,7 +88,23 @@ fn handle_wisp_request(req, _context: Context) {
         200,
       )
 
-    [audit_name, "dashboard"] -> todo
+    [audit_name, "dashboard"] ->
+      case audit_dashboard.get_skeleton(for: audit_name) {
+        Ok(skeleton) -> {
+          server_componentx.render_with_prerendered_skeleton(
+            filepath.join("component-dashboard", audit_name),
+            skeleton,
+          )
+          |> server_componentx.as_document
+          |> element.to_document_string_builder
+          |> wisp.html_response(200)
+        }
+
+        Error(snag) ->
+          snag.pretty_print(snag)
+          |> string_tree.from_string
+          |> wisp.html_response(500)
+      }
 
     file_path_segments -> {
       let file_path = list.fold(file_path_segments, "", filepath.join)
@@ -83,11 +112,10 @@ fn handle_wisp_request(req, _context: Context) {
       case page.get_skeleton(for: file_path) {
         Ok(skeleton) -> {
           server_componentx.render_with_prerendered_skeleton(
-            filepath.join("component", file_path),
+            filepath.join("component-page", file_path),
             skeleton,
           )
           |> server_componentx.as_document
-          // |> element.to_string_builder
           |> element.to_document_string_builder
           |> wisp.html_response(200)
         }
