@@ -129,9 +129,7 @@ pub fn find_open_notes(in discussion: discussion.Discussion) {
 
   let incomplete_todos =
     list.filter(all_todos, fn(note) {
-      let thread_notes =
-        pcd_dict.get(discussion.notes, { note.1 }.note_id)
-        |> result.unwrap([])
+      let thread_notes = pcd_dict.get(discussion.notes, { note.1 }.note_id)
 
       let closing_note =
         list.find(thread_notes, fn(thread_note) {
@@ -158,9 +156,7 @@ pub fn find_open_notes(in discussion: discussion.Discussion) {
 
   let unanswered_questions =
     list.filter(all_questions, fn(note) {
-      let thread_notes =
-        pcd_dict.get(discussion.notes, { note.1 }.note_id)
-        |> result.unwrap([])
+      let thread_notes = pcd_dict.get(discussion.notes, { note.1 }.note_id)
 
       let closing_note =
         list.find(thread_notes, fn(thread_note) {
@@ -187,9 +183,7 @@ pub fn find_open_notes(in discussion: discussion.Discussion) {
 
   let unconfirmed_findings =
     list.filter(all_findings, fn(note) {
-      let thread_notes =
-        pcd_dict.get(discussion.notes, { note.1 }.note_id)
-        |> result.unwrap([])
+      let thread_notes = pcd_dict.get(discussion.notes, { note.1 }.note_id)
 
       let closing_note =
         list.find(thread_notes, fn(thread_note) {
@@ -209,9 +203,7 @@ pub fn find_open_notes(in discussion: discussion.Discussion) {
 
   let confirmed_findings =
     list.filter(all_findings, fn(note) {
-      let thread_notes =
-        pcd_dict.get(discussion.notes, { note.1 }.note_id)
-        |> result.unwrap([])
+      let thread_notes = pcd_dict.get(discussion.notes, { note.1 }.note_id)
 
       let closing_note =
         list.find(thread_notes, fn(thread_note) {

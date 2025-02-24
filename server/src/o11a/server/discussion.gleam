@@ -1,5 +1,6 @@
 import gleam/dynamic/decode
 import gleam/function
+import gleam/list
 import gleam/result
 import lib/persistent_concurrent_duplicate_dict as pcd_dict
 import o11a/config
@@ -72,6 +73,8 @@ pub fn note_persist_decoder() {
     message:,
     expanded_message:,
     time: datetime.from_unix_milli(time),
+    thread_notes: [],
+    edited: False,
   )
   |> decode.success
 }
@@ -103,4 +106,21 @@ pub fn empty_discussion(audit_name: String) {
 
 pub fn add_note(discussion: Discussion, note: note.Note) {
   pcd_dict.insert(discussion.notes, note.parent_id, note)
+}
+
+pub fn get_structured_notes(
+  discussion: Discussion,
+  starting_from parent_id: String,
+) {
+  pcd_dict.get(discussion.notes, parent_id)
+  |> list.sort(fn(a, b) { datetime.compare(a.time, b.time) })
+  |> list.map(fn(note) {
+    note.Note(
+      ..note,
+      thread_notes: get_structured_notes(
+        discussion,
+        starting_from: note.note_id,
+      ),
+    )
+  })
 }

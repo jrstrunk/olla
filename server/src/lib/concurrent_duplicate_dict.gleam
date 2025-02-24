@@ -41,10 +41,7 @@ pub fn insert(table: ConcurrentDuplicateDict(key, val), key, val) {
 }
 
 pub fn get(table: ConcurrentDuplicateDict(key, val), key) {
-  case lamb.lookup(table, key) {
-    [] -> Error(Nil)
-    values -> Ok(values)
-  }
+  lamb.lookup(table, key)
 }
 
 pub fn keys(table: ConcurrentDuplicateDict(key, val)) -> List(key) {

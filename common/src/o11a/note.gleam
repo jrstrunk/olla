@@ -7,7 +7,6 @@ import gleam/result
 import gleam/string
 import tempo
 import tempo/datetime
-import tempo/instant
 
 pub type Note {
   Note(
@@ -18,6 +17,8 @@ pub type Note {
     message: String,
     expanded_message: Option(String),
     time: tempo.DateTime,
+    thread_notes: List(Note),
+    edited: Bool,
   )
 }
 
@@ -107,6 +108,8 @@ pub fn encode_note(note: Note) {
     #("message", json.string(note.message)),
     #("expanded_message", json.nullable(note.expanded_message, json.string)),
     #("time", json.int(note.time |> datetime.to_unix_milli)),
+    #("thread_notes", json.array(note.thread_notes, encode_note)),
+    #("edited", json.bool(note.edited)),
   ])
 }
 
@@ -142,6 +145,11 @@ pub fn json_note_decoder() {
     decode.optional(decode.string),
   )
   use time <- decode.field("time", decode.int)
+  use thread_notes <- decode.field(
+    "thread_notes",
+    decode.list(json_note_decoder()),
+  )
+  use edited <- decode.field("edited", decode.bool)
 
   Note(
     note_id:,
@@ -151,6 +159,8 @@ pub fn json_note_decoder() {
     message:,
     expanded_message:,
     time: datetime.from_unix_milli(time),
+    thread_notes:,
+    edited:,
   )
   |> decode.success
 }
@@ -163,10 +173,58 @@ pub fn example_note() {
     user_id: 0,
     message: "Wow bro great finding that is really cool",
     expanded_message: option.None,
-    time: instant.now()
-      |> instant.as_utc_datetime
-      |> datetime.to_unix_milli
-      |> datetime.from_unix_milli,
+    time: datetime.literal("2021-01-01T00:00:00Z"),
+    thread_notes: [],
+    edited: False,
+  )
+}
+
+pub fn example_note_thread() {
+  Note(
+    note_id: "1-10000",
+    parent_id: "Example",
+    significance: Regular,
+    user_id: 0,
+    message: "Wow bro great finding that is really cool",
+    expanded_message: option.None,
+    time: datetime.literal("2021-01-01T00:00:00Z"),
+    thread_notes: [
+      Note(
+        note_id: "1-10001",
+        parent_id: "1-10000",
+        significance: Regular,
+        user_id: 0,
+        message: "Wow bro great finding that is really cool",
+        expanded_message: option.None,
+        time: datetime.literal("2021-01-01T00:00:00Z"),
+        thread_notes: [
+          Note(
+            note_id: "1-10003",
+            parent_id: "1-10001",
+            significance: Regular,
+            user_id: 0,
+            message: "Wow bro great finding that is really cool",
+            expanded_message: option.None,
+            time: datetime.literal("2021-01-01T00:00:00Z"),
+            thread_notes: [],
+            edited: False,
+          ),
+        ],
+        edited: False,
+      ),
+      Note(
+        note_id: "1-10002",
+        parent_id: "1-10000",
+        significance: Regular,
+        user_id: 0,
+        message: "Wow bro great finding that is really cool",
+        expanded_message: option.None,
+        time: datetime.literal("2021-01-01T00:00:00Z"),
+        thread_notes: [],
+        edited: True,
+      ),
+    ],
+    edited: False,
   )
 }
 

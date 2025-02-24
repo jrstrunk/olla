@@ -8,7 +8,6 @@ import gleam/json
 import gleam/list
 import gleam/result
 import gleam/string
-import lib/persistent_concurrent_duplicate_dict as pcd_dict
 import lib/server_componentx
 import lustre
 import lustre/attribute
@@ -23,7 +22,6 @@ import o11a/server/discussion
 import o11a/user_interface/line_notes
 import simplifile
 import snag
-import tempo/datetime
 
 pub fn app() -> lustre.App(Model, Model, Msg) {
   lustre.component(init, update, view(_, False), dict.new())
@@ -48,7 +46,7 @@ pub fn init(init_model) -> #(Model, effect.Effect(Msg)) {
 pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
     UserSubmittedNote(note) -> {
-      io.debug("User submitted note")
+      io.debug("adding note")
       let assert Ok(Nil) = discussion.add_note(model.discussion, note)
       #(model, effect.none())
     }
@@ -133,10 +131,7 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
     ])
   })
 
-  let line_comments =
-    pcd_dict.get(model.discussion.notes, line_id)
-    |> result.unwrap([])
-    |> list.sort(fn(a, b) { datetime.compare(a.time, b.time) })
+  let line_comments = discussion.get_structured_notes(model.discussion, line_id)
 
   let inline_comment_preview_text = case
     line_comments |> list.reverse |> list.take(1)
@@ -184,6 +179,7 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
 
 pub fn on_user_submitted_line_note(msg) {
   use event <- event.on(line_notes.user_submitted_note_event)
+  io.debug("user submitted line note")
 
   let empty_error = [dynamic.DecodeError("", "", [])]
 

@@ -633,9 +633,11 @@ var LustreServerComponent = class extends HTMLElement {
 };
 window.customElements.define("lustre-server-component", LustreServerComponent);
 var deep_merge = (target, source) => {
-  for (const key in source) {
-    if (source[key] instanceof Object)
-      Object.assign(source[key], deep_merge(target[key], source[key]));
+  if (target) {
+    for (const key in source) {
+      if (source[key] instanceof Object)
+        Object.assign(source[key], deep_merge(target[key], source[key]));
+    }
   }
   Object.assign(target || {}, source);
   return target;

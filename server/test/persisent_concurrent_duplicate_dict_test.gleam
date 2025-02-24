@@ -24,9 +24,9 @@ pub fn pcdd_test() {
 
   let assert Ok(Nil) = pcdd.insert(pcdd, "first_msg", test_val)
 
-  let assert Ok([#("hello", option.None), ..]) = pcdd.get(pcdd, "first_msg")
+  let assert [#("hello", option.None), ..] = pcdd.get(pcdd, "first_msg")
 
-  let assert Error(Nil) = pcdd.get(pcdd, "foo")
+  let assert [] = pcdd.get(pcdd, "foo")
 
   // Reconstruct the persistent concurrent dict from the persisted data
   let assert Ok(pcdd) =
@@ -48,6 +48,6 @@ pub fn pcdd_test() {
   let assert Ok(Nil) = pcdd.insert(pcdd, "first_msg", test_val)
 
   // The value should already be there
-  let assert Ok([#("hello", option.None), #("hello", option.None), ..]) =
+  let assert [#("hello", option.None), #("hello", option.None), ..] =
     pcdd.get(pcdd, "first_msg")
 }

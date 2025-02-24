@@ -1907,6 +1907,9 @@ function object(entries) {
 function identity2(x) {
   return x;
 }
+function array(list3) {
+  return list3.toArray();
+}
 function do_null() {
   return null;
 }
@@ -2032,6 +2035,9 @@ function parse(json, decoder) {
 function string4(input2) {
   return identity2(input2);
 }
+function bool2(input2) {
+  return identity2(input2);
+}
 function int3(input2) {
   return identity2(input2);
 }
@@ -2048,6 +2054,14 @@ function nullable(input2, inner_type) {
 }
 function object2(entries) {
   return object(entries);
+}
+function preprocessed_array(from) {
+  return array(from);
+}
+function array2(entries, inner_type) {
+  let _pipe = entries;
+  let _pipe$1 = map(_pipe, inner_type);
+  return preprocessed_array(_pipe$1);
 }
 
 // build/dev/javascript/lustre/lustre/effect.mjs
@@ -3936,7 +3950,7 @@ function on_input(msg) {
 
 // build/dev/javascript/o11a_common/o11a/note.mjs
 var Note = class extends CustomType {
-  constructor(note_id, parent_id, significance, user_id, message, expanded_message, time2) {
+  constructor(note_id, parent_id, significance, user_id, message, expanded_message, time2, thread_notes, edited) {
     super();
     this.note_id = note_id;
     this.parent_id = parent_id;
@@ -3945,6 +3959,8 @@ var Note = class extends CustomType {
     this.message = message;
     this.expanded_message = expanded_message;
     this.time = time2;
+    this.thread_notes = thread_notes;
+    this.edited = edited;
   }
 };
 var Regular = class extends CustomType {
@@ -4009,7 +4025,7 @@ function note_significance_from_int(note_significance) {
     throw makeError(
       "panic",
       "o11a/note",
-      67,
+      68,
       "note_significance_from_int",
       "Invalid note significance found",
       {}
@@ -4041,7 +4057,9 @@ function encode_note(note) {
             return to_unix_milli2(_pipe);
           })()
         )
-      ]
+      ],
+      ["thread_notes", array2(note.thread_notes, encode_note)],
+      ["edited", bool2(note.edited)]
     ])
   );
 }
@@ -4074,16 +4092,30 @@ function json_note_decoder() {
                             "time",
                             int2,
                             (time2) => {
-                              let _pipe = new Note(
-                                note_id,
-                                parent_id,
-                                note_significance_from_int(significance),
-                                user_id,
-                                message,
-                                expanded_message,
-                                from_unix_milli3(time2)
+                              return field2(
+                                "thread_notes",
+                                list2(json_note_decoder()),
+                                (thread_notes) => {
+                                  return field2(
+                                    "edited",
+                                    bool,
+                                    (edited) => {
+                                      let _pipe = new Note(
+                                        note_id,
+                                        parent_id,
+                                        note_significance_from_int(significance),
+                                        user_id,
+                                        message,
+                                        expanded_message,
+                                        from_unix_milli3(time2),
+                                        thread_notes,
+                                        edited
+                                      );
+                                      return success(_pipe);
+                                    }
+                                  );
+                                }
                               );
-                              return success(_pipe);
                             }
                           );
                         }
@@ -4286,9 +4318,11 @@ function update(model, msg) {
       parent_id,
       new Regular(),
       model.user_id,
-      "",
+      model.current_note_draft,
       new None(),
-      now4
+      now4,
+      toList([]),
+      false
     );
     let note$1 = (() => {
       let $ = model.current_note_draft;
@@ -4302,7 +4336,9 @@ function update(model, msg) {
           _record.user_id,
           rest,
           _record.expanded_message,
-          _record.time
+          _record.time,
+          _record.thread_notes,
+          _record.edited
         );
       } else if ($.startsWith("done ")) {
         let rest = $.slice(5);
@@ -4314,7 +4350,9 @@ function update(model, msg) {
           _record.user_id,
           rest,
           _record.expanded_message,
-          _record.time
+          _record.time,
+          _record.thread_notes,
+          _record.edited
         );
       } else if ($.startsWith("? ")) {
         let rest = $.slice(2);
@@ -4326,7 +4364,9 @@ function update(model, msg) {
           _record.user_id,
           rest,
           _record.expanded_message,
-          _record.time
+          _record.time,
+          _record.thread_notes,
+          _record.edited
         );
       } else if ($.startsWith(", ")) {
         let rest = $.slice(2);
@@ -4338,7 +4378,9 @@ function update(model, msg) {
           _record.user_id,
           rest,
           _record.expanded_message,
-          _record.time
+          _record.time,
+          _record.thread_notes,
+          _record.edited
         );
       } else if ($.startsWith("! ")) {
         let rest = $.slice(2);
@@ -4350,7 +4392,9 @@ function update(model, msg) {
           _record.user_id,
           rest,
           _record.expanded_message,
-          _record.time
+          _record.time,
+          _record.thread_notes,
+          _record.edited
         );
       } else if ($.startsWith(". ")) {
         let rest = $.slice(2);
@@ -4362,7 +4406,9 @@ function update(model, msg) {
           _record.user_id,
           rest,
           _record.expanded_message,
-          _record.time
+          _record.time,
+          _record.thread_notes,
+          _record.edited
         );
       } else if ($.startsWith("!! ")) {
         let rest = $.slice(3);
@@ -4374,7 +4420,9 @@ function update(model, msg) {
           _record.user_id,
           rest,
           _record.expanded_message,
-          _record.time
+          _record.time,
+          _record.thread_notes,
+          _record.edited
         );
       } else {
         return note;
@@ -4392,7 +4440,7 @@ function update(model, msg) {
     throw makeError(
       "todo",
       "o11a/user_interface/line_notes",
-      126,
+      128,
       "update",
       "`todo` expression evaluated. This code has not yet been implemented.",
       {}
@@ -4401,7 +4449,7 @@ function update(model, msg) {
     throw makeError(
       "todo",
       "o11a/user_interface/line_notes",
-      127,
+      129,
       "update",
       "`todo` expression evaluated. This code has not yet been implemented.",
       {}

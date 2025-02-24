@@ -91,9 +91,11 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
           parent_id:,
           significance: note.Regular,
           user_id: model.user_id,
-          message: "",
+          message: model.current_note_draft,
           expanded_message: None,
           time: now,
+          thread_notes: [],
+          edited: False,
         )
 
       let note = case model.current_note_draft {

@@ -45,9 +45,12 @@ pub fn build(
     |> list.repeat("?", _)
     |> string.join(", ")
 
-  let assert Ok(Nil) =
-    filepath.directory_name(path)
-    |> simplifile.create_directory_all
+  let assert Ok(Nil) = case path == ":memory:" {
+    True -> Ok(Nil)
+    False ->
+      filepath.directory_name(path)
+      |> simplifile.create_directory_all
+  }
 
   use conn <- result.try(
     sqlight.open(path)
