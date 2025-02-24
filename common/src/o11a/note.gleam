@@ -1,7 +1,6 @@
 import gleam/dict
 import gleam/dynamic
 import gleam/dynamic/decode
-import gleam/int
 import gleam/json
 import gleam/option.{type Option}
 import gleam/result
@@ -12,15 +11,13 @@ import tempo/instant
 
 pub type Note {
   Note(
+    note_id: String,
     parent_id: String,
-    note_type: NoteType,
     significance: NoteSignificance,
     user_id: Int,
     message: String,
     expanded_message: Option(String),
     time: tempo.DateTime,
-    thread_id: Option(String),
-    last_edit_time: Option(tempo.DateTime),
   )
 }
 
@@ -29,32 +26,6 @@ pub type NoteId =
 
 pub type NoteCollection =
   dict.Dict(String, List(Note))
-
-pub type NoteType {
-  FunctionTestNote
-  FunctionInvariantNote
-  LineCommentNote
-  ThreadNote
-}
-
-pub fn note_type_to_int(note_type) {
-  case note_type {
-    FunctionTestNote -> 1
-    FunctionInvariantNote -> 2
-    LineCommentNote -> 3
-    ThreadNote -> 4
-  }
-}
-
-pub fn note_type_from_int(note_type) {
-  case note_type {
-    1 -> FunctionTestNote
-    2 -> FunctionInvariantNote
-    3 -> LineCommentNote
-    4 -> ThreadNote
-    _ -> panic as "Invalid note type found"
-  }
-}
 
 pub type NoteSignificance {
   Regular
@@ -127,29 +98,15 @@ pub type NoteVote {
 pub type NoteVoteCollection =
   dict.Dict(NoteId, List(NoteVote))
 
-pub fn get_note_id(note: Note) {
-  int.to_string(note.user_id)
-  <> "-"
-  <> int.to_string(note.time |> datetime.to_unix_milli)
-}
-
 pub fn encode_note(note: Note) {
   json.object([
+    #("note_id", json.string(note.note_id)),
     #("parent_id", json.string(note.parent_id)),
-    #("note_type", json.int(note.note_type |> note_type_to_int)),
     #("significance", json.int(note.significance |> note_significance_to_int)),
     #("user_id", json.int(note.user_id)),
     #("message", json.string(note.message)),
     #("expanded_message", json.nullable(note.expanded_message, json.string)),
     #("time", json.int(note.time |> datetime.to_unix_milli)),
-    #("thread_id", json.nullable(note.thread_id, json.string)),
-    #(
-      "last_edit_time",
-      json.nullable(
-        note.last_edit_time |> option.map(datetime.to_unix_milli),
-        json.int,
-      ),
-    ),
   ])
 }
 
@@ -175,8 +132,8 @@ pub fn decode_notes(notes: dynamic.Dynamic) {
 }
 
 pub fn json_note_decoder() {
+  use note_id <- decode.field("note_id", decode.string)
   use parent_id <- decode.field("parent_id", decode.string)
-  use note_type <- decode.field("note_type", decode.int)
   use significance <- decode.field("significance", decode.int)
   use user_id <- decode.field("user_id", decode.int)
   use message <- decode.field("message", decode.string)
@@ -185,30 +142,23 @@ pub fn json_note_decoder() {
     decode.optional(decode.string),
   )
   use time <- decode.field("time", decode.int)
-  use thread_id <- decode.field("thread_id", decode.optional(decode.string))
-  use last_edit_time <- decode.field(
-    "last_edit_time",
-    decode.optional(decode.int),
-  )
 
   Note(
+    note_id:,
     parent_id:,
-    note_type: note_type_from_int(note_type),
     significance: note_significance_from_int(significance),
     user_id:,
     message:,
     expanded_message:,
     time: datetime.from_unix_milli(time),
-    thread_id:,
-    last_edit_time: last_edit_time |> option.map(datetime.from_unix_milli),
   )
   |> decode.success
 }
 
 pub fn example_note() {
   Note(
+    note_id: "1-10000",
     parent_id: "Example",
-    note_type: LineCommentNote,
     significance: Regular,
     user_id: 0,
     message: "Wow bro great finding that is really cool",
@@ -217,8 +167,6 @@ pub fn example_note() {
       |> instant.as_utc_datetime
       |> datetime.to_unix_milli
       |> datetime.from_unix_milli,
-    thread_id: option.None,
-    last_edit_time: option.None,
   )
 }
 

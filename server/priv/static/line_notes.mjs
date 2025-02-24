@@ -314,14 +314,6 @@ function to_result(option, e) {
     return new Error(e);
   }
 }
-function map(option, fun) {
-  if (option instanceof Some) {
-    let x = option[0];
-    return new Some(fun(x));
-  } else {
-    return new None();
-  }
-}
 
 // build/dev/javascript/gleam_stdlib/dict.mjs
 var referenceMap = /* @__PURE__ */ new WeakMap();
@@ -1104,18 +1096,18 @@ var trim_end_regex = new RegExp(`[${unicode_whitespaces}]*$`);
 function new_map() {
   return Dict.new();
 }
-function map_to_list(map6) {
-  return List.fromArray(map6.entries());
+function map_to_list(map5) {
+  return List.fromArray(map5.entries());
 }
-function map_get(map6, key) {
-  const value3 = map6.get(key, NOT_FOUND);
+function map_get(map5, key) {
+  const value3 = map5.get(key, NOT_FOUND);
   if (value3 === NOT_FOUND) {
     return new Error(Nil);
   }
   return new Ok(value3);
 }
-function map_insert(key, value3, map6) {
-  return map6.set(key, value3);
+function map_insert(key, value3, map5) {
+  return map5.set(key, value3);
 }
 function classify_dynamic(data) {
   if (typeof data === "string") {
@@ -1255,10 +1247,10 @@ function inspectString(str) {
   new_str += '"';
   return new_str;
 }
-function inspectDict(map6) {
+function inspectDict(map5) {
   let body = "dict.from_list([";
   let first2 = true;
-  map6.forEach((value3, key) => {
+  map5.forEach((value3, key) => {
     if (!first2)
       body = body + ", ";
     body = body + "#(" + inspect(key) + ", " + inspect(value3) + ")";
@@ -1381,7 +1373,7 @@ function map_loop(loop$list, loop$fun, loop$acc) {
     }
   }
 }
-function map2(list3, fun) {
+function map(list3, fun) {
   return map_loop(list3, fun, toList([]));
 }
 function append_loop(loop$first, loop$second) {
@@ -1465,7 +1457,7 @@ function inspect2(term) {
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/result.mjs
-function map3(result, fun) {
+function map2(result, fun) {
   if (result.isOk()) {
     let x = result[0];
     return new Ok(fun(x));
@@ -1517,7 +1509,7 @@ function map_errors(result, f) {
   return map_error(
     result,
     (_capture) => {
-      return map2(_capture, f);
+      return map(_capture, f);
     }
   );
 }
@@ -1549,7 +1541,7 @@ function push_path(error, name2) {
     toList([
       decode_string,
       (x) => {
-        return map3(decode_int(x), to_string);
+        return map2(decode_int(x), to_string);
       }
     ])
   );
@@ -1679,7 +1671,7 @@ function success(data) {
     return [data, toList([])];
   });
 }
-function map4(decoder, transformer) {
+function map3(decoder, transformer) {
   return new Decoder(
     (d) => {
       let $ = decoder.function(d);
@@ -1802,11 +1794,11 @@ function push_path2(layer, path) {
     toList([
       (() => {
         let _pipe = int2;
-        return map4(_pipe, to_string);
+        return map3(_pipe, to_string);
       })()
     ])
   );
-  let path$1 = map2(
+  let path$1 = map(
     path,
     (key) => {
       let key$1 = identity(key);
@@ -1819,7 +1811,7 @@ function push_path2(layer, path) {
       }
     }
   );
-  let errors = map2(
+  let errors = map(
     layer[1],
     (error) => {
       let _record = error;
@@ -3829,6 +3821,9 @@ function from_unix_milli(unix_ts) {
 function to_unix_milli(date2) {
   return to_unix_seconds(date2) * 1e3;
 }
+function to_unix_micro(date2) {
+  return date_to_unix_micro(date2);
+}
 
 // build/dev/javascript/gtempo/tempo/time.mjs
 function from_unix_milli2(unix_ts) {
@@ -3868,6 +3863,23 @@ function to_unix_milli2(datetime2) {
       })()
     ),
     1e3
+  );
+}
+function to_unix_micro2(datetime2) {
+  let utc_dt = (() => {
+    let _pipe = datetime2;
+    return apply_offset(_pipe);
+  })();
+  return to_unix_micro(
+    (() => {
+      let _pipe = utc_dt;
+      return naive_datetime_get_date(_pipe);
+    })()
+  ) + time_to_microseconds(
+    (() => {
+      let _pipe = utc_dt;
+      return naive_datetime_get_time(_pipe);
+    })()
   );
 }
 
@@ -3917,33 +3929,23 @@ function on_input(msg) {
     "input",
     (event2) => {
       let _pipe = value2(event2);
-      return map3(_pipe, msg);
+      return map2(_pipe, msg);
     }
   );
 }
 
 // build/dev/javascript/o11a_common/o11a/note.mjs
 var Note = class extends CustomType {
-  constructor(parent_id, note_type, significance, user_id, message, expanded_message, time2, thread_id, last_edit_time) {
+  constructor(note_id, parent_id, significance, user_id, message, expanded_message, time2) {
     super();
+    this.note_id = note_id;
     this.parent_id = parent_id;
-    this.note_type = note_type;
     this.significance = significance;
     this.user_id = user_id;
     this.message = message;
     this.expanded_message = expanded_message;
     this.time = time2;
-    this.thread_id = thread_id;
-    this.last_edit_time = last_edit_time;
   }
-};
-var FunctionTestNote = class extends CustomType {
-};
-var FunctionInvariantNote = class extends CustomType {
-};
-var LineCommentNote = class extends CustomType {
-};
-var ThreadNote = class extends CustomType {
 };
 var Regular = class extends CustomType {
 };
@@ -3963,37 +3965,6 @@ var FindingRejection = class extends CustomType {
 };
 var DevelperQuestion = class extends CustomType {
 };
-function note_type_to_int(note_type) {
-  if (note_type instanceof FunctionTestNote) {
-    return 1;
-  } else if (note_type instanceof FunctionInvariantNote) {
-    return 2;
-  } else if (note_type instanceof LineCommentNote) {
-    return 3;
-  } else {
-    return 4;
-  }
-}
-function note_type_from_int(note_type) {
-  if (note_type === 1) {
-    return new FunctionTestNote();
-  } else if (note_type === 2) {
-    return new FunctionInvariantNote();
-  } else if (note_type === 3) {
-    return new LineCommentNote();
-  } else if (note_type === 4) {
-    return new ThreadNote();
-  } else {
-    throw makeError(
-      "panic",
-      "o11a/note",
-      55,
-      "note_type_from_int",
-      "Invalid note type found",
-      {}
-    );
-  }
-}
 function note_significance_to_int(note_significance) {
   if (note_significance instanceof Regular) {
     return 1;
@@ -4038,34 +4009,18 @@ function note_significance_from_int(note_significance) {
     throw makeError(
       "panic",
       "o11a/note",
-      96,
+      67,
       "note_significance_from_int",
       "Invalid note significance found",
       {}
     );
   }
 }
-function get_note_id(note) {
-  return to_string(note.user_id) + "-" + to_string(
-    (() => {
-      let _pipe = note.time;
-      return to_unix_milli2(_pipe);
-    })()
-  );
-}
 function encode_note(note) {
   return object2(
     toList([
+      ["note_id", string4(note.note_id)],
       ["parent_id", string4(note.parent_id)],
-      [
-        "note_type",
-        int3(
-          (() => {
-            let _pipe = note.note_type;
-            return note_type_to_int(_pipe);
-          })()
-        )
-      ],
       [
         "significance",
         int3(
@@ -4086,30 +4041,19 @@ function encode_note(note) {
             return to_unix_milli2(_pipe);
           })()
         )
-      ],
-      ["thread_id", nullable(note.thread_id, string4)],
-      [
-        "last_edit_time",
-        nullable(
-          (() => {
-            let _pipe = note.last_edit_time;
-            return map(_pipe, to_unix_milli2);
-          })(),
-          int3
-        )
       ]
     ])
   );
 }
 function json_note_decoder() {
   return field2(
-    "parent_id",
+    "note_id",
     string3,
-    (parent_id) => {
+    (note_id) => {
       return field2(
-        "note_type",
-        int2,
-        (note_type) => {
+        "parent_id",
+        string3,
+        (parent_id) => {
           return field2(
             "significance",
             int2,
@@ -4130,36 +4074,16 @@ function json_note_decoder() {
                             "time",
                             int2,
                             (time2) => {
-                              return field2(
-                                "thread_id",
-                                optional(string3),
-                                (thread_id) => {
-                                  return field2(
-                                    "last_edit_time",
-                                    optional(int2),
-                                    (last_edit_time) => {
-                                      let _pipe = new Note(
-                                        parent_id,
-                                        note_type_from_int(note_type),
-                                        note_significance_from_int(significance),
-                                        user_id,
-                                        message,
-                                        expanded_message,
-                                        from_unix_milli3(time2),
-                                        thread_id,
-                                        (() => {
-                                          let _pipe2 = last_edit_time;
-                                          return map(
-                                            _pipe2,
-                                            from_unix_milli3
-                                          );
-                                        })()
-                                      );
-                                      return success(_pipe);
-                                    }
-                                  );
-                                }
+                              let _pipe = new Note(
+                                note_id,
+                                parent_id,
+                                note_significance_from_int(significance),
+                                user_id,
+                                message,
+                                expanded_message,
+                                from_unix_milli3(time2)
                               );
+                              return success(_pipe);
                             }
                           );
                         }
@@ -4196,8 +4120,9 @@ function decode_notes(notes) {
 
 // build/dev/javascript/o11a_common/o11a/user_interface/line_notes.mjs
 var Model2 = class extends CustomType {
-  constructor(line_id, notes, current_note_draft) {
+  constructor(user_id, line_id, notes, current_note_draft) {
     super();
+    this.user_id = user_id;
     this.line_id = line_id;
     this.notes = notes;
     this.current_note_draft = current_note_draft;
@@ -4222,14 +4147,19 @@ var UserWroteNote = class extends CustomType {
   }
 };
 var UserSubmittedNote = class extends CustomType {
-  constructor(parent_id, note_type) {
+  constructor(parent_id) {
     super();
     this.parent_id = parent_id;
-    this.note_type = note_type;
+  }
+};
+var UserSwitchedToThread = class extends CustomType {
+  constructor(x0) {
+    super();
+    this[0] = x0;
   }
 };
 function init2(_) {
-  return [new Model2("", toList([]), ""), none()];
+  return [new Model2(0, "", toList([]), ""), none()];
 }
 function on_ctrl_enter(msg) {
   return on2(
@@ -4272,7 +4202,7 @@ function view(model) {
     toList([class$("line-notes-list")]),
     toList([
       fragment(
-        map2(
+        map(
           model.notes,
           (note) => {
             return fragment(
@@ -4293,9 +4223,7 @@ function view(model) {
           on_input((var0) => {
             return new UserWroteNote(var0);
           }),
-          on_ctrl_enter(
-            new UserSubmittedNote(model.line_id, new LineCommentNote())
-          ),
+          on_ctrl_enter(new UserSubmittedNote(model.line_id)),
           value(model.current_note_draft)
         ])
       )
@@ -4310,7 +4238,12 @@ function update(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model2(line_id, _record.notes, _record.current_note_draft);
+        return new Model2(
+          _record.user_id,
+          line_id,
+          _record.notes,
+          _record.current_note_draft
+        );
       })(),
       none()
     ];
@@ -4319,7 +4252,12 @@ function update(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model2(_record.line_id, notes, _record.current_note_draft);
+        return new Model2(
+          _record.user_id,
+          _record.line_id,
+          notes,
+          _record.current_note_draft
+        );
       })(),
       none()
     ];
@@ -4328,26 +4266,29 @@ function update(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model2(_record.line_id, _record.notes, draft);
+        return new Model2(_record.user_id, _record.line_id, _record.notes, draft);
       })(),
       none()
     ];
-  } else {
+  } else if (msg instanceof UserSubmittedNote) {
     let parent_id = msg.parent_id;
-    let note_type = msg.note_type;
+    let now4 = (() => {
+      let _pipe = now3();
+      return as_utc_datetime(_pipe);
+    })();
+    let note_id = to_string(model.user_id) + "-" + (() => {
+      let _pipe = now4;
+      let _pipe$1 = to_unix_micro2(_pipe);
+      return to_string(_pipe$1);
+    })();
     let note = new Note(
+      note_id,
       parent_id,
-      note_type,
       new Regular(),
-      0,
+      model.user_id,
       "",
       new None(),
-      (() => {
-        let _pipe = now3();
-        return as_utc_datetime(_pipe);
-      })(),
-      new None(),
-      new None()
+      now4
     );
     let note$1 = (() => {
       let $ = model.current_note_draft;
@@ -4355,99 +4296,85 @@ function update(model, msg) {
         let rest = $.slice(5);
         let _record = note;
         return new Note(
+          _record.note_id,
           _record.parent_id,
-          _record.note_type,
           new ToDo(),
           _record.user_id,
           rest,
           _record.expanded_message,
-          _record.time,
-          new Some(get_note_id(note)),
-          _record.last_edit_time
+          _record.time
         );
       } else if ($.startsWith("done ")) {
         let rest = $.slice(5);
         let _record = note;
         return new Note(
+          _record.note_id,
           _record.parent_id,
-          _record.note_type,
           new ToDoDone(),
           _record.user_id,
           rest,
           _record.expanded_message,
-          _record.time,
-          _record.thread_id,
-          _record.last_edit_time
+          _record.time
         );
       } else if ($.startsWith("? ")) {
         let rest = $.slice(2);
         let _record = note;
         return new Note(
+          _record.note_id,
           _record.parent_id,
-          _record.note_type,
           new Question(),
           _record.user_id,
           rest,
           _record.expanded_message,
-          _record.time,
-          new Some(get_note_id(note)),
-          _record.last_edit_time
+          _record.time
         );
       } else if ($.startsWith(", ")) {
         let rest = $.slice(2);
         let _record = note;
         return new Note(
+          _record.note_id,
           _record.parent_id,
-          _record.note_type,
           new Answer(),
           _record.user_id,
           rest,
           _record.expanded_message,
-          _record.time,
-          _record.thread_id,
-          _record.last_edit_time
+          _record.time
         );
       } else if ($.startsWith("! ")) {
         let rest = $.slice(2);
         let _record = note;
         return new Note(
+          _record.note_id,
           _record.parent_id,
-          _record.note_type,
           new FindingLead(),
           _record.user_id,
           rest,
           _record.expanded_message,
-          _record.time,
-          new Some(get_note_id(note)),
-          _record.last_edit_time
+          _record.time
         );
       } else if ($.startsWith(". ")) {
         let rest = $.slice(2);
         let _record = note;
         return new Note(
+          _record.note_id,
           _record.parent_id,
-          _record.note_type,
           new FindingRejection(),
           _record.user_id,
           rest,
           _record.expanded_message,
-          _record.time,
-          _record.thread_id,
-          _record.last_edit_time
+          _record.time
         );
       } else if ($.startsWith("!! ")) {
         let rest = $.slice(3);
         let _record = note;
         return new Note(
+          _record.note_id,
           _record.parent_id,
-          _record.note_type,
           new FindingComfirmation(),
           _record.user_id,
           rest,
           _record.expanded_message,
-          _record.time,
-          _record.thread_id,
-          _record.last_edit_time
+          _record.time
         );
       } else {
         return note;
@@ -4456,10 +4383,29 @@ function update(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model2(_record.line_id, _record.notes, "");
+        return new Model2(_record.user_id, _record.line_id, _record.notes, "");
       })(),
       emit2(user_submitted_note_event, encode_note(note$1))
     ];
+  } else if (msg instanceof UserSwitchedToThread) {
+    let thread_id = msg[0];
+    throw makeError(
+      "todo",
+      "o11a/user_interface/line_notes",
+      126,
+      "update",
+      "`todo` expression evaluated. This code has not yet been implemented.",
+      {}
+    );
+  } else {
+    throw makeError(
+      "todo",
+      "o11a/user_interface/line_notes",
+      127,
+      "update",
+      "`todo` expression evaluated. This code has not yet been implemented.",
+      {}
+    );
   }
 }
 function component2() {

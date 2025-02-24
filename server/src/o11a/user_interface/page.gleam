@@ -134,7 +134,7 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
   })
 
   let line_comments =
-    pcd_dict.get(model.discussion.line_comment_notes, line_id)
+    pcd_dict.get(model.discussion.notes, line_id)
     |> result.unwrap([])
     |> list.sort(fn(a, b) { datetime.compare(a.time, b.time) })
 
