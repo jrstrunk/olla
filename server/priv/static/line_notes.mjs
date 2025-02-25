@@ -314,6 +314,22 @@ function to_result(option, e) {
     return new Error(e);
   }
 }
+function map(option, fun) {
+  if (option instanceof Some) {
+    let x = option[0];
+    return new Some(fun(x));
+  } else {
+    return new None();
+  }
+}
+function flatten(option) {
+  if (option instanceof Some) {
+    let x = option[0];
+    return x;
+  } else {
+    return new None();
+  }
+}
 
 // build/dev/javascript/gleam_stdlib/dict.mjs
 var referenceMap = /* @__PURE__ */ new WeakMap();
@@ -1096,18 +1112,18 @@ var trim_end_regex = new RegExp(`[${unicode_whitespaces}]*$`);
 function new_map() {
   return Dict.new();
 }
-function map_to_list(map5) {
-  return List.fromArray(map5.entries());
+function map_to_list(map6) {
+  return List.fromArray(map6.entries());
 }
-function map_get(map5, key) {
-  const value3 = map5.get(key, NOT_FOUND);
+function map_get(map6, key) {
+  const value3 = map6.get(key, NOT_FOUND);
   if (value3 === NOT_FOUND) {
     return new Error(Nil);
   }
   return new Ok(value3);
 }
-function map_insert(key, value3, map5) {
-  return map5.set(key, value3);
+function map_insert(key, value3, map6) {
+  return map6.set(key, value3);
 }
 function classify_dynamic(data) {
   if (typeof data === "string") {
@@ -1247,10 +1263,10 @@ function inspectString(str) {
   new_str += '"';
   return new_str;
 }
-function inspectDict(map5) {
+function inspectDict(map6) {
   let body = "dict.from_list([";
   let first2 = true;
-  map5.forEach((value3, key) => {
+  map6.forEach((value3, key) => {
     if (!first2)
       body = body + ", ";
     body = body + "#(" + inspect(key) + ", " + inspect(value3) + ")";
@@ -1373,7 +1389,7 @@ function map_loop(loop$list, loop$fun, loop$acc) {
     }
   }
 }
-function map(list3, fun) {
+function map2(list3, fun) {
   return map_loop(list3, fun, toList([]));
 }
 function append_loop(loop$first, loop$second) {
@@ -1457,7 +1473,7 @@ function inspect2(term) {
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/result.mjs
-function map2(result, fun) {
+function map3(result, fun) {
   if (result.isOk()) {
     let x = result[0];
     return new Ok(fun(x));
@@ -1487,6 +1503,14 @@ function try$(result, fun) {
 function then$(result, fun) {
   return try$(result, fun);
 }
+function unwrap(result, default$) {
+  if (result.isOk()) {
+    let v = result[0];
+    return v;
+  } else {
+    return default$;
+  }
+}
 function replace_error(result, error) {
   if (result.isOk()) {
     let x = result[0];
@@ -1509,7 +1533,7 @@ function map_errors(result, f) {
   return map_error(
     result,
     (_capture) => {
-      return map(_capture, f);
+      return map2(_capture, f);
     }
   );
 }
@@ -1541,7 +1565,7 @@ function push_path(error, name2) {
     toList([
       decode_string,
       (x) => {
-        return map2(decode_int(x), to_string);
+        return map3(decode_int(x), to_string);
       }
     ])
   );
@@ -1671,7 +1695,7 @@ function success(data) {
     return [data, toList([])];
   });
 }
-function map3(decoder, transformer) {
+function map4(decoder, transformer) {
   return new Decoder(
     (d) => {
       let $ = decoder.function(d);
@@ -1794,11 +1818,11 @@ function push_path2(layer, path) {
     toList([
       (() => {
         let _pipe = int2;
-        return map3(_pipe, to_string);
+        return map4(_pipe, to_string);
       })()
     ])
   );
-  let path$1 = map(
+  let path$1 = map2(
     path,
     (key) => {
       let key$1 = identity(key);
@@ -1811,7 +1835,7 @@ function push_path2(layer, path) {
       }
     }
   );
-  let errors = map(
+  let errors = map2(
     layer[1],
     (error) => {
       let _record = error;
@@ -1906,9 +1930,6 @@ function object(entries) {
 }
 function identity2(x) {
   return x;
-}
-function array(list3) {
-  return list3.toArray();
 }
 function do_null() {
   return null;
@@ -2054,14 +2075,6 @@ function nullable(input2, inner_type) {
 }
 function object2(entries) {
   return object(entries);
-}
-function preprocessed_array(from) {
-  return array(from);
-}
-function array2(entries, inner_type) {
-  let _pipe = entries;
-  let _pipe$1 = map(_pipe, inner_type);
-  return preprocessed_array(_pipe$1);
 }
 
 // build/dev/javascript/lustre/lustre/effect.mjs
@@ -3918,8 +3931,14 @@ function hr(attrs) {
 function p(attrs, children2) {
   return element("p", attrs, children2);
 }
+function br(attrs) {
+  return element("br", attrs, toList([]));
+}
 function span(attrs, children2) {
   return element("span", attrs, children2);
+}
+function button(attrs, children2) {
+  return element("button", attrs, children2);
 }
 function input(attrs) {
   return element("input", attrs, toList([]));
@@ -3932,6 +3951,11 @@ function emit2(event2, data) {
 function on2(name2, handler) {
   return on(name2, handler);
 }
+function on_click(msg) {
+  return on2("click", (_) => {
+    return new Ok(msg);
+  });
+}
 function value2(event2) {
   let _pipe = event2;
   return field("target", field("value", string))(
@@ -3943,14 +3967,14 @@ function on_input(msg) {
     "input",
     (event2) => {
       let _pipe = value2(event2);
-      return map2(_pipe, msg);
+      return map3(_pipe, msg);
     }
   );
 }
 
 // build/dev/javascript/o11a_common/o11a/note.mjs
 var Note = class extends CustomType {
-  constructor(note_id, parent_id, significance, user_id, message, expanded_message, time2, thread_notes, edited) {
+  constructor(note_id, parent_id, significance, user_id, message, expanded_message, time2, edited) {
     super();
     this.note_id = note_id;
     this.parent_id = parent_id;
@@ -3959,7 +3983,6 @@ var Note = class extends CustomType {
     this.message = message;
     this.expanded_message = expanded_message;
     this.time = time2;
-    this.thread_notes = thread_notes;
     this.edited = edited;
   }
 };
@@ -4025,7 +4048,7 @@ function note_significance_from_int(note_significance) {
     throw makeError(
       "panic",
       "o11a/note",
-      68,
+      67,
       "note_significance_from_int",
       "Invalid note significance found",
       {}
@@ -4058,12 +4081,11 @@ function encode_note(note) {
           })()
         )
       ],
-      ["thread_notes", array2(note.thread_notes, encode_note)],
       ["edited", bool2(note.edited)]
     ])
   );
 }
-function json_note_decoder() {
+function note_decoder() {
   return field2(
     "note_id",
     string3,
@@ -4093,27 +4115,20 @@ function json_note_decoder() {
                             int2,
                             (time2) => {
                               return field2(
-                                "thread_notes",
-                                list2(json_note_decoder()),
-                                (thread_notes) => {
-                                  return field2(
-                                    "edited",
-                                    bool,
-                                    (edited) => {
-                                      let _pipe = new Note(
-                                        note_id,
-                                        parent_id,
-                                        note_significance_from_int(significance),
-                                        user_id,
-                                        message,
-                                        expanded_message,
-                                        from_unix_milli3(time2),
-                                        thread_notes,
-                                        edited
-                                      );
-                                      return success(_pipe);
-                                    }
+                                "edited",
+                                bool,
+                                (edited) => {
+                                  let _pipe = new Note(
+                                    note_id,
+                                    parent_id,
+                                    note_significance_from_int(significance),
+                                    user_id,
+                                    message,
+                                    expanded_message,
+                                    from_unix_milli3(time2),
+                                    edited
                                   );
+                                  return success(_pipe);
                                 }
                               );
                             }
@@ -4131,11 +4146,27 @@ function json_note_decoder() {
     }
   );
 }
-function decode_notes(notes) {
+function structured_note_decoder() {
+  return field2(
+    "note_id",
+    string3,
+    (note_id) => {
+      return field2(
+        "thread_notes",
+        list2(note_decoder()),
+        (thread_notes) => {
+          let _pipe = [note_id, thread_notes];
+          return success(_pipe);
+        }
+      );
+    }
+  );
+}
+function decode_structured_notes(notes) {
   return try$(
     run(notes, string3),
     (notes2) => {
-      let _pipe = parse(notes2, list2(json_note_decoder()));
+      let _pipe = parse(notes2, list2(structured_note_decoder()));
       return replace_error(
         _pipe,
         toList([
@@ -4152,12 +4183,22 @@ function decode_notes(notes) {
 
 // build/dev/javascript/o11a_common/o11a/user_interface/line_notes.mjs
 var Model2 = class extends CustomType {
-  constructor(user_id, line_id, notes, current_note_draft) {
+  constructor(user_id, line_id, notes, current_note_draft, active_thread) {
     super();
     this.user_id = user_id;
     this.line_id = line_id;
     this.notes = notes;
     this.current_note_draft = current_note_draft;
+    this.active_thread = active_thread;
+  }
+};
+var ActiveThread = class extends CustomType {
+  constructor(current_thread_id, parent_note, prior_thread_id, prior_thread) {
+    super();
+    this.current_thread_id = current_thread_id;
+    this.parent_note = parent_note;
+    this.prior_thread_id = prior_thread_id;
+    this.prior_thread = prior_thread;
   }
 };
 var ServerSetLineId = class extends CustomType {
@@ -4185,13 +4226,28 @@ var UserSubmittedNote = class extends CustomType {
   }
 };
 var UserSwitchedToThread = class extends CustomType {
-  constructor(x0) {
+  constructor(new_thread_id, parent_note) {
     super();
-    this[0] = x0;
+    this.new_thread_id = new_thread_id;
+    this.parent_note = parent_note;
   }
 };
+var UserClosedThread = class extends CustomType {
+};
 function init2(_) {
-  return [new Model2(0, "", toList([]), ""), none()];
+  return [
+    new Model2(0, "", new_map(), "", new None()),
+    none()
+  ];
+}
+function get_current_thread_id(model) {
+  let $ = model.active_thread;
+  if ($ instanceof Some) {
+    let thread = $[0];
+    return thread.current_thread_id;
+  } else {
+    return model.line_id;
+  }
 }
 function on_ctrl_enter(msg) {
   return on2(
@@ -4230,18 +4286,51 @@ function on_ctrl_enter(msg) {
   );
 }
 function view(model) {
+  let current_thread_id = get_current_thread_id(model);
+  let current_notes = (() => {
+    let _pipe = map_get(model.notes, current_thread_id);
+    return unwrap(_pipe, toList([]));
+  })();
   return div(
     toList([class$("line-notes-list")]),
     toList([
+      (() => {
+        let $ = model.active_thread;
+        if ($ instanceof Some) {
+          let active_thread = $[0];
+          return fragment(
+            toList([
+              button(
+                toList([on_click(new UserClosedThread())]),
+                toList([text2("Close Thread")])
+              ),
+              br(toList([])),
+              text2("Current Thread: "),
+              text2(active_thread.parent_note.message),
+              hr(toList([]))
+            ])
+          );
+        } else {
+          return fragment(toList([]));
+        }
+      })(),
       fragment(
-        map(
-          model.notes,
+        map2(
+          current_notes,
           (note) => {
             return fragment(
               toList([
                 p(
                   toList([class$("line-notes-list-item")]),
                   toList([text2(note.message)])
+                ),
+                button(
+                  toList([
+                    on_click(
+                      new UserSwitchedToThread(note.note_id, note)
+                    )
+                  ]),
+                  toList([text2("Switch to Thread")])
                 ),
                 hr(toList([]))
               ])
@@ -4255,7 +4344,7 @@ function view(model) {
           on_input((var0) => {
             return new UserWroteNote(var0);
           }),
-          on_ctrl_enter(new UserSubmittedNote(model.line_id)),
+          on_ctrl_enter(new UserSubmittedNote(current_thread_id)),
           value(model.current_note_draft)
         ])
       )
@@ -4274,7 +4363,8 @@ function update(model, msg) {
           _record.user_id,
           line_id,
           _record.notes,
-          _record.current_note_draft
+          _record.current_note_draft,
+          _record.active_thread
         );
       })(),
       none()
@@ -4287,8 +4377,9 @@ function update(model, msg) {
         return new Model2(
           _record.user_id,
           _record.line_id,
-          notes,
-          _record.current_note_draft
+          from_list(notes),
+          _record.current_note_draft,
+          _record.active_thread
         );
       })(),
       none()
@@ -4298,7 +4389,13 @@ function update(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model2(_record.user_id, _record.line_id, _record.notes, draft);
+        return new Model2(
+          _record.user_id,
+          _record.line_id,
+          _record.notes,
+          draft,
+          _record.active_thread
+        );
       })(),
       none()
     ];
@@ -4321,7 +4418,6 @@ function update(model, msg) {
       model.current_note_draft,
       new None(),
       now4,
-      toList([]),
       false
     );
     let note$1 = (() => {
@@ -4337,7 +4433,6 @@ function update(model, msg) {
           rest,
           _record.expanded_message,
           _record.time,
-          _record.thread_notes,
           _record.edited
         );
       } else if ($.startsWith("done ")) {
@@ -4351,7 +4446,6 @@ function update(model, msg) {
           rest,
           _record.expanded_message,
           _record.time,
-          _record.thread_notes,
           _record.edited
         );
       } else if ($.startsWith("? ")) {
@@ -4365,7 +4459,6 @@ function update(model, msg) {
           rest,
           _record.expanded_message,
           _record.time,
-          _record.thread_notes,
           _record.edited
         );
       } else if ($.startsWith(", ")) {
@@ -4379,7 +4472,6 @@ function update(model, msg) {
           rest,
           _record.expanded_message,
           _record.time,
-          _record.thread_notes,
           _record.edited
         );
       } else if ($.startsWith("! ")) {
@@ -4393,7 +4485,6 @@ function update(model, msg) {
           rest,
           _record.expanded_message,
           _record.time,
-          _record.thread_notes,
           _record.edited
         );
       } else if ($.startsWith(". ")) {
@@ -4407,7 +4498,6 @@ function update(model, msg) {
           rest,
           _record.expanded_message,
           _record.time,
-          _record.thread_notes,
           _record.edited
         );
       } else if ($.startsWith("!! ")) {
@@ -4421,7 +4511,6 @@ function update(model, msg) {
           rest,
           _record.expanded_message,
           _record.time,
-          _record.thread_notes,
           _record.edited
         );
       } else {
@@ -4431,29 +4520,62 @@ function update(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model2(_record.user_id, _record.line_id, _record.notes, "");
+        return new Model2(
+          _record.user_id,
+          _record.line_id,
+          _record.notes,
+          "",
+          _record.active_thread
+        );
       })(),
       emit2(user_submitted_note_event, encode_note(note$1))
     ];
   } else if (msg instanceof UserSwitchedToThread) {
-    let thread_id = msg[0];
-    throw makeError(
-      "todo",
-      "o11a/user_interface/line_notes",
-      128,
-      "update",
-      "`todo` expression evaluated. This code has not yet been implemented.",
-      {}
-    );
+    let new_thread_id = msg.new_thread_id;
+    let parent_note = msg.parent_note;
+    return [
+      (() => {
+        let _record = model;
+        return new Model2(
+          _record.user_id,
+          _record.line_id,
+          _record.notes,
+          _record.current_note_draft,
+          new Some(
+            new ActiveThread(
+              new_thread_id,
+              parent_note,
+              get_current_thread_id(model),
+              model.active_thread
+            )
+          )
+        );
+      })(),
+      none()
+    ];
   } else {
-    throw makeError(
-      "todo",
-      "o11a/user_interface/line_notes",
-      129,
-      "update",
-      "`todo` expression evaluated. This code has not yet been implemented.",
-      {}
-    );
+    return [
+      (() => {
+        let _record = model;
+        return new Model2(
+          _record.user_id,
+          _record.line_id,
+          _record.notes,
+          _record.current_note_draft,
+          (() => {
+            let _pipe = model.active_thread;
+            let _pipe$1 = map(
+              _pipe,
+              (thread) => {
+                return thread.prior_thread;
+              }
+            );
+            return flatten(_pipe$1);
+          })()
+        );
+      })(),
+      none()
+    ];
   }
 }
 function component2() {
@@ -4466,7 +4588,7 @@ function component2() {
         [
           "line-notes",
           (dy) => {
-            let $ = decode_notes(dy);
+            let $ = decode_structured_notes(dy);
             if ($.isOk()) {
               let notes = $[0];
               return new Ok(new ServerUpdatedNotes(notes));

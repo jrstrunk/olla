@@ -17,7 +17,6 @@ pub type Note {
     message: String,
     expanded_message: Option(String),
     time: tempo.DateTime,
-    thread_notes: List(Note),
     edited: Bool,
   )
 }
@@ -99,6 +98,30 @@ pub type NoteVote {
 pub type NoteVoteCollection =
   dict.Dict(NoteId, List(NoteVote))
 
+pub fn encode_structured_notes(note: #(String, List(Note))) {
+  json.object([
+    #("note_id", json.string(note.0)),
+    #("thread_notes", json.array(note.1, encode_note)),
+  ])
+}
+
+pub fn decode_structured_notes(notes: dynamic.Dynamic) {
+  use notes <- result.try(decode.run(notes, decode.string))
+
+  json.parse(notes, decode.list(structured_note_decoder()))
+  |> result.replace_error([
+    decode.DecodeError("json-encoded note", string.inspect(notes), []),
+  ])
+}
+
+fn structured_note_decoder() {
+  use note_id <- decode.field("note_id", decode.string)
+  use thread_notes <- decode.field("thread_notes", decode.list(note_decoder()))
+
+  #(note_id, thread_notes)
+  |> decode.success
+}
+
 pub fn encode_note(note: Note) {
   json.object([
     #("note_id", json.string(note.note_id)),
@@ -108,33 +131,11 @@ pub fn encode_note(note: Note) {
     #("message", json.string(note.message)),
     #("expanded_message", json.nullable(note.expanded_message, json.string)),
     #("time", json.int(note.time |> datetime.to_unix_milli)),
-    #("thread_notes", json.array(note.thread_notes, encode_note)),
     #("edited", json.bool(note.edited)),
   ])
 }
 
-pub fn decode_note(note: dynamic.Dynamic) {
-  use note <- result.try(decode.run(note, decode.string))
-  parse_note(note)
-}
-
-pub fn parse_note(note: String) {
-  json.parse(note, json_note_decoder())
-  |> result.replace_error([
-    decode.DecodeError("json-encoded note", string.inspect(note), []),
-  ])
-}
-
-pub fn decode_notes(notes: dynamic.Dynamic) {
-  use notes <- result.try(decode.run(notes, decode.string))
-
-  json.parse(notes, decode.list(json_note_decoder()))
-  |> result.replace_error([
-    decode.DecodeError("json-encoded note", string.inspect(notes), []),
-  ])
-}
-
-pub fn json_note_decoder() {
+pub fn note_decoder() {
   use note_id <- decode.field("note_id", decode.string)
   use parent_id <- decode.field("parent_id", decode.string)
   use significance <- decode.field("significance", decode.int)
@@ -145,10 +146,6 @@ pub fn json_note_decoder() {
     decode.optional(decode.string),
   )
   use time <- decode.field("time", decode.int)
-  use thread_notes <- decode.field(
-    "thread_notes",
-    decode.list(json_note_decoder()),
-  )
   use edited <- decode.field("edited", decode.bool)
 
   Note(
@@ -159,7 +156,6 @@ pub fn json_note_decoder() {
     message:,
     expanded_message:,
     time: datetime.from_unix_milli(time),
-    thread_notes:,
     edited:,
   )
   |> decode.success
@@ -174,58 +170,59 @@ pub fn example_note() {
     message: "Wow bro great finding that is really cool",
     expanded_message: option.None,
     time: datetime.literal("2021-01-01T00:00:00Z"),
-    thread_notes: [],
     edited: False,
   )
 }
 
 pub fn example_note_thread() {
-  Note(
-    note_id: "1-10000",
-    parent_id: "Example",
-    significance: Regular,
-    user_id: 0,
-    message: "Wow bro great finding that is really cool",
-    expanded_message: option.None,
-    time: datetime.literal("2021-01-01T00:00:00Z"),
-    thread_notes: [
+  [
+    #("L1", [
       Note(
-        note_id: "1-10001",
-        parent_id: "1-10000",
+        note_id: "L2",
+        parent_id: "L1",
         significance: Regular,
         user_id: 0,
-        message: "Wow bro great finding that is really cool",
+        message: "world",
         expanded_message: option.None,
-        time: datetime.literal("2021-01-01T00:00:00Z"),
-        thread_notes: [
-          Note(
-            note_id: "1-10003",
-            parent_id: "1-10001",
-            significance: Regular,
-            user_id: 0,
-            message: "Wow bro great finding that is really cool",
-            expanded_message: option.None,
-            time: datetime.literal("2021-01-01T00:00:00Z"),
-            thread_notes: [],
-            edited: False,
-          ),
-        ],
+        time: example_note().time,
         edited: False,
       ),
       Note(
-        note_id: "1-10002",
-        parent_id: "1-10000",
+        note_id: "L3",
+        parent_id: "L1",
         significance: Regular,
         user_id: 0,
-        message: "Wow bro great finding that is really cool",
+        message: "hello2",
         expanded_message: option.None,
-        time: datetime.literal("2021-01-01T00:00:00Z"),
-        thread_notes: [],
-        edited: True,
+        time: example_note().time,
+        edited: False,
       ),
-    ],
-    edited: False,
-  )
+    ]),
+    #("L50", [
+      Note(
+        note_id: "L1",
+        parent_id: "L50",
+        significance: Regular,
+        user_id: 0,
+        message: "hello",
+        expanded_message: option.None,
+        time: example_note().time,
+        edited: False,
+      ),
+    ]),
+    #("L3", [
+      Note(
+        note_id: "L4",
+        parent_id: "L3",
+        significance: Regular,
+        user_id: 0,
+        message: "world2",
+        expanded_message: option.None,
+        time: example_note().time,
+        edited: False,
+      ),
+    ]),
+  ]
 }
 
 pub fn example_note_vote() {

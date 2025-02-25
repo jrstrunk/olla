@@ -52,7 +52,6 @@ pub fn structured_notes_test() {
       message: "hello",
       expanded_message: option.None,
       time: note.example_note().time,
-      thread_notes: [],
       edited: False,
     )
 
@@ -67,7 +66,6 @@ pub fn structured_notes_test() {
       message: "world",
       expanded_message: option.None,
       time: note.example_note().time,
-      thread_notes: [],
       edited: False,
     )
 
@@ -83,7 +81,6 @@ pub fn structured_notes_test() {
       message: "hello2",
       expanded_message: option.None,
       time: note.example_note().time,
-      thread_notes: [],
       edited: False,
     )
 
@@ -98,60 +95,45 @@ pub fn structured_notes_test() {
       message: "world2",
       expanded_message: option.None,
       time: note.example_note().time,
-      thread_notes: [],
       edited: False,
     )
 
   let assert Ok(Nil) =
     pcd_dict.insert(notes, fourth_note.parent_id, fourth_note)
 
-  discussion.get_structured_notes(discussion, first_note.parent_id)
-  |> should.equal([
+  let fifth_note =
     note.Note(
-      note_id: "L1",
-      parent_id: "L50",
+      note_id: "L5",
+      parent_id: "L3",
       significance: note.Regular,
       user_id: 0,
-      message: "hello",
+      message: "world3",
       expanded_message: option.None,
       time: note.example_note().time,
-      thread_notes: [
-        note.Note(
-          note_id: "L2",
-          parent_id: "L1",
-          significance: note.Regular,
-          user_id: 0,
-          message: "world",
-          expanded_message: option.None,
-          time: note.example_note().time,
-          thread_notes: [],
-          edited: False,
-        ),
-        note.Note(
-          note_id: "L3",
-          parent_id: "L1",
-          significance: note.Regular,
-          user_id: 0,
-          message: "hello2",
-          expanded_message: option.None,
-          time: note.example_note().time,
-          thread_notes: [
-            note.Note(
-              note_id: "L4",
-              parent_id: "L3",
-              significance: note.Regular,
-              user_id: 0,
-              message: "world2",
-              expanded_message: option.None,
-              time: note.example_note().time,
-              thread_notes: [],
-              edited: False,
-            ),
-          ],
-          edited: False,
-        ),
-      ],
       edited: False,
-    ),
+    )
+
+  let assert Ok(Nil) = pcd_dict.insert(notes, fifth_note.parent_id, fifth_note)
+
+  let sixth_note =
+    note.Note(
+      note_id: "L6",
+      parent_id: "L5",
+      significance: note.Regular,
+      user_id: 0,
+      message: "world4",
+      expanded_message: option.None,
+      time: note.example_note().time,
+      edited: False,
+    )
+
+  let assert Ok(Nil) = pcd_dict.insert(notes, sixth_note.parent_id, sixth_note)
+
+  discussion.get_structured_notes(discussion, first_note.parent_id)
+  |> should.equal([
+    #("L5", [sixth_note]),
+    #("L3", [fourth_note, fifth_note]),
+    #("L1", [second_note, third_note]),
+    #("L50", [first_note]),
   ])
 }

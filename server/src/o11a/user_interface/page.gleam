@@ -3,7 +3,6 @@ import gleam/dict
 import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/int
-import gleam/io
 import gleam/json
 import gleam/list
 import gleam/result
@@ -46,7 +45,6 @@ pub fn init(init_model) -> #(Model, effect.Effect(Msg)) {
 pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
     UserSubmittedNote(note) -> {
-      io.debug("adding note")
       let assert Ok(Nil) = discussion.add_note(model.discussion, note)
       #(model, effect.none())
     }
@@ -136,7 +134,7 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
   let inline_comment_preview_text = case
     line_comments |> list.reverse |> list.take(1)
   {
-    [comment] -> comment.message |> string.slice(at_index: 0, length: 30)
+    // [comment] -> comment.message |> string.slice(at_index: 0, length: 30)
     _ -> "+"
   }
 
@@ -162,7 +160,7 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
           [
             attribute.attribute(
               "line-notes",
-              list.map(line_comments, note.encode_note)
+              list.map(line_comments, note.encode_structured_notes)
                 |> json.preprocessed_array
                 |> json.to_string,
             ),
@@ -179,14 +177,13 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
 
 pub fn on_user_submitted_line_note(msg) {
   use event <- event.on(line_notes.user_submitted_note_event)
-  io.debug("user submitted line note")
 
   let empty_error = [dynamic.DecodeError("", "", [])]
 
   use note <- result.try(
     decode.run(
       event,
-      decode.field("detail", note.json_note_decoder(), decode.success),
+      decode.field("detail", note.note_decoder(), decode.success),
     )
     |> result.replace_error(empty_error),
   )

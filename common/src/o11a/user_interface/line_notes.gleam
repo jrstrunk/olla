@@ -3,7 +3,7 @@ import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/int
 import gleam/list
-import gleam/option.{None}
+import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import lustre
@@ -27,7 +27,7 @@ pub fn component() {
     view,
     dict.from_list([
       #("line-notes", fn(dy) {
-        case note.decode_notes(dy) {
+        case note.decode_structured_notes(dy) {
           Ok(notes) -> Ok(ServerUpdatedNotes(notes))
           Error(_) ->
             Error([dynamic.DecodeError("line-notes", string.inspect(dy), [])])
@@ -46,7 +46,13 @@ pub fn component() {
 
 fn init(_) -> #(Model, effect.Effect(Msg)) {
   #(
-    Model(user_id: 0, notes: [], current_note_draft: "", line_id: ""),
+    Model(
+      user_id: 0,
+      notes: dict.new(),
+      current_note_draft: "",
+      line_id: "",
+      active_thread: option.None,
+    ),
     effect.none(),
   )
 }
@@ -55,24 +61,44 @@ pub type Model {
   Model(
     user_id: Int,
     line_id: String,
-    notes: List(note.Note),
+    notes: dict.Dict(String, List(note.Note)),
     current_note_draft: String,
+    active_thread: Option(ActiveThread),
+  )
+}
+
+fn get_current_thread_id(model: Model) {
+  case model.active_thread {
+    Some(thread) -> thread.current_thread_id
+    None -> model.line_id
+  }
+}
+
+pub type ActiveThread {
+  ActiveThread(
+    current_thread_id: String,
+    parent_note: note.Note,
+    prior_thread_id: String,
+    prior_thread: Option(ActiveThread),
   )
 }
 
 pub type Msg {
   ServerSetLineId(String)
-  ServerUpdatedNotes(List(note.Note))
+  ServerUpdatedNotes(List(#(String, List(note.Note))))
   UserWroteNote(String)
   UserSubmittedNote(parent_id: String)
-  UserSwitchedToThread(String)
-  UserCreatedThread(note.Note)
+  UserSwitchedToThread(new_thread_id: String, parent_note: note.Note)
+  UserClosedThread
 }
 
 fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
     ServerSetLineId(line_id) -> #(Model(..model, line_id:), effect.none())
-    ServerUpdatedNotes(notes) -> #(Model(..model, notes:), effect.none())
+    ServerUpdatedNotes(notes) -> #(
+      Model(..model, notes: dict.from_list(notes)),
+      effect.none(),
+    )
     UserWroteNote(draft) -> #(
       Model(..model, current_note_draft: draft),
       effect.none(),
@@ -94,30 +120,29 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
           message: model.current_note_draft,
           expanded_message: None,
           time: now,
-          thread_notes: [],
           edited: False,
         )
 
-      let note = case model.current_note_draft {
-        "todo " <> rest ->
+      let note = case model.active_thread, model.current_note_draft {
+        None, "todo " <> rest ->
           note.Note(..note, significance: note.ToDo, message: rest)
-        "done " <> rest ->
+        None, "done " <> rest ->
           note.Note(..note, significance: note.ToDoDone, message: rest)
-        "? " <> rest ->
+        None, "? " <> rest ->
           note.Note(..note, significance: note.Question, message: rest)
-        ", " <> rest ->
+        None, ", " <> rest ->
           note.Note(..note, significance: note.Answer, message: rest)
-        "! " <> rest ->
+        None, "! " <> rest ->
           note.Note(..note, significance: note.FindingLead, message: rest)
-        ". " <> rest ->
+        None, ". " <> rest ->
           note.Note(..note, significance: note.FindingRejection, message: rest)
-        "!! " <> rest ->
+        None, "!! " <> rest ->
           note.Note(
             ..note,
             significance: note.FindingComfirmation,
             message: rest,
           )
-        _ -> note
+        _, _ -> note
       }
 
       #(
@@ -125,26 +150,59 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         event.emit(user_submitted_note_event, note.encode_note(note)),
       )
     }
-    UserSwitchedToThread(thread_id) -> todo
-    UserCreatedThread(..) -> todo
+    UserSwitchedToThread(new_thread_id:, parent_note:) -> #(
+      Model(
+        ..model,
+        active_thread: Some(ActiveThread(
+          current_thread_id: new_thread_id,
+          parent_note:,
+          prior_thread_id: get_current_thread_id(model),
+          prior_thread: model.active_thread,
+        )),
+      ),
+      effect.none(),
+    )
+    UserClosedThread -> #(
+      Model(
+        ..model,
+        active_thread: model.active_thread
+          |> option.map(fn(thread) { thread.prior_thread })
+          |> option.flatten,
+      ),
+      effect.none(),
+    )
   }
 }
 
 fn view(model: Model) -> element.Element(Msg) {
+  let current_thread_id = get_current_thread_id(model)
+  let current_notes =
+    dict.get(model.notes, current_thread_id) |> result.unwrap([])
+
   html.div([attribute.class("line-notes-list")], [
+    case model.active_thread {
+      Some(active_thread) ->
+        element.fragment([
+          html.button([event.on_click(UserClosedThread)], [
+            html.text("Close Thread"),
+          ]),
+          html.br([]),
+          html.text("Current Thread: "),
+          html.text(active_thread.parent_note.message),
+          html.hr([]),
+        ])
+      None -> element.fragment([])
+    },
     element.fragment(
-      list.map(model.notes, fn(note) {
+      list.map(current_notes, fn(note) {
         element.fragment([
           html.p([attribute.class("line-notes-list-item")], [
             html.text(note.message),
           ]),
-          // case note.thread_id {
-          //   None -> html.button([], [html.text("Start Thread")])
-          //   Some(thread_id) ->
-          //     html.button([event.on_click(UserSwitchedToThread(thread_id))], [
-          //       html.text("Switch to Thread"),
-          //     ])
-          // },
+          html.button(
+            [event.on_click(UserSwitchedToThread(note.note_id, note))],
+            [html.text("Switch to Thread")],
+          ),
           html.hr([]),
         ])
       }),
@@ -152,7 +210,7 @@ fn view(model: Model) -> element.Element(Msg) {
     html.span([], [html.text("Add a new comment: ")]),
     html.input([
       event.on_input(UserWroteNote),
-      on_ctrl_enter(UserSubmittedNote(parent_id: model.line_id)),
+      on_ctrl_enter(UserSubmittedNote(parent_id: current_thread_id)),
       attribute.value(model.current_note_draft),
     ]),
   ])
