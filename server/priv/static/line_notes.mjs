@@ -4588,7 +4588,7 @@ function update(model, msg) {
     ];
   }
 }
-var component_style = "\n:host {\n  display: inline-block;\n}\n\n.new-thread-preview {\n  opacity: 0;\n}\n\n.new-thread-preview:hover {\n  opacity: 0.3;\n}\n\n.line-notes-list {\n  position: absolute;\n  z-index: 99;\n  bottom: 1.4rem;\n  left: 0rem;\n  width: 30rem;\n  text-wrap: wrap;\n  background-color: white;\n  border-radius: 6px;\n  border: 1px solid black;\n  visibility: hidden;\n  opacity: 0;\n}\n\n.loc:hover + .line-notes-list,\n.line-notes-list:hover,\n.line-notes-list:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n";
+var component_style = "\n:host {\n  display: inline-block;\n}\n\n.new-thread-preview {\n  opacity: 0;\n}\n\n.new-thread-preview:hover {\n  opacity: 0.35;\n}\n\n.line-notes-list {\n  position: absolute;\n  z-index: 99;\n  bottom: 1.4rem;\n  left: 0rem;\n  width: 30rem;\n  text-wrap: wrap;\n  background-color: var(--overlay-background-color);;\n  border-radius: 6px;\n  border: var(--input-border-color) solid black;\n  visibility: hidden;\n  opacity: 0;\n  font-style: normal;\n}\n\n.loc:hover + .line-notes-list,\n.line-notes-list:hover,\n.line-notes-list:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\nbutton, input {\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border-color: var(--input-border-color);\n}\n";
 function view(model) {
   let current_thread_id = get_current_thread_id(model);
   let current_notes = (() => {

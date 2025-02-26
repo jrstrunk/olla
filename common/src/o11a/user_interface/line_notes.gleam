@@ -185,7 +185,7 @@ const component_style = "
 }
 
 .new-thread-preview:hover {
-  opacity: 0.3;
+  opacity: 0.35;
 }
 
 .line-notes-list {
@@ -195,11 +195,12 @@ const component_style = "
   left: 0rem;
   width: 30rem;
   text-wrap: wrap;
-  background-color: white;
+  background-color: var(--overlay-background-color);;
   border-radius: 6px;
-  border: 1px solid black;
+  border: var(--input-border-color) solid black;
   visibility: hidden;
   opacity: 0;
+  font-style: normal;
 }
 
 .loc:hover + .line-notes-list,
@@ -207,6 +208,12 @@ const component_style = "
 .line-notes-list:focus-within {
   visibility: visible;
   opacity: 1;
+}
+
+button, input {
+  background-color: var(--input-background-color);
+  color: var(--text-color);
+  border-color: var(--input-border-color);
 }
 "
 
