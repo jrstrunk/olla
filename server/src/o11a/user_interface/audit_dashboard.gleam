@@ -5,6 +5,7 @@ import gleam/string
 import lib/persistent_concurrent_duplicate_dict as pcd_dict
 import lib/server_componentx
 import lustre
+import lustre/attribute
 import lustre/effect
 import lustre/element
 import lustre/element/html
@@ -42,6 +43,15 @@ pub fn update(model: Model, _msg: Msg) -> #(Model, effect.Effect(Msg)) {
 }
 
 fn view(model: Model, is_skeleton is_skeleton) -> element.Element(Msg) {
+  let container_styles = [
+    #("display", "flex"),
+    #("flex-direction", "column"),
+    #("align-items", "center"),
+    #("width", "100vw"),
+    #("height", "100vh"),
+    #("padding-top", "5rem"),
+  ]
+
   let #(
     incomplete_todos,
     unanswered_questions,
@@ -49,40 +59,42 @@ fn view(model: Model, is_skeleton is_skeleton) -> element.Element(Msg) {
     confirmed_findings,
   ) = find_open_notes(model.discussion)
 
-  html.div([], [
-    server_componentx.hide_skeleton(),
-    html.h2([], [html.text("Incomplete ToDos")]),
-    html.ul([], case is_skeleton {
-      True -> []
-      False ->
-        list.map(incomplete_todos, fn(note) {
-          html.li([], [html.text(note.0 <> " - " <> { note.1 }.message)])
-        })
-    }),
-    html.h2([], [html.text("Unanswered Questions")]),
-    html.ul([], case is_skeleton {
-      True -> []
-      False ->
-        list.map(unanswered_questions, fn(note) {
-          html.li([], [html.text(note.0 <> " - " <> { note.1 }.message)])
-        })
-    }),
-    html.h2([], [html.text("Unconfirmed Findings")]),
-    html.ul([], case is_skeleton {
-      True -> []
-      False ->
-        list.map(unconfirmed_findings, fn(note) {
-          html.li([], [html.text(note.0 <> " - " <> { note.1 }.message)])
-        })
-    }),
-    html.h2([], [html.text("Confirmed Findings")]),
-    html.ul([], case is_skeleton {
-      True -> []
-      False ->
-        list.map(confirmed_findings, fn(note) {
-          html.li([], [html.text(note.0 <> " - " <> { note.1 }.message)])
-        })
-    }),
+  html.div([attribute.style(container_styles)], [
+    html.div([attribute.style([#("width", "40rem")])], [
+      server_componentx.hide_skeleton(),
+      html.h2([], [html.text("Incomplete ToDos")]),
+      html.ul([], case is_skeleton {
+        True -> []
+        False ->
+          list.map(incomplete_todos, fn(note) {
+            html.li([], [html.text(note.0 <> " - " <> { note.1 }.message)])
+          })
+      }),
+      html.h2([], [html.text("Unanswered Questions")]),
+      html.ul([], case is_skeleton {
+        True -> []
+        False ->
+          list.map(unanswered_questions, fn(note) {
+            html.li([], [html.text(note.0 <> " - " <> { note.1 }.message)])
+          })
+      }),
+      html.h2([], [html.text("Unconfirmed Findings")]),
+      html.ul([], case is_skeleton {
+        True -> []
+        False ->
+          list.map(unconfirmed_findings, fn(note) {
+            html.li([], [html.text(note.0 <> " - " <> { note.1 }.message)])
+          })
+      }),
+      html.h2([], [html.text("Confirmed Findings")]),
+      html.ul([], case is_skeleton {
+        True -> []
+        False ->
+          list.map(confirmed_findings, fn(note) {
+            html.li([], [html.text(note.0 <> " - " <> { note.1 }.message)])
+          })
+      }),
+    ]),
   ])
 }
 
