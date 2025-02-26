@@ -20,15 +20,22 @@ pub fn app() -> lustre.App(Model, Model, Msg) {
 }
 
 pub type Msg {
-  ServerSentNoteUpdate
+  ServerUpdatedDiscussion
 }
 
 pub type Model {
   Model(discussion: discussion.Discussion)
 }
 
-pub fn init(init_model) -> #(Model, effect.Effect(Msg)) {
-  #(init_model, effect.none())
+pub fn init(init_model: Model) -> #(Model, effect.Effect(Msg)) {
+  let subscribe_to_note_updates_effect =
+    effect.from(fn(dispatch) {
+      discussion.subscribe_to_note_updates(init_model.discussion, fn() {
+        dispatch(ServerUpdatedDiscussion)
+      })
+    })
+
+  #(init_model, subscribe_to_note_updates_effect)
 }
 
 pub fn update(model: Model, _msg: Msg) -> #(Model, effect.Effect(Msg)) {
@@ -45,7 +52,7 @@ fn view(model: Model, is_skeleton is_skeleton) -> element.Element(Msg) {
 
   html.div([], [
     server_componentx.hide_skeleton(),
-    html.button([event.on_click(ServerSentNoteUpdate)], [
+    html.button([event.on_click(ServerUpdatedDiscussion)], [
       html.text("Update Notes"),
     ]),
     html.h2([], [html.text("Incomplete ToDos")]),

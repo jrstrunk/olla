@@ -107,6 +107,10 @@ pub fn add_note(discussion: Discussion, note: note.Note) {
   pcd_dict.insert(discussion.notes, note.parent_id, note)
 }
 
+pub fn subscribe_to_note_updates(discussion: Discussion, effect: fn() -> Nil) {
+  pcd_dict.subscribe(discussion.notes, effect)
+}
+
 pub fn get_structured_notes(
   discussion: Discussion,
   starting_from parent_id: String,

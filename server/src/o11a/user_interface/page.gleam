@@ -28,6 +28,7 @@ pub fn app() -> lustre.App(Model, Model, Msg) {
 
 pub type Msg {
   UserSubmittedNote(note: note.Note)
+  ServerUpdatedDiscussion
 }
 
 pub type Model {
@@ -38,8 +39,15 @@ pub type Model {
   )
 }
 
-pub fn init(init_model) -> #(Model, effect.Effect(Msg)) {
-  #(init_model, effect.none())
+pub fn init(init_model: Model) -> #(Model, effect.Effect(Msg)) {
+  let subscribe_to_note_updates_effect =
+    effect.from(fn(dispatch) {
+      discussion.subscribe_to_note_updates(init_model.discussion, fn() {
+        dispatch(ServerUpdatedDiscussion)
+      })
+    })
+
+  #(init_model, subscribe_to_note_updates_effect)
 }
 
 pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
@@ -48,6 +56,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       let assert Ok(Nil) = discussion.add_note(model.discussion, note)
       #(model, effect.none())
     }
+    ServerUpdatedDiscussion -> #(model, effect.none())
   }
 }
 
@@ -129,15 +138,6 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
     ])
   })
 
-  let line_comments = discussion.get_structured_notes(model.discussion, line_id)
-
-  let inline_comment_preview_text = case
-    line_comments |> list.reverse |> list.take(1)
-  {
-    // [comment] -> comment.message |> string.slice(at_index: 0, length: 30)
-    _ -> "+"
-  }
-
   html.p([attribute.class("loc"), attribute.id(line_tag)], [
     html.span([attribute.class("line-number faded-code-extras")], [
       html.text(line_number_text),
@@ -156,7 +156,8 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
           [
             attribute.attribute(
               "line-notes",
-              list.map(line_comments, note.encode_structured_notes)
+              discussion.get_structured_notes(model.discussion, line_id)
+                |> list.map(note.encode_structured_notes)
                 |> json.preprocessed_array
                 |> json.to_string,
             ),

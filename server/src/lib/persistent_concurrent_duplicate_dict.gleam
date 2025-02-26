@@ -19,7 +19,15 @@ pub opaque type PersistentConcurrentDuplicateDict(key, val) {
     key_encoder: fn(key) -> String,
     val_encoder: fn(val) -> List(Value),
     data: concurrent_duplicate_dict.ConcurrentDuplicateDict(key, val),
+    subscribers: concurrent_duplicate_dict.ConcurrentDuplicateDict(
+      Nil,
+      fn() -> Nil,
+    ),
   )
+}
+
+pub type SubscriptionMsg {
+  ValueInserted
 }
 
 /// Field schema should be the SQLite column schema for the fields of the
@@ -119,6 +127,7 @@ pub fn build(
     key_encoder:,
     val_encoder:,
     data:,
+    subscribers: concurrent_duplicate_dict.new(),
   )
 }
 
@@ -130,6 +139,7 @@ pub fn insert(pcdd: PersistentConcurrentDuplicateDict(key, val), key, val) {
   let encoded_key = pcdd.key_encoder(key)
   let encoded_vals = pcdd.val_encoder(val)
 
+  // First persist the data in the disk database
   use _ <- result.map(
     sqlight.query(
       pcdd.insert_query,
@@ -143,7 +153,16 @@ pub fn insert(pcdd: PersistentConcurrentDuplicateDict(key, val), key, val) {
     |> snag.map_error(string.inspect),
   )
 
+  // If that succeeds, then add it to the in-memory store
   concurrent_duplicate_dict.insert(pcdd.data, key, val)
+
+  // After that succeeds, update any subscribers
+  concurrent_duplicate_dict.get(pcdd.subscribers, Nil)
+  |> list.each(fn(effect) { effect() })
+}
+
+pub fn subscribe(pcdd: PersistentConcurrentDuplicateDict(key, val), subscriber) {
+  concurrent_duplicate_dict.insert(pcdd.subscribers, Nil, subscriber)
 }
 
 pub fn keys(pcd: PersistentConcurrentDuplicateDict(key, val)) {
@@ -164,6 +183,7 @@ pub fn empty() {
     key_encoder: string.inspect,
     val_encoder: fn(_) { [] },
     data: concurrent_duplicate_dict.new(),
+    subscribers: concurrent_duplicate_dict.new(),
   )
 }
 

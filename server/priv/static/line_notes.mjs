@@ -4288,86 +4288,6 @@ function on_ctrl_enter(msg) {
     }
   );
 }
-function view(model) {
-  let current_thread_id = get_current_thread_id(model);
-  let current_notes = (() => {
-    let _pipe = map_get(model.notes, current_thread_id);
-    return unwrap(_pipe, toList([]));
-  })();
-  let inline_comment_preview_text = "what is going on";
-  return div(
-    toList([class$("line-notes-component-container")]),
-    toList([
-      style2(
-        toList([]),
-        "\n:host {\n  display: inline-block;\n}\n\n.loc:hover {\n  color: red;\n}\n\n.line-notes-list {\n  position: absolute;\n  z-index: 99;\n  bottom: 1.4rem;\n  left: 0rem;\n  width: 30rem;\n  text-wrap: wrap;\n  background-color: white;\n  border-radius: 6px;\n  border: 1px solid black;\n  visibility: hidden;\n  opacity: 0;\n}\n\n.loc:hover + .line-notes-list,\n.line-notes-list:hover,\n.line-notes-list:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n      "
-      ),
-      span(
-        toList([class$("loc faded-code-extras comment-preview")]),
-        toList([text2(inline_comment_preview_text)])
-      ),
-      div(
-        toList([class$("line-notes-list")]),
-        toList([
-          (() => {
-            let $ = model.active_thread;
-            if ($ instanceof Some) {
-              let active_thread = $[0];
-              return fragment(
-                toList([
-                  button(
-                    toList([on_click(new UserClosedThread())]),
-                    toList([text2("Close Thread")])
-                  ),
-                  br(toList([])),
-                  text2("Current Thread: "),
-                  text2(active_thread.parent_note.message),
-                  hr(toList([]))
-                ])
-              );
-            } else {
-              return fragment(toList([]));
-            }
-          })(),
-          fragment(
-            map2(
-              current_notes,
-              (note) => {
-                return fragment(
-                  toList([
-                    p(
-                      toList([class$("line-notes-list-item")]),
-                      toList([text2(note.message)])
-                    ),
-                    button(
-                      toList([
-                        on_click(
-                          new UserSwitchedToThread(note.note_id, note)
-                        )
-                      ]),
-                      toList([text2("Switch to Thread")])
-                    ),
-                    hr(toList([]))
-                  ])
-                );
-              }
-            )
-          ),
-          span(toList([]), toList([text2("Add a new comment: ")])),
-          input(
-            toList([
-              on_input((var0) => {
-                return new UserWroteNote(var0);
-              }),
-              on_ctrl_enter(new UserSubmittedNote(current_thread_id)),
-              value(model.current_note_draft)
-            ])
-          )
-        ])
-      )
-    ])
-  );
-}
 var component_name = "line-notes";
 var user_submitted_note_event = "user-submitted-line-note";
 function update(model, msg) {
@@ -4595,6 +4515,84 @@ function update(model, msg) {
       none()
     ];
   }
+}
+var component_style = "\n:host {\n  display: inline-block;\n}\n\n.loc:hover {\n  color: red;\n}\n\n.line-notes-list {\n  position: absolute;\n  z-index: 99;\n  bottom: 1.4rem;\n  left: 0rem;\n  width: 30rem;\n  text-wrap: wrap;\n  background-color: white;\n  border-radius: 6px;\n  border: 1px solid black;\n  visibility: hidden;\n  opacity: 0;\n}\n\n.loc:hover + .line-notes-list,\n.line-notes-list:hover,\n.line-notes-list:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n";
+function view(model) {
+  let current_thread_id = get_current_thread_id(model);
+  let current_notes = (() => {
+    let _pipe = map_get(model.notes, current_thread_id);
+    return unwrap(_pipe, toList([]));
+  })();
+  let inline_comment_preview_text = "what is going on";
+  return div(
+    toList([class$("line-notes-component-container")]),
+    toList([
+      style2(toList([]), component_style),
+      span(
+        toList([class$("loc faded-code-extras comment-preview")]),
+        toList([text2(inline_comment_preview_text)])
+      ),
+      div(
+        toList([class$("line-notes-list")]),
+        toList([
+          (() => {
+            let $ = model.active_thread;
+            if ($ instanceof Some) {
+              let active_thread = $[0];
+              return fragment(
+                toList([
+                  button(
+                    toList([on_click(new UserClosedThread())]),
+                    toList([text2("Close Thread")])
+                  ),
+                  br(toList([])),
+                  text2("Current Thread: "),
+                  text2(active_thread.parent_note.message),
+                  hr(toList([]))
+                ])
+              );
+            } else {
+              return fragment(toList([]));
+            }
+          })(),
+          fragment(
+            map2(
+              current_notes,
+              (note) => {
+                return fragment(
+                  toList([
+                    p(
+                      toList([class$("line-notes-list-item")]),
+                      toList([text2(note.message)])
+                    ),
+                    button(
+                      toList([
+                        on_click(
+                          new UserSwitchedToThread(note.note_id, note)
+                        )
+                      ]),
+                      toList([text2("Switch to Thread")])
+                    ),
+                    hr(toList([]))
+                  ])
+                );
+              }
+            )
+          ),
+          span(toList([]), toList([text2("Add a new comment: ")])),
+          input(
+            toList([
+              on_input((var0) => {
+                return new UserWroteNote(var0);
+              }),
+              on_ctrl_enter(new UserSubmittedNote(current_thread_id)),
+              value(model.current_note_draft)
+            ])
+          )
+        ])
+      )
+    ])
+  );
 }
 function component2() {
   return component(

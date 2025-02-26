@@ -54,6 +54,11 @@ pub fn keys(table: ConcurrentDuplicateDict(key, val)) -> List(key) {
   |> list.unique
 }
 
+pub fn values(table: ConcurrentDuplicateDict(key, val)) -> List(val) {
+  to_list(table)
+  |> list.map(fn(record) { record.1 })
+}
+
 pub fn to_list(table: ConcurrentDuplicateDict(key, val)) -> List(#(key, val)) {
   lamb.search(table, query.new())
 }
