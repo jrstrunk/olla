@@ -6,6 +6,7 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
+import lib/effectx
 import lustre
 import lustre/attribute
 import lustre/effect
@@ -126,17 +127,17 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       let note = case model.active_thread, model.current_note_draft {
         None, "todo " <> rest ->
           note.Note(..note, significance: note.ToDo, message: rest)
-        None, "done " <> rest ->
+        Some(..), "done " <> rest ->
           note.Note(..note, significance: note.ToDoDone, message: rest)
         None, "? " <> rest ->
           note.Note(..note, significance: note.Question, message: rest)
-        None, ", " <> rest ->
+        Some(..), ", " <> rest ->
           note.Note(..note, significance: note.Answer, message: rest)
         None, "! " <> rest ->
           note.Note(..note, significance: note.FindingLead, message: rest)
-        None, ". " <> rest ->
+        Some(..), ". " <> rest ->
           note.Note(..note, significance: note.FindingRejection, message: rest)
-        None, "!! " <> rest ->
+        Some(..), "!! " <> rest ->
           note.Note(
             ..note,
             significance: note.FindingComfirmation,
@@ -179,8 +180,12 @@ const component_style = "
   display: inline-block;
 }
 
-.loc:hover {
-  color: red;
+.new-thread-preview {
+  opacity: 0;
+}
+
+.new-thread-preview:hover {
+  opacity: 0.3;
 }
 
 .line-notes-list {
@@ -210,13 +215,22 @@ fn view(model: Model) -> element.Element(Msg) {
   let current_notes =
     dict.get(model.notes, current_thread_id) |> result.unwrap([])
 
-  let inline_comment_preview_text = "what is going on"
+  let inline_comment_preview =
+    list.last(current_notes)
+    |> result.map(fn(note) {
+      html.span([attribute.class("loc faded code-extras")], [
+        html.text(note.message |> string.slice(0, length: 30)),
+      ])
+    })
+    |> result.unwrap(
+      html.span([attribute.class("loc code-extras new-thread-preview")], [
+        html.text("Start new thread"),
+      ]),
+    )
 
   html.div([attribute.class("line-notes-component-container")], [
     html.style([], component_style),
-    html.span([attribute.class("loc faded-code-extras comment-preview")], [
-      html.text(inline_comment_preview_text),
-    ]),
+    inline_comment_preview,
     html.div([attribute.class("line-notes-list")], [
       case model.active_thread {
         Some(active_thread) ->
@@ -248,32 +262,9 @@ fn view(model: Model) -> element.Element(Msg) {
       html.span([], [html.text("Add a new comment: ")]),
       html.input([
         event.on_input(UserWroteNote),
-        on_ctrl_enter(UserSubmittedNote(parent_id: current_thread_id)),
+        effectx.on_ctrl_enter(UserSubmittedNote(parent_id: current_thread_id)),
         attribute.value(model.current_note_draft),
       ]),
     ]),
   ])
-}
-
-pub fn on_ctrl_enter(msg: msg) {
-  use event <- event.on("keydown")
-
-  let decoder = {
-    use ctrl_key <- decode.field("ctrlKey", decode.bool)
-    use key <- decode.field("key", decode.string)
-
-    decode.success(#(ctrl_key, key))
-  }
-
-  let empty_error = [dynamic.DecodeError("", "", [])]
-
-  use #(ctrl_key, key) <- result.try(
-    decode.run(event, decoder)
-    |> result.replace_error(empty_error),
-  )
-
-  case ctrl_key, key {
-    True, "Enter" -> Ok(msg)
-    _, _ -> Error(empty_error)
-  }
 }

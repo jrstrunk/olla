@@ -1059,6 +1059,21 @@ function float_to_string(float4) {
     }
   }
 }
+function string_length(string5) {
+  if (string5 === "") {
+    return 0;
+  }
+  const iterator = graphemes_iterator(string5);
+  if (iterator) {
+    let i = 0;
+    for (const _ of iterator) {
+      i++;
+    }
+    return i;
+  } else {
+    return string5.match(/./gsu).length;
+  }
+}
 var segmenter = void 0;
 function graphemes_iterator(string5) {
   if (globalThis.Intl && Intl.Segmenter) {
@@ -1086,6 +1101,28 @@ function concat(xs) {
     result = result + x;
   }
   return result;
+}
+function string_slice(string5, idx, len) {
+  if (len <= 0 || idx >= string5.length) {
+    return "";
+  }
+  const iterator = graphemes_iterator(string5);
+  if (iterator) {
+    while (idx-- > 0) {
+      iterator.next();
+    }
+    let result = "";
+    while (len-- > 0) {
+      const v = iterator.next().value;
+      if (v === void 0) {
+        break;
+      }
+      result += v.segment;
+    }
+    return result;
+  } else {
+    return string5.match(/./gsu).slice(idx, idx + len).join("");
+  }
 }
 var unicode_whitespaces = [
   " ",
@@ -1446,8 +1483,41 @@ function index_fold_loop(loop$over, loop$acc, loop$with, loop$index) {
 function index_fold(list3, initial, fun) {
   return index_fold_loop(list3, initial, fun, 0);
 }
+function reduce(list3, fun) {
+  if (list3.hasLength(0)) {
+    return new Error(void 0);
+  } else {
+    let first$1 = list3.head;
+    let rest$1 = list3.tail;
+    return new Ok(fold(rest$1, first$1, fun));
+  }
+}
+function last(list3) {
+  return reduce(list3, (_, elem) => {
+    return elem;
+  });
+}
 
 // build/dev/javascript/gleam_stdlib/gleam/string.mjs
+function slice(string5, idx, len) {
+  let $ = len < 0;
+  if ($) {
+    return "";
+  } else {
+    let $1 = idx < 0;
+    if ($1) {
+      let translated_idx = string_length(string5) + idx;
+      let $2 = translated_idx < 0;
+      if ($2) {
+        return "";
+      } else {
+        return string_slice(string5, translated_idx, len);
+      }
+    } else {
+      return string_slice(string5, idx, len);
+    }
+  }
+}
 function drop_start(loop$string, loop$num_graphemes) {
   while (true) {
     let string5 = loop$string;
@@ -3975,6 +4045,44 @@ function on_input(msg) {
   );
 }
 
+// build/dev/javascript/o11a_common/lib/effectx.mjs
+function on_ctrl_enter(msg) {
+  return on2(
+    "keydown",
+    (event2) => {
+      let decoder = field2(
+        "ctrlKey",
+        bool,
+        (ctrl_key) => {
+          return field2(
+            "key",
+            string3,
+            (key) => {
+              return success([ctrl_key, key]);
+            }
+          );
+        }
+      );
+      let empty_error = toList([new DecodeError("", "", toList([]))]);
+      return try$(
+        (() => {
+          let _pipe = run(event2, decoder);
+          return replace_error(_pipe, empty_error);
+        })(),
+        (_use0) => {
+          let ctrl_key = _use0[0];
+          let key = _use0[1];
+          if (ctrl_key && key === "Enter") {
+            return new Ok(msg);
+          } else {
+            return new Error(empty_error);
+          }
+        }
+      );
+    }
+  );
+}
+
 // build/dev/javascript/o11a_common/o11a/note.mjs
 var Note = class extends CustomType {
   constructor(note_id, parent_id, significance, user_id, message, expanded_message, time2, edited) {
@@ -4252,42 +4360,6 @@ function get_current_thread_id(model) {
     return model.line_id;
   }
 }
-function on_ctrl_enter(msg) {
-  return on2(
-    "keydown",
-    (event2) => {
-      let decoder = field2(
-        "ctrlKey",
-        bool,
-        (ctrl_key) => {
-          return field2(
-            "key",
-            string3,
-            (key) => {
-              return success([ctrl_key, key]);
-            }
-          );
-        }
-      );
-      let empty_error = toList([new DecodeError("", "", toList([]))]);
-      return try$(
-        (() => {
-          let _pipe = run(event2, decoder);
-          return replace_error(_pipe, empty_error);
-        })(),
-        (_use0) => {
-          let ctrl_key = _use0[0];
-          let key = _use0[1];
-          if (ctrl_key && key === "Enter") {
-            return new Ok(msg);
-          } else {
-            return new Error(empty_error);
-          }
-        }
-      );
-    }
-  );
-}
 var component_name = "line-notes";
 var user_submitted_note_event = "user-submitted-line-note";
 function update(model, msg) {
@@ -4373,7 +4445,7 @@ function update(model, msg) {
           _record.time,
           _record.edited
         );
-      } else if ($ instanceof None && $1.startsWith("done ")) {
+      } else if ($ instanceof Some && $1.startsWith("done ")) {
         let rest = $1.slice(5);
         let _record = note;
         return new Note(
@@ -4399,7 +4471,7 @@ function update(model, msg) {
           _record.time,
           _record.edited
         );
-      } else if ($ instanceof None && $1.startsWith(", ")) {
+      } else if ($ instanceof Some && $1.startsWith(", ")) {
         let rest = $1.slice(2);
         let _record = note;
         return new Note(
@@ -4425,7 +4497,7 @@ function update(model, msg) {
           _record.time,
           _record.edited
         );
-      } else if ($ instanceof None && $1.startsWith(". ")) {
+      } else if ($ instanceof Some && $1.startsWith(". ")) {
         let rest = $1.slice(2);
         let _record = note;
         return new Note(
@@ -4438,7 +4510,7 @@ function update(model, msg) {
           _record.time,
           _record.edited
         );
-      } else if ($ instanceof None && $1.startsWith("!! ")) {
+      } else if ($ instanceof Some && $1.startsWith("!! ")) {
         let rest = $1.slice(3);
         let _record = note;
         return new Note(
@@ -4516,22 +4588,44 @@ function update(model, msg) {
     ];
   }
 }
-var component_style = "\n:host {\n  display: inline-block;\n}\n\n.loc:hover {\n  color: red;\n}\n\n.line-notes-list {\n  position: absolute;\n  z-index: 99;\n  bottom: 1.4rem;\n  left: 0rem;\n  width: 30rem;\n  text-wrap: wrap;\n  background-color: white;\n  border-radius: 6px;\n  border: 1px solid black;\n  visibility: hidden;\n  opacity: 0;\n}\n\n.loc:hover + .line-notes-list,\n.line-notes-list:hover,\n.line-notes-list:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n";
+var component_style = "\n:host {\n  display: inline-block;\n}\n\n.new-thread-preview {\n  opacity: 0;\n}\n\n.new-thread-preview:hover {\n  opacity: 0.3;\n}\n\n.line-notes-list {\n  position: absolute;\n  z-index: 99;\n  bottom: 1.4rem;\n  left: 0rem;\n  width: 30rem;\n  text-wrap: wrap;\n  background-color: white;\n  border-radius: 6px;\n  border: 1px solid black;\n  visibility: hidden;\n  opacity: 0;\n}\n\n.loc:hover + .line-notes-list,\n.line-notes-list:hover,\n.line-notes-list:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n";
 function view(model) {
   let current_thread_id = get_current_thread_id(model);
   let current_notes = (() => {
     let _pipe = map_get(model.notes, current_thread_id);
     return unwrap(_pipe, toList([]));
   })();
-  let inline_comment_preview_text = "what is going on";
+  let inline_comment_preview = (() => {
+    let _pipe = last(current_notes);
+    let _pipe$1 = map3(
+      _pipe,
+      (note) => {
+        return span(
+          toList([class$("loc faded code-extras")]),
+          toList([
+            text2(
+              (() => {
+                let _pipe$12 = note.message;
+                return slice(_pipe$12, 0, 30);
+              })()
+            )
+          ])
+        );
+      }
+    );
+    return unwrap(
+      _pipe$1,
+      span(
+        toList([class$("loc code-extras new-thread-preview")]),
+        toList([text2("Start new thread")])
+      )
+    );
+  })();
   return div(
     toList([class$("line-notes-component-container")]),
     toList([
       style2(toList([]), component_style),
-      span(
-        toList([class$("loc faded-code-extras comment-preview")]),
-        toList([text2(inline_comment_preview_text)])
-      ),
+      inline_comment_preview,
       div(
         toList([class$("line-notes-list")]),
         toList([

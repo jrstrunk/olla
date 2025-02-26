@@ -122,7 +122,7 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
 
   use <- given.that(is_skeleton, return: fn() {
     html.p([attribute.class("loc"), attribute.id(line_tag)], [
-      html.span([attribute.class("line-number faded-code-extras")], [
+      html.span([attribute.class("line-number faded code-extras")], [
         html.text(line_number_text),
       ]),
       html.text(line_text),
@@ -131,7 +131,7 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
 
   use <- given.that(line_text == "", return: fn() {
     html.p([attribute.class("loc"), attribute.id(line_tag)], [
-      html.span([attribute.class("line-number faded-code-extras")], [
+      html.span([attribute.class("line-number faded code-extras")], [
         html.text(line_number_text),
       ]),
       html.text(" "),
@@ -139,7 +139,7 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
   })
 
   html.p([attribute.class("loc"), attribute.id(line_tag)], [
-    html.span([attribute.class("line-number faded-code-extras")], [
+    html.span([attribute.class("line-number faded code-extras")], [
       html.text(line_number_text),
     ]),
     html.text(line_text),

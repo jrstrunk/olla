@@ -8,7 +8,6 @@ import lustre
 import lustre/effect
 import lustre/element
 import lustre/element/html
-import lustre/event
 import o11a/config
 import o11a/note
 import o11a/server/discussion
@@ -52,9 +51,6 @@ fn view(model: Model, is_skeleton is_skeleton) -> element.Element(Msg) {
 
   html.div([], [
     server_componentx.hide_skeleton(),
-    html.button([event.on_click(ServerUpdatedDiscussion)], [
-      html.text("Update Notes"),
-    ]),
     html.h2([], [html.text("Incomplete ToDos")]),
     html.ul([], case is_skeleton {
       True -> []
