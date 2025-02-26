@@ -145,16 +145,12 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
     html.text(line_text),
     html.span(
       [
-        attribute.class("inline-comment"),
-        attribute.class("fade-in"),
+        attribute.class("inline-comment fade-in"),
         attribute.style([
           #("animation-delay", int.to_string(line_number * 4) <> "ms"),
         ]),
       ],
       [
-        html.span([attribute.class("loc faded-code-extras")], [
-          html.text(inline_comment_preview_text),
-        ]),
         element.element(
           line_notes.component_name,
           [

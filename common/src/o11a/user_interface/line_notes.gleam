@@ -174,44 +174,83 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   }
 }
 
+const component_style = "
+:host {
+  display: inline-block;
+}
+
+.loc:hover {
+  color: red;
+}
+
+.line-notes-list {
+  position: absolute;
+  z-index: 99;
+  bottom: 1.4rem;
+  left: 0rem;
+  width: 30rem;
+  text-wrap: wrap;
+  background-color: white;
+  border-radius: 6px;
+  border: 1px solid black;
+  visibility: hidden;
+  opacity: 0;
+}
+
+.loc:hover + .line-notes-list,
+.line-notes-list:hover,
+.line-notes-list:focus-within {
+  visibility: visible;
+  opacity: 1;
+}
+"
+
 fn view(model: Model) -> element.Element(Msg) {
   let current_thread_id = get_current_thread_id(model)
   let current_notes =
     dict.get(model.notes, current_thread_id) |> result.unwrap([])
 
-  html.div([attribute.class("line-notes-list")], [
-    case model.active_thread {
-      Some(active_thread) ->
-        element.fragment([
-          html.button([event.on_click(UserClosedThread)], [
-            html.text("Close Thread"),
-          ]),
-          html.br([]),
-          html.text("Current Thread: "),
-          html.text(active_thread.parent_note.message),
-          html.hr([]),
-        ])
-      None -> element.fragment([])
-    },
-    element.fragment(
-      list.map(current_notes, fn(note) {
-        element.fragment([
-          html.p([attribute.class("line-notes-list-item")], [
-            html.text(note.message),
-          ]),
-          html.button(
-            [event.on_click(UserSwitchedToThread(note.note_id, note))],
-            [html.text("Switch to Thread")],
-          ),
-          html.hr([]),
-        ])
-      }),
-    ),
-    html.span([], [html.text("Add a new comment: ")]),
-    html.input([
-      event.on_input(UserWroteNote),
-      on_ctrl_enter(UserSubmittedNote(parent_id: current_thread_id)),
-      attribute.value(model.current_note_draft),
+  let inline_comment_preview_text = "what is going on"
+
+  html.div([attribute.class("line-notes-component-container")], [
+    html.style([], component_style),
+    html.span([attribute.class("loc faded-code-extras comment-preview")], [
+      html.text(inline_comment_preview_text),
+    ]),
+    html.div([attribute.class("line-notes-list")], [
+      case model.active_thread {
+        Some(active_thread) ->
+          element.fragment([
+            html.button([event.on_click(UserClosedThread)], [
+              html.text("Close Thread"),
+            ]),
+            html.br([]),
+            html.text("Current Thread: "),
+            html.text(active_thread.parent_note.message),
+            html.hr([]),
+          ])
+        None -> element.fragment([])
+      },
+      element.fragment(
+        list.map(current_notes, fn(note) {
+          element.fragment([
+            html.p([attribute.class("line-notes-list-item")], [
+              html.text(note.message),
+            ]),
+            html.button(
+              [event.on_click(UserSwitchedToThread(note.note_id, note))],
+              [html.text("Switch to Thread")],
+            ),
+            html.hr([]),
+          ])
+        }),
+      ),
+      html.span([], [html.text("Add a new comment: ")]),
+      html.input([
+        event.on_input(UserWroteNote),
+        on_ctrl_enter(UserSubmittedNote(parent_id: current_thread_id)),
+        attribute.value(model.current_note_draft),
+      ]),
     ]),
   ])
 }

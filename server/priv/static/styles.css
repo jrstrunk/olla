@@ -53,44 +53,14 @@
   position: relative;
 }
 
-.inline-comment-text::after {
-  content: "";
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 2.5rem; /* Adjust the fade width as needed */
-  height: 100%;
-  background: linear-gradient(to right, transparent, white);
-  pointer-events: none;
-  z-index: 2;
-}
-
-/* Line Notes Component */
-line-notes {
-  position: absolute;
-  z-index: 99;
-  bottom: 1.4rem;
-  left: 0rem;
-  width: 30rem;
-  text-wrap: wrap;
-  background-color: white;
-  border-radius: 6px;
-  border: 1px solid black;
-  visibility: hidden;
-  opacity: 0;
-}
-
-.inline-comment:hover > line-notes,
-line-notes:hover,
-line-notes:focus-within {
-  visibility: visible;
-  opacity: 1;
-}
-
-.line-notes-list {
-  border-radius: 6px;
-}
-
-.line-notes-item {
-  color: red;
-}
+  /* .inline-comment::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 2.5rem;
+    height: 100%;
+    background: linear-gradient(to right, transparent, white);
+    pointer-events: none;
+    z-index: 2;
+  } */

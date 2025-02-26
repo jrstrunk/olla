@@ -2471,7 +2471,7 @@ function createElementNode({ prev, next, dispatch, stack }) {
   const prevHandlers = canMorph ? new Set(handlersForEl.keys()) : null;
   const prevAttributes = canMorph ? new Set(Array.from(prev.attributes, (a) => a.name)) : null;
   let className = null;
-  let style2 = null;
+  let style3 = null;
   let innerHTML = null;
   if (canMorph && next.tag === "textarea") {
     const innertText = next.children[Symbol.iterator]().next().value?.content;
@@ -2514,7 +2514,7 @@ function createElementNode({ prev, next, dispatch, stack }) {
     } else if (name2 === "class") {
       className = className === null ? value3 : className + " " + value3;
     } else if (name2 === "style") {
-      style2 = style2 === null ? value3 : style2 + value3;
+      style3 = style3 === null ? value3 : style3 + value3;
     } else if (name2 === "dangerous-unescaped-html") {
       innerHTML = value3;
     } else {
@@ -2531,8 +2531,8 @@ function createElementNode({ prev, next, dispatch, stack }) {
     if (canMorph)
       prevAttributes.delete("class");
   }
-  if (style2 !== null) {
-    el.setAttribute("style", style2);
+  if (style3 !== null) {
+    el.setAttribute("style", style3);
     if (canMorph)
       prevAttributes.delete("style");
   }
@@ -3922,6 +3922,9 @@ function as_utc_datetime(instant) {
 function text2(content) {
   return text(content);
 }
+function style2(attrs, css) {
+  return element("style", attrs, toList([text2(css)]));
+}
 function div(attrs, children2) {
   return element("div", attrs, children2);
 }
@@ -4291,61 +4294,75 @@ function view(model) {
     let _pipe = map_get(model.notes, current_thread_id);
     return unwrap(_pipe, toList([]));
   })();
+  let inline_comment_preview_text = "what is going on";
   return div(
-    toList([class$("line-notes-list")]),
+    toList([class$("line-notes-component-container")]),
     toList([
-      (() => {
-        let $ = model.active_thread;
-        if ($ instanceof Some) {
-          let active_thread = $[0];
-          return fragment(
-            toList([
-              button(
-                toList([on_click(new UserClosedThread())]),
-                toList([text2("Close Thread")])
-              ),
-              br(toList([])),
-              text2("Current Thread: "),
-              text2(active_thread.parent_note.message),
-              hr(toList([]))
-            ])
-          );
-        } else {
-          return fragment(toList([]));
-        }
-      })(),
-      fragment(
-        map2(
-          current_notes,
-          (note) => {
-            return fragment(
-              toList([
-                p(
-                  toList([class$("line-notes-list-item")]),
-                  toList([text2(note.message)])
-                ),
-                button(
-                  toList([
-                    on_click(
-                      new UserSwitchedToThread(note.note_id, note)
-                    )
-                  ]),
-                  toList([text2("Switch to Thread")])
-                ),
-                hr(toList([]))
-              ])
-            );
-          }
-        )
+      style2(
+        toList([]),
+        "\n:host {\n  display: inline-block;\n}\n\n.loc:hover {\n  color: red;\n}\n\n.line-notes-list {\n  position: absolute;\n  z-index: 99;\n  bottom: 1.4rem;\n  left: 0rem;\n  width: 30rem;\n  text-wrap: wrap;\n  background-color: white;\n  border-radius: 6px;\n  border: 1px solid black;\n  visibility: hidden;\n  opacity: 0;\n}\n\n.loc:hover + .line-notes-list,\n.line-notes-list:hover,\n.line-notes-list:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n      "
       ),
-      span(toList([]), toList([text2("Add a new comment: ")])),
-      input(
+      span(
+        toList([class$("loc faded-code-extras comment-preview")]),
+        toList([text2(inline_comment_preview_text)])
+      ),
+      div(
+        toList([class$("line-notes-list")]),
         toList([
-          on_input((var0) => {
-            return new UserWroteNote(var0);
-          }),
-          on_ctrl_enter(new UserSubmittedNote(current_thread_id)),
-          value(model.current_note_draft)
+          (() => {
+            let $ = model.active_thread;
+            if ($ instanceof Some) {
+              let active_thread = $[0];
+              return fragment(
+                toList([
+                  button(
+                    toList([on_click(new UserClosedThread())]),
+                    toList([text2("Close Thread")])
+                  ),
+                  br(toList([])),
+                  text2("Current Thread: "),
+                  text2(active_thread.parent_note.message),
+                  hr(toList([]))
+                ])
+              );
+            } else {
+              return fragment(toList([]));
+            }
+          })(),
+          fragment(
+            map2(
+              current_notes,
+              (note) => {
+                return fragment(
+                  toList([
+                    p(
+                      toList([class$("line-notes-list-item")]),
+                      toList([text2(note.message)])
+                    ),
+                    button(
+                      toList([
+                        on_click(
+                          new UserSwitchedToThread(note.note_id, note)
+                        )
+                      ]),
+                      toList([text2("Switch to Thread")])
+                    ),
+                    hr(toList([]))
+                  ])
+                );
+              }
+            )
+          ),
+          span(toList([]), toList([text2("Add a new comment: ")])),
+          input(
+            toList([
+              on_input((var0) => {
+                return new UserWroteNote(var0);
+              }),
+              on_ctrl_enter(new UserSubmittedNote(current_thread_id)),
+              value(model.current_note_draft)
+            ])
+          )
         ])
       )
     ])
@@ -4421,9 +4438,10 @@ function update(model, msg) {
       false
     );
     let note$1 = (() => {
-      let $ = model.current_note_draft;
-      if ($.startsWith("todo ")) {
-        let rest = $.slice(5);
+      let $ = model.active_thread;
+      let $1 = model.current_note_draft;
+      if ($ instanceof None && $1.startsWith("todo ")) {
+        let rest = $1.slice(5);
         let _record = note;
         return new Note(
           _record.note_id,
@@ -4435,8 +4453,8 @@ function update(model, msg) {
           _record.time,
           _record.edited
         );
-      } else if ($.startsWith("done ")) {
-        let rest = $.slice(5);
+      } else if ($ instanceof None && $1.startsWith("done ")) {
+        let rest = $1.slice(5);
         let _record = note;
         return new Note(
           _record.note_id,
@@ -4448,8 +4466,8 @@ function update(model, msg) {
           _record.time,
           _record.edited
         );
-      } else if ($.startsWith("? ")) {
-        let rest = $.slice(2);
+      } else if ($ instanceof None && $1.startsWith("? ")) {
+        let rest = $1.slice(2);
         let _record = note;
         return new Note(
           _record.note_id,
@@ -4461,8 +4479,8 @@ function update(model, msg) {
           _record.time,
           _record.edited
         );
-      } else if ($.startsWith(", ")) {
-        let rest = $.slice(2);
+      } else if ($ instanceof None && $1.startsWith(", ")) {
+        let rest = $1.slice(2);
         let _record = note;
         return new Note(
           _record.note_id,
@@ -4474,8 +4492,8 @@ function update(model, msg) {
           _record.time,
           _record.edited
         );
-      } else if ($.startsWith("! ")) {
-        let rest = $.slice(2);
+      } else if ($ instanceof None && $1.startsWith("! ")) {
+        let rest = $1.slice(2);
         let _record = note;
         return new Note(
           _record.note_id,
@@ -4487,8 +4505,8 @@ function update(model, msg) {
           _record.time,
           _record.edited
         );
-      } else if ($.startsWith(". ")) {
-        let rest = $.slice(2);
+      } else if ($ instanceof None && $1.startsWith(". ")) {
+        let rest = $1.slice(2);
         let _record = note;
         return new Note(
           _record.note_id,
@@ -4500,8 +4518,8 @@ function update(model, msg) {
           _record.time,
           _record.edited
         );
-      } else if ($.startsWith("!! ")) {
-        let rest = $.slice(3);
+      } else if ($ instanceof None && $1.startsWith("!! ")) {
+        let rest = $1.slice(3);
         let _record = note;
         return new Note(
           _record.note_id,
