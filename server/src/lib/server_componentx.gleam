@@ -139,6 +139,17 @@ pub fn as_document(body: element.Element(msg)) {
   ])
 }
 
+/// Returns the given element as a document, but without the lustre server
+/// component script tag
+pub fn as_static_document(body: element.Element(msg)) {
+  html.html([], [
+    html.head([], [
+      html.link([attribute.rel("stylesheet"), attribute.href("/styles.css")]),
+    ]),
+    html.body([], [body]),
+  ])
+}
+
 pub fn html_response(html: element.Element(msg)) {
   response.new(200)
   |> response.prepend_header("content-type", "text/html")

@@ -11,8 +11,10 @@ import mist
 import o11a/config
 import o11a/user_interface/audit_dashboard
 import o11a/user_interface/audit_page
+import o11a/user_interface/audit_doc
 import o11a/user_interface/audit_tree
 import o11a/user_interface/gateway
+import simplifile
 import snag
 import wisp
 import wisp/wisp_mist
@@ -101,6 +103,26 @@ fn handle_wisp_request(req, context: Context) {
       |> server_componentx.as_document
       |> element.to_document_string_builder
       |> wisp.html_response(200)
+
+    [audit_name, readme] if readme == "readme.md" || readme == "README.md" ->
+      case
+        config.get_audit_path(for: audit_name)
+        |> filepath.join(readme)
+        |> simplifile.read
+        |> snag.map_error(simplifile.describe_error)
+      {
+        Ok(contents) ->
+          audit_doc.view(contents)
+          |> audit_tree.view(audit_name)
+          |> server_componentx.as_static_document
+          |> element.to_document_string_builder
+          |> wisp.html_response(200)
+
+        Error(snag) ->
+          snag.pretty_print(snag)
+          |> string_tree.from_string
+          |> wisp.html_response(500)
+      }
 
     [audit_name, ..] as file_path_segments -> {
       let file_path = list.fold(file_path_segments, "", filepath.join)
