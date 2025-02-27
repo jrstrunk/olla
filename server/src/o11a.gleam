@@ -11,6 +11,7 @@ import mist
 import o11a/config
 import o11a/user_interface/audit_dashboard
 import o11a/user_interface/audit_page
+import o11a/user_interface/audit_tree
 import o11a/user_interface/gateway
 import snag
 import wisp
@@ -95,6 +96,7 @@ fn handle_wisp_request(req, _context: Context) {
             filepath.join("component-dashboard", audit_name),
             skeleton,
           )
+          |> audit_tree.view(audit_name)
           |> server_componentx.as_document
           |> element.to_document_string_builder
           |> wisp.html_response(200)
@@ -115,6 +117,7 @@ fn handle_wisp_request(req, _context: Context) {
             filepath.join("component-page", file_path),
             skeleton,
           )
+          |> audit_tree.view(audit_name)
           |> server_componentx.as_document
           |> element.to_document_string_builder
           |> wisp.html_response(200)
