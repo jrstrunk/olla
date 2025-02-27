@@ -35,3 +35,37 @@ pub fn group_files_by_parent_test() {
     |> dict.from_list,
   )
 }
+
+pub fn group_files_by_parent2_test() {
+  let files = [
+    "thorwallet/contracts/mocks/Tgt.sol",
+    "thorwallet/contracts/interfaces/IERC677Receiver.sol",
+    "thorwallet/contracts/interfaces/IMerge.sol",
+    "thorwallet/contracts/MergeTgt.sol", "thorwallet/contracts/Titn.sol",
+  ]
+
+  audit_tree.group_files_by_parent(files)
+  |> should.equal(
+    [
+      #("thorwallet", #(["thorwallet/contracts"], [])),
+      #(
+        "thorwallet/contracts",
+        #(["thorwallet/contracts/mocks", "thorwallet/contracts/interfaces"], [
+          "thorwallet/contracts/MergeTgt.sol", "thorwallet/contracts/Titn.sol",
+        ]),
+      ),
+      #(
+        "thorwallet/contracts/interfaces",
+        #([], [
+          "thorwallet/contracts/interfaces/IERC677Receiver.sol",
+          "thorwallet/contracts/interfaces/IMerge.sol",
+        ]),
+      ),
+      #(
+        "thorwallet/contracts/mocks",
+        #([], ["thorwallet/contracts/mocks/Tgt.sol"]),
+      ),
+    ]
+    |> dict.from_list,
+  )
+}

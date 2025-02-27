@@ -10,8 +10,8 @@ import lustre/element
 import mist
 import o11a/config
 import o11a/user_interface/audit_dashboard
-import o11a/user_interface/audit_page
 import o11a/user_interface/audit_doc
+import o11a/user_interface/audit_page
 import o11a/user_interface/audit_tree
 import o11a/user_interface/gateway
 import simplifile

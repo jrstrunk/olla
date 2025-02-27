@@ -39,8 +39,8 @@ const style = "
 }
 
 .tree-item {
-  margin-top: 0.2rem;
-  margin-bottom: 0.2rem;
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
 }
 
 .tree-link {
@@ -51,6 +51,11 @@ const style = "
 
 .tree-link:hover {
   text-decoration: underline;
+}
+
+.nested-tree-items {
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--input-background-color);
 }
 "
 
@@ -104,9 +109,7 @@ pub fn view(contents, for audit_name) {
 
 fn audit_file_tree_view(audit_name) {
   let all_audit_files =
-    config.get_all_audit_page_paths()
-    |> dict.get(audit_name)
-    |> result.unwrap([])
+    config.get_files_in_scope(for: audit_name)
     |> group_files_by_parent
 
   let #(subdirs, direct_files) =
@@ -134,7 +137,7 @@ fn audit_file_tree_view(audit_name) {
       })
     ]),
     html.div(
-      [attribute.id(audit_name)],
+      [attribute.id(audit_name <> "-dirs")],
       list.map(subdirs, sub_file_tree_view(_, all_audit_files)),
     ),
   ])
@@ -147,21 +150,16 @@ fn sub_file_tree_view(
   let #(subdirs, direct_files) =
     dict.get(all_audit_files, dir_name) |> result.unwrap(#([], []))
 
-  element.fragment([
-    html.div([attribute.id(dir_name)], [
-      html.p([attribute.class("tree-item")], [
-        html.text(dir_name |> filepath.base_name),
-      ]),
-      ..list.map(subdirs, sub_file_tree_view(_, all_audit_files))
+  html.div([attribute.id(dir_name)], [
+    html.p([attribute.class("tree-item")], [
+      html.text(dir_name |> filepath.base_name),
     ]),
     html.div(
-      [
-        attribute.id(dir_name <> "-files"),
-        attribute.style([#("padding-left", "0.75rem")]),
-        attribute.style([
-          #("border-left", "1px solid var(--input-background-color)"),
-        ]),
-      ],
+      [attribute.id(dir_name <> "-dirs"), attribute.class("nested-tree-items")],
+      list.map(subdirs, sub_file_tree_view(_, all_audit_files)),
+    ),
+    html.div(
+      [attribute.id(dir_name <> "-files"), attribute.class("nested-tree-items")],
       list.map(direct_files, fn(file) {
         html.a(
           [
@@ -177,13 +175,29 @@ fn sub_file_tree_view(
 }
 
 /// Thanks Claude ;)
+/// Helper to get all parent directories of a path
+fn get_all_parents(path) {
+  path
+  |> string.split("/")
+  |> list.take(list.length(string.split(path, "/")) - 1)
+  |> list.index_fold([], fn(acc, segment, i) {
+    case i {
+      0 -> [segment, ..acc]
+      _ -> {
+        let prev = list.first(acc) |> result.unwrap("")
+        [prev <> "/" <> segment, ..acc]
+      }
+    }
+  })
+  |> list.reverse
+}
+
 pub fn group_files_by_parent(files) {
-  // Get all unique parent directories
+  // Get all unique parents including intermediate ones
   let parents =
     files
-    |> list.map(filepath.directory_name)
+    |> list.flat_map(get_all_parents)
     |> list.unique
-    |> list.filter(fn(p) { p != "" })
 
   // For each parent, find its immediate subdirs and files
   parents
