@@ -73,7 +73,7 @@ function resize(e) {
   if (!isResizing) return;
   const containerRect = container.getBoundingClientRect();
   const newWidth = e.clientX - containerRect.left;
-  container.style.gridTemplateColumns = `${newWidth}px 5px 1fr`;
+  container.style.gridTemplateColumns = `${newWidth}px 4px 1fr`;
 }
 
 function stopResize() {
