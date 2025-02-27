@@ -1,5 +1,5 @@
-import gleam/dynamic/decode
 import gleam/dynamic
+import gleam/dynamic/decode
 import gleam/result
 import lustre/event
 
