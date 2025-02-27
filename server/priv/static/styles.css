@@ -19,6 +19,10 @@
 body {
   background-color: var(--background-color);
   color: var(--text-color);
+  height: 100vh;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 1rem;
 }
 
 .text {

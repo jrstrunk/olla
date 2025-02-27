@@ -24,12 +24,16 @@ pub type DashboardGateway =
     process.Subject(lustre.Action(audit_dashboard.Msg, lustre.ServerComponent)),
   )
 
+pub type DiscussionGateway =
+  concurrent_dict.ConcurrentDict(String, discussion.Discussion)
+
 pub fn start_discussion_gateway() -> Result(
-  #(DashboardGateway, PageGateway),
+  #(DashboardGateway, PageGateway, DiscussionGateway),
   snag.Snag,
 ) {
   let dashboard_actors = concurrent_dict.new()
   let page_actors = concurrent_dict.new()
+  let discussions = concurrent_dict.new()
 
   let page_paths = config.get_all_audit_page_paths()
 
@@ -37,6 +41,8 @@ pub fn start_discussion_gateway() -> Result(
     dict.keys(page_paths)
     |> list.map(fn(audit_name) {
       use discussion <- result.try(discussion.get_audit_discussion(audit_name))
+
+      concurrent_dict.insert(discussions, audit_name, discussion)
 
       use audit_dashboard_actor <- result.try(
         lustre.start_actor(
@@ -74,13 +80,18 @@ pub fn start_discussion_gateway() -> Result(
     |> result.map(list.flatten),
   )
 
-  #(dashboard_actors, page_actors)
+  #(dashboard_actors, page_actors, discussions)
 }
 
-pub fn get_page_actor(discussion_gateway: PageGateway, page_path) {
+pub fn get_page_actor(discussion_gateway: PageGateway, for page_path) {
   concurrent_dict.get(discussion_gateway, page_path)
 }
 
-pub fn get_dashboard_actor(discussion_gateway: DashboardGateway, audit_name) {
+pub fn get_dashboard_actor(discussion_gateway: DashboardGateway, for audit_name) {
   concurrent_dict.get(discussion_gateway, audit_name)
+}
+
+pub fn get_discussion(discussion_gateway: DiscussionGateway, for audit_name) {
+  concurrent_dict.get(discussion_gateway, audit_name)
+  |> result.unwrap(discussion.empty_discussion(audit_name))
 }

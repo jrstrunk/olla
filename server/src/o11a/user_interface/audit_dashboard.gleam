@@ -1,7 +1,6 @@
+import filepath
 import gleam/dict
 import gleam/list
-import gleam/result
-import gleam/string
 import lib/persistent_concurrent_duplicate_dict as pcd_dict
 import lib/server_componentx
 import lustre
@@ -9,14 +8,11 @@ import lustre/attribute
 import lustre/effect
 import lustre/element
 import lustre/element/html
-import o11a/config
 import o11a/note
 import o11a/server/discussion
-import simplifile
-import snag
 
 pub fn app() -> lustre.App(Model, Model, Msg) {
-  lustre.component(init, update, view(_, False), dict.new())
+  lustre.component(init, update, view, dict.new())
 }
 
 pub type Msg {
@@ -42,14 +38,23 @@ pub fn update(model: Model, _msg: Msg) -> #(Model, effect.Effect(Msg)) {
   #(model, effect.none())
 }
 
-fn view(model: Model, is_skeleton is_skeleton) -> element.Element(Msg) {
+const style = "
+.dashboard-link {
+  text-decoration: none;
+  color: var(--text-color);
+}
+
+.dashboard-link:hover {
+  text-decoration: underline;
+}
+"
+
+fn view(model: Model) -> element.Element(Msg) {
   let container_styles = [
     #("display", "flex"),
     #("flex-direction", "column"),
     #("align-items", "center"),
-    #("width", "100vw"),
-    #("height", "100vh"),
-    #("padding-top", "5rem"),
+    #("padding-top", "4rem"),
   ]
 
   let #(
@@ -60,75 +65,39 @@ fn view(model: Model, is_skeleton is_skeleton) -> element.Element(Msg) {
   ) = find_open_notes(model.discussion)
 
   html.div([attribute.style(container_styles)], [
+    html.style([], style),
     html.div([attribute.style([#("width", "40rem")])], [
       server_componentx.hide_skeleton(),
       html.h2([], [html.text("Incomplete ToDos")]),
-      html.ul([], case is_skeleton {
-        True -> []
-        False ->
-          list.map(incomplete_todos, fn(note) {
-            html.li([], [html.text(note.0 <> " - " <> { note.1 }.message)])
-          })
-      }),
+      notes_view(incomplete_todos),
       html.h2([], [html.text("Unanswered Questions")]),
-      html.ul([], case is_skeleton {
-        True -> []
-        False ->
-          list.map(unanswered_questions, fn(note) {
-            html.li([], [html.text(note.0 <> " - " <> { note.1 }.message)])
-          })
-      }),
+      notes_view(unanswered_questions),
       html.h2([], [html.text("Unconfirmed Findings")]),
-      html.ul([], case is_skeleton {
-        True -> []
-        False ->
-          list.map(unconfirmed_findings, fn(note) {
-            html.li([], [html.text(note.0 <> " - " <> { note.1 }.message)])
-          })
-      }),
+      notes_view(unconfirmed_findings),
       html.h2([], [html.text("Confirmed Findings")]),
-      html.ul([], case is_skeleton {
-        True -> []
-        False ->
-          list.map(confirmed_findings, fn(note) {
-            html.li([], [html.text(note.0 <> " - " <> { note.1 }.message)])
-          })
-      }),
+      notes_view(confirmed_findings),
     ]),
   ])
 }
 
-pub fn get_skeleton(for audit_name) {
-  let skeleton_path = config.get_full_dashboard_skeleton_path(for: audit_name)
+fn notes_view(notes) {
+  html.ul(
+    [],
+    list.map(notes, fn(note: #(String, note.Note)) {
+      html.li([], [
+        html.a(
+          [attribute.href("/" <> note.0), attribute.class("dashboard-link")],
+          [html.text(note.0 |> filepath.base_name)],
+        ),
+        html.text(" - " <> { note.1 }.message),
+      ])
+    }),
+  )
+}
 
-  case simplifile.read(skeleton_path) {
-    Ok(skeleton) -> Ok(skeleton)
-
-    Error(simplifile.Enoent) -> {
-      // Generates a skeleton page for the given page path, and writes it to disk.
-      let skeleton: Result(String, snag.Snag) = {
-        let skeleton =
-          Model(discussion: discussion.empty_discussion(audit_name))
-          |> view(is_skeleton: True)
-          |> element.to_string
-
-        use Nil <- result.map(
-          simplifile.write(skeleton, to: skeleton_path)
-          |> snag.map_error(simplifile.describe_error),
-        )
-
-        skeleton
-      }
-
-      case skeleton {
-        Ok(skeleton) -> Ok(skeleton)
-
-        Error(msg) -> string.inspect(msg) |> snag.error
-      }
-    }
-
-    Error(msg) -> string.inspect(msg) |> snag.error
-  }
+pub fn get_skeleton(for discussion) {
+  Model(discussion:)
+  |> view
 }
 
 pub fn find_open_notes(in discussion: discussion.Discussion) {

@@ -21,6 +21,7 @@ type Context {
   Context(
     dashboard_gateway: gateway.DashboardGateway,
     page_gateway: gateway.PageGateway,
+    discussion_gateway: gateway.DiscussionGateway,
   )
 }
 
@@ -29,11 +30,11 @@ pub fn main() {
 
   let config = config.Config(port: 8400)
 
-  use #(dashboard_gateway, page_gateway) <- result.map(
+  use #(dashboard_gateway, page_gateway, discussion_gateway) <- result.map(
     gateway.start_discussion_gateway(),
   )
 
-  let context = Context(dashboard_gateway:, page_gateway:)
+  let context = Context(dashboard_gateway:, page_gateway:, discussion_gateway:)
 
   let assert Ok(_) =
     handler(_, context)
@@ -75,7 +76,7 @@ fn handler(req, context: Context) {
   }
 }
 
-fn handle_wisp_request(req, _context: Context) {
+fn handle_wisp_request(req, context: Context) {
   case request.path_segments(req) {
     [] ->
       wisp.html_response(
@@ -90,23 +91,16 @@ fn handle_wisp_request(req, _context: Context) {
       )
 
     [audit_name, "dashboard"] ->
-      case audit_dashboard.get_skeleton(for: audit_name) {
-        Ok(skeleton) -> {
-          server_componentx.render_with_prerendered_skeleton(
-            filepath.join("component-dashboard", audit_name),
-            skeleton,
-          )
-          |> audit_tree.view(audit_name)
-          |> server_componentx.as_document
-          |> element.to_document_string_builder
-          |> wisp.html_response(200)
-        }
-
-        Error(snag) ->
-          snag.pretty_print(snag)
-          |> string_tree.from_string
-          |> wisp.html_response(500)
-      }
+      gateway.get_discussion(context.discussion_gateway, for: audit_name)
+      |> audit_dashboard.get_skeleton
+      |> server_componentx.render_with_skeleton(
+        filepath.join("component-dashboard", audit_name),
+        _,
+      )
+      |> audit_tree.view(audit_name)
+      |> server_componentx.as_document
+      |> element.to_document_string_builder
+      |> wisp.html_response(200)
 
     [audit_name, ..] as file_path_segments -> {
       let file_path = list.fold(file_path_segments, "", filepath.join)
