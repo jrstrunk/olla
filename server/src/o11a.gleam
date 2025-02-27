@@ -10,8 +10,8 @@ import lustre/element
 import mist
 import o11a/config
 import o11a/user_interface/audit_dashboard
+import o11a/user_interface/audit_page
 import o11a/user_interface/gateway
-import o11a/user_interface/page
 import snag
 import wisp
 import wisp/wisp_mist
@@ -106,10 +106,10 @@ fn handle_wisp_request(req, _context: Context) {
           |> wisp.html_response(500)
       }
 
-    file_path_segments -> {
+    [audit_name, ..] as file_path_segments -> {
       let file_path = list.fold(file_path_segments, "", filepath.join)
 
-      case page.get_skeleton(for: file_path) {
+      case audit_page.get_skeleton(for: file_path) {
         Ok(skeleton) -> {
           server_componentx.render_with_prerendered_skeleton(
             filepath.join("component-page", file_path),
