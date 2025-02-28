@@ -35,7 +35,7 @@ pub type NoteSignificance {
   ToDo
   ToDoDone
   FindingLead
-  FindingComfirmation
+  FindingConfirmation
   FindingRejection
   DevelperQuestion
 }
@@ -48,7 +48,7 @@ pub fn note_significance_to_int(note_significance) {
     ToDo -> 4
     ToDoDone -> 5
     FindingLead -> 6
-    FindingComfirmation -> 7
+    FindingConfirmation -> 7
     FindingRejection -> 8
     DevelperQuestion -> 9
   }
@@ -63,8 +63,17 @@ pub fn significance_to_string(note_significance, thread_notes: List(Note)) {
           thread_note.significance == Answer
         })
       {
-        Ok(..) -> Some("Answered Question")
-        Error(Nil) -> Some("Unanswered Question")
+        Ok(..) -> Some("Answered")
+        Error(Nil) -> Some("Unanswered")
+      }
+    DevelperQuestion ->
+      case
+        list.find(thread_notes, fn(thread_note) {
+          thread_note.significance == Answer
+        })
+      {
+        Ok(..) -> Some("Answered")
+        Error(Nil) -> Some("Dev Question")
       }
     Answer -> Some("Answer")
     ToDo ->
@@ -73,28 +82,27 @@ pub fn significance_to_string(note_significance, thread_notes: List(Note)) {
           thread_note.significance == ToDoDone
         })
       {
-        Ok(..) -> Some("Incomplete ToDo")
-        Error(Nil) -> Some("Complete ToDo")
+        Ok(..) -> Some("Completed")
+        Error(Nil) -> Some("ToDo")
       }
-    ToDoDone -> Some("ToDo Completion")
-    FindingLead -> Some("Finding Lead")
-    FindingComfirmation ->
+    ToDoDone -> Some("Completion")
+    FindingLead ->
       case
         list.find_map(thread_notes, fn(thread_note) {
           case thread_note.significance {
             FindingRejection -> Ok(FindingRejection)
-            FindingComfirmation -> Ok(FindingComfirmation)
+            FindingConfirmation -> Ok(FindingConfirmation)
             _ -> Error(Nil)
           }
         })
       {
-        Ok(FindingRejection) -> Some("Rejected Finding")
-        Ok(FindingComfirmation) -> Some("Confirmed Finding")
-        Ok(..) -> Some("Unconfirmed Finding")
-        Error(Nil) -> Some("Unconfirmed Finding")
+        Ok(FindingRejection) -> Some("Rejected")
+        Ok(FindingConfirmation) -> Some("Confirmed")
+        Ok(..) -> Some("Unconfirmed")
+        Error(Nil) -> Some("Unconfirmed")
       }
-    FindingRejection -> Some("Finding Rejection")
-    DevelperQuestion -> Some("Developer Question")
+    FindingConfirmation -> Some("Confirmation")
+    FindingRejection -> Some("Rejection")
   }
 }
 
@@ -106,7 +114,7 @@ pub fn note_significance_from_int(note_significance) {
     4 -> ToDo
     5 -> ToDoDone
     6 -> FindingLead
-    7 -> FindingComfirmation
+    7 -> FindingConfirmation
     8 -> FindingRejection
     9 -> DevelperQuestion
     _ -> panic as "Invalid note significance found"
