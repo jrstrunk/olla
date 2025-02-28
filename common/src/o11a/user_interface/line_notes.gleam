@@ -1,3 +1,4 @@
+import given
 import gleam/dict
 import gleam/dynamic
 import gleam/dynamic/decode
@@ -57,6 +58,7 @@ fn init(_) -> #(Model, effect.Effect(Msg)) {
       active_thread: option.None,
       show_expanded_message_box: False,
       current_expanded_message_draft: None,
+      expanded_messages: set.new(),
     ),
     effect.none(),
   )
@@ -71,6 +73,7 @@ pub type Model {
     active_thread: Option(ActiveThread),
     show_expanded_message_box: Bool,
     current_expanded_message_draft: Option(String),
+    expanded_messages: set.Set(String),
   )
 }
 
@@ -99,6 +102,7 @@ pub type Msg {
   UserClosedThread
   UserToggledExpandedMessageBox(Bool)
   UserWroteExpandedMessage(String)
+  UserToggledExpandedMessage(for_note_id: String)
 }
 
 fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
@@ -113,9 +117,13 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       effect.none(),
     )
     UserSubmittedNote(parent_id:) -> {
+      use <- given.that(model.current_note_draft == "", return: fn() {
+        #(model, effect.none())
+      })
+
       let now = instant.now() |> instant.as_utc_datetime
 
-      // Microseconds aren't available in the browser :(
+      // Microseconds aren't available in the browser so just get milli :(
       let note_id =
         model.user_name <> now |> datetime.to_unix_milli |> int.to_string
 
@@ -130,7 +138,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
           note_id:,
           parent_id:,
           significance:,
-          user_name: model.user_name,
+          user_name: "user" <> int.random(100) |> int.to_string,
           message:,
           expanded_message: model.current_expanded_message_draft,
           time: now,
@@ -176,6 +184,23 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       Model(..model, current_expanded_message_draft: Some(expanded_message)),
       effect.none(),
     )
+    UserToggledExpandedMessage(for_note_id) ->
+      case set.contains(model.expanded_messages, for_note_id) {
+        True -> #(
+          Model(
+            ..model,
+            expanded_messages: set.delete(model.expanded_messages, for_note_id),
+          ),
+          effect.none(),
+        )
+        False -> #(
+          Model(
+            ..model,
+            expanded_messages: set.insert(model.expanded_messages, for_note_id),
+          ),
+          effect.none(),
+        )
+      }
   }
 }
 
@@ -246,22 +271,34 @@ button, input {
   border: 1px solid var(--input-border-color);
 }
 
-.thread-switch-button {
+.line-notes-item-header-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+button {
   background-color: var(--overlay-background-color);
   color: var(--text-color);
   border: none;
   border-radius: 4px;
-  margin-left: 0.5rem;
-  padding-top: 0.2rem;
+  cursor: pointer;
 }
 
-.thread-switch-button:hover {
+button:hover {
   background-color: var(--input-background-color);
 }
 
-.thread-switch-button svg {
+button svg {
   height: 1.25rem;
   width: 1.25rem;
+}
+
+.thread-switch-button, .expand-message-button {
+  padding-top: 0.2rem;
+}
+
+.expanded-note-message {
+  margin-top: 1rem;
 }
 
 .line-notes-input-container {
@@ -272,20 +309,7 @@ button, input {
 }
 
 .new-comment-button {
-  background-color: var(--overlay-background-color);
-  color: var(--text-color);
-  border: none;
-  border-radius: 4px;
   padding-top: 0.25rem;
-}
-
-.new-comment-button:hover {
-  background-color: var(--input-background-color);
-}
-
-.new-comment-button svg {
-  height: 1.25rem;
-  width: 1.25rem;
 }
 
 .new-comment-input {
@@ -307,7 +331,7 @@ button, input {
   left: 0;
   padding: .5rem;
   background-color: var(--overlay-background-color);
-  border-radius: 4px;
+  border-radius: 6px;
   border: 1px solid var(--input-border-color);
   height: 10rem;
   margin-top: 1rem;
@@ -359,6 +383,13 @@ fn view(model: Model) -> element.Element(Msg) {
             html.br([]),
             html.text("Current Thread: "),
             html.text(active_thread.parent_note.message),
+            case active_thread.parent_note.expanded_message {
+              Some(expanded_message) ->
+                html.div([attribute.class("expanded-note-message")], [
+                  html.p([], [html.text(expanded_message)]),
+                ])
+              None -> element.fragment([])
+            },
             html.hr([]),
           ])
         None -> element.fragment([])
@@ -371,19 +402,36 @@ fn view(model: Model) -> element.Element(Msg) {
                 html.p([], [html.text(note.user_name)]),
                 significance_badge_view(model, note),
               ]),
-              html.button(
-                [
-                  attribute.class("thread-switch-button"),
-                  event.on_click(UserSwitchedToThread(note.note_id, note)),
-                ],
-                [lucide.messages_square([])],
-              ),
+              html.div([attribute.class("line-notes-item-header-actions")], [
+                case note.expanded_message {
+                  Some(_) ->
+                    html.button(
+                      [
+                        attribute.class("expand-message-button"),
+                        event.on_click(UserToggledExpandedMessage(note.note_id)),
+                      ],
+                      [lucide.list_collapse([])],
+                    )
+                  None -> element.fragment([])
+                },
+                html.button(
+                  [
+                    attribute.class("thread-switch-button"),
+                    event.on_click(UserSwitchedToThread(note.note_id, note)),
+                  ],
+                  [lucide.messages_square([])],
+                ),
+              ]),
             ]),
             html.p([], [html.text(note.message)]),
-            case note.expanded_message {
-              Some(expanded_message) ->
-                html.p([], [html.text(expanded_message)])
-              None -> element.fragment([])
+            case set.contains(model.expanded_messages, note.note_id) {
+              True ->
+                html.div([attribute.class("expanded-note-message")], [
+                  html.p([], [
+                    html.text(note.expanded_message |> option.unwrap("")),
+                  ]),
+                ])
+              False -> element.fragment([])
             },
             html.hr([]),
           ])
@@ -463,7 +511,7 @@ fn classify_message(message, is_thread_open is_thread_open) {
         "done " <> rest -> #(note.ToDoDone, rest)
         ": " <> rest -> #(note.Answer, rest)
         ". " <> rest -> #(note.FindingRejection, rest)
-        "!! " <> rest -> #(note.FindingComfirmation, rest)
+        "!! " <> rest -> #(note.FindingConfirmation, rest)
         _ -> #(note.Comment, message)
       }
   }

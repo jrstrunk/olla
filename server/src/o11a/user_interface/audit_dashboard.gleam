@@ -173,7 +173,7 @@ pub fn find_open_notes(in discussion: discussion.Discussion) {
         list.find(thread_notes, fn(thread_note) {
           case { thread_note }.significance {
             note.FindingRejection -> True
-            note.FindingComfirmation -> True
+            note.FindingConfirmation -> True
             _ -> False
           }
         })
@@ -192,7 +192,7 @@ pub fn find_open_notes(in discussion: discussion.Discussion) {
       let closing_note =
         list.find(thread_notes, fn(thread_note) {
           case { thread_note }.significance {
-            note.FindingComfirmation -> True
+            note.FindingConfirmation -> True
             _ -> False
           }
         })
