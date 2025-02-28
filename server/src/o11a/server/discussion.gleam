@@ -49,7 +49,7 @@ pub fn note_persist_encoder(note: note.Note) {
     pcd_dict.text(note.note_id),
     pcd_dict.text(note.parent_id),
     pcd_dict.int(note.note_significance_to_int(note.significance)),
-    pcd_dict.int(note.user_id),
+    pcd_dict.text(note.user_name),
     pcd_dict.text(note.message),
     pcd_dict.text_nullable(note.expanded_message),
     pcd_dict.int(datetime.to_unix_milli(note.time)),
@@ -60,7 +60,7 @@ pub fn note_persist_decoder() {
   use note_id <- decode.field(0, decode.string)
   use parent_id <- decode.field(1, decode.string)
   use significance <- decode.field(2, decode.int)
-  use user_id <- decode.field(3, decode.int)
+  use user_name <- decode.field(3, decode.string)
   use message <- decode.field(4, decode.string)
   use expanded_message <- decode.field(5, decode.optional(decode.string))
   use time <- decode.field(6, decode.int)
@@ -69,7 +69,7 @@ pub fn note_persist_decoder() {
     note_id:,
     parent_id:,
     significance: note.note_significance_from_int(significance),
-    user_id:,
+    user_name:,
     message:,
     expanded_message:,
     time: datetime.from_unix_milli(time),
@@ -82,18 +82,18 @@ pub fn note_vote_persist_encoder(note_vote: note.NoteVote) {
   [
     pcd_dict.text(note_vote.note_id),
     pcd_dict.int(note.note_vote_sigficance_to_int(note_vote.sigficance)),
-    pcd_dict.int(note_vote.user_id),
+    pcd_dict.text(note_vote.user_name),
   ]
 }
 
 pub fn note_vote_persist_decoder() {
   use note_id <- decode.field(0, decode.string)
   use sigficance <- decode.field(1, decode.int)
-  use user_id <- decode.field(2, decode.int)
+  use user_name <- decode.field(2, decode.string)
 
   note.NoteVote(
     note_id:,
-    user_id:,
+    user_name:,
     sigficance: note.note_vote_sigficance_from_int(sigficance),
   )
   |> decode.success

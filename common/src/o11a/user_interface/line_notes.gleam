@@ -5,8 +5,10 @@ import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
+import gleam/set
 import gleam/string
 import lib/effectx
+import lib/lucide
 import lustre
 import lustre/attribute
 import lustre/effect
@@ -48,11 +50,13 @@ pub fn component() {
 fn init(_) -> #(Model, effect.Effect(Msg)) {
   #(
     Model(
-      user_id: 0,
+      user_name: "user01",
       notes: dict.new(),
       current_note_draft: "",
       line_id: "",
       active_thread: option.None,
+      show_expanded_message_box: False,
+      current_expanded_message_draft: None,
     ),
     effect.none(),
   )
@@ -60,11 +64,13 @@ fn init(_) -> #(Model, effect.Effect(Msg)) {
 
 pub type Model {
   Model(
-    user_id: Int,
+    user_name: String,
     line_id: String,
     notes: dict.Dict(String, List(note.Note)),
     current_note_draft: String,
     active_thread: Option(ActiveThread),
+    show_expanded_message_box: Bool,
+    current_expanded_message_draft: Option(String),
   )
 }
 
@@ -91,6 +97,8 @@ pub type Msg {
   UserSubmittedNote(parent_id: String)
   UserSwitchedToThread(new_thread_id: String, parent_note: note.Note)
   UserClosedThread
+  UserToggledExpandedMessageBox(Bool)
+  UserWroteExpandedMessage(String)
 }
 
 fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
@@ -107,47 +115,35 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     UserSubmittedNote(parent_id:) -> {
       let now = instant.now() |> instant.as_utc_datetime
 
+      // Microseconds aren't available in the browser :(
       let note_id =
-        int.to_string(model.user_id)
-        <> "-"
-        <> now |> datetime.to_unix_micro |> int.to_string
+        model.user_name <> now |> datetime.to_unix_milli |> int.to_string
+
+      let #(significance, message) =
+        classify_message(
+          model.current_note_draft,
+          is_thread_open: option.is_some(model.active_thread),
+        )
 
       let note =
         note.Note(
           note_id:,
           parent_id:,
-          significance: note.Regular,
-          user_id: model.user_id,
-          message: model.current_note_draft,
-          expanded_message: None,
+          significance:,
+          user_name: model.user_name,
+          message:,
+          expanded_message: model.current_expanded_message_draft,
           time: now,
           edited: False,
         )
 
-      let note = case model.active_thread, model.current_note_draft {
-        None, "todo " <> rest ->
-          note.Note(..note, significance: note.ToDo, message: rest)
-        Some(..), "done " <> rest ->
-          note.Note(..note, significance: note.ToDoDone, message: rest)
-        None, "? " <> rest ->
-          note.Note(..note, significance: note.Question, message: rest)
-        Some(..), ", " <> rest ->
-          note.Note(..note, significance: note.Answer, message: rest)
-        None, "! " <> rest ->
-          note.Note(..note, significance: note.FindingLead, message: rest)
-        Some(..), ". " <> rest ->
-          note.Note(..note, significance: note.FindingRejection, message: rest)
-        Some(..), "!! " <> rest ->
-          note.Note(
-            ..note,
-            significance: note.FindingComfirmation,
-            message: rest,
-          )
-        _, _ -> note
-      }
-
       #(
-        Model(..model, current_note_draft: ""),
+        Model(
+          ..model,
+          current_note_draft: "",
+          current_expanded_message_draft: None,
+          show_expanded_message_box: False,
+        ),
         event.emit(user_submitted_note_event, note.encode_note(note)),
       )
     }
@@ -170,6 +166,14 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
           |> option.map(fn(thread) { thread.prior_thread })
           |> option.flatten,
       ),
+      effect.none(),
+    )
+    UserToggledExpandedMessageBox(show_expanded_message_box) -> #(
+      Model(..model, show_expanded_message_box:),
+      effect.none(),
+    )
+    UserWroteExpandedMessage(expanded_message) -> #(
+      Model(..model, current_expanded_message_draft: Some(expanded_message)),
       effect.none(),
     )
   }
@@ -198,9 +202,11 @@ const component_style = "
   background-color: var(--overlay-background-color);;
   border-radius: 6px;
   border: var(--input-border-color) solid black;
-  visibility: hidden;
-  opacity: 0;
+  visibility: visible;
+  opacity: 1;
   font-style: normal;
+  user-select: text;
+  padding: 0.5rem;
 }
 
 .loc:hover + .line-notes-list,
@@ -215,6 +221,107 @@ button, input {
   color: var(--text-color);
   border-color: var(--input-border-color);
 }
+
+.line-notes-item-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.2rem;
+}
+
+.line-notes-item-header-meta {
+  display: flex;
+  gap: 0.5rem;
+  align-items: start;
+}
+
+.line-notes-list p {
+  margin: 0;
+}
+
+.significance-badge {
+  border-radius: 4px;
+  padding: 0.25rem;
+  padding-bottom: 0.15rem;
+  font-size: 0.65rem;
+  border: 1px solid var(--input-border-color);
+}
+
+.thread-switch-button {
+  background-color: var(--overlay-background-color);
+  color: var(--text-color);
+  border: none;
+  border-radius: 4px;
+  margin-left: 0.5rem;
+  padding-top: 0.2rem;
+}
+
+.thread-switch-button:hover {
+  background-color: var(--input-background-color);
+}
+
+.thread-switch-button svg {
+  height: 1.25rem;
+  width: 1.25rem;
+}
+
+.line-notes-input-container {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.new-comment-button {
+  background-color: var(--overlay-background-color);
+  color: var(--text-color);
+  border: none;
+  border-radius: 4px;
+  padding-top: 0.25rem;
+}
+
+.new-comment-button:hover {
+  background-color: var(--input-background-color);
+}
+
+.new-comment-button svg {
+  height: 1.25rem;
+  width: 1.25rem;
+}
+
+.new-comment-input {
+  display: inline-block;
+  width: 100%;
+  border: none;
+  border-top: 1px solid var(--input-border-color);
+  border-radius: 4px;
+  flex-grow: 1;
+  padding: 0.3rem;
+  padding-left: .5rem;
+  font-size: 0.95rem;
+}
+
+.expanded-message-box {
+  position: absolute;
+  display: flex;
+  width: 140%;
+  left: 0;
+  padding: .5rem;
+  background-color: var(--overlay-background-color);
+  border-radius: 4px;
+  border: 1px solid var(--input-border-color);
+  height: 10rem;
+  margin-top: 1rem;
+}
+
+.expanded-message-box textarea {
+  flex-grow: 1;
+  background-color: var(--input-background-color);
+  color: var(--text-color);
+  border: 1px solid var(--input-border-color);
+  border-radius: 4px;
+  padding: 0.3rem;
+  font-size: 0.95rem;
+}
 "
 
 fn view(model: Model) -> element.Element(Msg) {
@@ -223,10 +330,14 @@ fn view(model: Model) -> element.Element(Msg) {
     dict.get(model.notes, current_thread_id) |> result.unwrap([])
 
   let inline_comment_preview =
-    list.last(current_notes)
+    dict.get(model.notes, model.line_id)
+    |> result.try(list.last)
     |> result.map(fn(note) {
       html.span([attribute.class("loc faded code-extras")], [
-        html.text(note.message |> string.slice(0, length: 30)),
+        html.text(case string.length(note.message) > 40 {
+          True -> note.message |> string.slice(0, length: 37) <> "..."
+          False -> note.message |> string.slice(0, length: 40)
+        }),
       ])
     })
     |> result.unwrap(
@@ -254,24 +365,106 @@ fn view(model: Model) -> element.Element(Msg) {
       },
       element.fragment(
         list.map(current_notes, fn(note) {
-          element.fragment([
-            html.p([attribute.class("line-notes-list-item")], [
-              html.text(note.message),
+          html.div([attribute.class("line-notes-item")], [
+            html.div([attribute.class("line-notes-item-header")], [
+              html.div([attribute.class("line-notes-item-header-meta")], [
+                html.p([], [html.text(note.user_name)]),
+                significance_badge_view(model, note),
+              ]),
+              html.button(
+                [
+                  attribute.class("thread-switch-button"),
+                  event.on_click(UserSwitchedToThread(note.note_id, note)),
+                ],
+                [lucide.messages_square([])],
+              ),
             ]),
-            html.button(
-              [event.on_click(UserSwitchedToThread(note.note_id, note))],
-              [html.text("Switch to Thread")],
-            ),
+            html.p([], [html.text(note.message)]),
+            case note.expanded_message {
+              Some(expanded_message) ->
+                html.p([], [html.text(expanded_message)])
+              None -> element.fragment([])
+            },
             html.hr([]),
           ])
         }),
       ),
-      html.span([], [html.text("Add a new comment: ")]),
-      html.input([
-        event.on_input(UserWroteNote),
-        effectx.on_ctrl_enter(UserSubmittedNote(parent_id: current_thread_id)),
-        attribute.value(model.current_note_draft),
+      html.div([attribute.class("line-notes-input-container")], [
+        html.button(
+          [
+            attribute.class("new-comment-button"),
+            event.on_click(UserToggledExpandedMessageBox(
+              !model.show_expanded_message_box,
+            )),
+          ],
+          [lucide.pencil_ruler([])],
+        ),
+        html.input([
+          attribute.class("new-comment-input"),
+          attribute.placeholder("Add a new comment"),
+          event.on_input(UserWroteNote),
+          effectx.on_ctrl_enter(UserSubmittedNote(parent_id: current_thread_id)),
+          attribute.value(model.current_note_draft),
+        ]),
       ]),
+      case model.show_expanded_message_box {
+        True ->
+          html.div([attribute.class("expanded-message-box")], [
+            html.textarea(
+              [
+                attribute.class("expanded-comment-input"),
+                attribute.placeholder("Write an expanded message body"),
+                event.on_input(UserWroteExpandedMessage),
+                effectx.on_ctrl_enter(UserSubmittedNote(
+                  parent_id: current_thread_id,
+                )),
+                attribute.value(
+                  model.current_expanded_message_draft |> option.unwrap(""),
+                ),
+              ],
+              "Write an expanded message body ig",
+            ),
+          ])
+        False -> element.fragment([])
+      },
     ]),
   ])
+}
+
+fn significance_badge_view(model: Model, note: note.Note) {
+  case
+    note.significance_to_string(
+      note.significance,
+      dict.get(model.notes, note.note_id) |> result.unwrap([]),
+    )
+  {
+    Some(significance) ->
+      html.span([attribute.class("significance-badge")], [
+        html.text(significance),
+      ])
+    None -> element.fragment([])
+  }
+}
+
+fn classify_message(message, is_thread_open is_thread_open) {
+  case is_thread_open {
+    // Users can only start actionalble threads in the main thread
+    False ->
+      case message {
+        "todo " <> rest -> #(note.ToDo, rest)
+        "? " <> rest -> #(note.Question, rest)
+        "! " <> rest -> #(note.FindingLead, rest)
+        "@dev " <> rest -> #(note.DevelperQuestion, rest)
+        _ -> #(note.Comment, message)
+      }
+    // Users can only resolve actionalble threads in an open thread
+    True ->
+      case message {
+        "done " <> rest -> #(note.ToDoDone, rest)
+        ": " <> rest -> #(note.Answer, rest)
+        ". " <> rest -> #(note.FindingRejection, rest)
+        "!! " <> rest -> #(note.FindingComfirmation, rest)
+        _ -> #(note.Comment, message)
+      }
+  }
 }

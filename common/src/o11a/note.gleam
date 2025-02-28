@@ -2,7 +2,8 @@ import gleam/dict
 import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/json
-import gleam/option.{type Option}
+import gleam/list
+import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import tempo
@@ -13,7 +14,7 @@ pub type Note {
     note_id: String,
     parent_id: String,
     significance: NoteSignificance,
-    user_id: Int,
+    user_name: String,
     message: String,
     expanded_message: Option(String),
     time: tempo.DateTime,
@@ -28,7 +29,7 @@ pub type NoteCollection =
   dict.Dict(String, List(Note))
 
 pub type NoteSignificance {
-  Regular
+  Comment
   Question
   Answer
   ToDo
@@ -41,7 +42,7 @@ pub type NoteSignificance {
 
 pub fn note_significance_to_int(note_significance) {
   case note_significance {
-    Regular -> 1
+    Comment -> 1
     Question -> 2
     Answer -> 3
     ToDo -> 4
@@ -53,9 +54,53 @@ pub fn note_significance_to_int(note_significance) {
   }
 }
 
+pub fn significance_to_string(note_significance, thread_notes: List(Note)) {
+  case note_significance {
+    Comment -> None
+    Question ->
+      case
+        list.find(thread_notes, fn(thread_note) {
+          thread_note.significance == Answer
+        })
+      {
+        Ok(..) -> Some("Answered Question")
+        Error(Nil) -> Some("Unanswered Question")
+      }
+    Answer -> Some("Answer")
+    ToDo ->
+      case
+        list.find(thread_notes, fn(thread_note) {
+          thread_note.significance == ToDoDone
+        })
+      {
+        Ok(..) -> Some("Incomplete ToDo")
+        Error(Nil) -> Some("Complete ToDo")
+      }
+    ToDoDone -> Some("ToDo Completion")
+    FindingLead -> Some("Finding Lead")
+    FindingComfirmation ->
+      case
+        list.find_map(thread_notes, fn(thread_note) {
+          case thread_note.significance {
+            FindingRejection -> Ok(FindingRejection)
+            FindingComfirmation -> Ok(FindingComfirmation)
+            _ -> Error(Nil)
+          }
+        })
+      {
+        Ok(FindingRejection) -> Some("Rejected Finding")
+        Ok(FindingComfirmation) -> Some("Confirmed Finding")
+        Ok(..) -> Some("Unconfirmed Finding")
+        Error(Nil) -> Some("Unconfirmed Finding")
+      }
+    FindingRejection -> Some("Finding Rejection")
+    DevelperQuestion -> Some("Developer Question")
+  }
+}
+
 pub fn note_significance_from_int(note_significance) {
   case note_significance {
-    1 -> Regular
+    1 -> Comment
     2 -> Question
     3 -> Answer
     4 -> ToDo
@@ -89,7 +134,7 @@ pub fn note_vote_sigficance_from_int(note_vote_sigficance) {
 }
 
 pub type NoteVote {
-  NoteVote(note_id: String, user_id: Int, sigficance: NoteVoteSigficance)
+  NoteVote(note_id: String, user_name: String, sigficance: NoteVoteSigficance)
 }
 
 /// A dictionary mapping each note id to a list of votes for it. The data is
@@ -127,7 +172,7 @@ pub fn encode_note(note: Note) {
     #("note_id", json.string(note.note_id)),
     #("parent_id", json.string(note.parent_id)),
     #("significance", json.int(note.significance |> note_significance_to_int)),
-    #("user_id", json.int(note.user_id)),
+    #("user_name", json.string(note.user_name)),
     #("message", json.string(note.message)),
     #("expanded_message", json.nullable(note.expanded_message, json.string)),
     #("time", json.int(note.time |> datetime.to_unix_milli)),
@@ -139,7 +184,7 @@ pub fn note_decoder() {
   use note_id <- decode.field("note_id", decode.string)
   use parent_id <- decode.field("parent_id", decode.string)
   use significance <- decode.field("significance", decode.int)
-  use user_id <- decode.field("user_id", decode.int)
+  use user_name <- decode.field("user_name", decode.string)
   use message <- decode.field("message", decode.string)
   use expanded_message <- decode.field(
     "expanded_message",
@@ -152,7 +197,7 @@ pub fn note_decoder() {
     note_id:,
     parent_id:,
     significance: note_significance_from_int(significance),
-    user_id:,
+    user_name:,
     message:,
     expanded_message:,
     time: datetime.from_unix_milli(time),
@@ -165,8 +210,8 @@ pub fn example_note() {
   Note(
     note_id: "1-10000",
     parent_id: "Example",
-    significance: Regular,
-    user_id: 0,
+    significance: Comment,
+    user_name: "system",
     message: "Wow bro great finding that is really cool",
     expanded_message: option.None,
     time: datetime.literal("2021-01-01T00:00:00Z"),
@@ -180,8 +225,8 @@ pub fn example_note_thread() {
       Note(
         note_id: "L2",
         parent_id: "L1",
-        significance: Regular,
-        user_id: 0,
+        significance: Comment,
+        user_name: "system",
         message: "world",
         expanded_message: option.None,
         time: example_note().time,
@@ -190,8 +235,8 @@ pub fn example_note_thread() {
       Note(
         note_id: "L3",
         parent_id: "L1",
-        significance: Regular,
-        user_id: 0,
+        significance: Comment,
+        user_name: "system",
         message: "hello2",
         expanded_message: option.None,
         time: example_note().time,
@@ -202,8 +247,8 @@ pub fn example_note_thread() {
       Note(
         note_id: "L1",
         parent_id: "L50",
-        significance: Regular,
-        user_id: 0,
+        significance: Comment,
+        user_name: "system",
         message: "hello",
         expanded_message: option.None,
         time: example_note().time,
@@ -214,8 +259,8 @@ pub fn example_note_thread() {
       Note(
         note_id: "L4",
         parent_id: "L3",
-        significance: Regular,
-        user_id: 0,
+        significance: Comment,
+        user_name: "system",
         message: "world2",
         expanded_message: option.None,
         time: example_note().time,
@@ -226,5 +271,5 @@ pub fn example_note_thread() {
 }
 
 pub fn example_note_vote() {
-  NoteVote(note_id: "Example", user_id: 0, sigficance: UpVote)
+  NoteVote(note_id: "Example", user_name: "system", sigficance: UpVote)
 }

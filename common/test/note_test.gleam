@@ -19,8 +19,8 @@ pub fn encode_notes_round_trip_test() {
       note.Note(
         note_id: "L1",
         parent_id: "L50",
-        significance: note.Regular,
-        user_id: 0,
+        significance: note.Comment,
+        user_name: "system",
         message: "hello",
         expanded_message: option.None,
         time: note.example_note().time,
@@ -31,8 +31,8 @@ pub fn encode_notes_round_trip_test() {
       note.Note(
         note_id: "L2",
         parent_id: "L1",
-        significance: note.Regular,
-        user_id: 0,
+        significance: note.Comment,
+        user_name: "system",
         message: "world",
         expanded_message: option.None,
         time: note.example_note().time,
@@ -41,8 +41,8 @@ pub fn encode_notes_round_trip_test() {
       note.Note(
         note_id: "L3",
         parent_id: "L1",
-        significance: note.Regular,
-        user_id: 0,
+        significance: note.Comment,
+        user_name: "system",
         message: "hello2",
         expanded_message: option.None,
         time: note.example_note().time,
@@ -53,8 +53,8 @@ pub fn encode_notes_round_trip_test() {
       note.Note(
         note_id: "L4",
         parent_id: "L3",
-        significance: note.Regular,
-        user_id: 0,
+        significance: note.Comment,
+        user_name: "system",
         message: "world2",
         expanded_message: option.None,
         time: note.example_note().time,

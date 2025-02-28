@@ -11,7 +11,7 @@ import o11a/config
 const style = "
 #tree-grid {
   display: grid;
-  grid-template-columns: 16rem 4px 1fr;
+  grid-template-columns: 12rem 4px 1fr;
   height: 100%;
 }
 

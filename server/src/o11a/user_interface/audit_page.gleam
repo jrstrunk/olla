@@ -193,9 +193,10 @@ pub fn style_code_tokens(line_text) {
 
   // First cut out the comments so they don't get any formatting
 
-  let assert Ok(comment_regex) = regexp.from_string(
-    "(?:\\/\\/.*|^\\s*\\/\\*\\*.*|^\\s*\\*.*|^\\s*\\*\\/.*|\\/\\*.*?\\*\\/)"
-  )
+  let assert Ok(comment_regex) =
+    regexp.from_string(
+      "(?:\\/\\/.*|^\\s*\\/\\*\\*.*|^\\s*\\*.*|^\\s*\\*\\/.*|\\/\\*.*?\\*\\/)",
+    )
 
   let comments = regexp.scan(comment_regex, styled_line)
 
@@ -224,7 +225,9 @@ pub fn style_code_tokens(line_text) {
     })
 
   let assert Ok(global_variable_regex) =
-    regexp.from_string("\\b(super|this|msg\\.sender|msg\\.value|tx\\.origin|block\\.timestamp|block\\.chainid)\\b")
+    regexp.from_string(
+      "\\b(super|this|msg\\.sender|msg\\.value|tx\\.origin|block\\.timestamp|block\\.chainid)\\b",
+    )
 
   let styled_line =
     regexp.match_map(global_variable_regex, styled_line, fn(match) {
@@ -261,7 +264,9 @@ pub fn style_code_tokens(line_text) {
     })
 
   let assert Ok(type_regex) =
-    regexp.from_string("\\b(address|bool|bytes|string|int|uint|int\\d+|uint\\d+)\\b")
+    regexp.from_string(
+      "\\b(address|bool|bytes|string|int|uint|int\\d+|uint\\d+)\\b",
+    )
 
   let styled_line =
     regexp.match_map(type_regex, styled_line, fn(match) {
@@ -280,8 +285,7 @@ pub fn style_code_tokens(line_text) {
       |> element.to_string
     })
 
-  let assert Ok(literal_regex) =
-    regexp.from_string("\\b(true|false)\\b")
+  let assert Ok(literal_regex) = regexp.from_string("\\b(true|false)\\b")
 
   let styled_line =
     regexp.match_map(literal_regex, styled_line, fn(match) {

@@ -306,12 +306,23 @@ var Some = class extends CustomType {
 };
 var None = class extends CustomType {
 };
+function is_some(option) {
+  return !isEqual(option, new None());
+}
 function to_result(option, e) {
   if (option instanceof Some) {
     let a = option[0];
     return new Ok(a);
   } else {
     return new Error(e);
+  }
+}
+function unwrap(option, default$) {
+  if (option instanceof Some) {
+    let x = option[0];
+    return x;
+  } else {
+    return default$;
   }
 }
 function map(option, fun) {
@@ -1483,6 +1494,45 @@ function index_fold_loop(loop$over, loop$acc, loop$with, loop$index) {
 function index_fold(list3, initial, fun) {
   return index_fold_loop(list3, initial, fun, 0);
 }
+function find2(loop$list, loop$is_desired) {
+  while (true) {
+    let list3 = loop$list;
+    let is_desired = loop$is_desired;
+    if (list3.hasLength(0)) {
+      return new Error(void 0);
+    } else {
+      let first$1 = list3.head;
+      let rest$1 = list3.tail;
+      let $ = is_desired(first$1);
+      if ($) {
+        return new Ok(first$1);
+      } else {
+        loop$list = rest$1;
+        loop$is_desired = is_desired;
+      }
+    }
+  }
+}
+function find_map(loop$list, loop$fun) {
+  while (true) {
+    let list3 = loop$list;
+    let fun = loop$fun;
+    if (list3.hasLength(0)) {
+      return new Error(void 0);
+    } else {
+      let first$1 = list3.head;
+      let rest$1 = list3.tail;
+      let $ = fun(first$1);
+      if ($.isOk()) {
+        let first$2 = $[0];
+        return new Ok(first$2);
+      } else {
+        loop$list = rest$1;
+        loop$fun = fun;
+      }
+    }
+  }
+}
 function reduce(list3, fun) {
   if (list3.hasLength(0)) {
     return new Error(void 0);
@@ -1573,7 +1623,7 @@ function try$(result, fun) {
 function then$(result, fun) {
   return try$(result, fun);
 }
-function unwrap(result, default$) {
+function unwrap2(result, default$) {
   if (result.isOk()) {
     let v = result[0];
     return v;
@@ -1592,11 +1642,11 @@ function replace_error(result, error) {
 
 // build/dev/javascript/gleam_stdlib/gleam/dynamic.mjs
 var DecodeError = class extends CustomType {
-  constructor(expected, found, path) {
+  constructor(expected, found, path2) {
     super();
     this.expected = expected;
     this.found = found;
-    this.path = path;
+    this.path = path2;
   }
 };
 function map_errors(result, f) {
@@ -1737,11 +1787,11 @@ function is_null(data) {
 
 // build/dev/javascript/gleam_stdlib/gleam/dynamic/decode.mjs
 var DecodeError2 = class extends CustomType {
-  constructor(expected, found, path) {
+  constructor(expected, found, path2) {
     super();
     this.expected = expected;
     this.found = found;
-    this.path = path;
+    this.path = path2;
   }
 };
 var Decoder = class extends CustomType {
@@ -1882,7 +1932,7 @@ function list2(inner) {
     }
   );
 }
-function push_path2(layer, path) {
+function push_path2(layer, path2) {
   let decoder = one_of(
     string3,
     toList([
@@ -1893,7 +1943,7 @@ function push_path2(layer, path) {
     ])
   );
   let path$1 = map2(
-    path,
+    path2,
     (key) => {
       let key$1 = identity(key);
       let $ = run(key$1, decoder);
@@ -1920,17 +1970,17 @@ function push_path2(layer, path) {
 }
 function index3(loop$path, loop$position, loop$inner, loop$data, loop$handle_miss) {
   while (true) {
-    let path = loop$path;
+    let path2 = loop$path;
     let position = loop$position;
     let inner = loop$inner;
     let data = loop$data;
     let handle_miss = loop$handle_miss;
-    if (path.hasLength(0)) {
+    if (path2.hasLength(0)) {
       let _pipe = inner(data);
       return push_path2(_pipe, reverse(position));
     } else {
-      let key = path.head;
-      let path$1 = path.tail;
+      let key = path2.head;
+      let path$1 = path2.tail;
       let $ = index2(data, key);
       if ($.isOk() && $[0] instanceof Some) {
         let data$1 = $[0][0];
@@ -2180,10 +2230,10 @@ var Text = class extends CustomType {
   }
 };
 var Element = class extends CustomType {
-  constructor(key, namespace, tag, attrs, children2, self_closing, void$) {
+  constructor(key, namespace2, tag, attrs, children2, self_closing, void$) {
     super();
     this.key = key;
-    this.namespace = namespace;
+    this.namespace = namespace2;
     this.tag = tag;
     this.attrs = attrs;
     this.children = children2;
@@ -2296,6 +2346,9 @@ function class$(name2) {
 function value(val) {
   return attribute("value", val);
 }
+function placeholder(text3) {
+  return attribute("placeholder", text3);
+}
 
 // build/dev/javascript/lustre/lustre/element.mjs
 function element(tag, attrs, children2) {
@@ -2330,6 +2383,9 @@ function element(tag, attrs, children2) {
   } else {
     return new Element("", "", tag, attrs, children2, false, false);
   }
+}
+function namespaced(namespace2, tag, attrs, children2) {
+  return new Element("", namespace2, tag, attrs, children2, false, false);
 }
 function text(content) {
   return new Text(content);
@@ -2527,9 +2583,9 @@ function morph(prev, next, dispatch) {
   return out;
 }
 function createElementNode({ prev, next, dispatch, stack }) {
-  const namespace = next.namespace || "http://www.w3.org/1999/xhtml";
+  const namespace2 = next.namespace || "http://www.w3.org/1999/xhtml";
   const canMorph = prev && prev.nodeType === Node.ELEMENT_NODE && prev.localName === next.tag && prev.namespaceURI === (next.namespace || "http://www.w3.org/1999/xhtml");
-  const el = canMorph ? prev : namespace ? document.createElementNS(namespace, next.tag) : document.createElement(next.tag);
+  const el = canMorph ? prev : namespace2 ? document.createElementNS(namespace2, next.tag) : document.createElement(next.tag);
   let handlersForEl;
   if (!registeredHandlers.has(el)) {
     const emptyHandlers = /* @__PURE__ */ new Map();
@@ -2696,14 +2752,14 @@ function lustreServerEventHandler(event2) {
     tag,
     data: include.reduce(
       (data2, property) => {
-        const path = property.split(".");
-        for (let i = 0, o = data2, e = event2; i < path.length; i++) {
-          if (i === path.length - 1) {
-            o[path[i]] = e[path[i]];
+        const path2 = property.split(".");
+        for (let i = 0, o = data2, e = event2; i < path2.length; i++) {
+          if (i === path2.length - 1) {
+            o[path2[i]] = e[path2[i]];
           } else {
-            o[path[i]] ??= {};
-            e = e[path[i]];
-            o = o[path[i]];
+            o[path2[i]] ??= {};
+            e = e[path2[i]];
+            o = o[path2[i]];
           }
         }
         return data2;
@@ -2746,9 +2802,9 @@ function diffKeyedChild(prevChild, child, el, stack, incomingKeyedChildren, keye
     return prevChild;
   }
   if (!keyedChild && prevChild !== null) {
-    const placeholder = document.createTextNode("");
-    el.insertBefore(placeholder, prevChild);
-    stack.unshift({ prev: placeholder, next: child, parent: el });
+    const placeholder2 = document.createTextNode("");
+    el.insertBefore(placeholder2, prevChild);
+    stack.unshift({ prev: placeholder2, next: child, parent: el });
     return prevChild;
   }
   if (!keyedChild || keyedChild === prevChild) {
@@ -3918,9 +3974,6 @@ function from_unix_milli(unix_ts) {
 function to_unix_milli(date2) {
   return to_unix_seconds(date2) * 1e3;
 }
-function to_unix_micro(date2) {
-  return date_to_unix_micro(date2);
-}
 
 // build/dev/javascript/gtempo/tempo/time.mjs
 function from_unix_milli2(unix_ts) {
@@ -3962,23 +4015,6 @@ function to_unix_milli2(datetime2) {
     1e3
   );
 }
-function to_unix_micro2(datetime2) {
-  let utc_dt = (() => {
-    let _pipe = datetime2;
-    return apply_offset(_pipe);
-  })();
-  return to_unix_micro(
-    (() => {
-      let _pipe = utc_dt;
-      return naive_datetime_get_date(_pipe);
-    })()
-  ) + time_to_microseconds(
-    (() => {
-      let _pipe = utc_dt;
-      return naive_datetime_get_time(_pipe);
-    })()
-  );
-}
 
 // build/dev/javascript/gtempo/tempo/instant.mjs
 function now3() {
@@ -4015,6 +4051,9 @@ function button(attrs, children2) {
 }
 function input(attrs) {
   return element("input", attrs, toList([]));
+}
+function textarea(attrs, content) {
+  return element("textarea", attrs, toList([text(content)]));
 }
 
 // build/dev/javascript/lustre/lustre/event.mjs
@@ -4083,21 +4122,128 @@ function on_ctrl_enter(msg) {
   );
 }
 
+// build/dev/javascript/lustre/lustre/element/svg.mjs
+var namespace = "http://www.w3.org/2000/svg";
+function svg(attrs, children2) {
+  return namespaced(namespace, "svg", attrs, children2);
+}
+function path(attrs) {
+  return namespaced(namespace, "path", attrs, toList([]));
+}
+
+// build/dev/javascript/o11a_common/lib/lucide.mjs
+function messages_square(attributes) {
+  return svg(
+    prepend(
+      attribute("stroke-linejoin", "round"),
+      prepend(
+        attribute("stroke-linecap", "round"),
+        prepend(
+          attribute("stroke-width", "2"),
+          prepend(
+            attribute("stroke", "currentColor"),
+            prepend(
+              attribute("fill", "none"),
+              prepend(
+                attribute("viewBox", "0 0 24 24"),
+                prepend(
+                  attribute("height", "24"),
+                  prepend(attribute("width", "24"), attributes)
+                )
+              )
+            )
+          )
+        )
+      )
+    ),
+    toList([
+      path(
+        toList([
+          attribute(
+            "d",
+            "M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"
+          )
+        ])
+      ),
+      path(
+        toList([
+          attribute("d", "M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1")
+        ])
+      )
+    ])
+  );
+}
+function pencil_ruler(attributes) {
+  return svg(
+    prepend(
+      attribute("stroke-linejoin", "round"),
+      prepend(
+        attribute("stroke-linecap", "round"),
+        prepend(
+          attribute("stroke-width", "2"),
+          prepend(
+            attribute("stroke", "currentColor"),
+            prepend(
+              attribute("fill", "none"),
+              prepend(
+                attribute("viewBox", "0 0 24 24"),
+                prepend(
+                  attribute("height", "24"),
+                  prepend(attribute("width", "24"), attributes)
+                )
+              )
+            )
+          )
+        )
+      )
+    ),
+    toList([
+      path(
+        toList([
+          attribute(
+            "d",
+            "M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"
+          )
+        ])
+      ),
+      path(toList([attribute("d", "m8 6 2-2")])),
+      path(toList([attribute("d", "m18 16 2-2")])),
+      path(
+        toList([
+          attribute(
+            "d",
+            "m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"
+          )
+        ])
+      ),
+      path(
+        toList([
+          attribute(
+            "d",
+            "M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+          )
+        ])
+      ),
+      path(toList([attribute("d", "m15 5 4 4")]))
+    ])
+  );
+}
+
 // build/dev/javascript/o11a_common/o11a/note.mjs
 var Note = class extends CustomType {
-  constructor(note_id, parent_id, significance, user_id, message, expanded_message, time2, edited) {
+  constructor(note_id, parent_id, significance, user_name, message, expanded_message, time2, edited) {
     super();
     this.note_id = note_id;
     this.parent_id = parent_id;
     this.significance = significance;
-    this.user_id = user_id;
+    this.user_name = user_name;
     this.message = message;
     this.expanded_message = expanded_message;
     this.time = time2;
     this.edited = edited;
   }
 };
-var Regular = class extends CustomType {
+var Comment = class extends CustomType {
 };
 var Question = class extends CustomType {
 };
@@ -4116,7 +4262,7 @@ var FindingRejection = class extends CustomType {
 var DevelperQuestion = class extends CustomType {
 };
 function note_significance_to_int(note_significance) {
-  if (note_significance instanceof Regular) {
+  if (note_significance instanceof Comment) {
     return 1;
   } else if (note_significance instanceof Question) {
     return 2;
@@ -4136,9 +4282,71 @@ function note_significance_to_int(note_significance) {
     return 9;
   }
 }
+function significance_to_string(note_significance, thread_notes) {
+  if (note_significance instanceof Comment) {
+    return new None();
+  } else if (note_significance instanceof Question) {
+    let $ = find2(
+      thread_notes,
+      (thread_note) => {
+        return isEqual(thread_note.significance, new Answer());
+      }
+    );
+    if ($.isOk()) {
+      return new Some("Answered Question");
+    } else {
+      return new Some("Unanswered Question");
+    }
+  } else if (note_significance instanceof Answer) {
+    return new Some("Answer");
+  } else if (note_significance instanceof ToDo) {
+    let $ = find2(
+      thread_notes,
+      (thread_note) => {
+        return isEqual(thread_note.significance, new ToDoDone());
+      }
+    );
+    if ($.isOk()) {
+      return new Some("Incomplete ToDo");
+    } else {
+      return new Some("Complete ToDo");
+    }
+  } else if (note_significance instanceof ToDoDone) {
+    return new Some("ToDo Completion");
+  } else if (note_significance instanceof FindingLead) {
+    return new Some("Finding Lead");
+  } else if (note_significance instanceof FindingComfirmation) {
+    let $ = find_map(
+      thread_notes,
+      (thread_note) => {
+        let $1 = thread_note.significance;
+        if ($1 instanceof FindingRejection) {
+          return new Ok(new FindingRejection());
+        } else if ($1 instanceof FindingComfirmation) {
+          return new Ok(new FindingComfirmation());
+        } else {
+          return new Error(void 0);
+        }
+      }
+    );
+    if ($.isOk() && $[0] instanceof FindingRejection) {
+      return new Some("Rejected Finding");
+    } else if ($.isOk() && $[0] instanceof FindingComfirmation) {
+      return new Some("Confirmed Finding");
+    } else if ($.isOk()) {
+      return new Some("Unconfirmed Finding");
+    } else {
+      return new Some("Unconfirmed Finding");
+    }
+  } else if (note_significance instanceof FindingRejection) {
+    return new Some("Finding Rejection");
+  } else {
+    return new Some("Developer Question");
+  }
+}
 function note_significance_from_int(note_significance) {
   if (note_significance === 1) {
-    return new Regular();
+    return new Comment();
   } else if (note_significance === 2) {
     return new Question();
   } else if (note_significance === 3) {
@@ -4159,7 +4367,7 @@ function note_significance_from_int(note_significance) {
     throw makeError(
       "panic",
       "o11a/note",
-      67,
+      112,
       "note_significance_from_int",
       "Invalid note significance found",
       {}
@@ -4180,7 +4388,7 @@ function encode_note(note) {
           })()
         )
       ],
-      ["user_id", int3(note.user_id)],
+      ["user_name", string4(note.user_name)],
       ["message", string4(note.message)],
       ["expanded_message", nullable(note.expanded_message, string4)],
       [
@@ -4210,9 +4418,9 @@ function note_decoder() {
             int2,
             (significance) => {
               return field2(
-                "user_id",
-                int2,
-                (user_id) => {
+                "user_name",
+                string3,
+                (user_name) => {
                   return field2(
                     "message",
                     string3,
@@ -4233,7 +4441,7 @@ function note_decoder() {
                                     note_id,
                                     parent_id,
                                     note_significance_from_int(significance),
-                                    user_id,
+                                    user_name,
                                     message,
                                     expanded_message,
                                     from_unix_milli3(time2),
@@ -4294,13 +4502,15 @@ function decode_structured_notes(notes) {
 
 // build/dev/javascript/o11a_common/o11a/user_interface/line_notes.mjs
 var Model2 = class extends CustomType {
-  constructor(user_id, line_id, notes, current_note_draft, active_thread) {
+  constructor(user_name, line_id, notes, current_note_draft, active_thread, show_expanded_message_box, current_expanded_message_draft) {
     super();
-    this.user_id = user_id;
+    this.user_name = user_name;
     this.line_id = line_id;
     this.notes = notes;
     this.current_note_draft = current_note_draft;
     this.active_thread = active_thread;
+    this.show_expanded_message_box = show_expanded_message_box;
+    this.current_expanded_message_draft = current_expanded_message_draft;
   }
 };
 var ActiveThread = class extends CustomType {
@@ -4345,9 +4555,29 @@ var UserSwitchedToThread = class extends CustomType {
 };
 var UserClosedThread = class extends CustomType {
 };
+var UserToggledExpandedMessageBox = class extends CustomType {
+  constructor(x0) {
+    super();
+    this[0] = x0;
+  }
+};
+var UserWroteExpandedMessage = class extends CustomType {
+  constructor(x0) {
+    super();
+    this[0] = x0;
+  }
+};
 function init2(_) {
   return [
-    new Model2(0, "", new_map(), "", new None()),
+    new Model2(
+      "user01",
+      "",
+      new_map(),
+      "",
+      new None(),
+      false,
+      new None()
+    ),
     none()
   ];
 }
@@ -4360,6 +4590,59 @@ function get_current_thread_id(model) {
     return model.line_id;
   }
 }
+function significance_badge_view(model, note) {
+  let $ = significance_to_string(
+    note.significance,
+    (() => {
+      let _pipe = map_get(model.notes, note.note_id);
+      return unwrap2(_pipe, toList([]));
+    })()
+  );
+  if ($ instanceof Some) {
+    let significance = $[0];
+    return span(
+      toList([class$("significance-badge")]),
+      toList([text2(significance)])
+    );
+  } else {
+    return fragment(toList([]));
+  }
+}
+function classify_message(message, is_thread_open) {
+  if (!is_thread_open) {
+    if (message.startsWith("todo ")) {
+      let rest = message.slice(5);
+      return [new ToDo(), rest];
+    } else if (message.startsWith("? ")) {
+      let rest = message.slice(2);
+      return [new Question(), rest];
+    } else if (message.startsWith("! ")) {
+      let rest = message.slice(2);
+      return [new FindingLead(), rest];
+    } else if (message.startsWith("@dev ")) {
+      let rest = message.slice(5);
+      return [new DevelperQuestion(), rest];
+    } else {
+      return [new Comment(), message];
+    }
+  } else {
+    if (message.startsWith("done ")) {
+      let rest = message.slice(5);
+      return [new ToDoDone(), rest];
+    } else if (message.startsWith(": ")) {
+      let rest = message.slice(2);
+      return [new Answer(), rest];
+    } else if (message.startsWith(". ")) {
+      let rest = message.slice(2);
+      return [new FindingRejection(), rest];
+    } else if (message.startsWith("!! ")) {
+      let rest = message.slice(3);
+      return [new FindingComfirmation(), rest];
+    } else {
+      return [new Comment(), message];
+    }
+  }
+}
 var component_name = "line-notes";
 var user_submitted_note_event = "user-submitted-line-note";
 function update(model, msg) {
@@ -4369,11 +4652,13 @@ function update(model, msg) {
       (() => {
         let _record = model;
         return new Model2(
-          _record.user_id,
+          _record.user_name,
           line_id,
           _record.notes,
           _record.current_note_draft,
-          _record.active_thread
+          _record.active_thread,
+          _record.show_expanded_message_box,
+          _record.current_expanded_message_draft
         );
       })(),
       none()
@@ -4384,11 +4669,13 @@ function update(model, msg) {
       (() => {
         let _record = model;
         return new Model2(
-          _record.user_id,
+          _record.user_name,
           _record.line_id,
           from_list(notes),
           _record.current_note_draft,
-          _record.active_thread
+          _record.active_thread,
+          _record.show_expanded_message_box,
+          _record.current_expanded_message_draft
         );
       })(),
       none()
@@ -4399,11 +4686,13 @@ function update(model, msg) {
       (() => {
         let _record = model;
         return new Model2(
-          _record.user_id,
+          _record.user_name,
           _record.line_id,
           _record.notes,
           draft,
-          _record.active_thread
+          _record.active_thread,
+          _record.show_expanded_message_box,
+          _record.current_expanded_message_draft
         );
       })(),
       none()
@@ -4414,131 +4703,41 @@ function update(model, msg) {
       let _pipe = now3();
       return as_utc_datetime(_pipe);
     })();
-    let note_id = to_string(model.user_id) + "-" + (() => {
+    let note_id = model.user_name + (() => {
       let _pipe = now4;
-      let _pipe$1 = to_unix_micro2(_pipe);
+      let _pipe$1 = to_unix_milli2(_pipe);
       return to_string(_pipe$1);
     })();
+    let $ = classify_message(
+      model.current_note_draft,
+      is_some(model.active_thread)
+    );
+    let significance = $[0];
+    let message = $[1];
     let note = new Note(
       note_id,
       parent_id,
-      new Regular(),
-      model.user_id,
-      model.current_note_draft,
-      new None(),
+      significance,
+      model.user_name,
+      message,
+      model.current_expanded_message_draft,
       now4,
       false
     );
-    let note$1 = (() => {
-      let $ = model.active_thread;
-      let $1 = model.current_note_draft;
-      if ($ instanceof None && $1.startsWith("todo ")) {
-        let rest = $1.slice(5);
-        let _record = note;
-        return new Note(
-          _record.note_id,
-          _record.parent_id,
-          new ToDo(),
-          _record.user_id,
-          rest,
-          _record.expanded_message,
-          _record.time,
-          _record.edited
-        );
-      } else if ($ instanceof Some && $1.startsWith("done ")) {
-        let rest = $1.slice(5);
-        let _record = note;
-        return new Note(
-          _record.note_id,
-          _record.parent_id,
-          new ToDoDone(),
-          _record.user_id,
-          rest,
-          _record.expanded_message,
-          _record.time,
-          _record.edited
-        );
-      } else if ($ instanceof None && $1.startsWith("? ")) {
-        let rest = $1.slice(2);
-        let _record = note;
-        return new Note(
-          _record.note_id,
-          _record.parent_id,
-          new Question(),
-          _record.user_id,
-          rest,
-          _record.expanded_message,
-          _record.time,
-          _record.edited
-        );
-      } else if ($ instanceof Some && $1.startsWith(", ")) {
-        let rest = $1.slice(2);
-        let _record = note;
-        return new Note(
-          _record.note_id,
-          _record.parent_id,
-          new Answer(),
-          _record.user_id,
-          rest,
-          _record.expanded_message,
-          _record.time,
-          _record.edited
-        );
-      } else if ($ instanceof None && $1.startsWith("! ")) {
-        let rest = $1.slice(2);
-        let _record = note;
-        return new Note(
-          _record.note_id,
-          _record.parent_id,
-          new FindingLead(),
-          _record.user_id,
-          rest,
-          _record.expanded_message,
-          _record.time,
-          _record.edited
-        );
-      } else if ($ instanceof Some && $1.startsWith(". ")) {
-        let rest = $1.slice(2);
-        let _record = note;
-        return new Note(
-          _record.note_id,
-          _record.parent_id,
-          new FindingRejection(),
-          _record.user_id,
-          rest,
-          _record.expanded_message,
-          _record.time,
-          _record.edited
-        );
-      } else if ($ instanceof Some && $1.startsWith("!! ")) {
-        let rest = $1.slice(3);
-        let _record = note;
-        return new Note(
-          _record.note_id,
-          _record.parent_id,
-          new FindingComfirmation(),
-          _record.user_id,
-          rest,
-          _record.expanded_message,
-          _record.time,
-          _record.edited
-        );
-      } else {
-        return note;
-      }
-    })();
     return [
       (() => {
         let _record = model;
         return new Model2(
-          _record.user_id,
+          _record.user_name,
           _record.line_id,
           _record.notes,
           "",
-          _record.active_thread
+          _record.active_thread,
+          false,
+          new None()
         );
       })(),
-      emit2(user_submitted_note_event, encode_note(note$1))
+      emit2(user_submitted_note_event, encode_note(note))
     ];
   } else if (msg instanceof UserSwitchedToThread) {
     let new_thread_id = msg.new_thread_id;
@@ -4547,7 +4746,7 @@ function update(model, msg) {
       (() => {
         let _record = model;
         return new Model2(
-          _record.user_id,
+          _record.user_name,
           _record.line_id,
           _record.notes,
           _record.current_note_draft,
@@ -4558,17 +4757,19 @@ function update(model, msg) {
               get_current_thread_id(model),
               model.active_thread
             )
-          )
+          ),
+          _record.show_expanded_message_box,
+          _record.current_expanded_message_draft
         );
       })(),
       none()
     ];
-  } else {
+  } else if (msg instanceof UserClosedThread) {
     return [
       (() => {
         let _record = model;
         return new Model2(
-          _record.user_id,
+          _record.user_name,
           _record.line_id,
           _record.notes,
           _record.current_note_draft,
@@ -4581,40 +4782,85 @@ function update(model, msg) {
               }
             );
             return flatten(_pipe$1);
-          })()
+          })(),
+          _record.show_expanded_message_box,
+          _record.current_expanded_message_draft
+        );
+      })(),
+      none()
+    ];
+  } else if (msg instanceof UserToggledExpandedMessageBox) {
+    let show_expanded_message_box = msg[0];
+    return [
+      (() => {
+        let _record = model;
+        return new Model2(
+          _record.user_name,
+          _record.line_id,
+          _record.notes,
+          _record.current_note_draft,
+          _record.active_thread,
+          show_expanded_message_box,
+          _record.current_expanded_message_draft
+        );
+      })(),
+      none()
+    ];
+  } else {
+    let expanded_message = msg[0];
+    return [
+      (() => {
+        let _record = model;
+        return new Model2(
+          _record.user_name,
+          _record.line_id,
+          _record.notes,
+          _record.current_note_draft,
+          _record.active_thread,
+          _record.show_expanded_message_box,
+          new Some(expanded_message)
         );
       })(),
       none()
     ];
   }
 }
-var component_style = "\n:host {\n  display: inline-block;\n}\n\n.new-thread-preview {\n  opacity: 0;\n}\n\n.new-thread-preview:hover {\n  opacity: 0.35;\n}\n\n.line-notes-list {\n  position: absolute;\n  z-index: 99;\n  bottom: 1.4rem;\n  left: 0rem;\n  width: 30rem;\n  text-wrap: wrap;\n  background-color: var(--overlay-background-color);;\n  border-radius: 6px;\n  border: var(--input-border-color) solid black;\n  visibility: hidden;\n  opacity: 0;\n  font-style: normal;\n}\n\n.loc:hover + .line-notes-list,\n.line-notes-list:hover,\n.line-notes-list:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\nbutton, input {\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border-color: var(--input-border-color);\n}\n";
+var component_style = "\n:host {\n  display: inline-block;\n}\n\n.new-thread-preview {\n  opacity: 0;\n}\n\n.new-thread-preview:hover {\n  opacity: 0.35;\n}\n\n.line-notes-list {\n  position: absolute;\n  z-index: 99;\n  bottom: 1.4rem;\n  left: 0rem;\n  width: 30rem;\n  text-wrap: wrap;\n  background-color: var(--overlay-background-color);;\n  border-radius: 6px;\n  border: var(--input-border-color) solid black;\n  visibility: visible;\n  opacity: 1;\n  font-style: normal;\n  user-select: text;\n  padding: 0.5rem;\n}\n\n.loc:hover + .line-notes-list,\n.line-notes-list:hover,\n.line-notes-list:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\nbutton, input {\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border-color: var(--input-border-color);\n}\n\n.line-notes-item-header {\n  display: flex;\n  justify-content: space-between;\n  margin-bottom: 0.2rem;\n}\n\n.line-notes-item-header-meta {\n  display: flex;\n  gap: 0.5rem;\n  align-items: start;\n}\n\n.line-notes-list p {\n  margin: 0;\n}\n\n.significance-badge {\n  border-radius: 4px;\n  padding: 0.25rem;\n  padding-bottom: 0.15rem;\n  font-size: 0.65rem;\n  border: 1px solid var(--input-border-color);\n}\n\n.thread-switch-button {\n  background-color: var(--overlay-background-color);\n  color: var(--text-color);\n  border: none;\n  border-radius: 4px;\n  margin-left: 0.5rem;\n  padding-top: 0.2rem;\n}\n\n.thread-switch-button:hover {\n  background-color: var(--input-background-color);\n}\n\n.thread-switch-button svg {\n  height: 1.25rem;\n  width: 1.25rem;\n}\n\n.line-notes-input-container {\n  display: flex;\n  gap: 0.35rem;\n  align-items: center;\n  justify-content: space-between;\n}\n\n.new-comment-button {\n  background-color: var(--overlay-background-color);\n  color: var(--text-color);\n  border: none;\n  border-radius: 4px;\n  padding-top: 0.25rem;\n}\n\n.new-comment-button:hover {\n  background-color: var(--input-background-color);\n}\n\n.new-comment-button svg {\n  height: 1.25rem;\n  width: 1.25rem;\n}\n\n.new-comment-input {\n  display: inline-block;\n  width: 100%;\n  border: none;\n  border-top: 1px solid var(--input-border-color);\n  border-radius: 4px;\n  flex-grow: 1;\n  padding: 0.3rem;\n  padding-left: .5rem;\n  font-size: 0.95rem;\n}\n\n.expanded-message-box {\n  position: absolute;\n  display: flex;\n  width: 140%;\n  left: 0;\n  padding: .5rem;\n  background-color: var(--overlay-background-color);\n  border-radius: 4px;\n  border: 1px solid var(--input-border-color);\n  height: 10rem;\n  margin-top: 1rem;\n}\n\n.expanded-message-box textarea {\n  flex-grow: 1;\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border: 1px solid var(--input-border-color);\n  border-radius: 4px;\n  padding: 0.3rem;\n  font-size: 0.95rem;\n}\n";
 function view(model) {
   let current_thread_id = get_current_thread_id(model);
   let current_notes = (() => {
     let _pipe = map_get(model.notes, current_thread_id);
-    return unwrap(_pipe, toList([]));
+    return unwrap2(_pipe, toList([]));
   })();
   let inline_comment_preview = (() => {
-    let _pipe = last(current_notes);
-    let _pipe$1 = map3(
-      _pipe,
+    let _pipe = map_get(model.notes, model.line_id);
+    let _pipe$1 = try$(_pipe, last);
+    let _pipe$2 = map3(
+      _pipe$1,
       (note) => {
         return span(
           toList([class$("loc faded code-extras")]),
           toList([
             text2(
               (() => {
-                let _pipe$12 = note.message;
-                return slice(_pipe$12, 0, 30);
+                let $ = string_length(note.message) > 40;
+                if ($) {
+                  return (() => {
+                    let _pipe$22 = note.message;
+                    return slice(_pipe$22, 0, 37);
+                  })() + "...";
+                } else {
+                  let _pipe$22 = note.message;
+                  return slice(_pipe$22, 0, 40);
+                }
               })()
             )
           ])
         );
       }
     );
-    return unwrap(
-      _pipe$1,
+    return unwrap2(
+      _pipe$2,
       span(
         toList([class$("loc code-extras new-thread-preview")]),
         toList([text2("Start new thread")])
@@ -4653,36 +4899,116 @@ function view(model) {
             map2(
               current_notes,
               (note) => {
-                return fragment(
+                return div(
+                  toList([class$("line-notes-item")]),
                   toList([
-                    p(
-                      toList([class$("line-notes-list-item")]),
-                      toList([text2(note.message)])
-                    ),
-                    button(
+                    div(
+                      toList([class$("line-notes-item-header")]),
                       toList([
-                        on_click(
-                          new UserSwitchedToThread(note.note_id, note)
+                        div(
+                          toList([
+                            class$("line-notes-item-header-meta")
+                          ]),
+                          toList([
+                            p(
+                              toList([]),
+                              toList([text2(note.user_name)])
+                            ),
+                            significance_badge_view(model, note)
+                          ])
+                        ),
+                        button(
+                          toList([
+                            class$("thread-switch-button"),
+                            on_click(
+                              new UserSwitchedToThread(note.note_id, note)
+                            )
+                          ]),
+                          toList([messages_square(toList([]))])
                         )
-                      ]),
-                      toList([text2("Switch to Thread")])
+                      ])
                     ),
-                    hr(toList([]))
+                    p(toList([]), toList([text2(note.message)])),
+                    hr(toList([])),
+                    (() => {
+                      let $ = note.expanded_message;
+                      if ($ instanceof Some) {
+                        let expanded_message = $[0];
+                        return p(
+                          toList([]),
+                          toList([text2(expanded_message)])
+                        );
+                      } else {
+                        return fragment(toList([]));
+                      }
+                    })()
                   ])
                 );
               }
             )
           ),
-          span(toList([]), toList([text2("Add a new comment: ")])),
-          input(
+          div(
+            toList([class$("line-notes-input-container")]),
             toList([
-              on_input((var0) => {
-                return new UserWroteNote(var0);
-              }),
-              on_ctrl_enter(new UserSubmittedNote(current_thread_id)),
-              value(model.current_note_draft)
+              button(
+                toList([
+                  class$("new-comment-button"),
+                  on_click(
+                    new UserToggledExpandedMessageBox(
+                      !model.show_expanded_message_box
+                    )
+                  )
+                ]),
+                toList([pencil_ruler(toList([]))])
+              ),
+              input(
+                toList([
+                  class$("new-comment-input"),
+                  placeholder("Add a new comment"),
+                  on_input((var0) => {
+                    return new UserWroteNote(var0);
+                  }),
+                  on_ctrl_enter(
+                    new UserSubmittedNote(current_thread_id)
+                  ),
+                  value(model.current_note_draft)
+                ])
+              )
             ])
-          )
+          ),
+          (() => {
+            let $ = model.show_expanded_message_box;
+            if ($) {
+              return div(
+                toList([class$("expanded-message-box")]),
+                toList([
+                  textarea(
+                    toList([
+                      class$("expanded-comment-input"),
+                      placeholder("Write an expanded message body"),
+                      on_input(
+                        (var0) => {
+                          return new UserWroteExpandedMessage(var0);
+                        }
+                      ),
+                      on_ctrl_enter(
+                        new UserSubmittedNote(current_thread_id)
+                      ),
+                      value(
+                        (() => {
+                          let _pipe = model.current_expanded_message_draft;
+                          return unwrap(_pipe, "");
+                        })()
+                      )
+                    ]),
+                    "Write an expanded message body ig"
+                  )
+                ])
+              );
+            } else {
+              return fragment(toList([]));
+            }
+          })()
         ])
       )
     ])
