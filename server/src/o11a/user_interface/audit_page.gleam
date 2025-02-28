@@ -193,7 +193,9 @@ pub fn style_code_tokens(line_text) {
 
   // First cut out the comments so they don't get any formatting
 
-  let assert Ok(comment_regex) = regexp.from_string("\\/\\/.*")
+  let assert Ok(comment_regex) = regexp.from_string(
+    "(?:\\/\\/.*|^\\s*\\/\\*\\*.*|^\\s*\\*.*|^\\s*\\*\\/.*|\\/\\*.*?\\*\\/)"
+  )
 
   let comments = regexp.scan(comment_regex, styled_line)
 
@@ -201,7 +203,7 @@ pub fn style_code_tokens(line_text) {
 
   let assert Ok(operator_regex) =
     regexp.from_string(
-      "\\+|\\-|\\*|(?!/)\\/(?!/)|\\={1,2}|\\<(?!span)|(?!span)\\>|\\&|\\|",
+      "\\+|\\-|\\*|(?!/)\\/(?!/)|\\={1,2}|\\<(?!span)|(?!span)\\>|\\&|\\!|\\|",
     )
 
   let styled_line =
@@ -212,12 +214,21 @@ pub fn style_code_tokens(line_text) {
 
   let assert Ok(keyword_regex) =
     regexp.from_string(
-      "\\b(contract|fallback|using|for|function|if|else|returns|return|memory|public|private|external|view|pure|payable|internal|import|struct|storage|is)\\b",
+      "\\b(constructor|contract|fallback|override|mapping|immutable|interface|constant|pragma|solidity|event|error|require|revert|using|for|emit|function|if|else|returns|return|memory|calldata|public|private|external|view|pure|payable|internal|import|enum|struct|storage|is)\\b",
     )
 
   let styled_line =
     regexp.match_map(keyword_regex, styled_line, fn(match) {
       html.span([attribute.class("keyword")], [html.text(match.content)])
+      |> element.to_string
+    })
+
+  let assert Ok(global_variable_regex) =
+    regexp.from_string("\\b(super|this|msg\\.sender|msg\\.value|tx\\.origin|block\\.timestamp|block\\.chainid)\\b")
+
+  let styled_line =
+    regexp.match_map(global_variable_regex, styled_line, fn(match) {
+      html.span([attribute.class("global-variable")], [html.text(match.content)])
       |> element.to_string
     })
 
@@ -249,7 +260,19 @@ pub fn style_code_tokens(line_text) {
       }
     })
 
-  let assert Ok(number_regex) = regexp.from_string("\\b\\d+")
+  let assert Ok(type_regex) =
+    regexp.from_string("\\b(address|bool|bytes|string|int|uint|int\\d+|uint\\d+)\\b")
+
+  let styled_line =
+    regexp.match_map(type_regex, styled_line, fn(match) {
+      html.span([attribute.class("type")], [html.text(match.content)])
+      |> element.to_string
+    })
+
+  let assert Ok(number_regex) =
+    regexp.from_string(
+      "(?<!\\w)\\d+(?:[_ \\.]\\d+)*(?:\\s+(?:days|ether|finney|wei))?(?!\\w)",
+    )
 
   let styled_line =
     regexp.match_map(number_regex, styled_line, fn(match) {
@@ -257,12 +280,12 @@ pub fn style_code_tokens(line_text) {
       |> element.to_string
     })
 
-  let assert Ok(type_regex) =
-    regexp.from_string("\\b(address|bool|bytes|string|int\\d+|uint\\d+)\\b")
+  let assert Ok(literal_regex) =
+    regexp.from_string("\\b(true|false)\\b")
 
   let styled_line =
-    regexp.match_map(type_regex, styled_line, fn(match) {
-      html.span([attribute.class("type")], [html.text(match.content)])
+    regexp.match_map(literal_regex, styled_line, fn(match) {
+      html.span([attribute.class("number")], [html.text(match.content)])
       |> element.to_string
     })
 

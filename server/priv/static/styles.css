@@ -14,6 +14,7 @@
   --type-color: #4acad3;
   --contract-color: #e5c07b;
   --variable-color: #abb2bf;
+  --global-variable-color: #dd8087;
 }
 
 body {
@@ -65,6 +66,10 @@ body {
 
 .contract {
   color: var(--contract-color);
+}
+
+.global-variable {
+  color: var(--global-variable-color);
 }
 
 .code-snippet {
