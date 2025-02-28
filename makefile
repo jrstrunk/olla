@@ -3,7 +3,7 @@ SUBDIRS := $(wildcard */)
 
 .PHONY: all
 all:
-	@echo "Available commands: run, dev, test, update, format, clean, add <package>, remove <package>"
+	@echo "Available commands: run, dev, test, update, format, clean, build, add <package>, remove <package>"
 
 .PHONY: run
 run:
@@ -39,6 +39,12 @@ update:
 format:
 	@for dir in $(SUBDIRS); do \
 		(cd $$dir && gleam format); \
+	done
+
+.PHONY: build
+build:
+	@for dir in $(SUBDIRS); do \
+		(cd $$dir && gleam build); \
 	done
 
 .PHONY: add
