@@ -117,7 +117,7 @@ pub fn get_structured_notes(
 ) -> List(#(String, List(note.Note))) {
   let notes =
     pcd_dict.get(discussion.notes, parent_id)
-    |> list.sort(fn(a, b) { datetime.compare(a.time, b.time) })
+    |> list.sort(fn(a, b) { datetime.compare(b.time, a.time) })
 
   case notes {
     [] -> []
