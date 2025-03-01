@@ -1,6 +1,7 @@
 import filepath
 import gleam/dict
 import gleam/list
+import gleam/string
 import lib/persistent_concurrent_duplicate_dict as pcd_dict
 import lib/server_componentx
 import lustre
@@ -50,12 +51,7 @@ const style = "
 "
 
 fn view(model: Model) -> element.Element(Msg) {
-  let container_styles = [
-    #("display", "flex"),
-    #("flex-direction", "column"),
-    #("align-items", "center"),
-    #("padding-top", "4rem"),
-  ]
+  let container_styles = [#("margin-left", "2rem")]
 
   let #(
     incomplete_todos,
@@ -68,13 +64,18 @@ fn view(model: Model) -> element.Element(Msg) {
     html.style([], style),
     html.div([attribute.style([#("width", "40rem")])], [
       server_componentx.hide_skeleton(),
-      html.h2([], [html.text("Incomplete ToDos")]),
+      html.h1([], [
+        html.text(
+          model.discussion.audit_name |> string.capitalise <> " audit dashboard",
+        ),
+      ]),
+      html.h2([], [html.text("Incomplete todos")]),
       notes_view(incomplete_todos),
-      html.h2([], [html.text("Unanswered Questions")]),
+      html.h2([], [html.text("Unanswered questions")]),
       notes_view(unanswered_questions),
-      html.h2([], [html.text("Unconfirmed Findings")]),
+      html.h2([], [html.text("Unconfirmed findings")]),
       notes_view(unconfirmed_findings),
-      html.h2([], [html.text("Confirmed Findings")]),
+      html.h2([], [html.text("Confirmed findings")]),
       notes_view(confirmed_findings),
     ]),
   ])

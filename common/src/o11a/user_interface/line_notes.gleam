@@ -517,7 +517,7 @@ fn view(model: Model) -> element.Element(Msg) {
             ),
             case model.active_thread {
               Some(active_thread) ->
-                element.fragment([
+                html.div([], [
                   html.button([event.on_click(UserClosedThread)], [
                     html.text("Close Thread"),
                   ]),
