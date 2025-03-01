@@ -3,7 +3,6 @@ import gleam/dict
 import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/int
-import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
@@ -239,17 +238,37 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 }
 
 const component_style = "
+/* Duplicated from the main styles.css bleh */
+.code-extras {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  font-style: italic;
+  color: var(--comment-color);
+}
+
 :host {
   display: inline-block;
+}
+
+.line-notes-component-container {
+  position: relative;
 }
 
 .new-thread-preview {
   opacity: 0;
 }
 
+.new-thread-preview:hover,
+.line-notes-component-container:focus .new-thread-preview {
+  opacity: 1;
+}
+
 .line-notes-list {
   position: absolute;
-  z-index: 3;
   bottom: 1.4rem;
   left: 0rem;
   width: 30rem;
@@ -258,7 +277,6 @@ const component_style = "
   border-radius: 6px;
   border: var(--input-border-color) solid black;
   visibility: hidden;
-  opacity: 0;
   font-style: normal;
   user-select: text;
 }
@@ -271,17 +289,12 @@ const component_style = "
   overflow: auto;
 }
 
-.new-thread-preview:hover,
-.line-notes-component-container:focus .new-thread-preview {
-  opacity: 0.35;
-}
-
 .loc:hover + .line-notes-list,
 .line-notes-list:hover,
 .line-notes-list:focus-within,
-.line-notes-component-container:focus .line-notes-list {
+.line-notes-component-container:focus .line-notes-list,
+.line-notes-component-container:hover .line-notes-list {
   visibility: visible;
-  opacity: 1;
 }
 
 button, input {
@@ -377,8 +390,8 @@ button svg {
   border-radius: 6px;
   border: 1px solid var(--input-border-color);
   height: 10rem;
-  margin-top: 1rem;
-  z-index: 4;
+  margin-top: 0.5rem;
+  z-index: 3;
 }
 
 .expanded-message-box textarea {
@@ -402,7 +415,7 @@ fn view(model: Model) -> element.Element(Msg) {
     dict.get(model.notes, model.line_id)
     |> result.try(list.last)
     |> result.map(fn(note) {
-      html.span([attribute.class("loc faded code-extras")], [
+      html.span([attribute.class("code-extras fade-in")], [
         html.text(case string.length(note.message) > 40 {
           True -> note.message |> string.slice(0, length: 37) <> "..."
           False -> note.message |> string.slice(0, length: 40)
@@ -410,7 +423,7 @@ fn view(model: Model) -> element.Element(Msg) {
       ])
     })
     |> result.unwrap(
-      html.span([attribute.class("loc code-extras new-thread-preview")], [
+      html.span([attribute.class("code-extras new-thread-preview")], [
         html.text("Start new thread"),
       ]),
     )

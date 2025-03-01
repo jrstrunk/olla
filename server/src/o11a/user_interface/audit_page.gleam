@@ -125,7 +125,7 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
 
   use <- given.that(is_skeleton, return: fn() {
     html.p([attribute.class("loc"), attribute.id(line_tag)], [
-      html.span([attribute.class("line-number faded code-extras")], [
+      html.span([attribute.class("line-number code-extras")], [
         html.text(line_number_text),
       ]),
       html.span(
@@ -137,7 +137,7 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
 
   use <- given.that(line_text == "", return: fn() {
     html.p([attribute.class("loc"), attribute.id(line_tag)], [
-      html.span([attribute.class("line-number faded code-extras")], [
+      html.span([attribute.class("line-number code-extras")], [
         html.text(line_number_text),
       ]),
       html.text(" "),
@@ -145,13 +145,13 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
   })
 
   html.p([attribute.class("loc"), attribute.id(line_tag)], [
-    html.span([attribute.class("line-number faded code-extras")], [
+    html.span([attribute.class("line-number code-extras")], [
       html.text(line_number_text),
     ]),
     html.span([attribute.attribute("dangerous-unescaped-html", line_text)], []),
     html.span(
       [
-        attribute.class("inline-comment fade-in code-extras"),
+        attribute.class("inline-comment"),
         attribute.style([
           #("animation-delay", int.to_string(line_number * 4) <> "ms"),
         ]),

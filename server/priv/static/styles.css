@@ -76,12 +76,6 @@ body {
   padding-left: 0;
 }
 
-.code-snippet-hover {
-  position: absolute;
-  width: 100%;
-  z-index: -1;
-}
-
 .code-extras {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
@@ -90,10 +84,7 @@ body {
   -ms-user-select: none;
   user-select: none;
   font-style: italic;
-}
-
-.faded {
-  opacity: 0.35;
+  color: var(--comment-color);
 }
 
 .fade-in {
@@ -123,21 +114,5 @@ body {
 }
 
 .inline-comment {
-  display: inline;
   margin-left: 2.5rem;
-  white-space: nowrap;
-  overflow: hidden;
-  position: relative;
 }
-
-/* .inline-comment::after {
-    content: "";
-    position: absolute;
-    right: 0;
-    top: 0;
-    width: 2.5rem;
-    height: 100%;
-    background: linear-gradient(to right, transparent, white);
-    pointer-events: none;
-    z-index: 2;
-  } */
