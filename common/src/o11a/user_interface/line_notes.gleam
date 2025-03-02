@@ -260,11 +260,20 @@ const component_style = "
 
 .new-thread-preview {
   opacity: 0;
+  transition-property: opacity;
+  transition-duration: 75ms;
+  transition-timing-function: ease-in;
+  transition-delay: 50ms;
 }
 
 .new-thread-preview:hover,
+.line-notes-component-container:hover .new-thread-preview,
 .line-notes-component-container:focus .new-thread-preview {
   opacity: 1;
+  transition-property: opacity;
+  transition-duration: 75ms;
+  transition-timing-function: ease-in;
+  transition-delay: 50ms;
 }
 
 .line-notes-list {
@@ -279,6 +288,25 @@ const component_style = "
   visibility: hidden;
   font-style: normal;
   user-select: text;
+
+  opacity: 0;
+  transition-property: visibility, opacity;
+  transition-duration: 0s, 75ms;
+  transition-timing-function: linear, ease-in;
+  transition-delay: 0.3s, 50ms;
+}
+
+.loc:hover + .line-notes-list,
+.line-notes-list:hover,
+.line-notes-list:focus-within,
+.line-notes-component-container:hover .line-notes-list,
+.line-notes-component-container:focus .line-notes-list {
+  visibility: visible;
+  opacity: 1;
+  transition-property: opacity;
+  transition-duration: 75ms;
+  transition-timing-function: ease-in;
+  transition-delay: 50ms;
 }
 
 .line-notes-list-column {
@@ -287,14 +315,6 @@ const component_style = "
   padding: 0.5rem;
   max-height: 30rem;
   overflow: auto;
-}
-
-.loc:hover + .line-notes-list,
-.line-notes-list:hover,
-.line-notes-list:focus-within,
-.line-notes-component-container:focus .line-notes-list,
-.line-notes-component-container:hover .line-notes-list {
-  visibility: visible;
 }
 
 button, input {
@@ -415,12 +435,20 @@ fn view(model: Model) -> element.Element(Msg) {
     dict.get(model.notes, model.line_id)
     |> result.try(list.last)
     |> result.map(fn(note) {
-      html.span([attribute.class("code-extras fade-in")], [
-        html.text(case string.length(note.message) > 40 {
-          True -> note.message |> string.slice(0, length: 37) <> "..."
-          False -> note.message |> string.slice(0, length: 40)
-        }),
-      ])
+      html.span(
+        [
+          attribute.class("code-extras fade-in"),
+          attribute.style([
+            #("animation-delay", int.to_string(model.line_number * 4) <> "ms"),
+          ]),
+        ],
+        [
+          html.text(case string.length(note.message) > 40 {
+            True -> note.message |> string.slice(0, length: 37) <> "..."
+            False -> note.message |> string.slice(0, length: 40)
+          }),
+        ],
+      )
     })
     |> result.unwrap(
       html.span([attribute.class("code-extras new-thread-preview")], [

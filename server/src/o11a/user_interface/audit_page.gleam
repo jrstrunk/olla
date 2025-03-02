@@ -149,33 +149,25 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
       html.text(line_number_text),
     ]),
     html.span([attribute.attribute("dangerous-unescaped-html", line_text)], []),
-    html.span(
-      [
-        attribute.class("inline-comment"),
-        attribute.style([
-          #("animation-delay", int.to_string(line_number * 4) <> "ms"),
-        ]),
-      ],
-      [
-        element.element(
-          line_notes.component_name,
-          [
-            attribute.attribute(
-              "line-notes",
-              discussion.get_structured_notes(model.discussion, line_id)
-                |> list.map(note.encode_structured_notes)
-                |> json.preprocessed_array
-                |> json.to_string,
-            ),
-            attribute.attribute("line-id", line_id),
-            attribute.attribute("line-number", line_number_text),
-            on_user_submitted_line_note(UserSubmittedNote),
-            server_component.include(["detail"]),
-          ],
-          [],
-        ),
-      ],
-    ),
+    html.span([attribute.class("inline-comment")], [
+      element.element(
+        line_notes.component_name,
+        [
+          attribute.attribute(
+            "line-notes",
+            discussion.get_structured_notes(model.discussion, line_id)
+              |> list.map(note.encode_structured_notes)
+              |> json.preprocessed_array
+              |> json.to_string,
+          ),
+          attribute.attribute("line-id", line_id),
+          attribute.attribute("line-number", line_number_text),
+          on_user_submitted_line_note(UserSubmittedNote),
+          server_component.include(["detail"]),
+        ],
+        [],
+      ),
+    ]),
   ])
 }
 
