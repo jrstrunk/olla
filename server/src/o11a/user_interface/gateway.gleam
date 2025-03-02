@@ -7,10 +7,20 @@ import lib/concurrent_dict
 import lib/snagx
 import lustre
 import o11a/config
+import o11a/server/audit_metadata
 import o11a/server/discussion
 import o11a/user_interface/audit_dashboard
 import o11a/user_interface/audit_page
 import snag
+
+pub type Gateway {
+  Gateway(
+    page_gateway: PageGateway,
+    dashboard_gateway: DashboardGateway,
+    discussion_gateway: DiscussionGateway,
+    audit_metadata_gateway: AuditMetaDataGateway,
+  )
+}
 
 pub type PageGateway =
   concurrent_dict.ConcurrentDict(
@@ -27,22 +37,27 @@ pub type DashboardGateway =
 pub type DiscussionGateway =
   concurrent_dict.ConcurrentDict(String, discussion.Discussion)
 
-pub fn start_discussion_gateway() -> Result(
-  #(DashboardGateway, PageGateway, DiscussionGateway),
-  snag.Snag,
-) {
-  let dashboard_actors = concurrent_dict.new()
-  let page_actors = concurrent_dict.new()
-  let discussions = concurrent_dict.new()
+pub type AuditMetaDataGateway =
+  concurrent_dict.ConcurrentDict(String, audit_metadata.AuditMetaData)
+
+pub fn start_gateway() -> Result(Gateway, snag.Snag) {
+  let dashboard_gateway = concurrent_dict.new()
+  let page_gateway = concurrent_dict.new()
+  let discussion_gateway = concurrent_dict.new()
+  let audit_metadata_gateway = concurrent_dict.new()
 
   let page_paths = config.get_all_audit_page_paths()
 
   use _ <- result.map(
     dict.keys(page_paths)
     |> list.map(fn(audit_name) {
+      let audit_metadata = audit_metadata.gather_metadata(for: audit_name)
+
+      concurrent_dict.insert(audit_metadata_gateway, audit_name, audit_metadata)
+
       use discussion <- result.try(discussion.get_audit_discussion(audit_name))
 
-      concurrent_dict.insert(discussions, audit_name, discussion)
+      concurrent_dict.insert(discussion_gateway, audit_name, discussion)
 
       use audit_dashboard_actor <- result.try(
         lustre.start_actor(
@@ -53,7 +68,7 @@ pub fn start_discussion_gateway() -> Result(
       )
 
       concurrent_dict.insert(
-        dashboard_actors,
+        dashboard_gateway,
         audit_name,
         audit_dashboard_actor,
       )
@@ -72,7 +87,7 @@ pub fn start_discussion_gateway() -> Result(
           |> snag.map_error(string.inspect),
         )
 
-        concurrent_dict.insert(page_actors, page_path, actor)
+        concurrent_dict.insert(page_gateway, page_path, actor)
       })
       |> snagx.collect_errors
     })
@@ -80,7 +95,12 @@ pub fn start_discussion_gateway() -> Result(
     |> result.map(list.flatten),
   )
 
-  #(dashboard_actors, page_actors, discussions)
+  Gateway(
+    dashboard_gateway:,
+    page_gateway:,
+    discussion_gateway:,
+    audit_metadata_gateway:,
+  )
 }
 
 pub fn get_page_actor(discussion_gateway: PageGateway, for page_path) {
@@ -94,4 +114,18 @@ pub fn get_dashboard_actor(discussion_gateway: DashboardGateway, for audit_name)
 pub fn get_discussion(discussion_gateway: DiscussionGateway, for audit_name) {
   concurrent_dict.get(discussion_gateway, audit_name)
   |> result.unwrap(discussion.empty_discussion(audit_name))
+}
+
+pub fn get_audit_metadata(
+  audit_metadata_gateway: AuditMetaDataGateway,
+  for audit_name,
+) {
+  concurrent_dict.get(audit_metadata_gateway, audit_name)
+  |> result.unwrap(
+    audit_metadata.AuditMetaData(
+      audit_name: audit_name,
+      audit_formatted_name: audit_name,
+      in_scope_files: [],
+    ),
+  )
 }

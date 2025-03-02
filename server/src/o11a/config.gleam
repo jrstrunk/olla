@@ -1,8 +1,6 @@
 import filepath
-import gleam/dict
 import gleam/erlang
 import gleam/list
-import gleam/result
 import gleam/string
 import simplifile
 
@@ -92,29 +90,4 @@ pub fn get_notes_persist_path(for audit_name) {
 pub fn get_votes_persist_path(for audit_name) {
   [get_audit_path(for: audit_name), "votes.db"]
   |> list.fold("/", filepath.join)
-}
-
-/// Gets the paths (local) of all files in scope for the given audit
-pub fn get_files_in_scope(for audit_name) {
-  let in_scope_sol_files =
-    get_audit_path(for: audit_name)
-    |> filepath.join("scope.txt")
-    |> simplifile.read
-    |> result.unwrap("")
-    |> string.split("\n")
-    |> list.map(fn(path) {
-      case path {
-        "./" <> local_path -> audit_name <> "/" <> local_path
-        "/" <> local_path -> audit_name <> "/" <> local_path
-        local_path -> audit_name <> "/" <> local_path
-      }
-    })
-
-  let doc_files =
-    get_all_audit_page_paths()
-    |> dict.get(audit_name)
-    |> result.unwrap([])
-    |> list.filter(fn(path) { filepath.extension(path) == Ok("md") })
-
-  list.append(in_scope_sol_files, doc_files)
 }

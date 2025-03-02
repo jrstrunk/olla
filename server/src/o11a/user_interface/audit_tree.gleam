@@ -6,7 +6,7 @@ import gleam/string
 import lustre/attribute
 import lustre/element
 import lustre/element/html
-import o11a/config
+import o11a/user_interface/gateway
 
 const style = "
 #tree-grid {
@@ -90,7 +90,7 @@ function stopResize() {
 });
 "
 
-pub fn view(contents, for audit_name) {
+pub fn view(contents, for audit_name, with metadata) {
   element.fragment([
     html.style([], style),
     html.script([], resize_script),
@@ -99,7 +99,7 @@ pub fn view(contents, for audit_name) {
         html.h3([attribute.id("audit-tree-header")], [
           html.text(audit_name <> " files"),
         ]),
-        audit_file_tree_view(audit_name),
+        audit_file_tree_view(audit_name, metadata),
       ]),
       html.div([attribute.id("tree-resizer")], []),
       html.div([attribute.id("file-contents")], [contents]),
@@ -107,9 +107,11 @@ pub fn view(contents, for audit_name) {
   ])
 }
 
-fn audit_file_tree_view(audit_name) {
+fn audit_file_tree_view(audit_name, metadata) {
+  let audit_metadata = gateway.get_audit_metadata(metadata, for: audit_name)
+
   let all_audit_files =
-    config.get_files_in_scope(for: audit_name)
+    audit_metadata.in_scope_files
     |> group_files_by_parent
 
   let #(subdirs, direct_files) =

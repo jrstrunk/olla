@@ -24,6 +24,7 @@ type Context {
     dashboard_gateway: gateway.DashboardGateway,
     page_gateway: gateway.PageGateway,
     discussion_gateway: gateway.DiscussionGateway,
+    audit_metadata_gateway: gateway.AuditMetaDataGateway,
   )
 }
 
@@ -32,11 +33,22 @@ pub fn main() {
 
   let config = config.Config(port: 8401)
 
-  use #(dashboard_gateway, page_gateway, discussion_gateway) <- result.map(
-    gateway.start_discussion_gateway(),
-  )
+  use
+    gateway.Gateway(
+      dashboard_gateway:,
+      page_gateway:,
+      discussion_gateway:,
+      audit_metadata_gateway:,
+    )
+  <- result.map(gateway.start_gateway())
 
-  let context = Context(dashboard_gateway:, page_gateway:, discussion_gateway:)
+  let context =
+    Context(
+      dashboard_gateway:,
+      page_gateway:,
+      discussion_gateway:,
+      audit_metadata_gateway:,
+    )
 
   let assert Ok(_) =
     handler(_, context)
@@ -99,7 +111,7 @@ fn handle_wisp_request(req, context: Context) {
         filepath.join("component-dashboard", audit_name),
         _,
       )
-      |> audit_tree.view(audit_name)
+      |> audit_tree.view(audit_name, with: context.audit_metadata_gateway)
       |> server_componentx.as_document
       |> element.to_document_string_builder
       |> wisp.html_response(200)
@@ -113,7 +125,7 @@ fn handle_wisp_request(req, context: Context) {
       {
         Ok(contents) ->
           audit_doc.view(contents)
-          |> audit_tree.view(audit_name)
+          |> audit_tree.view(audit_name, with: context.audit_metadata_gateway)
           |> server_componentx.as_static_document
           |> element.to_document_string_builder
           |> wisp.html_response(200)
@@ -133,7 +145,7 @@ fn handle_wisp_request(req, context: Context) {
             filepath.join("component-page", file_path),
             skeleton,
           )
-          |> audit_tree.view(audit_name)
+          |> audit_tree.view(audit_name, with: context.audit_metadata_gateway)
           |> server_componentx.as_document
           |> element.to_document_string_builder
           |> wisp.html_response(200)
