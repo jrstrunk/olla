@@ -20,7 +20,7 @@ import o11a/note
 import tempo/datetime
 import tempo/instant
 
-pub const component_name = "line-notes"
+pub const component_name = "line-discussion"
 
 pub const user_submitted_note_event = "user-submitted-line-note"
 
@@ -30,11 +30,13 @@ pub fn component() {
     update,
     view,
     dict.from_list([
-      #("line-notes", fn(dy) {
+      #("line-discussion", fn(dy) {
         case note.decode_structured_notes(dy) {
           Ok(notes) -> Ok(ServerUpdatedNotes(notes))
           Error(..) ->
-            Error([dynamic.DecodeError("line-notes", string.inspect(dy), [])])
+            Error([
+              dynamic.DecodeError("line-discussion", string.inspect(dy), []),
+            ])
         }
       }),
       #("line-id", fn(dy) {
@@ -254,7 +256,7 @@ const component_style = "
   display: inline-block;
 }
 
-.line-notes-component-container {
+.line-discussion-component-container {
   position: relative;
 }
 
@@ -267,8 +269,8 @@ const component_style = "
 }
 
 .new-thread-preview:hover,
-.line-notes-component-container:hover .new-thread-preview,
-.line-notes-component-container:focus .new-thread-preview {
+.line-discussion-component-container:hover .new-thread-preview,
+.line-discussion-component-container:focus .new-thread-preview {
   opacity: 1;
   transition-property: opacity;
   transition-duration: 75ms;
@@ -276,7 +278,7 @@ const component_style = "
   transition-delay: 50ms;
 }
 
-.line-notes-list {
+.line-discussion-list {
   position: absolute;
   bottom: 1.4rem;
   left: 0rem;
@@ -296,11 +298,11 @@ const component_style = "
   transition-delay: 0.3s, 50ms;
 }
 
-.loc:hover + .line-notes-list,
-.line-notes-list:hover,
-.line-notes-list:focus-within,
-.line-notes-component-container:hover .line-notes-list,
-.line-notes-component-container:focus .line-notes-list {
+.loc:hover + .line-discussion-list,
+.line-discussion-list:hover,
+.line-discussion-list:focus-within,
+.line-discussion-component-container:hover .line-discussion-list,
+.line-discussion-component-container:focus .line-discussion-list {
   visibility: visible;
   opacity: 1;
   transition-property: opacity;
@@ -309,7 +311,7 @@ const component_style = "
   transition-delay: 50ms;
 }
 
-.line-notes-list-column {
+.line-discussion-list-column {
   display: flex;
   flex-direction: column-reverse;
   padding: 0.5rem;
@@ -323,19 +325,19 @@ button, input {
   border-color: var(--input-border-color);
 }
 
-.line-notes-item-header {
+.line-discussion-item-header {
   display: flex;
   justify-content: space-between;
   margin-bottom: 0.2rem;
 }
 
-.line-notes-item-header-meta {
+.line-discussion-item-header-meta {
   display: flex;
   gap: 0.5rem;
   align-items: start;
 }
 
-.line-notes-list p {
+.line-discussion-list p {
   margin: 0;
 }
 
@@ -347,7 +349,7 @@ button, input {
   border: 1px solid var(--input-border-color);
 }
 
-.line-notes-item-header-actions {
+.line-discussion-item-header-actions {
   display: flex;
   gap: 0.5rem;
 }
@@ -377,7 +379,7 @@ button svg {
   margin-top: 1rem;
 }
 
-.line-notes-input-container {
+.line-discussion-input-container {
   display: flex;
   gap: 0.35rem;
   align-items: center;
@@ -458,7 +460,7 @@ fn view(model: Model) -> element.Element(Msg) {
 
   html.div(
     [
-      attribute.class("line-notes-component-container"),
+      attribute.class("line-discussion-component-container"),
       attribute.attribute("tabindex", "0"),
       event.on_click(UserToggledKeepNotesOpen),
     ],
@@ -467,12 +469,12 @@ fn view(model: Model) -> element.Element(Msg) {
       inline_comment_preview,
       html.div(
         [
-          attribute.class("line-notes-list"),
+          attribute.class("line-discussion-list"),
           event.on_click(UserToggledKeepNotesOpen),
         ],
         [
-          html.div([attribute.class("line-notes-list-column")], [
-            html.div([attribute.class("line-notes-input-container")], [
+          html.div([attribute.class("line-discussion-list-column")], [
+            html.div([attribute.class("line-discussion-input-container")], [
               html.button(
                 [
                   attribute.class("new-comment-button"),
@@ -494,14 +496,17 @@ fn view(model: Model) -> element.Element(Msg) {
             ]),
             element.fragment(
               list.map(current_notes, fn(note) {
-                html.div([attribute.class("line-notes-item")], [
-                  html.div([attribute.class("line-notes-item-header")], [
-                    html.div([attribute.class("line-notes-item-header-meta")], [
-                      html.p([], [html.text(note.user_name)]),
-                      significance_badge_view(model, note),
-                    ]),
+                html.div([attribute.class("line-discussion-item")], [
+                  html.div([attribute.class("line-discussion-item-header")], [
                     html.div(
-                      [attribute.class("line-notes-item-header-actions")],
+                      [attribute.class("line-discussion-item-header-meta")],
+                      [
+                        html.p([], [html.text(note.user_name)]),
+                        significance_badge_view(model, note),
+                      ],
+                    ),
+                    html.div(
+                      [attribute.class("line-discussion-item-header-actions")],
                       [
                         case note.expanded_message {
                           Some(_) ->

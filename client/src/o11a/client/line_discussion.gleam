@@ -1,9 +1,9 @@
-import o11a/user_interface/line_notes
+import o11a/ui/line_discussion
 
-pub const name = line_notes.component_name
+pub const name = line_discussion.component_name
 
 pub fn register() {
-  line_notes.component()
+  line_discussion.component()
   // |> lustre.register(name)
   // 
   // We could then call lustre register like so to register the component 

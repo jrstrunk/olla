@@ -9,8 +9,8 @@ import lustre
 import o11a/config
 import o11a/server/audit_metadata
 import o11a/server/discussion
-import o11a/user_interface/audit_dashboard
-import o11a/user_interface/audit_page
+import o11a/ui/audit_dashboard
+import o11a/ui/audit_page
 import snag
 
 pub type Gateway {

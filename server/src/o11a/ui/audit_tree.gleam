@@ -6,7 +6,7 @@ import gleam/string
 import lustre/attribute
 import lustre/element
 import lustre/element/html
-import o11a/user_interface/gateway
+import o11a/ui/gateway
 
 const style = "
 #tree-grid {

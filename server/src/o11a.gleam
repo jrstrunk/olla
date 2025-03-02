@@ -9,11 +9,11 @@ import lib/server_componentx
 import lustre/element
 import mist
 import o11a/config
-import o11a/user_interface/audit_dashboard
-import o11a/user_interface/audit_doc
-import o11a/user_interface/audit_page
-import o11a/user_interface/audit_tree
-import o11a/user_interface/gateway
+import o11a/ui/audit_dashboard
+import o11a/ui/audit_doc
+import o11a/ui/audit_page
+import o11a/ui/audit_tree
+import o11a/ui/gateway
 import simplifile
 import snag
 import wisp
@@ -67,7 +67,7 @@ fn handler(req, context: Context) {
 
     ["styles.css"] -> server_componentx.serve_css("styles.css")
 
-    ["line_notes.mjs"] -> server_componentx.serve_js("line_notes.mjs")
+    ["line_discussion.mjs"] -> server_componentx.serve_js("line_discussion.mjs")
 
     ["component-page", ..component_path_segments] -> {
       let assert Ok(actor) =

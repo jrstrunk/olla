@@ -124,7 +124,7 @@ pub fn as_document(body: element.Element(msg)) {
     html.head([], [
       html.link([attribute.rel("stylesheet"), attribute.href("/styles.css")]),
       html.script(
-        [attribute.type_("module"), attribute.src("/line_notes.mjs")],
+        [attribute.type_("module"), attribute.src("/line_discussion.mjs")],
         "",
       ),
       html.script(

@@ -1,5 +1,5 @@
 import gleeunit/should
-import o11a/user_interface/audit_page
+import o11a/ui/audit_page
 
 pub fn style_code_tokens_operator_test() {
   audit_page.style_code_tokens("if (hi < hello == world) {")

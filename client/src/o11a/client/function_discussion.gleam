@@ -1,8 +1,8 @@
 // import gleam/dict
 // import lustre
-import o11a/user_interface/function_notes
+import o11a/ui/function_discussion
 
-pub const name = function_notes.component_name
+pub const name = function_discussion.component_name
 // pub fn register() {
 //   // lustre.component(todo, todo, todo, dict.from_list([#(todo, todo)]))
 //   // |> lustre.register(name)
