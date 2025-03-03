@@ -8,7 +8,6 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/set
 import gleam/string
-import lib/effectx
 import lib/eventx
 import lib/lucide
 import lustre
@@ -132,7 +131,6 @@ pub type Msg {
   UserToggledExpandedMessage(for_note_id: String)
   UserToggledKeepNotesOpen
   UserToggledCloseNotes
-  UserFocusedDiscussion
 }
 
 fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
@@ -277,14 +275,6 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       Model(..model, keep_notes_open: False),
       effect.none(),
     )
-    UserFocusedDiscussion -> {
-      #(
-        model,
-        effectx.focus_line_discussion_input(
-          "L" <> int.to_string(model.line_number),
-        ),
-      )
-    }
   }
 }
 
@@ -293,13 +283,20 @@ const component_style = "
   display: inline-block;
 }
 
+/* Delay the overlay transitions by 1ms to they are done last, and any 
+  actions on them can be done first (like focusing the input) */
+
 .new-thread-preview {
   opacity: 0;
+  transition-property: opacity;
+  transition-delay: 1ms;
 }
 
 #line-discussion-overlay {
   visibility: hidden;
   opacity: 0;
+  transition-property: opacity, visibility;
+  transition-delay: 1ms, 1ms;
 }
 
 /* When the new thread preview is hovered, delay the opacity transition to
@@ -365,8 +362,7 @@ input, textarea {
 }
 
 hr {
-  border: 1px solid var(--comment-color)
-  margin-top: 0.5rem;
+  border: 1px solid var(--comment-color);
 }
 
 .overlay {
@@ -437,7 +433,7 @@ fn thread_header_view(model: Model) {
             ])
           None -> element.fragment([])
         },
-        html.hr([]),
+        html.hr([attribute.class("mt-[.5rem]")]),
       ])
     None -> element.fragment([])
   }
@@ -486,7 +482,7 @@ fn comments_view(model: Model) {
         False -> element.fragment([])
       },
       // Comment divider
-      html.hr([]),
+      html.hr([attribute.class("mt-[.5rem]")]),
     ])
   })
 }
@@ -524,9 +520,8 @@ fn inline_comment_preview_view(model: Model) {
       [
         attribute.class("select-none italic comment font-code fade-in"),
         attribute.class("comment-preview"),
+        attribute.id("discussion-entry"),
         attribute.attribute("tabindex", "0"),
-        event.on_click(UserToggledKeepNotesOpen),
-        eventx.on_e(UserFocusedDiscussion),
         attribute.style([
           #("animation-delay", int.to_string(model.line_number * 4) <> "ms"),
         ]),
@@ -544,9 +539,8 @@ fn inline_comment_preview_view(model: Model) {
       [
         attribute.class("select-none italic comment"),
         attribute.class("new-thread-preview"),
+        attribute.id("discussion-entry"),
         attribute.attribute("tabindex", "0"),
-        event.on_click(UserToggledKeepNotesOpen),
-        eventx.on_e(UserFocusedDiscussion),
       ],
       [html.text("Start new thread")],
     ),

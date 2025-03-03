@@ -96,10 +96,14 @@ pub fn render_with_skeleton(name: String, skeleton: element.Element(msg)) {
   )
 }
 
-pub fn render_with_prerendered_skeleton(name: String, skeleton: String) {
+pub fn render_with_prerendered_skeleton(
+  name: String,
+  id: String,
+  skeleton: String,
+) {
   element.element(
     "lustre-server-component",
-    [server_component.route("/" <> name)],
+    [attribute.id(id), server_component.route("/" <> name)],
     [
       html.div(
         [
@@ -129,6 +133,10 @@ pub fn as_document(body: element.Element(msg)) {
       html.link([attribute.rel("stylesheet"), attribute.href("/styles.css")]),
       html.script(
         [attribute.type_("module"), attribute.src("/line_discussion.mjs")],
+        "",
+      ),
+      html.script(
+        [attribute.type_("module"), attribute.src("/page_navigation.mjs")],
         "",
       ),
       html.script(

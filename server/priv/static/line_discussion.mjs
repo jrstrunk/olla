@@ -2260,11 +2260,6 @@ function custom(run2) {
     ])
   );
 }
-function from(effect) {
-  return custom((dispatch, _, _1, _2) => {
-    return effect(dispatch);
-  });
-}
 function event(name2, data) {
   return custom((_, emit3, _1, _2) => {
     return emit3(name2, data);
@@ -4447,21 +4442,6 @@ function decode_structured_notes(notes) {
   );
 }
 
-// build/dev/javascript/o11a_client/selector_ffi.mjs
-function focus_line_discussion_input(line_tag) {
-  console.log("Focusing on line tag", line_tag);
-  document.querySelector("lustre-server-component").shadowRoot.querySelector(`#${line_tag} line-discussion`).shadowRoot.querySelector("input").focus();
-}
-
-// build/dev/javascript/o11a_client/lib/effectx.mjs
-function focus_line_discussion_input2(line_tag) {
-  return from(
-    (_) => {
-      return focus_line_discussion_input(line_tag);
-    }
-  );
-}
-
 // build/dev/javascript/o11a_client/lib/eventx.mjs
 function on_ctrl_enter(msg) {
   return on2(
@@ -4490,30 +4470,6 @@ function on_ctrl_enter(msg) {
           let ctrl_key = _use0[0];
           let key = _use0[1];
           if (ctrl_key && key === "Enter") {
-            return new Ok(msg);
-          } else {
-            return new Error(empty_error);
-          }
-        }
-      );
-    }
-  );
-}
-function on_e(msg) {
-  return on2(
-    "keydown",
-    (event2) => {
-      let empty_error = toList([new DecodeError("", "", toList([]))]);
-      return try$(
-        (() => {
-          let _pipe = run(
-            event2,
-            field2("key", string3, success)
-          );
-          return replace_error(_pipe, empty_error);
-        })(),
-        (key) => {
-          if (key === "e") {
             return new Ok(msg);
           } else {
             return new Error(empty_error);
@@ -4746,10 +4702,6 @@ var UserToggledExpandedMessage = class extends CustomType {
 };
 var UserToggledKeepNotesOpen = class extends CustomType {
 };
-var UserToggledCloseNotes = class extends CustomType {
-};
-var UserFocusedDiscussion = class extends CustomType {
-};
 function init2(_) {
   return [
     new Model2(
@@ -4797,7 +4749,7 @@ function thread_header_view(model) {
             return fragment(toList([]));
           }
         })(),
-        hr(toList([]))
+        hr(toList([class$("mt-[.5rem]")]))
       ])
     );
   } else {
@@ -4845,9 +4797,8 @@ function inline_comment_preview_view(model) {
         toList([
           class$("select-none italic comment font-code fade-in"),
           class$("comment-preview"),
+          id("discussion-entry"),
           attribute("tabindex", "0"),
-          on_click(new UserToggledKeepNotesOpen()),
-          on_e(new UserFocusedDiscussion()),
           style(
             toList([
               ["animation-delay", to_string(model.line_number * 4) + "ms"]
@@ -4879,9 +4830,8 @@ function inline_comment_preview_view(model) {
       toList([
         class$("select-none italic comment"),
         class$("new-thread-preview"),
-        attribute("tabindex", "0"),
-        on_click(new UserToggledKeepNotesOpen()),
-        on_e(new UserFocusedDiscussion())
+        id("discussion-entry"),
+        attribute("tabindex", "0")
       ]),
       toList([text2("Start new thread")])
     )
@@ -4981,14 +4931,14 @@ function comments_view(model) {
               return fragment(toList([]));
             }
           })(),
-          hr(toList([]))
+          hr(toList([class$("mt-[.5rem]")]))
         ])
       );
     }
   );
 }
 function expanded_message_view(model) {
-  let expanded_message_style = "overlay p-[.5rem] flex w-[140%] h-40 z-[3] mt-2 left-[-.3rem]";
+  let expanded_message_style = "overlay p-[.5rem] flex w-[140%] h-40 z-[3] mt-2";
   let textarea_style = "grow text-[.95rem] resize-none p-[.3rem]";
   return div(
     toList([class$(expanded_message_style)]),
@@ -5424,7 +5374,7 @@ function update(model, msg) {
       })(),
       none()
     ];
-  } else if (msg instanceof UserToggledCloseNotes) {
+  } else {
     return [
       (() => {
         let _record = model;
@@ -5445,17 +5395,10 @@ function update(model, msg) {
       })(),
       none()
     ];
-  } else {
-    return [
-      model,
-      focus_line_discussion_input2(
-        "L" + to_string(model.line_number)
-      )
-    ];
   }
 }
 var name = line_discussion;
-var component_style = "\n:host {\n  display: inline-block;\n}\n\n.new-thread-preview {\n  opacity: 0;\n}\n\n#line-discussion-overlay {\n  visibility: hidden;\n  opacity: 0;\n}\n\n/* When the new thread preview is hovered, delay the opacity transition to\n  avoid triggering it as the mouse swipes by. */\n\n.new-thread-preview:hover {\n  opacity: 1;\n  transition-property: opacity;\n  transition-delay: 25ms;\n}\n\n.new-thread-preview:hover + #line-discussion-overlay,\n.comment-preview:hover + #line-discussion-overlay {\n  visibility: visible;\n  opacity: 1;\n  transition-property: opacity, visible;\n  transition-delay: 25ms, 25ms;\n}\n\n/* When the new thread preview is focused, immediately show the overlay to\n  provide snappy feedback. */\n\n.new-thread-preview:focus,\n.new-thread-preview:has(+ #line-discussion-overlay:hover),\n.new-thread-preview:has(+ #line-discussion-overlay:focus-within) {\n  opacity: 1;\n}\n\n.new-thread-preview:focus + #line-discussion-overlay,\n.comment-preview:focus + #line-discussion-overlay,\n#line-discussion-overlay:hover,\n#line-discussion-overlay:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\nbutton.icon-button {\n  background-color: var(--overlay-background-color);\n  color: var(--text-color);\n  border-radius: 4px;\n  border: none;\n  cursor: pointer;\n  padding: 0.3rem;\n}\n\nbutton.icon-button:hover {\n  background-color: var(--input-background-color);\n}\n\nbutton.icon-button svg {\n  height: 1.25rem;\n  width: 1.25rem;\n}\n\ninput, textarea {\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border-radius: 6px;\n}\n\ninput, textarea {\n  border: 1px solid var(--input-border-color);\n}\n\nhr {\n  border: 1px solid var(--comment-color)\n  margin-top: 0.5rem;\n}\n\n.overlay {\n  position: absolute;\n  background-color: var(--overlay-background-color);\n  border: 1px solid var(--input-border-color);\n  border-radius: 6px;\n}\n";
+var component_style = "\n:host {\n  display: inline-block;\n}\n\n/* Delay the overlay transitions by 1ms to they are done last, and any \n  actions on them can be done first (like focusing the input) */\n\n.new-thread-preview {\n  opacity: 0;\n  transition-property: opacity;\n  transition-delay: 1ms;\n}\n\n#line-discussion-overlay {\n  visibility: hidden;\n  opacity: 0;\n  transition-property: opacity, visibility;\n  transition-delay: 1ms, 1ms;\n}\n\n/* When the new thread preview is hovered, delay the opacity transition to\n  avoid triggering it as the mouse swipes by. */\n\n.new-thread-preview:hover {\n  opacity: 1;\n  transition-property: opacity;\n  transition-delay: 25ms;\n}\n\n.new-thread-preview:hover + #line-discussion-overlay,\n.comment-preview:hover + #line-discussion-overlay {\n  visibility: visible;\n  opacity: 1;\n  transition-property: opacity, visible;\n  transition-delay: 25ms, 25ms;\n}\n\n/* When the new thread preview is focused, immediately show the overlay to\n  provide snappy feedback. */\n\n.new-thread-preview:focus,\n.new-thread-preview:has(+ #line-discussion-overlay:hover),\n.new-thread-preview:has(+ #line-discussion-overlay:focus-within) {\n  opacity: 1;\n}\n\n.new-thread-preview:focus + #line-discussion-overlay,\n.comment-preview:focus + #line-discussion-overlay,\n#line-discussion-overlay:hover,\n#line-discussion-overlay:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\nbutton.icon-button {\n  background-color: var(--overlay-background-color);\n  color: var(--text-color);\n  border-radius: 4px;\n  border: none;\n  cursor: pointer;\n  padding: 0.3rem;\n}\n\nbutton.icon-button:hover {\n  background-color: var(--input-background-color);\n}\n\nbutton.icon-button svg {\n  height: 1.25rem;\n  width: 1.25rem;\n}\n\ninput, textarea {\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border-radius: 6px;\n}\n\ninput, textarea {\n  border: 1px solid var(--input-border-color);\n}\n\nhr {\n  border: 1px solid var(--comment-color);\n}\n\n.overlay {\n  position: absolute;\n  background-color: var(--overlay-background-color);\n  border: 1px solid var(--input-border-color);\n  border-radius: 6px;\n}\n";
 function view(model) {
   return div(
     toList([

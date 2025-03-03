@@ -8,6 +8,7 @@ import gleam/string_tree
 import lib/server_componentx
 import lustre/element
 import mist
+import o11a/components
 import o11a/config
 import o11a/ui/audit_dashboard
 import o11a/ui/audit_doc
@@ -69,6 +70,8 @@ fn handler(req, context: Context) {
       server_componentx.serve_css(stylesheet)
 
     ["line_discussion.mjs"] -> server_componentx.serve_js("line_discussion.mjs")
+
+    ["page_navigation.mjs"] -> server_componentx.serve_js("page_navigation.mjs")
 
     ["component-page", ..component_path_segments] -> {
       let assert Ok(actor) =
@@ -144,6 +147,7 @@ fn handle_wisp_request(req, context: Context) {
         Ok(skeleton) -> {
           server_componentx.render_with_prerendered_skeleton(
             filepath.join("component-page", file_path),
+            components.audit_page,
             skeleton,
           )
           |> audit_tree.view(audit_name, with: context.audit_metadata_gateway)
