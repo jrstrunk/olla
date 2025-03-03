@@ -4684,7 +4684,7 @@ function list_collapse(attributes) {
 
 // build/dev/javascript/o11a_client/o11a/ui/line_discussion.mjs
 var Model2 = class extends CustomType {
-  constructor(user_name, line_number, line_id, keep_notes_open, notes, current_note_draft, active_thread, show_expanded_message_box, current_expanded_message_draft, expanded_messages) {
+  constructor(user_name, line_number, line_id, keep_notes_open, notes, current_note_draft, active_thread, current_thread_id, current_thread_notes, show_expanded_message_box, current_expanded_message_draft, expanded_messages) {
     super();
     this.user_name = user_name;
     this.line_number = line_number;
@@ -4693,6 +4693,8 @@ var Model2 = class extends CustomType {
     this.notes = notes;
     this.current_note_draft = current_note_draft;
     this.active_thread = active_thread;
+    this.current_thread_id = current_thread_id;
+    this.current_thread_notes = current_thread_notes;
     this.show_expanded_message_box = show_expanded_message_box;
     this.current_expanded_message_draft = current_expanded_message_draft;
     this.expanded_messages = expanded_messages;
@@ -4732,10 +4734,6 @@ var UserWroteNote = class extends CustomType {
   }
 };
 var UserSubmittedNote = class extends CustomType {
-  constructor(parent_id) {
-    super();
-    this.parent_id = parent_id;
-  }
 };
 var UserSwitchedToThread = class extends CustomType {
   constructor(new_thread_id, parent_note) {
@@ -4780,6 +4778,8 @@ function init2(_) {
       new_map(),
       "",
       new None(),
+      "",
+      toList([]),
       false,
       new None(),
       new$2()
@@ -4831,7 +4831,7 @@ function thread_header_view(model) {
     return fragment(toList([]));
   }
 }
-function new_message_input_view(model, current_thread_id) {
+function new_message_input_view(model) {
   return div(
     toList([class$("flex justify-between items-center gap-[.35rem]")]),
     toList([
@@ -4855,7 +4855,7 @@ function new_message_input_view(model, current_thread_id) {
           on_input((var0) => {
             return new UserWroteNote(var0);
           }),
-          on_ctrl_enter(new UserSubmittedNote(current_thread_id)),
+          on_ctrl_enter(new UserSubmittedNote()),
           value(model.current_note_draft)
         ])
       )
@@ -4933,9 +4933,9 @@ function significance_badge_view(model, note) {
     return fragment(toList([]));
   }
 }
-function comments_view(model, current_notes) {
+function comments_view(model) {
   return map2(
-    current_notes,
+    model.current_thread_notes,
     (note) => {
       return div(
         toList([class$("line-discussion-item")]),
@@ -5014,8 +5014,8 @@ function comments_view(model, current_notes) {
     }
   );
 }
-function expanded_message_view(model, current_thread_id) {
-  let expanded_message_style = "overlay p-[.5rem] flex w-[140%] h-40 z-[3] mt-2 left-0";
+function expanded_message_view(model) {
+  let expanded_message_style = "overlay p-[.5rem] flex w-[140%] h-40 z-[3] mt-2 left-[-.3rem]";
   let textarea_style = "grow text-[.95rem] resize-none p-[.3rem]";
   return div(
     toList([class$(expanded_message_style)]),
@@ -5030,7 +5030,7 @@ function expanded_message_view(model, current_thread_id) {
               return new UserWroteExpandedMessage(var0);
             }
           ),
-          on_ctrl_enter(new UserSubmittedNote(current_thread_id)),
+          on_ctrl_enter(new UserSubmittedNote()),
           value(
             (() => {
               let _pipe = model.current_expanded_message_draft;
@@ -5044,17 +5044,12 @@ function expanded_message_view(model, current_thread_id) {
   );
 }
 function discussion_overlay_view(model) {
-  let current_thread_id = get_current_thread_id(model);
-  let current_notes = (() => {
-    let _pipe = map_get(model.notes, current_thread_id);
-    return unwrap2(_pipe, toList([]));
-  })();
   let comment_list_style = "flex flex-col-reverse p-[.5rem] overflow-auto max-h-[30rem] gap-[.5rem]";
   return div(
     toList([
       id("line-discussion-overlay"),
       class$(
-        "overlay w-[30rem] invisible not-italic text-wrap select-text left-[-.25rem] bottom-[1.4rem]"
+        "overlay w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] bottom-[1.4rem]"
       ),
       on_click(new UserToggledKeepNotesOpen())
     ]),
@@ -5065,15 +5060,15 @@ function discussion_overlay_view(model) {
           class$(comment_list_style)
         ]),
         toList([
-          new_message_input_view(model, current_thread_id),
-          fragment(comments_view(model, current_notes)),
+          new_message_input_view(model),
+          fragment(comments_view(model)),
           thread_header_view(model)
         ])
       ),
       (() => {
         let $ = model.show_expanded_message_box;
         if ($) {
-          return expanded_message_view(model, current_thread_id);
+          return expanded_message_view(model);
         } else {
           return fragment(toList([]));
         }
@@ -5130,6 +5125,11 @@ function update(model, msg) {
           _record.notes,
           _record.current_note_draft,
           _record.active_thread,
+          line_id,
+          (() => {
+            let _pipe = map_get(model.notes, line_id);
+            return unwrap2(_pipe, toList([]));
+          })(),
           _record.show_expanded_message_box,
           _record.current_expanded_message_draft,
           _record.expanded_messages
@@ -5150,6 +5150,8 @@ function update(model, msg) {
           _record.notes,
           _record.current_note_draft,
           _record.active_thread,
+          _record.current_thread_id,
+          _record.current_thread_notes,
           _record.show_expanded_message_box,
           _record.current_expanded_message_draft,
           _record.expanded_messages
@@ -5159,6 +5161,7 @@ function update(model, msg) {
     ];
   } else if (msg instanceof ServerUpdatedNotes) {
     let notes = msg[0];
+    let updated_notes = from_list(notes);
     return [
       (() => {
         let _record = model;
@@ -5167,9 +5170,14 @@ function update(model, msg) {
           _record.line_number,
           _record.line_id,
           _record.keep_notes_open,
-          from_list(notes),
+          updated_notes,
           _record.current_note_draft,
           _record.active_thread,
+          _record.current_thread_id,
+          (() => {
+            let _pipe = map_get(updated_notes, model.current_thread_id);
+            return unwrap2(_pipe, toList([]));
+          })(),
           _record.show_expanded_message_box,
           _record.current_expanded_message_draft,
           _record.expanded_messages
@@ -5190,6 +5198,8 @@ function update(model, msg) {
           _record.notes,
           draft,
           _record.active_thread,
+          _record.current_thread_id,
+          _record.current_thread_notes,
           _record.show_expanded_message_box,
           _record.current_expanded_message_draft,
           _record.expanded_messages
@@ -5198,7 +5208,6 @@ function update(model, msg) {
       none()
     ];
   } else if (msg instanceof UserSubmittedNote) {
-    let parent_id = msg.parent_id;
     return that(
       model.current_note_draft === "",
       () => {
@@ -5222,7 +5231,7 @@ function update(model, msg) {
         let message = $[1];
         let note = new Note(
           note_id,
-          parent_id,
+          model.current_thread_id,
           significance,
           "user" + (() => {
             let _pipe = random(100);
@@ -5244,6 +5253,8 @@ function update(model, msg) {
               _record.notes,
               "",
               _record.active_thread,
+              _record.current_thread_id,
+              _record.current_thread_notes,
               false,
               new None(),
               _record.expanded_messages
@@ -5274,6 +5285,11 @@ function update(model, msg) {
               model.active_thread
             )
           ),
+          new_thread_id,
+          (() => {
+            let _pipe = map_get(model.notes, new_thread_id);
+            return unwrap2(_pipe, toList([]));
+          })(),
           _record.show_expanded_message_box,
           _record.current_expanded_message_draft,
           _record.expanded_messages
@@ -5282,6 +5298,25 @@ function update(model, msg) {
       none()
     ];
   } else if (msg instanceof UserClosedThread) {
+    let new_active_thread = (() => {
+      let _pipe = model.active_thread;
+      let _pipe$1 = map(
+        _pipe,
+        (thread) => {
+          return thread.prior_thread;
+        }
+      );
+      return flatten(_pipe$1);
+    })();
+    let new_current_thread_id = (() => {
+      let _pipe = map(
+        new_active_thread,
+        (thread) => {
+          return thread.current_thread_id;
+        }
+      );
+      return unwrap(_pipe, model.line_id);
+    })();
     return [
       (() => {
         let _record = model;
@@ -5292,15 +5327,11 @@ function update(model, msg) {
           _record.keep_notes_open,
           _record.notes,
           _record.current_note_draft,
+          new_active_thread,
+          new_current_thread_id,
           (() => {
-            let _pipe = model.active_thread;
-            let _pipe$1 = map(
-              _pipe,
-              (thread) => {
-                return thread.prior_thread;
-              }
-            );
-            return flatten(_pipe$1);
+            let _pipe = map_get(model.notes, new_current_thread_id);
+            return unwrap2(_pipe, toList([]));
           })(),
           _record.show_expanded_message_box,
           _record.current_expanded_message_draft,
@@ -5322,6 +5353,8 @@ function update(model, msg) {
           _record.notes,
           _record.current_note_draft,
           _record.active_thread,
+          _record.current_thread_id,
+          _record.current_thread_notes,
           show_expanded_message_box,
           _record.current_expanded_message_draft,
           _record.expanded_messages
@@ -5342,6 +5375,8 @@ function update(model, msg) {
           _record.notes,
           _record.current_note_draft,
           _record.active_thread,
+          _record.current_thread_id,
+          _record.current_thread_notes,
           _record.show_expanded_message_box,
           new Some(expanded_message),
           _record.expanded_messages
@@ -5364,6 +5399,8 @@ function update(model, msg) {
             _record.notes,
             _record.current_note_draft,
             _record.active_thread,
+            _record.current_thread_id,
+            _record.current_thread_notes,
             _record.show_expanded_message_box,
             _record.current_expanded_message_draft,
             delete$2(model.expanded_messages, for_note_id)
@@ -5383,6 +5420,8 @@ function update(model, msg) {
             _record.notes,
             _record.current_note_draft,
             _record.active_thread,
+            _record.current_thread_id,
+            _record.current_thread_notes,
             _record.show_expanded_message_box,
             _record.current_expanded_message_draft,
             insert2(model.expanded_messages, for_note_id)
@@ -5403,6 +5442,8 @@ function update(model, msg) {
           _record.notes,
           _record.current_note_draft,
           _record.active_thread,
+          _record.current_thread_id,
+          _record.current_thread_notes,
           _record.show_expanded_message_box,
           _record.current_expanded_message_draft,
           _record.expanded_messages
@@ -5422,6 +5463,8 @@ function update(model, msg) {
           _record.notes,
           _record.current_note_draft,
           _record.active_thread,
+          _record.current_thread_id,
+          _record.current_thread_notes,
           _record.show_expanded_message_box,
           _record.current_expanded_message_draft,
           _record.expanded_messages
@@ -5439,7 +5482,7 @@ function update(model, msg) {
   }
 }
 var name = line_discussion;
-var component_style = "\n:host {\n  display: inline-block;\n}\n\n.new-thread-preview {\n  opacity: 0;\n}\n\n.new-thread-preview:hover {\n  opacity: 1;\n  transition-property: opacity;\n  transition-delay: 25ms;\n}\n\n.new-thread-preview:focus,\n.new-thread-preview:has(+ #line-discussion-overlay:hover),\n.new-thread-preview:has(+ #line-discussion-overlay:focus-within) {\n  opacity: 1;\n}\n\n#line-discussion-overlay {\n  visibility: hidden;\n  opacity: 0;\n}\n\n.new-thread-preview:hover + #line-discussion-overlay,\n.comment-preview:hover + #line-discussion-overlay {\n  visibility: visible;\n  opacity: 1;\n  transition-property: opacity, visible;\n  transition-delay: 25ms, 25ms;\n}\n\n.new-thread-preview:focus + #line-discussion-overlay,\n.comment-preview:focus + #line-discussion-overlay,\n#line-discussion-overlay:hover,\n#line-discussion-overlay:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\nbutton.icon-button {\n  background-color: var(--overlay-background-color);\n  color: var(--text-color);\n  border-radius: 4px;\n  border: none;\n  cursor: pointer;\n  padding: 0.3rem;\n}\n\nbutton.icon-button:hover {\n  background-color: var(--input-background-color);\n}\n\nbutton.icon-button svg {\n  height: 1.25rem;\n  width: 1.25rem;\n}\n\ninput, textarea {\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border-radius: 6px;\n}\n\ninput, textarea {\n  border: 1px solid var(--input-border-color);\n}\n\nhr {\n  border: 1px solid var(--comment-color)\n}\n\n.overlay {\n  position: absolute;\n  background-color: var(--overlay-background-color);\n  border: 1px solid var(--input-border-color);\n  border-radius: 6px;\n}\n";
+var component_style = "\n:host {\n  display: inline-block;\n}\n\n.new-thread-preview {\n  opacity: 0;\n}\n\n#line-discussion-overlay {\n  visibility: hidden;\n  opacity: 0;\n}\n\n/* When the new thread preview is hovered, delay the opacity transition to\n  avoid triggering it as the mouse swipes by. */\n\n.new-thread-preview:hover {\n  opacity: 1;\n  transition-property: opacity;\n  transition-delay: 25ms;\n}\n\n.new-thread-preview:hover + #line-discussion-overlay,\n.comment-preview:hover + #line-discussion-overlay {\n  visibility: visible;\n  opacity: 1;\n  transition-property: opacity, visible;\n  transition-delay: 25ms, 25ms;\n}\n\n/* When the new thread preview is focused, immediately show the overlay to\n  provide snappy feedback. */\n\n.new-thread-preview:focus,\n.new-thread-preview:has(+ #line-discussion-overlay:hover),\n.new-thread-preview:has(+ #line-discussion-overlay:focus-within) {\n  opacity: 1;\n}\n\n.new-thread-preview:focus + #line-discussion-overlay,\n.comment-preview:focus + #line-discussion-overlay,\n#line-discussion-overlay:hover,\n#line-discussion-overlay:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\nbutton.icon-button {\n  background-color: var(--overlay-background-color);\n  color: var(--text-color);\n  border-radius: 4px;\n  border: none;\n  cursor: pointer;\n  padding: 0.3rem;\n}\n\nbutton.icon-button:hover {\n  background-color: var(--input-background-color);\n}\n\nbutton.icon-button svg {\n  height: 1.25rem;\n  width: 1.25rem;\n}\n\ninput, textarea {\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border-radius: 6px;\n}\n\ninput, textarea {\n  border: 1px solid var(--input-border-color);\n}\n\nhr {\n  border: 1px solid var(--comment-color)\n}\n\n.overlay {\n  position: absolute;\n  background-color: var(--overlay-background-color);\n  border: 1px solid var(--input-border-color);\n  border-radius: 6px;\n}\n";
 function view(model) {
   return div(
     toList([

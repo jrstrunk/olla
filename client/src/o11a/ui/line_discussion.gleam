@@ -82,6 +82,8 @@ fn init(_) -> #(Model, effect.Effect(Msg)) {
       keep_notes_open: False,
       current_note_draft: "",
       line_id: "",
+      current_thread_id: "",
+      current_thread_notes: [],
       active_thread: option.None,
       show_expanded_message_box: False,
       current_expanded_message_draft: None,
@@ -99,18 +101,13 @@ pub type Model {
     keep_notes_open: Bool,
     notes: dict.Dict(String, List(note.Note)),
     current_note_draft: String,
+    current_thread_id: String,
+    current_thread_notes: List(note.Note),
     active_thread: Option(ActiveThread),
     show_expanded_message_box: Bool,
     current_expanded_message_draft: Option(String),
     expanded_messages: set.Set(String),
   )
-}
-
-fn get_current_thread_id(model: Model) {
-  case model.active_thread {
-    Some(thread) -> thread.current_thread_id
-    None -> model.line_id
-  }
 }
 
 pub type ActiveThread {
@@ -127,7 +124,7 @@ pub type Msg {
   ServerSetLineNumber(Int)
   ServerUpdatedNotes(List(#(String, List(note.Note))))
   UserWroteNote(String)
-  UserSubmittedNote(parent_id: String)
+  UserSubmittedNote
   UserSwitchedToThread(new_thread_id: String, parent_note: note.Note)
   UserClosedThread
   UserToggledExpandedMessageBox(Bool)
@@ -140,20 +137,37 @@ pub type Msg {
 
 fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
-    ServerSetLineId(line_id) -> #(Model(..model, line_id:), effect.none())
+    ServerSetLineId(line_id) -> #(
+      Model(
+        ..model,
+        line_id:,
+        current_thread_id: line_id,
+        current_thread_notes: dict.get(model.notes, line_id)
+          |> result.unwrap([]),
+      ),
+      effect.none(),
+    )
     ServerSetLineNumber(line_number) -> #(
       Model(..model, line_number:),
       effect.none(),
     )
-    ServerUpdatedNotes(notes) -> #(
-      Model(..model, notes: dict.from_list(notes)),
-      effect.none(),
-    )
+    ServerUpdatedNotes(notes) -> {
+      let updated_notes = dict.from_list(notes)
+      #(
+        Model(
+          ..model,
+          notes: updated_notes,
+          current_thread_notes: dict.get(updated_notes, model.current_thread_id)
+            |> result.unwrap([]),
+        ),
+        effect.none(),
+      )
+    }
     UserWroteNote(draft) -> #(
       Model(..model, current_note_draft: draft),
       effect.none(),
     )
-    UserSubmittedNote(parent_id:) -> {
+    UserSubmittedNote -> {
       use <- given.that(model.current_note_draft == "", return: fn() {
         #(model, effect.none())
       })
@@ -173,7 +187,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       let note =
         note.Note(
           note_id:,
-          parent_id:,
+          parent_id: model.current_thread_id,
           significance:,
           user_name: "user" <> int.random(100) |> int.to_string,
           message:,
@@ -195,24 +209,39 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     UserSwitchedToThread(new_thread_id:, parent_note:) -> #(
       Model(
         ..model,
+        current_thread_id: new_thread_id,
+        current_thread_notes: dict.get(model.notes, new_thread_id)
+          |> result.unwrap([]),
         active_thread: Some(ActiveThread(
           current_thread_id: new_thread_id,
           parent_note:,
-          prior_thread_id: get_current_thread_id(model),
+          prior_thread_id: model.current_thread_id,
           prior_thread: model.active_thread,
         )),
       ),
       effect.none(),
     )
-    UserClosedThread -> #(
-      Model(
-        ..model,
-        active_thread: model.active_thread
-          |> option.map(fn(thread) { thread.prior_thread })
-          |> option.flatten,
-      ),
-      effect.none(),
-    )
+    UserClosedThread -> {
+      let new_active_thread =
+        model.active_thread
+        |> option.map(fn(thread) { thread.prior_thread })
+        |> option.flatten
+
+      let new_current_thread_id =
+        option.map(new_active_thread, fn(thread) { thread.current_thread_id })
+        |> option.unwrap(model.line_id)
+
+      #(
+        Model(
+          ..model,
+          current_thread_id: new_current_thread_id,
+          current_thread_notes: dict.get(model.notes, new_current_thread_id)
+            |> result.unwrap([]),
+          active_thread: new_active_thread,
+        ),
+        effect.none(),
+      )
+    }
     UserToggledExpandedMessageBox(show_expanded_message_box) -> #(
       Model(..model, show_expanded_message_box:),
       effect.none(),
@@ -368,10 +397,6 @@ fn view(model: Model) -> element.Element(Msg) {
 }
 
 fn discussion_overlay_view(model: Model) {
-  let current_thread_id = get_current_thread_id(model)
-  let current_notes =
-    dict.get(model.notes, current_thread_id) |> result.unwrap([])
-
   let comment_list_style =
     "flex flex-col-reverse p-[.5rem] overflow-auto max-h-[30rem] gap-[.5rem]"
 
@@ -387,13 +412,13 @@ fn discussion_overlay_view(model: Model) {
       html.div(
         [attribute.id("comment-list"), attribute.class(comment_list_style)],
         [
-          new_message_input_view(model, current_thread_id),
-          element.fragment(comments_view(model, current_notes)),
+          new_message_input_view(model),
+          element.fragment(comments_view(model)),
           thread_header_view(model),
         ],
       ),
       case model.show_expanded_message_box {
-        True -> expanded_message_view(model, current_thread_id)
+        True -> expanded_message_view(model)
         False -> element.fragment([])
       },
     ],
@@ -423,8 +448,8 @@ fn thread_header_view(model: Model) {
   }
 }
 
-fn comments_view(model: Model, current_notes: List(note.Note)) {
-  list.map(current_notes, fn(note) {
+fn comments_view(model: Model) {
+  list.map(model.current_thread_notes, fn(note) {
     html.div([attribute.class("line-discussion-item")], [
       // Comment header
       html.div([attribute.class("flex justify-between mb-[.2rem]")], [
@@ -471,7 +496,7 @@ fn comments_view(model: Model, current_notes: List(note.Note)) {
   })
 }
 
-fn new_message_input_view(model: Model, current_thread_id) {
+fn new_message_input_view(model: Model) {
   html.div([attribute.class("flex justify-between items-center gap-[.35rem]")], [
     html.button(
       [
@@ -490,7 +515,7 @@ fn new_message_input_view(model: Model, current_thread_id) {
       ),
       attribute.placeholder("Add a new comment"),
       event.on_input(UserWroteNote),
-      eventx.on_ctrl_enter(UserSubmittedNote(parent_id: current_thread_id)),
+      eventx.on_ctrl_enter(UserSubmittedNote),
       attribute.value(model.current_note_draft),
     ]),
   ])
@@ -548,7 +573,7 @@ fn significance_badge_view(model: Model, note: note.Note) {
   }
 }
 
-fn expanded_message_view(model: Model, current_thread_id) {
+fn expanded_message_view(model: Model) {
   let expanded_message_style =
     "overlay p-[.5rem] flex w-[140%] h-40 z-[3] mt-2 left-[-.3rem]"
 
@@ -561,7 +586,7 @@ fn expanded_message_view(model: Model, current_thread_id) {
         attribute.class(textarea_style),
         attribute.placeholder("Write an expanded message body"),
         event.on_input(UserWroteExpandedMessage),
-        eventx.on_ctrl_enter(UserSubmittedNote(parent_id: current_thread_id)),
+        eventx.on_ctrl_enter(UserSubmittedNote),
         attribute.value(
           model.current_expanded_message_draft |> option.unwrap(""),
         ),
