@@ -569,8 +569,7 @@ fn significance_badge_view(model: Model, note: note.Note) {
 }
 
 fn expanded_message_view(model: Model) {
-  let expanded_message_style =
-    "overlay p-[.5rem] flex w-[140%] h-40 z-[3] mt-2 left-[-.3rem]"
+  let expanded_message_style = "overlay p-[.5rem] flex w-[140%] h-40 z-[3] mt-2"
 
   let textarea_style = "grow text-[.95rem] resize-none p-[.3rem]"
 
