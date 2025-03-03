@@ -9,6 +9,7 @@ import gleam/result
 import gleam/set
 import gleam/string
 import lib/effectx
+import lib/eventx
 import lib/lucide
 import lustre
 import lustre/attribute
@@ -16,13 +17,23 @@ import lustre/effect
 import lustre/element
 import lustre/element/html
 import lustre/event
+import o11a/components
+import o11a/events
 import o11a/note
 import tempo/datetime
 import tempo/instant
 
-pub const component_name = "line-discussion"
+pub const name = components.line_discussion
 
-pub const user_submitted_note_event = "user-submitted-line-note"
+pub fn register() {
+  component()
+  // |> lustre.register(name)
+  // 
+  // We could then call lustre register like so to register the component 
+  // manually, but when we build this as a component with the lustre dev tools,
+  // the produced javascript will automatically do this. If we ever build this
+  // component in a different way, we'll need to register it manually.
+}
 
 pub fn component() {
   lustre.component(
@@ -124,6 +135,7 @@ pub type Msg {
   UserToggledExpandedMessage(for_note_id: String)
   UserToggledKeepNotesOpen
   UserToggledCloseNotes
+  UserFocusedDiscussion
 }
 
 fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
@@ -177,7 +189,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
           current_expanded_message_draft: None,
           show_expanded_message_box: False,
         ),
-        event.emit(user_submitted_note_event, note.encode_note(note)),
+        event.emit(events.user_submitted_note, note.encode_note(note)),
       )
     }
     UserSwitchedToThread(new_thread_id:, parent_note:) -> #(
@@ -236,6 +248,14 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       Model(..model, keep_notes_open: False),
       effect.none(),
     )
+    UserFocusedDiscussion -> {
+      #(
+        model,
+        effectx.focus_line_discussion_input(
+          "L" <> int.to_string(model.line_number),
+        ),
+      )
+    }
   }
 }
 
@@ -256,7 +276,7 @@ const component_style = "
   display: inline-block;
 }
 
-.line-discussion-component-container {
+#line-discussion-component-container {
   position: relative;
 }
 
@@ -269,8 +289,10 @@ const component_style = "
 }
 
 .new-thread-preview:hover,
-.line-discussion-component-container:hover .new-thread-preview,
-.line-discussion-component-container:focus .new-thread-preview {
+.new-thread-preview:focus,
+#line-discussion-component-container:hover .new-thread-preview,
+#line-discussion-component-container:focus-within .new-thread-preview,
+#line-discussion-component-container:focus .new-thread-preview {
   opacity: 1;
   transition-property: opacity;
   transition-duration: 75ms;
@@ -293,22 +315,26 @@ const component_style = "
 
   opacity: 0;
   transition-property: visibility, opacity;
-  transition-duration: 0s, 75ms;
+  transition-duration: 0s, 25ms;
   transition-timing-function: linear, ease-in;
-  transition-delay: 0.3s, 50ms;
+  transition-delay: 50ms, 25ms;
 }
 
 .loc:hover + .line-discussion-list,
 .line-discussion-list:hover,
 .line-discussion-list:focus-within,
-.line-discussion-component-container:hover .line-discussion-list,
-.line-discussion-component-container:focus .line-discussion-list {
+.new-thread-preview:focus + .line-discussion-list,
+.comment-preview:focus + .line-discussion-list,
+#line-discussion-component-container:hover .line-discussion-list,
+#line-discussion-component-container:focus .line-discussion-list {
   visibility: visible;
   opacity: 1;
+  /* idk if I want this delay anymore, I want it to be snappy
   transition-property: opacity;
   transition-duration: 75ms;
   transition-timing-function: ease-in;
   transition-delay: 50ms;
+  */
 }
 
 .line-discussion-list-column {
@@ -390,7 +416,7 @@ button svg {
   padding-top: 0.25rem;
 }
 
-.new-comment-input {
+#new-comment-input {
   display: inline-block;
   width: 100%;
   border: none;
@@ -433,165 +459,168 @@ fn view(model: Model) -> element.Element(Msg) {
   let current_notes =
     dict.get(model.notes, current_thread_id) |> result.unwrap([])
 
-  let inline_comment_preview =
-    dict.get(model.notes, model.line_id)
-    |> result.try(list.last)
-    |> result.map(fn(note) {
-      html.span(
-        [
-          attribute.class("code-extras fade-in"),
-          attribute.style([
-            #("animation-delay", int.to_string(model.line_number * 4) <> "ms"),
-          ]),
-        ],
-        [
-          html.text(case string.length(note.message) > 40 {
-            True -> note.message |> string.slice(0, length: 37) <> "..."
-            False -> note.message |> string.slice(0, length: 40)
-          }),
-        ],
-      )
-    })
-    |> result.unwrap(
-      html.span([attribute.class("code-extras new-thread-preview")], [
-        html.text("Start new thread"),
-      ]),
-    )
-
-  html.div(
-    [
-      attribute.class("line-discussion-component-container"),
-      attribute.attribute("tabindex", "0"),
-      event.on_click(UserToggledKeepNotesOpen),
-    ],
-    [
-      html.style([], component_style),
-      inline_comment_preview,
-      html.div(
-        [
-          attribute.class("line-discussion-list"),
-          event.on_click(UserToggledKeepNotesOpen),
-        ],
-        [
-          html.div([attribute.class("line-discussion-list-column")], [
-            html.div([attribute.class("line-discussion-input-container")], [
-              html.button(
-                [
-                  attribute.class("new-comment-button"),
-                  event.on_click(UserToggledExpandedMessageBox(
-                    !model.show_expanded_message_box,
-                  )),
-                ],
-                [lucide.pencil_ruler([])],
-              ),
-              html.input([
-                attribute.class("new-comment-input"),
-                attribute.placeholder("Add a new comment"),
-                event.on_input(UserWroteNote),
-                effectx.on_ctrl_enter(UserSubmittedNote(
-                  parent_id: current_thread_id,
+  html.div([attribute.id("line-discussion-component-container")], [
+    html.style([], component_style),
+    inline_comment_preview_view(model),
+    html.div(
+      [
+        attribute.class("line-discussion-list"),
+        event.on_click(UserToggledKeepNotesOpen),
+      ],
+      [
+        html.div([attribute.class("line-discussion-list-column")], [
+          html.div([attribute.class("line-discussion-input-container")], [
+            html.button(
+              [
+                attribute.class("new-comment-button"),
+                event.on_click(UserToggledExpandedMessageBox(
+                  !model.show_expanded_message_box,
                 )),
-                attribute.value(model.current_note_draft),
-              ]),
-            ]),
-            element.fragment(
-              list.map(current_notes, fn(note) {
-                html.div([attribute.class("line-discussion-item")], [
-                  html.div([attribute.class("line-discussion-item-header")], [
-                    html.div(
-                      [attribute.class("line-discussion-item-header-meta")],
-                      [
-                        html.p([], [html.text(note.user_name)]),
-                        significance_badge_view(model, note),
-                      ],
-                    ),
-                    html.div(
-                      [attribute.class("line-discussion-item-header-actions")],
-                      [
-                        case note.expanded_message {
-                          Some(_) ->
-                            html.button(
-                              [
-                                attribute.class("expand-message-button"),
-                                event.on_click(UserToggledExpandedMessage(
-                                  note.note_id,
-                                )),
-                              ],
-                              [lucide.list_collapse([])],
-                            )
-                          None -> element.fragment([])
-                        },
-                        html.button(
-                          [
-                            attribute.class("thread-switch-button"),
-                            event.on_click(UserSwitchedToThread(
-                              note.note_id,
-                              note,
-                            )),
-                          ],
-                          [lucide.messages_square([])],
-                        ),
-                      ],
-                    ),
-                  ]),
-                  html.p([], [html.text(note.message)]),
-                  case set.contains(model.expanded_messages, note.note_id) {
-                    True ->
-                      html.div([attribute.class("expanded-note-message")], [
-                        html.p([], [
-                          html.text(note.expanded_message |> option.unwrap("")),
-                        ]),
-                      ])
-                    False -> element.fragment([])
-                  },
-                  html.hr([]),
-                ])
-              }),
+              ],
+              [lucide.pencil_ruler([])],
             ),
-            case model.active_thread {
-              Some(active_thread) ->
-                html.div([], [
-                  html.button([event.on_click(UserClosedThread)], [
-                    html.text("Close Thread"),
-                  ]),
-                  html.br([]),
-                  html.text("Current Thread: "),
-                  html.text(active_thread.parent_note.message),
-                  case active_thread.parent_note.expanded_message {
-                    Some(expanded_message) ->
-                      html.div([attribute.class("expanded-note-message")], [
-                        html.p([], [html.text(expanded_message)]),
-                      ])
-                    None -> element.fragment([])
-                  },
-                  html.hr([]),
-                ])
-              None -> element.fragment([])
-            },
+            html.input([
+              attribute.id("new-comment-input"),
+              attribute.placeholder("Add a new comment"),
+              event.on_input(UserWroteNote),
+              eventx.on_ctrl_enter(UserSubmittedNote(
+                parent_id: current_thread_id,
+              )),
+              attribute.value(model.current_note_draft),
+            ]),
           ]),
-          case model.show_expanded_message_box {
-            True ->
-              html.div([attribute.class("expanded-message-box")], [
-                html.textarea(
-                  [
-                    attribute.class("expanded-comment-input"),
-                    attribute.placeholder("Write an expanded message body"),
-                    event.on_input(UserWroteExpandedMessage),
-                    effectx.on_ctrl_enter(UserSubmittedNote(
-                      parent_id: current_thread_id,
-                    )),
-                    attribute.value(
-                      model.current_expanded_message_draft |> option.unwrap(""),
-                    ),
-                  ],
-                  "Write an expanded message body ig",
-                ),
+          element.fragment(
+            list.map(current_notes, fn(note) {
+              html.div([attribute.class("line-discussion-item")], [
+                html.div([attribute.class("line-discussion-item-header")], [
+                  html.div(
+                    [attribute.class("line-discussion-item-header-meta")],
+                    [
+                      html.p([], [html.text(note.user_name)]),
+                      significance_badge_view(model, note),
+                    ],
+                  ),
+                  html.div(
+                    [attribute.class("line-discussion-item-header-actions")],
+                    [
+                      case note.expanded_message {
+                        Some(_) ->
+                          html.button(
+                            [
+                              attribute.class("expand-message-button"),
+                              event.on_click(UserToggledExpandedMessage(
+                                note.note_id,
+                              )),
+                            ],
+                            [lucide.list_collapse([])],
+                          )
+                        None -> element.fragment([])
+                      },
+                      html.button(
+                        [
+                          attribute.class("thread-switch-button"),
+                          event.on_click(UserSwitchedToThread(
+                            note.note_id,
+                            note,
+                          )),
+                        ],
+                        [lucide.messages_square([])],
+                      ),
+                    ],
+                  ),
+                ]),
+                html.p([], [html.text(note.message)]),
+                case set.contains(model.expanded_messages, note.note_id) {
+                  True ->
+                    html.div([attribute.class("expanded-note-message")], [
+                      html.p([], [
+                        html.text(note.expanded_message |> option.unwrap("")),
+                      ]),
+                    ])
+                  False -> element.fragment([])
+                },
+                html.hr([]),
               ])
-            False -> element.fragment([])
+            }),
+          ),
+          case model.active_thread {
+            Some(active_thread) ->
+              html.div([], [
+                html.button([event.on_click(UserClosedThread)], [
+                  html.text("Close Thread"),
+                ]),
+                html.br([]),
+                html.text("Current Thread: "),
+                html.text(active_thread.parent_note.message),
+                case active_thread.parent_note.expanded_message {
+                  Some(expanded_message) ->
+                    html.div([attribute.class("expanded-note-message")], [
+                      html.p([], [html.text(expanded_message)]),
+                    ])
+                  None -> element.fragment([])
+                },
+                html.hr([]),
+              ])
+            None -> element.fragment([])
           },
-        ],
-      ),
-    ],
+        ]),
+        case model.show_expanded_message_box {
+          True ->
+            html.div([attribute.class("expanded-message-box")], [
+              html.textarea(
+                [
+                  attribute.class("expanded-comment-input"),
+                  attribute.placeholder("Write an expanded message body"),
+                  event.on_input(UserWroteExpandedMessage),
+                  eventx.on_ctrl_enter(UserSubmittedNote(
+                    parent_id: current_thread_id,
+                  )),
+                  attribute.value(
+                    model.current_expanded_message_draft |> option.unwrap(""),
+                  ),
+                ],
+                "Write an expanded message body ig",
+              ),
+            ])
+          False -> element.fragment([])
+        },
+      ],
+    ),
+  ])
+}
+
+fn inline_comment_preview_view(model: Model) {
+  dict.get(model.notes, model.line_id)
+  |> result.try(list.last)
+  |> result.map(fn(note) {
+    html.span(
+      [
+        attribute.class("code-extras fade-in comment-preview"),
+        attribute.attribute("tabindex", "0"),
+        event.on_click(UserToggledKeepNotesOpen),
+        eventx.on_e(UserFocusedDiscussion),
+        attribute.style([
+          #("animation-delay", int.to_string(model.line_number * 4) <> "ms"),
+        ]),
+      ],
+      [
+        html.text(case string.length(note.message) > 40 {
+          True -> note.message |> string.slice(0, length: 37) <> "..."
+          False -> note.message |> string.slice(0, length: 40)
+        }),
+      ],
+    )
+  })
+  |> result.unwrap(
+    html.span(
+      [
+        attribute.class("code-extras new-thread-preview"),
+        attribute.attribute("tabindex", "0"),
+        event.on_click(UserToggledKeepNotesOpen),
+        eventx.on_e(UserFocusedDiscussion),
+      ],
+      [html.text("Start new thread")],
+    ),
   )
 }
 

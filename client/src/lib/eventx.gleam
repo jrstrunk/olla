@@ -25,3 +25,19 @@ pub fn on_ctrl_enter(msg: msg) {
     _, _ -> Error(empty_error)
   }
 }
+
+pub fn on_e(msg: msg) {
+  use event <- event.on("keydown")
+
+  let empty_error = [dynamic.DecodeError("", "", [])]
+
+  use key <- result.try(
+    decode.run(event, decode.field("key", decode.string, decode.success))
+    |> result.replace_error(empty_error),
+  )
+
+  case key {
+    "e" -> Ok(msg)
+    _ -> Error(empty_error)
+  }
+}

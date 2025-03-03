@@ -1164,6 +1164,15 @@ var unicode_whitespaces = [
 ].join("");
 var trim_start_regex = new RegExp(`^[${unicode_whitespaces}]*`);
 var trim_end_regex = new RegExp(`[${unicode_whitespaces}]*$`);
+function print_debug(string5) {
+  if (typeof process === "object" && process.stderr?.write) {
+    process.stderr.write(string5 + "\n");
+  } else if (typeof Deno === "object") {
+    Deno.stderr.writeSync(new TextEncoder().encode(string5 + "\n"));
+  } else {
+    console.log(string5);
+  }
+}
 function floor(float4) {
   return Math.floor(float4);
 }
@@ -2266,6 +2275,11 @@ function custom(run2) {
     ])
   );
 }
+function from(effect) {
+  return custom((dispatch, _, _1, _2) => {
+    return effect(dispatch);
+  });
+}
 function event(name2, data) {
   return custom((_, emit3, _1, _2) => {
     return emit3(name2, data);
@@ -2395,6 +2409,9 @@ function style(properties) {
 }
 function class$(name2) {
   return attribute("class", name2);
+}
+function id(name2) {
+  return attribute("id", name2);
 }
 function value(val) {
   return attribute("value", val);
@@ -3395,6 +3412,14 @@ function that(requirement, consequence, alternative) {
   }
 }
 
+// build/dev/javascript/gleam_stdlib/gleam/io.mjs
+function debug(term) {
+  let _pipe = term;
+  let _pipe$1 = inspect2(_pipe);
+  print_debug(_pipe$1);
+  return term;
+}
+
 // build/dev/javascript/gtempo/gtempo/internal.mjs
 var imprecise_day_microseconds = 864e8;
 function imprecise_days(days2) {
@@ -4158,183 +4183,11 @@ function on_input(msg) {
   );
 }
 
-// build/dev/javascript/o11a_common/lib/effectx.mjs
-function on_ctrl_enter(msg) {
-  return on2(
-    "keydown",
-    (event2) => {
-      let decoder = field2(
-        "ctrlKey",
-        bool,
-        (ctrl_key) => {
-          return field2(
-            "key",
-            string3,
-            (key) => {
-              return success([ctrl_key, key]);
-            }
-          );
-        }
-      );
-      let empty_error = toList([new DecodeError("", "", toList([]))]);
-      return try$(
-        (() => {
-          let _pipe = run(event2, decoder);
-          return replace_error(_pipe, empty_error);
-        })(),
-        (_use0) => {
-          let ctrl_key = _use0[0];
-          let key = _use0[1];
-          if (ctrl_key && key === "Enter") {
-            return new Ok(msg);
-          } else {
-            return new Error(empty_error);
-          }
-        }
-      );
-    }
-  );
-}
+// build/dev/javascript/o11a_common/o11a/components.mjs
+var line_discussion = "line-discussion";
 
-// build/dev/javascript/lustre/lustre/element/svg.mjs
-var namespace = "http://www.w3.org/2000/svg";
-function svg(attrs, children2) {
-  return namespaced(namespace, "svg", attrs, children2);
-}
-function path(attrs) {
-  return namespaced(namespace, "path", attrs, toList([]));
-}
-
-// build/dev/javascript/o11a_common/lib/lucide.mjs
-function messages_square(attributes) {
-  return svg(
-    prepend(
-      attribute("stroke-linejoin", "round"),
-      prepend(
-        attribute("stroke-linecap", "round"),
-        prepend(
-          attribute("stroke-width", "2"),
-          prepend(
-            attribute("stroke", "currentColor"),
-            prepend(
-              attribute("fill", "none"),
-              prepend(
-                attribute("viewBox", "0 0 24 24"),
-                prepend(
-                  attribute("height", "24"),
-                  prepend(attribute("width", "24"), attributes)
-                )
-              )
-            )
-          )
-        )
-      )
-    ),
-    toList([
-      path(
-        toList([
-          attribute(
-            "d",
-            "M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"
-          )
-        ])
-      ),
-      path(
-        toList([
-          attribute("d", "M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1")
-        ])
-      )
-    ])
-  );
-}
-function pencil_ruler(attributes) {
-  return svg(
-    prepend(
-      attribute("stroke-linejoin", "round"),
-      prepend(
-        attribute("stroke-linecap", "round"),
-        prepend(
-          attribute("stroke-width", "2"),
-          prepend(
-            attribute("stroke", "currentColor"),
-            prepend(
-              attribute("fill", "none"),
-              prepend(
-                attribute("viewBox", "0 0 24 24"),
-                prepend(
-                  attribute("height", "24"),
-                  prepend(attribute("width", "24"), attributes)
-                )
-              )
-            )
-          )
-        )
-      )
-    ),
-    toList([
-      path(
-        toList([
-          attribute(
-            "d",
-            "M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"
-          )
-        ])
-      ),
-      path(toList([attribute("d", "m8 6 2-2")])),
-      path(toList([attribute("d", "m18 16 2-2")])),
-      path(
-        toList([
-          attribute(
-            "d",
-            "m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"
-          )
-        ])
-      ),
-      path(
-        toList([
-          attribute(
-            "d",
-            "M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
-          )
-        ])
-      ),
-      path(toList([attribute("d", "m15 5 4 4")]))
-    ])
-  );
-}
-function list_collapse(attributes) {
-  return svg(
-    prepend(
-      attribute("stroke-linejoin", "round"),
-      prepend(
-        attribute("stroke-linecap", "round"),
-        prepend(
-          attribute("stroke-width", "2"),
-          prepend(
-            attribute("stroke", "currentColor"),
-            prepend(
-              attribute("fill", "none"),
-              prepend(
-                attribute("viewBox", "0 0 24 24"),
-                prepend(
-                  attribute("height", "24"),
-                  prepend(attribute("width", "24"), attributes)
-                )
-              )
-            )
-          )
-        )
-      )
-    ),
-    toList([
-      path(toList([attribute("d", "m3 10 2.5-2.5L3 5")])),
-      path(toList([attribute("d", "m3 19 2.5-2.5L3 14")])),
-      path(toList([attribute("d", "M10 6h11")])),
-      path(toList([attribute("d", "M10 12h11")])),
-      path(toList([attribute("d", "M10 18h11")]))
-    ])
-  );
-}
+// build/dev/javascript/o11a_common/o11a/events.mjs
+var user_submitted_note = "user-submitted-line-note";
 
 // build/dev/javascript/o11a_common/o11a/note.mjs
 var Note = class extends CustomType {
@@ -4617,7 +4470,229 @@ function decode_structured_notes(notes) {
   );
 }
 
-// build/dev/javascript/o11a_common/o11a/ui/line_discussion.mjs
+// build/dev/javascript/o11a_client/selector_ffi.mjs
+function focus_line_discussion_input(line_tag) {
+  console.log("Focusing on line tag", line_tag);
+  document.querySelector("lustre-server-component").shadowRoot.querySelector(`#${line_tag} line-discussion`).shadowRoot.querySelector("input").focus();
+}
+
+// build/dev/javascript/o11a_client/lib/effectx.mjs
+function focus_line_discussion_input2(line_tag) {
+  return from(
+    (_) => {
+      debug("Focusing on line tag " + line_tag);
+      return focus_line_discussion_input(line_tag);
+    }
+  );
+}
+
+// build/dev/javascript/o11a_client/lib/eventx.mjs
+function on_ctrl_enter(msg) {
+  return on2(
+    "keydown",
+    (event2) => {
+      let decoder = field2(
+        "ctrlKey",
+        bool,
+        (ctrl_key) => {
+          return field2(
+            "key",
+            string3,
+            (key) => {
+              return success([ctrl_key, key]);
+            }
+          );
+        }
+      );
+      let empty_error = toList([new DecodeError("", "", toList([]))]);
+      return try$(
+        (() => {
+          let _pipe = run(event2, decoder);
+          return replace_error(_pipe, empty_error);
+        })(),
+        (_use0) => {
+          let ctrl_key = _use0[0];
+          let key = _use0[1];
+          if (ctrl_key && key === "Enter") {
+            return new Ok(msg);
+          } else {
+            return new Error(empty_error);
+          }
+        }
+      );
+    }
+  );
+}
+function on_e(msg) {
+  return on2(
+    "keydown",
+    (event2) => {
+      let empty_error = toList([new DecodeError("", "", toList([]))]);
+      return try$(
+        (() => {
+          let _pipe = run(
+            event2,
+            field2("key", string3, success)
+          );
+          return replace_error(_pipe, empty_error);
+        })(),
+        (key) => {
+          debug("keydown on key " + key);
+          let _pipe = (() => {
+            if (key === "e") {
+              return new Ok(msg);
+            } else {
+              return new Error(empty_error);
+            }
+          })();
+          return debug(_pipe);
+        }
+      );
+    }
+  );
+}
+
+// build/dev/javascript/lustre/lustre/element/svg.mjs
+var namespace = "http://www.w3.org/2000/svg";
+function svg(attrs, children2) {
+  return namespaced(namespace, "svg", attrs, children2);
+}
+function path(attrs) {
+  return namespaced(namespace, "path", attrs, toList([]));
+}
+
+// build/dev/javascript/o11a_client/lib/lucide.mjs
+function messages_square(attributes) {
+  return svg(
+    prepend(
+      attribute("stroke-linejoin", "round"),
+      prepend(
+        attribute("stroke-linecap", "round"),
+        prepend(
+          attribute("stroke-width", "2"),
+          prepend(
+            attribute("stroke", "currentColor"),
+            prepend(
+              attribute("fill", "none"),
+              prepend(
+                attribute("viewBox", "0 0 24 24"),
+                prepend(
+                  attribute("height", "24"),
+                  prepend(attribute("width", "24"), attributes)
+                )
+              )
+            )
+          )
+        )
+      )
+    ),
+    toList([
+      path(
+        toList([
+          attribute(
+            "d",
+            "M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"
+          )
+        ])
+      ),
+      path(
+        toList([
+          attribute("d", "M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1")
+        ])
+      )
+    ])
+  );
+}
+function pencil_ruler(attributes) {
+  return svg(
+    prepend(
+      attribute("stroke-linejoin", "round"),
+      prepend(
+        attribute("stroke-linecap", "round"),
+        prepend(
+          attribute("stroke-width", "2"),
+          prepend(
+            attribute("stroke", "currentColor"),
+            prepend(
+              attribute("fill", "none"),
+              prepend(
+                attribute("viewBox", "0 0 24 24"),
+                prepend(
+                  attribute("height", "24"),
+                  prepend(attribute("width", "24"), attributes)
+                )
+              )
+            )
+          )
+        )
+      )
+    ),
+    toList([
+      path(
+        toList([
+          attribute(
+            "d",
+            "M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"
+          )
+        ])
+      ),
+      path(toList([attribute("d", "m8 6 2-2")])),
+      path(toList([attribute("d", "m18 16 2-2")])),
+      path(
+        toList([
+          attribute(
+            "d",
+            "m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"
+          )
+        ])
+      ),
+      path(
+        toList([
+          attribute(
+            "d",
+            "M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+          )
+        ])
+      ),
+      path(toList([attribute("d", "m15 5 4 4")]))
+    ])
+  );
+}
+function list_collapse(attributes) {
+  return svg(
+    prepend(
+      attribute("stroke-linejoin", "round"),
+      prepend(
+        attribute("stroke-linecap", "round"),
+        prepend(
+          attribute("stroke-width", "2"),
+          prepend(
+            attribute("stroke", "currentColor"),
+            prepend(
+              attribute("fill", "none"),
+              prepend(
+                attribute("viewBox", "0 0 24 24"),
+                prepend(
+                  attribute("height", "24"),
+                  prepend(attribute("width", "24"), attributes)
+                )
+              )
+            )
+          )
+        )
+      )
+    ),
+    toList([
+      path(toList([attribute("d", "m3 10 2.5-2.5L3 5")])),
+      path(toList([attribute("d", "m3 19 2.5-2.5L3 14")])),
+      path(toList([attribute("d", "M10 6h11")])),
+      path(toList([attribute("d", "M10 12h11")])),
+      path(toList([attribute("d", "M10 18h11")]))
+    ])
+  );
+}
+
+// build/dev/javascript/o11a_client/o11a/ui/line_discussion.mjs
 var Model2 = class extends CustomType {
   constructor(user_name, line_number, line_id, keep_notes_open, notes, current_note_draft, active_thread, show_expanded_message_box, current_expanded_message_draft, expanded_messages) {
     super();
@@ -4701,6 +4776,10 @@ var UserToggledExpandedMessage = class extends CustomType {
 };
 var UserToggledKeepNotesOpen = class extends CustomType {
 };
+var UserToggledCloseNotes = class extends CustomType {
+};
+var UserFocusedDiscussion = class extends CustomType {
+};
 function init2(_) {
   return [
     new Model2(
@@ -4726,6 +4805,56 @@ function get_current_thread_id(model) {
   } else {
     return model.line_id;
   }
+}
+function inline_comment_preview_view(model) {
+  let _pipe = map_get(model.notes, model.line_id);
+  let _pipe$1 = try$(_pipe, last);
+  let _pipe$2 = map3(
+    _pipe$1,
+    (note) => {
+      return span(
+        toList([
+          class$("code-extras fade-in comment-preview"),
+          attribute("tabindex", "0"),
+          on_click(new UserToggledKeepNotesOpen()),
+          on_e(new UserFocusedDiscussion()),
+          style(
+            toList([
+              ["animation-delay", to_string(model.line_number * 4) + "ms"]
+            ])
+          )
+        ]),
+        toList([
+          text2(
+            (() => {
+              let $ = string_length(note.message) > 40;
+              if ($) {
+                return (() => {
+                  let _pipe$22 = note.message;
+                  return slice(_pipe$22, 0, 37);
+                })() + "...";
+              } else {
+                let _pipe$22 = note.message;
+                return slice(_pipe$22, 0, 40);
+              }
+            })()
+          )
+        ])
+      );
+    }
+  );
+  return unwrap2(
+    _pipe$2,
+    span(
+      toList([
+        class$("code-extras new-thread-preview"),
+        attribute("tabindex", "0"),
+        on_click(new UserToggledKeepNotesOpen()),
+        on_e(new UserFocusedDiscussion())
+      ]),
+      toList([text2("Start new thread")])
+    )
+  );
 }
 function significance_badge_view(model, note) {
   let $ = significance_to_string(
@@ -4780,8 +4909,6 @@ function classify_message(message, is_thread_open) {
     }
   }
 }
-var component_name = "line-discussion";
-var user_submitted_note_event = "user-submitted-line-note";
 function update(model, msg) {
   if (msg instanceof ServerSetLineId) {
     let line_id = msg[0];
@@ -4915,7 +5042,7 @@ function update(model, msg) {
               _record.expanded_messages
             );
           })(),
-          emit2(user_submitted_note_event, encode_note(note))
+          emit2(user_submitted_note, encode_note(note))
         ];
       }
     );
@@ -5076,7 +5203,7 @@ function update(model, msg) {
       })(),
       none()
     ];
-  } else {
+  } else if (msg instanceof UserToggledCloseNotes) {
     return [
       (() => {
         let _record = model;
@@ -5095,69 +5222,29 @@ function update(model, msg) {
       })(),
       none()
     ];
+  } else {
+    debug("user focused discussion");
+    return [
+      model,
+      focus_line_discussion_input2(
+        "L" + to_string(model.line_number)
+      )
+    ];
   }
 }
-var component_style = "\n/* Duplicated from the main styles.css bleh */\n.code-extras {\n  -webkit-touch-callout: none;\n  -webkit-user-select: none;\n  -khtml-user-select: none;\n  -moz-user-select: none;\n  -ms-user-select: none;\n  user-select: none;\n  font-style: italic;\n  color: var(--comment-color);\n}\n\n:host {\n  display: inline-block;\n}\n\n.line-discussion-component-container {\n  position: relative;\n}\n\n.new-thread-preview {\n  opacity: 0;\n  transition-property: opacity;\n  transition-duration: 75ms;\n  transition-timing-function: ease-in;\n  transition-delay: 50ms;\n}\n\n.new-thread-preview:hover,\n.line-discussion-component-container:hover .new-thread-preview,\n.line-discussion-component-container:focus .new-thread-preview {\n  opacity: 1;\n  transition-property: opacity;\n  transition-duration: 75ms;\n  transition-timing-function: ease-in;\n  transition-delay: 50ms;\n}\n\n.line-discussion-list {\n  position: absolute;\n  bottom: 1.4rem;\n  left: 0rem;\n  width: 30rem;\n  text-wrap: wrap;\n  background-color: var(--overlay-background-color);;\n  border-radius: 6px;\n  border: var(--input-border-color) solid black;\n  visibility: hidden;\n  font-style: normal;\n  user-select: text;\n\n  opacity: 0;\n  transition-property: visibility, opacity;\n  transition-duration: 0s, 75ms;\n  transition-timing-function: linear, ease-in;\n  transition-delay: 0.3s, 50ms;\n}\n\n.loc:hover + .line-discussion-list,\n.line-discussion-list:hover,\n.line-discussion-list:focus-within,\n.line-discussion-component-container:hover .line-discussion-list,\n.line-discussion-component-container:focus .line-discussion-list {\n  visibility: visible;\n  opacity: 1;\n  transition-property: opacity;\n  transition-duration: 75ms;\n  transition-timing-function: ease-in;\n  transition-delay: 50ms;\n}\n\n.line-discussion-list-column {\n  display: flex;\n  flex-direction: column-reverse;\n  padding: 0.5rem;\n  max-height: 30rem;\n  overflow: auto;\n}\n\nbutton, input {\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border-color: var(--input-border-color);\n}\n\n.line-discussion-item-header {\n  display: flex;\n  justify-content: space-between;\n  margin-bottom: 0.2rem;\n}\n\n.line-discussion-item-header-meta {\n  display: flex;\n  gap: 0.5rem;\n  align-items: start;\n}\n\n.line-discussion-list p {\n  margin: 0;\n}\n\n.significance-badge {\n  border-radius: 4px;\n  padding: 0.25rem;\n  padding-bottom: 0.15rem;\n  font-size: 0.65rem;\n  border: 1px solid var(--input-border-color);\n}\n\n.line-discussion-item-header-actions {\n  display: flex;\n  gap: 0.5rem;\n}\n\nbutton {\n  background-color: var(--overlay-background-color);\n  color: var(--text-color);\n  border: none;\n  border-radius: 4px;\n  cursor: pointer;\n}\n\nbutton:hover {\n  background-color: var(--input-background-color);\n}\n\nbutton svg {\n  height: 1.25rem;\n  width: 1.25rem;\n}\n\n.thread-switch-button, .expand-message-button {\n  padding-top: 0.2rem;\n}\n\n.expanded-note-message {\n  margin-top: 1rem;\n}\n\n.line-discussion-input-container {\n  display: flex;\n  gap: 0.35rem;\n  align-items: center;\n  justify-content: space-between;\n}\n\n.new-comment-button {\n  padding-top: 0.25rem;\n}\n\n.new-comment-input {\n  display: inline-block;\n  width: 100%;\n  border: none;\n  border-top: 1px solid var(--input-border-color);\n  border-radius: 4px;\n  flex-grow: 1;\n  padding: 0.3rem;\n  padding-left: .5rem;\n  font-size: 0.95rem;\n}\n\n.expanded-message-box {\n  position: absolute;\n  display: flex;\n  width: 140%;\n  left: 0;\n  padding: .5rem;\n  background-color: var(--overlay-background-color);\n  border-radius: 6px;\n  border: 1px solid var(--input-border-color);\n  height: 10rem;\n  margin-top: 0.5rem;\n  z-index: 3;\n}\n\n.expanded-message-box textarea {\n  flex-grow: 1;\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border: 1px solid var(--input-border-color);\n  border-radius: 4px;\n  padding: 0.3rem;\n  font-size: 0.95rem;\n  resize: none;\n}\n";
+var name = line_discussion;
+var component_style = "\n/* Duplicated from the main styles.css bleh */\n.code-extras {\n  -webkit-touch-callout: none;\n  -webkit-user-select: none;\n  -khtml-user-select: none;\n  -moz-user-select: none;\n  -ms-user-select: none;\n  user-select: none;\n  font-style: italic;\n  color: var(--comment-color);\n}\n\n:host {\n  display: inline-block;\n}\n\n#line-discussion-component-container {\n  position: relative;\n}\n\n.new-thread-preview {\n  opacity: 0;\n  transition-property: opacity;\n  transition-duration: 75ms;\n  transition-timing-function: ease-in;\n  transition-delay: 50ms;\n}\n\n.new-thread-preview:hover,\n.new-thread-preview:focus,\n#line-discussion-component-container:hover .new-thread-preview,\n#line-discussion-component-container:focus-within .new-thread-preview,\n#line-discussion-component-container:focus .new-thread-preview {\n  opacity: 1;\n  transition-property: opacity;\n  transition-duration: 75ms;\n  transition-timing-function: ease-in;\n  transition-delay: 50ms;\n}\n\n.line-discussion-list {\n  position: absolute;\n  bottom: 1.4rem;\n  left: 0rem;\n  width: 30rem;\n  text-wrap: wrap;\n  background-color: var(--overlay-background-color);;\n  border-radius: 6px;\n  border: var(--input-border-color) solid black;\n  visibility: hidden;\n  font-style: normal;\n  user-select: text;\n\n  opacity: 0;\n  transition-property: visibility, opacity;\n  transition-duration: 0s, 15ms;\n  transition-timing-function: linear, ease-in;\n  transition-delay: 30ms, 15ms;\n}\n\n.loc:hover + .line-discussion-list,\n.line-discussion-list:hover,\n.line-discussion-list:focus-within,\n.new-thread-preview:focus + .line-discussion-list,\n.comment-preview:focus + .line-discussion-list,\n#line-discussion-component-container:hover .line-discussion-list,\n#line-discussion-component-container:focus .line-discussion-list {\n  visibility: visible;\n  opacity: 1;\n  /* idk if I want this delay anymore, I want it to be snappy\n  transition-property: opacity;\n  transition-duration: 75ms;\n  transition-timing-function: ease-in;\n  transition-delay: 50ms;\n  */\n}\n\n.line-discussion-list-column {\n  display: flex;\n  flex-direction: column-reverse;\n  padding: 0.5rem;\n  max-height: 30rem;\n  overflow: auto;\n}\n\nbutton, input {\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border-color: var(--input-border-color);\n}\n\n.line-discussion-item-header {\n  display: flex;\n  justify-content: space-between;\n  margin-bottom: 0.2rem;\n}\n\n.line-discussion-item-header-meta {\n  display: flex;\n  gap: 0.5rem;\n  align-items: start;\n}\n\n.line-discussion-list p {\n  margin: 0;\n}\n\n.significance-badge {\n  border-radius: 4px;\n  padding: 0.25rem;\n  padding-bottom: 0.15rem;\n  font-size: 0.65rem;\n  border: 1px solid var(--input-border-color);\n}\n\n.line-discussion-item-header-actions {\n  display: flex;\n  gap: 0.5rem;\n}\n\nbutton {\n  background-color: var(--overlay-background-color);\n  color: var(--text-color);\n  border: none;\n  border-radius: 4px;\n  cursor: pointer;\n}\n\nbutton:hover {\n  background-color: var(--input-background-color);\n}\n\nbutton svg {\n  height: 1.25rem;\n  width: 1.25rem;\n}\n\n.thread-switch-button, .expand-message-button {\n  padding-top: 0.2rem;\n}\n\n.expanded-note-message {\n  margin-top: 1rem;\n}\n\n.line-discussion-input-container {\n  display: flex;\n  gap: 0.35rem;\n  align-items: center;\n  justify-content: space-between;\n}\n\n.new-comment-button {\n  padding-top: 0.25rem;\n}\n\n#new-comment-input {\n  display: inline-block;\n  width: 100%;\n  border: none;\n  border-top: 1px solid var(--input-border-color);\n  border-radius: 4px;\n  flex-grow: 1;\n  padding: 0.3rem;\n  padding-left: .5rem;\n  font-size: 0.95rem;\n}\n\n.expanded-message-box {\n  position: absolute;\n  display: flex;\n  width: 140%;\n  left: 0;\n  padding: .5rem;\n  background-color: var(--overlay-background-color);\n  border-radius: 6px;\n  border: 1px solid var(--input-border-color);\n  height: 10rem;\n  margin-top: 0.5rem;\n  z-index: 3;\n}\n\n.expanded-message-box textarea {\n  flex-grow: 1;\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border: 1px solid var(--input-border-color);\n  border-radius: 4px;\n  padding: 0.3rem;\n  font-size: 0.95rem;\n  resize: none;\n}\n";
 function view(model) {
   let current_thread_id = get_current_thread_id(model);
   let current_notes = (() => {
     let _pipe = map_get(model.notes, current_thread_id);
     return unwrap2(_pipe, toList([]));
   })();
-  let inline_comment_preview = (() => {
-    let _pipe = map_get(model.notes, model.line_id);
-    let _pipe$1 = try$(_pipe, last);
-    let _pipe$2 = map3(
-      _pipe$1,
-      (note) => {
-        return span(
-          toList([
-            class$("code-extras fade-in"),
-            style(
-              toList([
-                [
-                  "animation-delay",
-                  to_string(model.line_number * 4) + "ms"
-                ]
-              ])
-            )
-          ]),
-          toList([
-            text2(
-              (() => {
-                let $ = string_length(note.message) > 40;
-                if ($) {
-                  return (() => {
-                    let _pipe$22 = note.message;
-                    return slice(_pipe$22, 0, 37);
-                  })() + "...";
-                } else {
-                  let _pipe$22 = note.message;
-                  return slice(_pipe$22, 0, 40);
-                }
-              })()
-            )
-          ])
-        );
-      }
-    );
-    return unwrap2(
-      _pipe$2,
-      span(
-        toList([class$("code-extras new-thread-preview")]),
-        toList([text2("Start new thread")])
-      )
-    );
-  })();
   return div(
-    toList([
-      class$("line-discussion-component-container"),
-      attribute("tabindex", "0"),
-      on_click(new UserToggledKeepNotesOpen())
-    ]),
+    toList([id("line-discussion-component-container")]),
     toList([
       style2(toList([]), component_style),
-      inline_comment_preview,
+      inline_comment_preview_view(model),
       div(
         toList([
           class$("line-discussion-list"),
@@ -5183,7 +5270,7 @@ function view(model) {
                   ),
                   input(
                     toList([
-                      class$("new-comment-input"),
+                      id("new-comment-input"),
                       placeholder("Add a new comment"),
                       on_input(
                         (var0) => {
@@ -5466,11 +5553,5 @@ function component2() {
   );
 }
 
-// build/dev/javascript/o11a_client/o11a/client/line_discussion.mjs
-function register() {
-  return component2();
-}
-var name = component_name;
-
 // build/.lustre/entry.mjs
-make_lustre_client_component(register(), name);
+make_lustre_client_component(component2(), name);

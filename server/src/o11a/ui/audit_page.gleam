@@ -17,10 +17,11 @@ import lustre/element
 import lustre/element/html
 import lustre/event
 import lustre/server_component
+import o11a/components
 import o11a/config
+import o11a/events
 import o11a/note
 import o11a/server/discussion
-import o11a/ui/line_discussion
 import simplifile
 import snag
 
@@ -151,8 +152,9 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
     html.span([attribute.attribute("dangerous-unescaped-html", line_text)], []),
     html.span([attribute.class("inline-comment")], [
       element.element(
-        line_discussion.component_name,
+        components.line_discussion,
         [
+          attribute.id("linediscussion" <> line_tag),
           attribute.attribute(
             "line-discussion",
             discussion.get_structured_notes(model.discussion, line_id)
@@ -296,7 +298,7 @@ pub fn style_code_tokens(line_text) {
 }
 
 pub fn on_user_submitted_line_note(msg) {
-  use event <- event.on(line_discussion.user_submitted_note_event)
+  use event <- event.on(events.user_submitted_note)
 
   let empty_error = [dynamic.DecodeError("", "", [])]
 

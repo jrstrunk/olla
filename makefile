@@ -8,8 +8,8 @@ all:
 .PHONY: run
 run:
 	@(cd client \
-  && gleam run -m lustre/dev build component o11a/client/line_discussion --outdir="../server/priv/static" \
-	&& gleam run -m lustre/dev build component o11a/client/function_discussion --outdir="../server/priv/static" \
+  && gleam run -m lustre/dev build component o11a/ui/line_discussion --outdir="../server/priv/static" \
+	&& gleam run -m lustre/dev build component o11a/ui/function_discussion --outdir="../server/priv/static" \
 	&& cd ../server \
 	add && gleam run)
 
