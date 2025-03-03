@@ -18,6 +18,7 @@ const style = "
 #file-tree {
   overflow: auto;
   font-size: 0.9rem;
+  padding-left: 1rem;
 }
 
 #audit-tree-header {
@@ -27,6 +28,8 @@ const style = "
 #tree-resizer {
   border-right: 1px solid var(--overlay-background-color);
   cursor: col-resize;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
 }
 
 #tree-resizer:hover {
@@ -34,8 +37,9 @@ const style = "
 }
 
 #file-contents {
-  /* grid-area: file-contents; */
   overflow: auto;
+  padding-top: .5rem;
+  padding-bottom: .5rem;
 }
 
 .tree-item {

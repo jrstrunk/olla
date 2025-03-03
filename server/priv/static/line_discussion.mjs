@@ -1164,15 +1164,6 @@ var unicode_whitespaces = [
 ].join("");
 var trim_start_regex = new RegExp(`^[${unicode_whitespaces}]*`);
 var trim_end_regex = new RegExp(`[${unicode_whitespaces}]*$`);
-function print_debug(string5) {
-  if (typeof process === "object" && process.stderr?.write) {
-    process.stderr.write(string5 + "\n");
-  } else if (typeof Deno === "object") {
-    Deno.stderr.writeSync(new TextEncoder().encode(string5 + "\n"));
-  } else {
-    console.log(string5);
-  }
-}
 function floor(float4) {
   return Math.floor(float4);
 }
@@ -2413,11 +2404,20 @@ function class$(name2) {
 function id(name2) {
   return attribute("id", name2);
 }
+function type_(name2) {
+  return attribute("type", name2);
+}
 function value(val) {
   return attribute("value", val);
 }
 function placeholder(text3) {
   return attribute("placeholder", text3);
+}
+function href(uri) {
+  return attribute("href", uri);
+}
+function rel(relationship) {
+  return attribute("rel", relationship);
 }
 
 // build/dev/javascript/lustre/lustre/element.mjs
@@ -3241,13 +3241,13 @@ var make_lustre_client_component = ({ init: init3, update: update2, view: view2,
     }
     async #adoptStyleSheets() {
       const pendingParentStylesheets = [];
-      for (const link of document.querySelectorAll("link[rel=stylesheet]")) {
-        if (link.sheet)
+      for (const link2 of document.querySelectorAll("link[rel=stylesheet]")) {
+        if (link2.sheet)
           continue;
         pendingParentStylesheets.push(
           new Promise((resolve, reject) => {
-            link.addEventListener("load", resolve);
-            link.addEventListener("error", reject);
+            link2.addEventListener("load", resolve);
+            link2.addEventListener("error", reject);
           })
         );
       }
@@ -3410,14 +3410,6 @@ function that(requirement, consequence, alternative) {
   } else {
     return alternative();
   }
-}
-
-// build/dev/javascript/gleam_stdlib/gleam/io.mjs
-function debug(term) {
-  let _pipe = term;
-  let _pipe$1 = inspect2(_pipe);
-  print_debug(_pipe$1);
-  return term;
 }
 
 // build/dev/javascript/gtempo/gtempo/internal.mjs
@@ -4127,6 +4119,9 @@ function as_utc_datetime(instant) {
 function text2(content) {
   return text(content);
 }
+function link(attrs) {
+  return element("link", attrs, toList([]));
+}
 function style2(attrs, css) {
   return element("style", attrs, toList([text2(css)]));
 }
@@ -4480,7 +4475,6 @@ function focus_line_discussion_input(line_tag) {
 function focus_line_discussion_input2(line_tag) {
   return from(
     (_) => {
-      debug("Focusing on line tag " + line_tag);
       return focus_line_discussion_input(line_tag);
     }
   );
@@ -4537,15 +4531,11 @@ function on_e(msg) {
           return replace_error(_pipe, empty_error);
         })(),
         (key) => {
-          debug("keydown on key " + key);
-          let _pipe = (() => {
-            if (key === "e") {
-              return new Ok(msg);
-            } else {
-              return new Error(empty_error);
-            }
-          })();
-          return debug(_pipe);
+          if (key === "e") {
+            return new Ok(msg);
+          } else {
+            return new Error(empty_error);
+          }
         }
       );
     }
@@ -4806,6 +4796,72 @@ function get_current_thread_id(model) {
     return model.line_id;
   }
 }
+function thread_header_view(model) {
+  let $ = model.active_thread;
+  if ($ instanceof Some) {
+    let active_thread = $[0];
+    return div(
+      toList([]),
+      toList([
+        button(
+          toList([on_click(new UserClosedThread())]),
+          toList([text2("Close Thread")])
+        ),
+        br(toList([])),
+        text2("Current Thread: "),
+        text2(active_thread.parent_note.message),
+        (() => {
+          let $1 = active_thread.parent_note.expanded_message;
+          if ($1 instanceof Some) {
+            let expanded_message = $1[0];
+            return div(
+              toList([class$("expanded-note-message")]),
+              toList([
+                p(toList([]), toList([text2(expanded_message)]))
+              ])
+            );
+          } else {
+            return fragment(toList([]));
+          }
+        })(),
+        hr(toList([]))
+      ])
+    );
+  } else {
+    return fragment(toList([]));
+  }
+}
+function new_message_input_view(model, current_thread_id) {
+  return div(
+    toList([class$("flex justify-between items-center gap-[.35rem]")]),
+    toList([
+      button(
+        toList([
+          id("toggle-expanded-message-button"),
+          class$("icon-button"),
+          on_click(
+            new UserToggledExpandedMessageBox(!model.show_expanded_message_box)
+          )
+        ]),
+        toList([pencil_ruler(toList([]))])
+      ),
+      input(
+        toList([
+          id("new-comment-input"),
+          class$(
+            "inline-block w-full grow text-[0.9rem] pl-2 pb-[.2rem] p-[0.3rem] border-[none] border-t border-solid;"
+          ),
+          placeholder("Add a new comment"),
+          on_input((var0) => {
+            return new UserWroteNote(var0);
+          }),
+          on_ctrl_enter(new UserSubmittedNote(current_thread_id)),
+          value(model.current_note_draft)
+        ])
+      )
+    ])
+  );
+}
 function inline_comment_preview_view(model) {
   let _pipe = map_get(model.notes, model.line_id);
   let _pipe$1 = try$(_pipe, last);
@@ -4814,7 +4870,8 @@ function inline_comment_preview_view(model) {
     (note) => {
       return span(
         toList([
-          class$("code-extras fade-in comment-preview"),
+          class$("select-none italic comment font-code fade-in"),
+          class$("comment-preview"),
           attribute("tabindex", "0"),
           on_click(new UserToggledKeepNotesOpen()),
           on_e(new UserFocusedDiscussion()),
@@ -4847,7 +4904,8 @@ function inline_comment_preview_view(model) {
     _pipe$2,
     span(
       toList([
-        class$("code-extras new-thread-preview"),
+        class$("select-none italic comment"),
+        class$("new-thread-preview"),
         attribute("tabindex", "0"),
         on_click(new UserToggledKeepNotesOpen()),
         on_e(new UserFocusedDiscussion())
@@ -4857,6 +4915,7 @@ function inline_comment_preview_view(model) {
   );
 }
 function significance_badge_view(model, note) {
+  let badge_style = "input-border rounded text-[0.65rem] pb-[0.15rem] p-1";
   let $ = significance_to_string(
     note.significance,
     (() => {
@@ -4867,12 +4926,160 @@ function significance_badge_view(model, note) {
   if ($ instanceof Some) {
     let significance = $[0];
     return span(
-      toList([class$("significance-badge")]),
+      toList([class$(badge_style)]),
       toList([text2(significance)])
     );
   } else {
     return fragment(toList([]));
   }
+}
+function comments_view(model, current_notes) {
+  return map2(
+    current_notes,
+    (note) => {
+      return div(
+        toList([class$("line-discussion-item")]),
+        toList([
+          div(
+            toList([class$("flex justify-between mb-[.2rem]")]),
+            toList([
+              div(
+                toList([class$("flex gap-[.5rem] items-start")]),
+                toList([
+                  p(toList([]), toList([text2(note.user_name)])),
+                  significance_badge_view(model, note)
+                ])
+              ),
+              div(
+                toList([class$("flex gap-[.5rem]")]),
+                toList([
+                  (() => {
+                    let $ = note.expanded_message;
+                    if ($ instanceof Some) {
+                      return button(
+                        toList([
+                          id("expand-message-button"),
+                          class$("icon-button"),
+                          on_click(
+                            new UserToggledExpandedMessage(note.note_id)
+                          )
+                        ]),
+                        toList([list_collapse(toList([]))])
+                      );
+                    } else {
+                      return fragment(toList([]));
+                    }
+                  })(),
+                  button(
+                    toList([
+                      id("switch-thread-button"),
+                      class$("icon-button"),
+                      on_click(
+                        new UserSwitchedToThread(note.note_id, note)
+                      )
+                    ]),
+                    toList([messages_square(toList([]))])
+                  )
+                ])
+              )
+            ])
+          ),
+          p(toList([]), toList([text2(note.message)])),
+          (() => {
+            let $ = contains(model.expanded_messages, note.note_id);
+            if ($) {
+              return div(
+                toList([class$("mt-[.5rem]")]),
+                toList([
+                  p(
+                    toList([]),
+                    toList([
+                      text2(
+                        (() => {
+                          let _pipe = note.expanded_message;
+                          return unwrap(_pipe, "");
+                        })()
+                      )
+                    ])
+                  )
+                ])
+              );
+            } else {
+              return fragment(toList([]));
+            }
+          })(),
+          hr(toList([class$("mt-[.5rem]")]))
+        ])
+      );
+    }
+  );
+}
+function expanded_message_view(model, current_thread_id) {
+  let expanded_message_style = "overlay p-[.5rem] flex w-[140%] h-40 z-[3] mt-2 left-0";
+  let textarea_style = "grow text-[.95rem] resize-none p-[.3rem]";
+  return div(
+    toList([class$(expanded_message_style)]),
+    toList([
+      textarea(
+        toList([
+          id("expanded-message-box"),
+          class$(textarea_style),
+          placeholder("Write an expanded message body"),
+          on_input(
+            (var0) => {
+              return new UserWroteExpandedMessage(var0);
+            }
+          ),
+          on_ctrl_enter(new UserSubmittedNote(current_thread_id)),
+          value(
+            (() => {
+              let _pipe = model.current_expanded_message_draft;
+              return unwrap(_pipe, "");
+            })()
+          )
+        ]),
+        "Write an expanded message body ig"
+      )
+    ])
+  );
+}
+function discussion_overlay_view(model) {
+  let current_thread_id = get_current_thread_id(model);
+  let current_notes = (() => {
+    let _pipe = map_get(model.notes, current_thread_id);
+    return unwrap2(_pipe, toList([]));
+  })();
+  let comment_list_style = "flex flex-col-reverse p-[.5rem] overflow-auto max-h-[30rem] gap-[.5rem]";
+  return div(
+    toList([
+      id("line-discussion-overlay"),
+      class$(
+        "overlay w-[30rem] invisible not-italic text-wrap select-text left-[-.25rem] bottom-[1.4rem]"
+      ),
+      on_click(new UserToggledKeepNotesOpen())
+    ]),
+    toList([
+      div(
+        toList([
+          id("comment-list"),
+          class$(comment_list_style)
+        ]),
+        toList([
+          new_message_input_view(model, current_thread_id),
+          fragment(comments_view(model, current_notes)),
+          thread_header_view(model)
+        ])
+      ),
+      (() => {
+        let $ = model.show_expanded_message_box;
+        if ($) {
+          return expanded_message_view(model, current_thread_id);
+        } else {
+          return fragment(toList([]));
+        }
+      })()
+    ])
+  );
 }
 function classify_message(message, is_thread_open) {
   if (!is_thread_open) {
@@ -5223,7 +5430,6 @@ function update(model, msg) {
       none()
     ];
   } else {
-    debug("user focused discussion");
     return [
       model,
       focus_line_discussion_input2(
@@ -5233,237 +5439,24 @@ function update(model, msg) {
   }
 }
 var name = line_discussion;
-var component_style = "\n/* Duplicated from the main styles.css bleh */\n.code-extras {\n  -webkit-touch-callout: none;\n  -webkit-user-select: none;\n  -khtml-user-select: none;\n  -moz-user-select: none;\n  -ms-user-select: none;\n  user-select: none;\n  font-style: italic;\n  color: var(--comment-color);\n}\n\n:host {\n  display: inline-block;\n}\n\n#line-discussion-component-container {\n  position: relative;\n}\n\n.new-thread-preview {\n  opacity: 0;\n  transition-property: opacity;\n  transition-duration: 75ms;\n  transition-timing-function: ease-in;\n  transition-delay: 50ms;\n}\n\n.new-thread-preview:hover,\n.new-thread-preview:focus,\n#line-discussion-component-container:hover .new-thread-preview,\n#line-discussion-component-container:focus-within .new-thread-preview,\n#line-discussion-component-container:focus .new-thread-preview {\n  opacity: 1;\n  transition-property: opacity;\n  transition-duration: 75ms;\n  transition-timing-function: ease-in;\n  transition-delay: 50ms;\n}\n\n.line-discussion-list {\n  position: absolute;\n  bottom: 1.4rem;\n  left: 0rem;\n  width: 30rem;\n  text-wrap: wrap;\n  background-color: var(--overlay-background-color);;\n  border-radius: 6px;\n  border: var(--input-border-color) solid black;\n  visibility: hidden;\n  font-style: normal;\n  user-select: text;\n\n  opacity: 0;\n  transition-property: visibility, opacity;\n  transition-duration: 0s, 15ms;\n  transition-timing-function: linear, ease-in;\n  transition-delay: 30ms, 15ms;\n}\n\n.loc:hover + .line-discussion-list,\n.line-discussion-list:hover,\n.line-discussion-list:focus-within,\n.new-thread-preview:focus + .line-discussion-list,\n.comment-preview:focus + .line-discussion-list,\n#line-discussion-component-container:hover .line-discussion-list,\n#line-discussion-component-container:focus .line-discussion-list {\n  visibility: visible;\n  opacity: 1;\n  /* idk if I want this delay anymore, I want it to be snappy\n  transition-property: opacity;\n  transition-duration: 75ms;\n  transition-timing-function: ease-in;\n  transition-delay: 50ms;\n  */\n}\n\n.line-discussion-list-column {\n  display: flex;\n  flex-direction: column-reverse;\n  padding: 0.5rem;\n  max-height: 30rem;\n  overflow: auto;\n}\n\nbutton, input {\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border-color: var(--input-border-color);\n}\n\n.line-discussion-item-header {\n  display: flex;\n  justify-content: space-between;\n  margin-bottom: 0.2rem;\n}\n\n.line-discussion-item-header-meta {\n  display: flex;\n  gap: 0.5rem;\n  align-items: start;\n}\n\n.line-discussion-list p {\n  margin: 0;\n}\n\n.significance-badge {\n  border-radius: 4px;\n  padding: 0.25rem;\n  padding-bottom: 0.15rem;\n  font-size: 0.65rem;\n  border: 1px solid var(--input-border-color);\n}\n\n.line-discussion-item-header-actions {\n  display: flex;\n  gap: 0.5rem;\n}\n\nbutton {\n  background-color: var(--overlay-background-color);\n  color: var(--text-color);\n  border: none;\n  border-radius: 4px;\n  cursor: pointer;\n}\n\nbutton:hover {\n  background-color: var(--input-background-color);\n}\n\nbutton svg {\n  height: 1.25rem;\n  width: 1.25rem;\n}\n\n.thread-switch-button, .expand-message-button {\n  padding-top: 0.2rem;\n}\n\n.expanded-note-message {\n  margin-top: 1rem;\n}\n\n.line-discussion-input-container {\n  display: flex;\n  gap: 0.35rem;\n  align-items: center;\n  justify-content: space-between;\n}\n\n.new-comment-button {\n  padding-top: 0.25rem;\n}\n\n#new-comment-input {\n  display: inline-block;\n  width: 100%;\n  border: none;\n  border-top: 1px solid var(--input-border-color);\n  border-radius: 4px;\n  flex-grow: 1;\n  padding: 0.3rem;\n  padding-left: .5rem;\n  font-size: 0.95rem;\n}\n\n.expanded-message-box {\n  position: absolute;\n  display: flex;\n  width: 140%;\n  left: 0;\n  padding: .5rem;\n  background-color: var(--overlay-background-color);\n  border-radius: 6px;\n  border: 1px solid var(--input-border-color);\n  height: 10rem;\n  margin-top: 0.5rem;\n  z-index: 3;\n}\n\n.expanded-message-box textarea {\n  flex-grow: 1;\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border: 1px solid var(--input-border-color);\n  border-radius: 4px;\n  padding: 0.3rem;\n  font-size: 0.95rem;\n  resize: none;\n}\n";
+var component_style = "\n:host {\n  display: inline-block;\n}\n\n.new-thread-preview {\n  opacity: 0;\n}\n\n.new-thread-preview:hover {\n  opacity: 1;\n  transition-property: opacity;\n  transition-delay: 25ms;\n}\n\n.new-thread-preview:focus,\n.new-thread-preview:has(+ #line-discussion-overlay:hover),\n.new-thread-preview:has(+ #line-discussion-overlay:focus-within) {\n  opacity: 1;\n}\n\n#line-discussion-overlay {\n  visibility: hidden;\n  opacity: 0;\n}\n\n.new-thread-preview:hover + #line-discussion-overlay,\n.comment-preview:hover + #line-discussion-overlay {\n  visibility: visible;\n  opacity: 1;\n  transition-property: opacity, visible;\n  transition-delay: 25ms, 25ms;\n}\n\n.new-thread-preview:focus + #line-discussion-overlay,\n.comment-preview:focus + #line-discussion-overlay,\n#line-discussion-overlay:hover,\n#line-discussion-overlay:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\nbutton.icon-button {\n  background-color: var(--overlay-background-color);\n  color: var(--text-color);\n  border-radius: 4px;\n  border: none;\n  cursor: pointer;\n  padding: 0.3rem;\n}\n\nbutton.icon-button:hover {\n  background-color: var(--input-background-color);\n}\n\nbutton.icon-button svg {\n  height: 1.25rem;\n  width: 1.25rem;\n}\n\ninput, textarea {\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border-radius: 6px;\n}\n\ninput, textarea {\n  border: 1px solid var(--input-border-color);\n}\n\nhr {\n  border: 1px solid var(--comment-color)\n}\n\n.overlay {\n  position: absolute;\n  background-color: var(--overlay-background-color);\n  border: 1px solid var(--input-border-color);\n  border-radius: 6px;\n}\n";
 function view(model) {
-  let current_thread_id = get_current_thread_id(model);
-  let current_notes = (() => {
-    let _pipe = map_get(model.notes, current_thread_id);
-    return unwrap2(_pipe, toList([]));
-  })();
   return div(
-    toList([id("line-discussion-component-container")]),
     toList([
+      id("line-discussion-container"),
+      class$("relative font-code")
+    ]),
+    toList([
+      link(
+        toList([
+          rel("stylesheet"),
+          type_("text/css"),
+          href("/line_discussion.css")
+        ])
+      ),
       style2(toList([]), component_style),
       inline_comment_preview_view(model),
-      div(
-        toList([
-          class$("line-discussion-list"),
-          on_click(new UserToggledKeepNotesOpen())
-        ]),
-        toList([
-          div(
-            toList([class$("line-discussion-list-column")]),
-            toList([
-              div(
-                toList([class$("line-discussion-input-container")]),
-                toList([
-                  button(
-                    toList([
-                      class$("new-comment-button"),
-                      on_click(
-                        new UserToggledExpandedMessageBox(
-                          !model.show_expanded_message_box
-                        )
-                      )
-                    ]),
-                    toList([pencil_ruler(toList([]))])
-                  ),
-                  input(
-                    toList([
-                      id("new-comment-input"),
-                      placeholder("Add a new comment"),
-                      on_input(
-                        (var0) => {
-                          return new UserWroteNote(var0);
-                        }
-                      ),
-                      on_ctrl_enter(
-                        new UserSubmittedNote(current_thread_id)
-                      ),
-                      value(model.current_note_draft)
-                    ])
-                  )
-                ])
-              ),
-              fragment(
-                map2(
-                  current_notes,
-                  (note) => {
-                    return div(
-                      toList([class$("line-discussion-item")]),
-                      toList([
-                        div(
-                          toList([
-                            class$("line-discussion-item-header")
-                          ]),
-                          toList([
-                            div(
-                              toList([
-                                class$(
-                                  "line-discussion-item-header-meta"
-                                )
-                              ]),
-                              toList([
-                                p(
-                                  toList([]),
-                                  toList([text2(note.user_name)])
-                                ),
-                                significance_badge_view(model, note)
-                              ])
-                            ),
-                            div(
-                              toList([
-                                class$(
-                                  "line-discussion-item-header-actions"
-                                )
-                              ]),
-                              toList([
-                                (() => {
-                                  let $ = note.expanded_message;
-                                  if ($ instanceof Some) {
-                                    return button(
-                                      toList([
-                                        class$(
-                                          "expand-message-button"
-                                        ),
-                                        on_click(
-                                          new UserToggledExpandedMessage(
-                                            note.note_id
-                                          )
-                                        )
-                                      ]),
-                                      toList([list_collapse(toList([]))])
-                                    );
-                                  } else {
-                                    return fragment(toList([]));
-                                  }
-                                })(),
-                                button(
-                                  toList([
-                                    class$("thread-switch-button"),
-                                    on_click(
-                                      new UserSwitchedToThread(
-                                        note.note_id,
-                                        note
-                                      )
-                                    )
-                                  ]),
-                                  toList([messages_square(toList([]))])
-                                )
-                              ])
-                            )
-                          ])
-                        ),
-                        p(toList([]), toList([text2(note.message)])),
-                        (() => {
-                          let $ = contains(
-                            model.expanded_messages,
-                            note.note_id
-                          );
-                          if ($) {
-                            return div(
-                              toList([
-                                class$("expanded-note-message")
-                              ]),
-                              toList([
-                                p(
-                                  toList([]),
-                                  toList([
-                                    text2(
-                                      (() => {
-                                        let _pipe = note.expanded_message;
-                                        return unwrap(_pipe, "");
-                                      })()
-                                    )
-                                  ])
-                                )
-                              ])
-                            );
-                          } else {
-                            return fragment(toList([]));
-                          }
-                        })(),
-                        hr(toList([]))
-                      ])
-                    );
-                  }
-                )
-              ),
-              (() => {
-                let $ = model.active_thread;
-                if ($ instanceof Some) {
-                  let active_thread = $[0];
-                  return div(
-                    toList([]),
-                    toList([
-                      button(
-                        toList([on_click(new UserClosedThread())]),
-                        toList([text2("Close Thread")])
-                      ),
-                      br(toList([])),
-                      text2("Current Thread: "),
-                      text2(active_thread.parent_note.message),
-                      (() => {
-                        let $1 = active_thread.parent_note.expanded_message;
-                        if ($1 instanceof Some) {
-                          let expanded_message = $1[0];
-                          return div(
-                            toList([class$("expanded-note-message")]),
-                            toList([
-                              p(
-                                toList([]),
-                                toList([text2(expanded_message)])
-                              )
-                            ])
-                          );
-                        } else {
-                          return fragment(toList([]));
-                        }
-                      })(),
-                      hr(toList([]))
-                    ])
-                  );
-                } else {
-                  return fragment(toList([]));
-                }
-              })()
-            ])
-          ),
-          (() => {
-            let $ = model.show_expanded_message_box;
-            if ($) {
-              return div(
-                toList([class$("expanded-message-box")]),
-                toList([
-                  textarea(
-                    toList([
-                      class$("expanded-comment-input"),
-                      placeholder("Write an expanded message body"),
-                      on_input(
-                        (var0) => {
-                          return new UserWroteExpandedMessage(var0);
-                        }
-                      ),
-                      on_ctrl_enter(
-                        new UserSubmittedNote(current_thread_id)
-                      ),
-                      value(
-                        (() => {
-                          let _pipe = model.current_expanded_message_draft;
-                          return unwrap(_pipe, "");
-                        })()
-                      )
-                    ]),
-                    "Write an expanded message body ig"
-                  )
-                ])
-              );
-            } else {
-              return fragment(toList([]));
-            }
-          })()
-        ])
-      )
+      discussion_overlay_view(model)
     ])
   );
 }

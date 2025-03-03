@@ -65,7 +65,8 @@ fn handler(req, context: Context) {
     ["lustre-server-component.mjs"] ->
       server_componentx.serve_lustre_framework()
 
-    ["styles.css"] -> server_componentx.serve_css("styles.css")
+    ["styles.css" as stylesheet] | ["line_discussion.css" as stylesheet] ->
+      server_componentx.serve_css(stylesheet)
 
     ["line_discussion.mjs"] -> server_componentx.serve_js("line_discussion.mjs")
 
