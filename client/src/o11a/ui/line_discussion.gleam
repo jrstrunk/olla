@@ -523,7 +523,7 @@ fn new_message_input_view(model: Model) {
 
 fn inline_comment_preview_view(model: Model) {
   dict.get(model.notes, model.line_id)
-  |> result.try(list.last)
+  |> result.try(list.first)
   |> result.map(fn(note) {
     html.span(
       [
