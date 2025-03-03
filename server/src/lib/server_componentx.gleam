@@ -122,6 +122,10 @@ pub fn hide_skeleton() {
 pub fn as_document(body: element.Element(msg)) {
   html.html([], [
     html.head([], [
+      html.link([
+        attribute.rel("stylesheet"),
+        attribute.href("/line_discussion.css"),
+      ]),
       html.link([attribute.rel("stylesheet"), attribute.href("/styles.css")]),
       html.script(
         [attribute.type_("module"), attribute.src("/line_discussion.mjs")],

@@ -384,11 +384,6 @@ fn view(model: Model) -> element.Element(Msg) {
       attribute.class("relative font-code"),
     ],
     [
-      html.link([
-        attribute.rel("stylesheet"),
-        attribute.type_("text/css"),
-        attribute.href("/line_discussion.css"),
-      ]),
       html.style([], component_style),
       inline_comment_preview_view(model),
       discussion_overlay_view(model),
