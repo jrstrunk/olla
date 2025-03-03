@@ -19,7 +19,7 @@ window.addEventListener("keydown", (event) => {
   if (control_keys.includes(event.key)) {
     event.preventDefault();
 
-    console.log("Got control key", event.key);
+    console.log("Got control key", event.key, event.ctrlKey, event.shiftKey);
 
     handle_discussion_focus(event) || handle_input_focus(event);
   }
@@ -27,14 +27,32 @@ window.addEventListener("keydown", (event) => {
 
 // Focus a dicussion input logic
 function handle_input_focus(event) {
-  console.log("Handling input focus");
-  if (event.key === "e") {
-    let el = get_line_discussion_input(
+  if (!event.ctrlKey && event.key === "e") {
+    get_line_discussion_input(
+      current_selected_line_number,
+      discussion_lane
+    )?.focus();
+  } else if (event.ctrlKey && event.key === "e") {
+    console.log("Got ctrl e key", event.key);
+    let exp = get_line_discussion_expanded_input(
       current_selected_line_number,
       discussion_lane
     );
-    console.log("Got el", el);
-    el?.focus();
+
+    let exp_cont = get_line_discussion_expanded_input_container(
+      current_selected_line_number,
+      discussion_lane
+    );
+
+
+    if (exp_cont?.classList.contains("hide-exp")) {
+      exp_cont.classList.remove("hide-exp");
+      exp_cont.classList.add("show-exp");
+      // Wait for the styles to be applied
+      setTimeout(() => exp?.focus(), 100);
+    } else {
+      exp?.focus();
+    }
   } else {
     return false;
   }
@@ -54,19 +72,62 @@ function get_line_discussion_input(line_number, discussion_lane) {
     ?.shadowRoot?.querySelector("#new-comment-input");
 }
 
+function get_line_discussion_expanded_input(line_number, discussion_lane) {
+  let discussion =
+    discussion_lane === 1 ? "line-discussion" : "function-discussion";
+
+  // Until function discussions are implemented
+  discussion = "line-discussion";
+
+  return document
+    .querySelector("#audit-page")
+    ?.shadowRoot?.querySelector(`#L${line_number} ${discussion}`)
+    ?.shadowRoot?.querySelector("#expanded-message-box");
+}
+
+function get_line_discussion_expanded_input_container(
+  line_number,
+  discussion_lane
+) {
+  let discussion =
+    discussion_lane === 1 ? "line-discussion" : "function-discussion";
+
+  // Until function discussions are implemented
+  discussion = "line-discussion";
+
+  return document
+    .querySelector("#audit-page")
+    ?.shadowRoot?.querySelector(`#L${line_number} ${discussion}`)
+    ?.shadowRoot?.querySelector("#expanded-message");
+}
+
 // Arrow navigation on the audit page logic
 
 function handle_discussion_focus(event) {
-  if (event.key === "ArrowUp") {
+  if (!event.shiftKey && event.key === "ArrowUp") {
     current_selected_line_number = findNextDiscussionLine(
       current_selected_line_number,
       -1
     );
     focus_line_discussion(current_selected_line_number, discussion_lane);
-  } else if (event.key === "ArrowDown") {
+  } else if (!event.shiftKey && event.key === "ArrowDown") {
     current_selected_line_number = findNextDiscussionLine(
       current_selected_line_number,
       1
+    );
+    focus_line_discussion(current_selected_line_number, discussion_lane);
+  } else if (event.shiftKey && event.key === "ArrowUp") {
+    current_selected_line_number = findNextDiscussionLine(
+      current_selected_line_number,
+      -1,
+      5
+    );
+    focus_line_discussion(current_selected_line_number, discussion_lane);
+  } else if (event.shiftKey && event.key === "ArrowDown") {
+    current_selected_line_number = findNextDiscussionLine(
+      current_selected_line_number,
+      1,
+      5
     );
     focus_line_discussion(current_selected_line_number, discussion_lane);
   } else if (event.key === "PageUp") {

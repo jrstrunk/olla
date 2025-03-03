@@ -292,7 +292,20 @@ const component_style = "
   transition-delay: 1ms;
 }
 
+.comment-preview:focus,
+.new-thread-preview:focus {
+  outline: none;
+  text-decoration: underline;
+}
+
 #line-discussion-overlay {
+  visibility: hidden;
+  opacity: 0;
+  transition-property: opacity, visibility;
+  transition-delay: 1ms, 1ms;
+}
+
+#expanded-message {
   visibility: hidden;
   opacity: 0;
   transition-property: opacity, visibility;
@@ -316,6 +329,14 @@ const component_style = "
   transition-delay: 25ms, 25ms;
 }
 
+.new-thread-preview:hover + #line-discussion-overlay #expanded-message.show-exp,
+.comment-preview:hover + #line-discussion-overlay #expanded-message.show-exp {
+  visibility: visible;
+  opacity: 1;
+  transition-property: opacity, visible;
+  transition-delay: 25ms, 25ms;
+}
+
 /* When the new thread preview is focused, immediately show the overlay to
   provide snappy feedback. */
 
@@ -329,6 +350,16 @@ const component_style = "
 .comment-preview:focus + #line-discussion-overlay,
 #line-discussion-overlay:hover,
 #line-discussion-overlay:focus-within {
+  visibility: visible;
+  opacity: 1;
+}
+
+.new-thread-preview:focus + #line-discussion-overlay #expanded-message.show-exp,
+.comment-preview:focus + #line-discussion-overlay #expanded-message.show-exp,
+#line-discussion-overlay:hover #expanded-message.show-exp,
+#line-discussion-overlay:focus-within #expanded-message.show-exp,
+#expanded-message.show-exp:hover,
+#expanded-message.show-exp:focus-within {
   visibility: visible;
   opacity: 1;
 }
@@ -371,6 +402,8 @@ hr {
   border: 1px solid var(--input-border-color);
   border-radius: 6px;
 }
+
+
 "
 
 fn view(model: Model) -> element.Element(Msg) {
@@ -408,10 +441,7 @@ fn discussion_overlay_view(model: Model) {
           thread_header_view(model),
         ],
       ),
-      case model.show_expanded_message_box {
-        True -> expanded_message_view(model)
-        False -> element.fragment([])
-      },
+      expanded_message_view(model),
     ],
   )
 }
@@ -567,21 +597,31 @@ fn expanded_message_view(model: Model) {
 
   let textarea_style = "grow text-[.95rem] resize-none p-[.3rem]"
 
-  html.div([attribute.class(expanded_message_style)], [
-    html.textarea(
-      [
-        attribute.id("expanded-message-box"),
-        attribute.class(textarea_style),
-        attribute.placeholder("Write an expanded message body"),
-        event.on_input(UserWroteExpandedMessage),
-        eventx.on_ctrl_enter(UserSubmittedNote),
-        attribute.value(
-          model.current_expanded_message_draft |> option.unwrap(""),
-        ),
-      ],
-      "Write an expanded message body ig",
-    ),
-  ])
+  html.div(
+    [
+      attribute.class(expanded_message_style),
+      attribute.id("expanded-message"),
+      case model.show_expanded_message_box {
+        True -> attribute.class("show-exp")
+        False -> attribute.class("hide-exp")
+      },
+    ],
+    [
+      html.textarea(
+        [
+          attribute.id("expanded-message-box"),
+          attribute.class(textarea_style),
+          attribute.placeholder("Write an expanded message body"),
+          event.on_input(UserWroteExpandedMessage),
+          eventx.on_ctrl_enter(UserSubmittedNote),
+          attribute.value(
+            model.current_expanded_message_draft |> option.unwrap(""),
+          ),
+        ],
+        "Write an expanded message body ig",
+      ),
+    ],
+  )
 }
 
 fn classify_message(message, is_thread_open is_thread_open) {
