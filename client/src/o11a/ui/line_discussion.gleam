@@ -364,21 +364,16 @@ const component_style = "
   transition-delay: 1ms, 1ms;
 }
 
-/* When the new thread preview is hovered, delay the opacity transition to
-  avoid triggering it as the mouse swipes by. */
+/* When the new thread preview is hovered */
 
 .new-thread-preview:hover {
   opacity: 1;
-  transition-property: opacity;
-  transition-delay: 25ms;
 }
 
-.new-thread-preview:hover + #line-discussion-overlay,
+.new-thread-preview:hover + #line-discussion-overlay.show-dis,
 .comment-preview:hover + #line-discussion-overlay {
   visibility: visible;
   opacity: 1;
-  transition-property: opacity, visible;
-  transition-delay: 25ms, 25ms;
 }
 
 .new-thread-preview:hover + #line-discussion-overlay #expanded-message.show-exp,
@@ -410,8 +405,8 @@ const component_style = "
 .comment-preview:focus + #line-discussion-overlay #expanded-message.show-exp,
 #line-discussion-overlay:hover #expanded-message.show-exp,
 #line-discussion-overlay:focus-within #expanded-message.show-exp,
-#expanded-message.show-exp:hover,
-#expanded-message.show-exp:focus-within {
+#expanded-message:hover,
+#expanded-message:focus-within {
   visibility: visible;
   opacity: 1;
 }

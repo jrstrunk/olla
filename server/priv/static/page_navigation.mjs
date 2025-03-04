@@ -1,4 +1,4 @@
-console.log("Starting page navigation");
+console.log("Starting page navigatiosn");
 
 let current_selected_line_number = 16;
 
@@ -58,68 +58,73 @@ function handle_expanded_input_focus(event) {
     if (exp_cont?.classList.contains("hide-exp")) {
       exp_cont.classList.remove("hide-exp");
       exp_cont.classList.add("show-exp");
-      // Wait for the styles to be applied
-      setTimeout(() => exp?.focus(), 100);
+      // Wait for the styles to be applied after changing the class
+      setTimeout(() => exp?.focus(), 50);
     } else {
       exp?.focus();
     }
+    return true;
   }
+  return false;
 }
 
 // Focus a dicussion input logic
 function handle_input_focus(event) {
   if (!event.ctrlKey && event.key === "e") {
     event.preventDefault();
-    get_line_discussion_input(
+
+    let overlay = get_line_discussion_overlay(
       current_selected_line_number,
       discussion_lane
-    )?.focus();
-  } else {
-    return false;
+    );
+
+    let inp = get_line_discussion_input(
+      current_selected_line_number,
+      discussion_lane
+    );
+
+    if (!overlay?.classList.contains("show-dis")) {
+      overlay.classList.add("show-dis");
+      // Wait for the styles to be applied after changing the class
+      setTimeout(() => inp?.focus(), 50);
+    } else {
+      inp?.focus();
+    }
+
+    return true;
   }
-  return true;
+  return false;
 }
 
 function get_line_discussion_input(line_number, discussion_lane) {
-  let discussion =
-    discussion_lane === 1 ? "line-discussion" : "function-discussion";
+  return get_discussion_shadow_root(
+    line_number,
+    discussion_lane
+  )?.querySelector("#new-comment-input");
+}
 
-  // Until function discussions are implemented
-  discussion = "line-discussion";
-
-  return document
-    .querySelector("#audit-page")
-    ?.shadowRoot?.querySelector(`#L${line_number} ${discussion}`)
-    ?.shadowRoot?.querySelector("#new-comment-input");
+function get_line_discussion_overlay(line_number, discussion_lane) {
+  return get_discussion_shadow_root(
+    line_number,
+    discussion_lane
+  )?.querySelector("#line-discussion-overlay");
 }
 
 function get_line_discussion_expanded_input(line_number, discussion_lane) {
-  let discussion =
-    discussion_lane === 1 ? "line-discussion" : "function-discussion";
-
-  // Until function discussions are implemented
-  discussion = "line-discussion";
-
-  return document
-    .querySelector("#audit-page")
-    ?.shadowRoot?.querySelector(`#L${line_number} ${discussion}`)
-    ?.shadowRoot?.querySelector("#expanded-message-box");
+  return get_discussion_shadow_root(
+    line_number,
+    discussion_lane
+  )?.querySelector("#expanded-message-box");
 }
 
 function get_line_discussion_expanded_input_container(
   line_number,
   discussion_lane
 ) {
-  let discussion =
-    discussion_lane === 1 ? "line-discussion" : "function-discussion";
-
-  // Until function discussions are implemented
-  discussion = "line-discussion";
-
-  return document
-    .querySelector("#audit-page")
-    ?.shadowRoot?.querySelector(`#L${line_number} ${discussion}`)
-    ?.shadowRoot?.querySelector("#expanded-message");
+  return get_discussion_shadow_root(
+    line_number,
+    discussion_lane
+  )?.querySelector("#expanded-message");
 }
 
 // Arrow navigation on the audit page logic
@@ -227,6 +232,13 @@ function focus_line_discussion(line_number, discussion_lane) {
 }
 
 function get_line_discussion(line_number, discussion_lane) {
+  return get_discussion_shadow_root(
+    line_number,
+    discussion_lane
+  )?.querySelector("#discussion-entry");
+}
+
+function get_discussion_shadow_root(line_number, discussion_lane) {
   let discussion =
     discussion_lane === 1 ? "line-discussion" : "function-discussion";
 
@@ -235,6 +247,5 @@ function get_line_discussion(line_number, discussion_lane) {
 
   return document
     .querySelector("#audit-page")
-    ?.shadowRoot?.querySelector(`#L${line_number} ${discussion}`)
-    ?.shadowRoot?.querySelector("#discussion-entry");
+    ?.shadowRoot?.querySelector(`#L${line_number} ${discussion}`)?.shadowRoot;
 }
