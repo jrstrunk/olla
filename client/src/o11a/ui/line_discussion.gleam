@@ -471,7 +471,7 @@ hr {
   background-color: var(--overlay-background-color);
   border: 1px solid var(--input-border-color);
   border-radius: 6px;
-}
+
 
 p.loc {
   margin: 0;
@@ -690,7 +690,8 @@ fn inline_comment_preview_view(model: Model) {
 }
 
 fn significance_badge_view(model: Model, note: note.Note) {
-  let badge_style = "input-border rounded text-[0.65rem] pb-[0.15rem] p-1"
+  let badge_style =
+    "input-border rounded-md text-[0.65rem] pb-[0.15rem] pt-1 px-[0.5rem]"
 
   case
     note.significance_to_string(

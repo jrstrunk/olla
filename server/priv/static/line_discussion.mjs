@@ -4829,60 +4829,8 @@ function new_message_input_view(model) {
     ])
   );
 }
-function inline_comment_preview_view(model) {
-  let _pipe = map_get(model.notes, model.line_id);
-  let _pipe$1 = try$(_pipe, first);
-  let _pipe$2 = map3(
-    _pipe$1,
-    (note) => {
-      return span(
-        toList([
-          class$("select-none italic comment font-code fade-in"),
-          class$("comment-preview"),
-          id("discussion-entry"),
-          attribute("tabindex", "0"),
-          on_click(new UserEnteredDiscussionPreview()),
-          style(
-            toList([
-              ["animation-delay", to_string(model.line_number * 4) + "ms"]
-            ])
-          )
-        ]),
-        toList([
-          text2(
-            (() => {
-              let $ = string_length(note.message) > 40;
-              if ($) {
-                return (() => {
-                  let _pipe$22 = note.message;
-                  return slice(_pipe$22, 0, 37);
-                })() + "...";
-              } else {
-                let _pipe$22 = note.message;
-                return slice(_pipe$22, 0, 40);
-              }
-            })()
-          )
-        ])
-      );
-    }
-  );
-  return unwrap2(
-    _pipe$2,
-    span(
-      toList([
-        class$("select-none italic comment"),
-        class$("new-thread-preview"),
-        id("discussion-entry"),
-        attribute("tabindex", "0"),
-        on_click(new UserEnteredDiscussionPreview())
-      ]),
-      toList([text2("Start new thread")])
-    )
-  );
-}
 function significance_badge_view(model, note) {
-  let badge_style = "input-border rounded text-[0.65rem] pb-[0.15rem] p-1";
+  let badge_style = "input-border rounded-md text-[0.65rem] pb-[0.15rem] pt-1 px-[0.5rem]";
   let $ = significance_to_string(
     note.significance,
     (() => {
@@ -4979,6 +4927,66 @@ function comments_view(model) {
         ])
       );
     }
+  );
+}
+function inline_comment_preview_view(model) {
+  let _pipe = map_get(model.notes, model.line_id);
+  let _pipe$1 = try$(_pipe, first);
+  let _pipe$2 = map3(
+    _pipe$1,
+    (note) => {
+      return fragment(
+        toList([
+          span(
+            toList([
+              class$("select-none italic comment font-code fade-in"),
+              class$("comment-preview"),
+              id("discussion-entry"),
+              attribute("tabindex", "0"),
+              on_click(new UserEnteredDiscussionPreview()),
+              style(
+                toList([
+                  [
+                    "animation-delay",
+                    to_string(model.line_number * 4) + "ms"
+                  ]
+                ])
+              )
+            ]),
+            toList([
+              text2(
+                (() => {
+                  let $ = string_length(note.message) > 40;
+                  if ($) {
+                    return (() => {
+                      let _pipe$22 = note.message;
+                      return slice(_pipe$22, 0, 37);
+                    })() + "...";
+                  } else {
+                    let _pipe$22 = note.message;
+                    return slice(_pipe$22, 0, 40);
+                  }
+                })()
+              )
+            ])
+          ),
+          significance_badge_view(model, note)
+        ])
+      );
+    }
+  );
+  return unwrap2(
+    _pipe$2,
+    span(
+      toList([
+        class$("select-none italic comment"),
+        class$("new-thread-preview"),
+        id("discussion-entry"),
+        attribute("tabindex", "0"),
+        on_click(new UserEnteredDiscussionPreview())
+      ]),
+      toList([text2("Start new thread")])
+    )
   );
 }
 function expanded_message_view(model) {
@@ -5585,7 +5593,7 @@ function update(model, msg) {
   }
 }
 var name = line_discussion;
-var component_style = "\n:host {\n  display: inline-block;\n}\n\n/* Delay the overlay transitions by 1ms to they are done last, and any \n  actions on them can be done first (like focusing the input) */\n\n.new-thread-preview {\n  opacity: 0;\n  transition-property: opacity;\n  transition-delay: 1ms;\n}\n\n.comment-preview:focus,\n.new-thread-preview:focus {\n  outline: none;\n  text-decoration: underline;\n}\n\n#line-discussion-overlay {\n  visibility: hidden;\n  opacity: 0;\n  transition-property: opacity, visibility;\n  transition-delay: 1ms, 1ms;\n}\n\n#expanded-message {\n  visibility: hidden;\n  opacity: 0;\n  transition-property: opacity, visibility;\n  transition-delay: 1ms, 1ms;\n}\n\n/* When the new thread preview is hovered */\n\np.loc:hover .new-thread-preview {\n  opacity: 1;\n}\n\n#line-discussion-overlay.show-dis,\n.comment-preview:hover + #line-discussion-overlay {\n  visibility: visible;\n  opacity: 1;\n}\n\n.new-thread-preview:hover + #line-discussion-overlay #expanded-message.show-exp,\n.comment-preview:hover + #line-discussion-overlay #expanded-message.show-exp {\n  visibility: visible;\n  opacity: 1;\n  transition-property: opacity, visible;\n  transition-delay: 25ms, 25ms;\n}\n\n/* When the new thread preview is focused, immediately show the overlay to\n  provide snappy feedback. */\n\n.new-thread-preview:focus,\n.new-thread-preview:has(+ #line-discussion-overlay:hover),\n.new-thread-preview:has(+ #line-discussion-overlay:focus-within) {\n  opacity: 1;\n}\n\n.new-thread-preview:focus + #line-discussion-overlay,\n.comment-preview:focus + #line-discussion-overlay,\n#line-discussion-overlay:hover,\n#line-discussion-overlay:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\n.new-thread-preview:focus + #line-discussion-overlay #expanded-message.show-exp,\n.comment-preview:focus + #line-discussion-overlay #expanded-message.show-exp,\n#line-discussion-overlay:hover #expanded-message.show-exp,\n#line-discussion-overlay:focus-within #expanded-message.show-exp,\n#expanded-message:hover,\n#expanded-message:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\nbutton.icon-button {\n  background-color: var(--overlay-background-color);\n  color: var(--text-color);\n  border-radius: 4px;\n  border: none;\n  cursor: pointer;\n  padding: 0.3rem;\n}\n\nbutton.icon-button:hover {\n  background-color: var(--input-background-color);\n}\n\nbutton.icon-button svg {\n  height: 1.25rem;\n  width: 1.25rem;\n}\n\ninput, textarea {\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border-radius: 6px;\n}\n\ninput, textarea {\n  border: 1px solid var(--input-border-color);\n}\n\nhr {\n  border: 1px solid var(--comment-color);\n}\n\n.overlay {\n  position: absolute;\n  background-color: var(--overlay-background-color);\n  border: 1px solid var(--input-border-color);\n  border-radius: 6px;\n}\n\np.loc {\n  margin: 0;\n  white-space: pre;\n  height: 1.1875rem;\n  display: flex;\n  align-items: center;\n}\n\n.line-number {\n  display: inline-block;\n  margin-right: 1rem;\n  width: 2.5rem;\n  text-align: right;\n  flex-shrink: 0;\n}\n\n.inline-comment {\n  margin-left: 2.5rem;\n}\n";
+var component_style = "\n:host {\n  display: inline-block;\n}\n\n/* Delay the overlay transitions by 1ms to they are done last, and any \n  actions on them can be done first (like focusing the input) */\n\n.new-thread-preview {\n  opacity: 0;\n  transition-property: opacity;\n  transition-delay: 1ms;\n}\n\n.comment-preview:focus,\n.new-thread-preview:focus {\n  outline: none;\n  text-decoration: underline;\n}\n\n#line-discussion-overlay {\n  visibility: hidden;\n  opacity: 0;\n  transition-property: opacity, visibility;\n  transition-delay: 1ms, 1ms;\n}\n\n#expanded-message {\n  visibility: hidden;\n  opacity: 0;\n  transition-property: opacity, visibility;\n  transition-delay: 1ms, 1ms;\n}\n\n/* When the new thread preview is hovered */\n\np.loc:hover .new-thread-preview {\n  opacity: 1;\n}\n\n#line-discussion-overlay.show-dis,\n.comment-preview:hover + #line-discussion-overlay {\n  visibility: visible;\n  opacity: 1;\n}\n\n.new-thread-preview:hover + #line-discussion-overlay #expanded-message.show-exp,\n.comment-preview:hover + #line-discussion-overlay #expanded-message.show-exp {\n  visibility: visible;\n  opacity: 1;\n  transition-property: opacity, visible;\n  transition-delay: 25ms, 25ms;\n}\n\n/* When the new thread preview is focused, immediately show the overlay to\n  provide snappy feedback. */\n\n.new-thread-preview:focus,\n.new-thread-preview:has(+ #line-discussion-overlay:hover),\n.new-thread-preview:has(+ #line-discussion-overlay:focus-within) {\n  opacity: 1;\n}\n\n.new-thread-preview:focus + #line-discussion-overlay,\n.comment-preview:focus + #line-discussion-overlay,\n#line-discussion-overlay:hover,\n#line-discussion-overlay:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\n.new-thread-preview:focus + #line-discussion-overlay #expanded-message.show-exp,\n.comment-preview:focus + #line-discussion-overlay #expanded-message.show-exp,\n#line-discussion-overlay:hover #expanded-message.show-exp,\n#line-discussion-overlay:focus-within #expanded-message.show-exp,\n#expanded-message:hover,\n#expanded-message:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\nbutton.icon-button {\n  background-color: var(--overlay-background-color);\n  color: var(--text-color);\n  border-radius: 4px;\n  border: none;\n  cursor: pointer;\n  padding: 0.3rem;\n}\n\nbutton.icon-button:hover {\n  background-color: var(--input-background-color);\n}\n\nbutton.icon-button svg {\n  height: 1.25rem;\n  width: 1.25rem;\n}\n\ninput, textarea {\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border-radius: 6px;\n}\n\ninput, textarea {\n  border: 1px solid var(--input-border-color);\n}\n\nhr {\n  border: 1px solid var(--comment-color);\n}\n\n.overlay {\n  position: absolute;\n  background-color: var(--overlay-background-color);\n  border: 1px solid var(--input-border-color);\n  border-radius: 6px;\n\n\np.loc {\n  margin: 0;\n  white-space: pre;\n  height: 1.1875rem;\n  display: flex;\n  align-items: center;\n}\n\n.line-number {\n  display: inline-block;\n  margin-right: 1rem;\n  width: 2.5rem;\n  text-align: right;\n  flex-shrink: 0;\n}\n\n.inline-comment {\n  margin-left: 2.5rem;\n}\n";
 function view(model) {
   return p(
     toList([
