@@ -4139,6 +4139,11 @@ function on_click(msg) {
     return new Ok(msg);
   });
 }
+function on_mouse_enter(msg) {
+  return on2("mouseenter", (_) => {
+    return new Ok(msg);
+  });
+}
 function on_focus(msg) {
   return on2("focus", (_) => {
     return new Ok(msg);
@@ -4825,6 +4830,7 @@ function inline_comment_preview_view(model) {
           id("discussion-entry"),
           attribute("tabindex", "0"),
           on_click(new UserClickedDiscussionPreview()),
+          on_mouse_enter(new UserClickedDiscussionPreview()),
           style(
             toList([
               ["animation-delay", to_string(model.line_number * 4) + "ms"]
@@ -4858,7 +4864,8 @@ function inline_comment_preview_view(model) {
         class$("new-thread-preview"),
         id("discussion-entry"),
         attribute("tabindex", "0"),
-        on_click(new UserClickedDiscussionPreview())
+        on_click(new UserClickedDiscussionPreview()),
+        on_mouse_enter(new UserClickedDiscussionPreview())
       ]),
       toList([text2("Start new thread")])
     )

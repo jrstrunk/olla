@@ -605,6 +605,7 @@ fn inline_comment_preview_view(model: Model) {
         attribute.id("discussion-entry"),
         attribute.attribute("tabindex", "0"),
         event.on_click(UserClickedDiscussionPreview),
+        event.on_mouse_enter(UserClickedDiscussionPreview),
         attribute.style([
           #("animation-delay", int.to_string(model.line_number * 4) <> "ms"),
         ]),
@@ -625,6 +626,7 @@ fn inline_comment_preview_view(model: Model) {
         attribute.id("discussion-entry"),
         attribute.attribute("tabindex", "0"),
         event.on_click(UserClickedDiscussionPreview),
+        event.on_mouse_enter(UserClickedDiscussionPreview),
       ],
       [html.text("Start new thread")],
     ),
