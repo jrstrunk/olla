@@ -4640,11 +4640,14 @@ function list_collapse(attributes) {
 
 // build/dev/javascript/o11a_client/o11a/ui/line_discussion.mjs
 var Model2 = class extends CustomType {
-  constructor(user_name, line_number, line_id, keep_notes_open, notes, current_note_draft, current_thread_id, current_thread_notes, active_thread, show_expanded_message_box, current_expanded_message_draft, expanded_messages) {
+  constructor(user_name, line_number, line_id, line_text, line_tag, line_number_text, keep_notes_open, notes, current_note_draft, current_thread_id, current_thread_notes, active_thread, show_expanded_message_box, current_expanded_message_draft, expanded_messages) {
     super();
     this.user_name = user_name;
     this.line_number = line_number;
     this.line_id = line_id;
+    this.line_text = line_text;
+    this.line_tag = line_tag;
+    this.line_number_text = line_number_text;
     this.keep_notes_open = keep_notes_open;
     this.notes = notes;
     this.current_note_draft = current_note_draft;
@@ -4672,6 +4675,12 @@ var ServerSetLineId = class extends CustomType {
   }
 };
 var ServerSetLineNumber = class extends CustomType {
+  constructor(x0) {
+    super();
+    this[0] = x0;
+  }
+};
+var ServerSetLineText = class extends CustomType {
   constructor(x0) {
     super();
     this[0] = x0;
@@ -4722,7 +4731,7 @@ var UserToggledKeepNotesOpen = class extends CustomType {
 };
 var UserToggledCloseNotes = class extends CustomType {
 };
-var UserClickedDiscussionPreview = class extends CustomType {
+var UserEnteredDiscussionPreview = class extends CustomType {
 };
 var UserFocusedInput = class extends CustomType {
 };
@@ -4735,6 +4744,9 @@ function init2(_) {
     new Model2(
       "guest",
       0,
+      "",
+      "",
+      "",
       "",
       false,
       new_map(),
@@ -4829,8 +4841,7 @@ function inline_comment_preview_view(model) {
           class$("comment-preview"),
           id("discussion-entry"),
           attribute("tabindex", "0"),
-          on_click(new UserClickedDiscussionPreview()),
-          on_mouse_enter(new UserClickedDiscussionPreview()),
+          on_click(new UserEnteredDiscussionPreview()),
           style(
             toList([
               ["animation-delay", to_string(model.line_number * 4) + "ms"]
@@ -4864,8 +4875,7 @@ function inline_comment_preview_view(model) {
         class$("new-thread-preview"),
         id("discussion-entry"),
         attribute("tabindex", "0"),
-        on_click(new UserClickedDiscussionPreview()),
-        on_mouse_enter(new UserClickedDiscussionPreview())
+        on_click(new UserEnteredDiscussionPreview())
       ]),
       toList([text2("Start new thread")])
     )
@@ -5014,7 +5024,6 @@ function expanded_message_view(model) {
   );
 }
 function discussion_overlay_view(model) {
-  let comment_list_style = "flex flex-col-reverse p-[.5rem] overflow-auto max-h-[30rem] gap-[.5rem]";
   return div(
     toList([
       id("line-discussion-overlay"),
@@ -5027,7 +5036,9 @@ function discussion_overlay_view(model) {
       div(
         toList([
           id("comment-list"),
-          class$(comment_list_style)
+          class$(
+            "flex flex-col-reverse p-[.5rem] overflow-auto max-h-[30rem] gap-[.5rem]"
+          )
         ]),
         toList([
           new_message_input_view(model),
@@ -5084,6 +5095,9 @@ function update(model, msg) {
           _record.user_name,
           _record.line_number,
           line_id,
+          _record.line_text,
+          _record.line_tag,
+          _record.line_number_text,
           _record.keep_notes_open,
           _record.notes,
           _record.current_note_draft,
@@ -5102,6 +5116,7 @@ function update(model, msg) {
     ];
   } else if (msg instanceof ServerSetLineNumber) {
     let line_number = msg[0];
+    let line_number_text = to_string(line_number);
     return [
       (() => {
         let _record = model;
@@ -5109,6 +5124,34 @@ function update(model, msg) {
           _record.user_name,
           line_number,
           _record.line_id,
+          _record.line_text,
+          "L" + line_number_text,
+          line_number_text,
+          _record.keep_notes_open,
+          _record.notes,
+          _record.current_note_draft,
+          _record.current_thread_id,
+          _record.current_thread_notes,
+          _record.active_thread,
+          _record.show_expanded_message_box,
+          _record.current_expanded_message_draft,
+          _record.expanded_messages
+        );
+      })(),
+      none()
+    ];
+  } else if (msg instanceof ServerSetLineText) {
+    let line_text = msg[0];
+    return [
+      (() => {
+        let _record = model;
+        return new Model2(
+          _record.user_name,
+          _record.line_number,
+          _record.line_id,
+          line_text,
+          _record.line_tag,
+          _record.line_number_text,
           _record.keep_notes_open,
           _record.notes,
           _record.current_note_draft,
@@ -5132,6 +5175,9 @@ function update(model, msg) {
           _record.user_name,
           _record.line_number,
           _record.line_id,
+          _record.line_text,
+          _record.line_tag,
+          _record.line_number_text,
           _record.keep_notes_open,
           updated_notes,
           _record.current_note_draft,
@@ -5157,6 +5203,9 @@ function update(model, msg) {
           _record.user_name,
           _record.line_number,
           _record.line_id,
+          _record.line_text,
+          _record.line_tag,
+          _record.line_number_text,
           _record.keep_notes_open,
           _record.notes,
           draft,
@@ -5212,6 +5261,9 @@ function update(model, msg) {
               _record.user_name,
               _record.line_number,
               _record.line_id,
+              _record.line_text,
+              _record.line_tag,
+              _record.line_number_text,
               _record.keep_notes_open,
               _record.notes,
               "",
@@ -5237,6 +5289,9 @@ function update(model, msg) {
           _record.user_name,
           _record.line_number,
           _record.line_id,
+          _record.line_text,
+          _record.line_tag,
+          _record.line_number_text,
           _record.keep_notes_open,
           _record.notes,
           _record.current_note_draft,
@@ -5287,6 +5342,9 @@ function update(model, msg) {
           _record.user_name,
           _record.line_number,
           _record.line_id,
+          _record.line_text,
+          _record.line_tag,
+          _record.line_number_text,
           _record.keep_notes_open,
           _record.notes,
           _record.current_note_draft,
@@ -5312,6 +5370,9 @@ function update(model, msg) {
           _record.user_name,
           _record.line_number,
           _record.line_id,
+          _record.line_text,
+          _record.line_tag,
+          _record.line_number_text,
           _record.keep_notes_open,
           _record.notes,
           _record.current_note_draft,
@@ -5334,6 +5395,9 @@ function update(model, msg) {
           _record.user_name,
           _record.line_number,
           _record.line_id,
+          _record.line_text,
+          _record.line_tag,
+          _record.line_number_text,
           _record.keep_notes_open,
           _record.notes,
           _record.current_note_draft,
@@ -5358,6 +5422,9 @@ function update(model, msg) {
             _record.user_name,
             _record.line_number,
             _record.line_id,
+            _record.line_text,
+            _record.line_tag,
+            _record.line_number_text,
             _record.keep_notes_open,
             _record.notes,
             _record.current_note_draft,
@@ -5379,6 +5446,9 @@ function update(model, msg) {
             _record.user_name,
             _record.line_number,
             _record.line_id,
+            _record.line_text,
+            _record.line_tag,
+            _record.line_number_text,
             _record.keep_notes_open,
             _record.notes,
             _record.current_note_draft,
@@ -5401,6 +5471,9 @@ function update(model, msg) {
           _record.user_name,
           _record.line_number,
           _record.line_id,
+          _record.line_text,
+          _record.line_tag,
+          _record.line_number_text,
           true,
           _record.notes,
           _record.current_note_draft,
@@ -5422,6 +5495,9 @@ function update(model, msg) {
           _record.user_name,
           _record.line_number,
           _record.line_id,
+          _record.line_text,
+          _record.line_tag,
+          _record.line_number_text,
           false,
           _record.notes,
           _record.current_note_draft,
@@ -5435,7 +5511,7 @@ function update(model, msg) {
       })(),
       none()
     ];
-  } else if (msg instanceof UserClickedDiscussionPreview) {
+  } else if (msg instanceof UserEnteredDiscussionPreview) {
     return [
       model,
       emit2(
@@ -5469,6 +5545,9 @@ function update(model, msg) {
           _record.user_name,
           _record.line_number,
           _record.line_id,
+          _record.line_text,
+          _record.line_tag,
+          _record.line_number_text,
           _record.keep_notes_open,
           _record.notes,
           _record.current_note_draft,
@@ -5506,17 +5585,41 @@ function update(model, msg) {
   }
 }
 var name = line_discussion;
-var component_style = "\n:host {\n  display: inline-block;\n}\n\n/* Delay the overlay transitions by 1ms to they are done last, and any \n  actions on them can be done first (like focusing the input) */\n\n.new-thread-preview {\n  opacity: 0;\n  transition-property: opacity;\n  transition-delay: 1ms;\n}\n\n.comment-preview:focus,\n.new-thread-preview:focus {\n  outline: none;\n  text-decoration: underline;\n}\n\n#line-discussion-overlay {\n  visibility: hidden;\n  opacity: 0;\n  transition-property: opacity, visibility;\n  transition-delay: 1ms, 1ms;\n}\n\n#expanded-message {\n  visibility: hidden;\n  opacity: 0;\n  transition-property: opacity, visibility;\n  transition-delay: 1ms, 1ms;\n}\n\n/* When the new thread preview is hovered */\n\n.new-thread-preview:hover {\n  opacity: 1;\n}\n\n.new-thread-preview:hover + #line-discussion-overlay.show-dis,\n.comment-preview:hover + #line-discussion-overlay {\n  visibility: visible;\n  opacity: 1;\n}\n\n.new-thread-preview:hover + #line-discussion-overlay #expanded-message.show-exp,\n.comment-preview:hover + #line-discussion-overlay #expanded-message.show-exp {\n  visibility: visible;\n  opacity: 1;\n  transition-property: opacity, visible;\n  transition-delay: 25ms, 25ms;\n}\n\n/* When the new thread preview is focused, immediately show the overlay to\n  provide snappy feedback. */\n\n.new-thread-preview:focus,\n.new-thread-preview:has(+ #line-discussion-overlay:hover),\n.new-thread-preview:has(+ #line-discussion-overlay:focus-within) {\n  opacity: 1;\n}\n\n.new-thread-preview:focus + #line-discussion-overlay,\n.comment-preview:focus + #line-discussion-overlay,\n#line-discussion-overlay:hover,\n#line-discussion-overlay:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\n.new-thread-preview:focus + #line-discussion-overlay #expanded-message.show-exp,\n.comment-preview:focus + #line-discussion-overlay #expanded-message.show-exp,\n#line-discussion-overlay:hover #expanded-message.show-exp,\n#line-discussion-overlay:focus-within #expanded-message.show-exp,\n#expanded-message:hover,\n#expanded-message:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\nbutton.icon-button {\n  background-color: var(--overlay-background-color);\n  color: var(--text-color);\n  border-radius: 4px;\n  border: none;\n  cursor: pointer;\n  padding: 0.3rem;\n}\n\nbutton.icon-button:hover {\n  background-color: var(--input-background-color);\n}\n\nbutton.icon-button svg {\n  height: 1.25rem;\n  width: 1.25rem;\n}\n\ninput, textarea {\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border-radius: 6px;\n}\n\ninput, textarea {\n  border: 1px solid var(--input-border-color);\n}\n\nhr {\n  border: 1px solid var(--comment-color);\n}\n\n.overlay {\n  position: absolute;\n  background-color: var(--overlay-background-color);\n  border: 1px solid var(--input-border-color);\n  border-radius: 6px;\n}\n";
+var component_style = "\n:host {\n  display: inline-block;\n}\n\n/* Delay the overlay transitions by 1ms to they are done last, and any \n  actions on them can be done first (like focusing the input) */\n\n.new-thread-preview {\n  opacity: 0;\n  transition-property: opacity;\n  transition-delay: 1ms;\n}\n\n.comment-preview:focus,\n.new-thread-preview:focus {\n  outline: none;\n  text-decoration: underline;\n}\n\n#line-discussion-overlay {\n  visibility: hidden;\n  opacity: 0;\n  transition-property: opacity, visibility;\n  transition-delay: 1ms, 1ms;\n}\n\n#expanded-message {\n  visibility: hidden;\n  opacity: 0;\n  transition-property: opacity, visibility;\n  transition-delay: 1ms, 1ms;\n}\n\n/* When the new thread preview is hovered */\n\np.loc:hover .new-thread-preview {\n  opacity: 1;\n}\n\n#line-discussion-overlay.show-dis,\n.comment-preview:hover + #line-discussion-overlay {\n  visibility: visible;\n  opacity: 1;\n}\n\n.new-thread-preview:hover + #line-discussion-overlay #expanded-message.show-exp,\n.comment-preview:hover + #line-discussion-overlay #expanded-message.show-exp {\n  visibility: visible;\n  opacity: 1;\n  transition-property: opacity, visible;\n  transition-delay: 25ms, 25ms;\n}\n\n/* When the new thread preview is focused, immediately show the overlay to\n  provide snappy feedback. */\n\n.new-thread-preview:focus,\n.new-thread-preview:has(+ #line-discussion-overlay:hover),\n.new-thread-preview:has(+ #line-discussion-overlay:focus-within) {\n  opacity: 1;\n}\n\n.new-thread-preview:focus + #line-discussion-overlay,\n.comment-preview:focus + #line-discussion-overlay,\n#line-discussion-overlay:hover,\n#line-discussion-overlay:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\n.new-thread-preview:focus + #line-discussion-overlay #expanded-message.show-exp,\n.comment-preview:focus + #line-discussion-overlay #expanded-message.show-exp,\n#line-discussion-overlay:hover #expanded-message.show-exp,\n#line-discussion-overlay:focus-within #expanded-message.show-exp,\n#expanded-message:hover,\n#expanded-message:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\nbutton.icon-button {\n  background-color: var(--overlay-background-color);\n  color: var(--text-color);\n  border-radius: 4px;\n  border: none;\n  cursor: pointer;\n  padding: 0.3rem;\n}\n\nbutton.icon-button:hover {\n  background-color: var(--input-background-color);\n}\n\nbutton.icon-button svg {\n  height: 1.25rem;\n  width: 1.25rem;\n}\n\ninput, textarea {\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border-radius: 6px;\n}\n\ninput, textarea {\n  border: 1px solid var(--input-border-color);\n}\n\nhr {\n  border: 1px solid var(--comment-color);\n}\n\n.overlay {\n  position: absolute;\n  background-color: var(--overlay-background-color);\n  border: 1px solid var(--input-border-color);\n  border-radius: 6px;\n}\n\np.loc {\n  margin: 0;\n  white-space: pre;\n  height: 1.1875rem;\n  display: flex;\n  align-items: center;\n}\n\n.line-number {\n  display: inline-block;\n  margin-right: 1rem;\n  width: 2.5rem;\n  text-align: right;\n  flex-shrink: 0;\n}\n\n.inline-comment {\n  margin-left: 2.5rem;\n}\n";
 function view(model) {
-  return div(
+  return p(
     toList([
-      id("line-discussion-container"),
-      class$("relative font-code")
+      class$("loc flex"),
+      id(model.line_tag),
+      on_mouse_enter(new UserEnteredDiscussionPreview())
     ]),
     toList([
-      style2(toList([]), component_style),
-      inline_comment_preview_view(model),
-      discussion_overlay_view(model)
+      span(
+        toList([class$("line-number code-extras")]),
+        toList([text2(model.line_number_text)])
+      ),
+      span(
+        toList([
+          attribute("dangerous-unescaped-html", model.line_text)
+        ]),
+        toList([])
+      ),
+      span(
+        toList([class$("inline-comment")]),
+        toList([
+          div(
+            toList([
+              id("line-discussion-container"),
+              class$("relative font-code")
+            ]),
+            toList([
+              style2(toList([]), component_style),
+              inline_comment_preview_view(model),
+              discussion_overlay_view(model)
+            ])
+          )
+        ])
+      )
     ])
   );
 }
@@ -5593,6 +5696,26 @@ function component2() {
                 toList([
                   new DecodeError(
                     "line-number",
+                    inspect2(dy),
+                    toList([])
+                  )
+                ])
+              );
+            }
+          }
+        ],
+        [
+          "line-text",
+          (dy) => {
+            let $ = run(dy, string3);
+            if ($.isOk()) {
+              let line_text = $[0];
+              return new Ok(new ServerSetLineText(line_text));
+            } else {
+              return new Error(
+                toList([
+                  new DecodeError(
+                    "line-text",
                     inspect2(dy),
                     toList([])
                   )

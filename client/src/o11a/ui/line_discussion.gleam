@@ -69,6 +69,13 @@ pub fn component() {
             Error([dynamic.DecodeError("line-number", string.inspect(dy), [])])
         }
       }),
+      #("line-text", fn(dy) {
+        case decode.run(dy, decode.string) {
+          Ok(line_text) -> Ok(ServerSetLineText(line_text))
+          Error(..) ->
+            Error([dynamic.DecodeError("line-text", string.inspect(dy), [])])
+        }
+      }),
     ]),
   )
 }
@@ -78,6 +85,9 @@ fn init(_) -> #(Model, effect.Effect(Msg)) {
     Model(
       user_name: "guest",
       line_number: 0,
+      line_text: "",
+      line_tag: "",
+      line_number_text: "",
       notes: dict.new(),
       keep_notes_open: False,
       current_note_draft: "",
@@ -98,6 +108,9 @@ pub type Model {
     user_name: String,
     line_number: Int,
     line_id: String,
+    line_text: String,
+    line_tag: String,
+    line_number_text: String,
     keep_notes_open: Bool,
     notes: dict.Dict(String, List(note.Note)),
     current_note_draft: String,
@@ -122,6 +135,7 @@ pub type ActiveThread {
 pub type Msg {
   ServerSetLineId(String)
   ServerSetLineNumber(Int)
+  ServerSetLineText(String)
   ServerUpdatedNotes(List(#(String, List(note.Note))))
   UserWroteNote(String)
   UserSubmittedNote
@@ -132,7 +146,7 @@ pub type Msg {
   UserToggledExpandedMessage(for_note_id: String)
   UserToggledKeepNotesOpen
   UserToggledCloseNotes
-  UserClickedDiscussionPreview
+  UserEnteredDiscussionPreview
   UserFocusedInput
   UserFocusedExpandedInput
   UserUnfocusedInput
@@ -150,10 +164,19 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       ),
       effect.none(),
     )
-    ServerSetLineNumber(line_number) -> #(
-      Model(..model, line_number:),
-      effect.none(),
-    )
+    ServerSetLineNumber(line_number) -> {
+      let line_number_text = int.to_string(line_number)
+      #(
+        Model(
+          ..model,
+          line_number:,
+          line_number_text:,
+          line_tag: "L" <> line_number_text,
+        ),
+        effect.none(),
+      )
+    }
+    ServerSetLineText(line_text) -> #(Model(..model, line_text:), effect.none())
     ServerUpdatedNotes(notes) -> {
       let updated_notes = dict.from_list(notes)
       #(
@@ -280,7 +303,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       Model(..model, keep_notes_open: False),
       effect.none(),
     )
-    UserClickedDiscussionPreview -> #(
+    UserEnteredDiscussionPreview -> #(
       model,
       event.emit(
         events.user_clicked_discussion_preview,
@@ -366,11 +389,11 @@ const component_style = "
 
 /* When the new thread preview is hovered */
 
-.new-thread-preview:hover {
+p.loc:hover .new-thread-preview {
   opacity: 1;
 }
 
-.new-thread-preview:hover + #line-discussion-overlay.show-dis,
+#line-discussion-overlay.show-dis,
 .comment-preview:hover + #line-discussion-overlay {
   visibility: visible;
   opacity: 1;
@@ -449,26 +472,61 @@ hr {
   border: 1px solid var(--input-border-color);
   border-radius: 6px;
 }
+
+p.loc {
+  margin: 0;
+  white-space: pre;
+  height: 1.1875rem;
+  display: flex;
+  align-items: center;
+}
+
+.line-number {
+  display: inline-block;
+  margin-right: 1rem;
+  width: 2.5rem;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.inline-comment {
+  margin-left: 2.5rem;
+}
 "
 
 fn view(model: Model) -> element.Element(Msg) {
-  html.div(
+  html.p(
     [
-      attribute.id("line-discussion-container"),
-      attribute.class("relative font-code"),
+      attribute.class("loc flex"),
+      attribute.id(model.line_tag),
+      event.on_mouse_enter(UserEnteredDiscussionPreview),
     ],
     [
-      html.style([], component_style),
-      inline_comment_preview_view(model),
-      discussion_overlay_view(model),
+      html.span([attribute.class("line-number code-extras")], [
+        html.text(model.line_number_text),
+      ]),
+      html.span(
+        [attribute.attribute("dangerous-unescaped-html", model.line_text)],
+        [],
+      ),
+      html.span([attribute.class("inline-comment")], [
+        html.div(
+          [
+            attribute.id("line-discussion-container"),
+            attribute.class("relative font-code"),
+          ],
+          [
+            html.style([], component_style),
+            inline_comment_preview_view(model),
+            discussion_overlay_view(model),
+          ],
+        ),
+      ]),
     ],
   )
 }
 
 fn discussion_overlay_view(model: Model) {
-  let comment_list_style =
-    "flex flex-col-reverse p-[.5rem] overflow-auto max-h-[30rem] gap-[.5rem]"
-
   html.div(
     [
       attribute.id("line-discussion-overlay"),
@@ -479,7 +537,12 @@ fn discussion_overlay_view(model: Model) {
     ],
     [
       html.div(
-        [attribute.id("comment-list"), attribute.class(comment_list_style)],
+        [
+          attribute.id("comment-list"),
+          attribute.class(
+            "flex flex-col-reverse p-[.5rem] overflow-auto max-h-[30rem] gap-[.5rem]",
+          ),
+        ],
         [
           new_message_input_view(model),
           element.fragment(comments_view(model)),
@@ -599,8 +662,7 @@ fn inline_comment_preview_view(model: Model) {
         attribute.class("comment-preview"),
         attribute.id("discussion-entry"),
         attribute.attribute("tabindex", "0"),
-        event.on_click(UserClickedDiscussionPreview),
-        event.on_mouse_enter(UserClickedDiscussionPreview),
+        event.on_click(UserEnteredDiscussionPreview),
         attribute.style([
           #("animation-delay", int.to_string(model.line_number * 4) <> "ms"),
         ]),
@@ -620,8 +682,7 @@ fn inline_comment_preview_view(model: Model) {
         attribute.class("new-thread-preview"),
         attribute.id("discussion-entry"),
         attribute.attribute("tabindex", "0"),
-        event.on_click(UserClickedDiscussionPreview),
-        event.on_mouse_enter(UserClickedDiscussionPreview),
+        event.on_click(UserEnteredDiscussionPreview),
       ],
       [html.text("Start new thread")],
     ),

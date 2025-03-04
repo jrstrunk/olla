@@ -147,32 +147,25 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
     ])
   })
 
-  html.p([attribute.class("loc"), attribute.id(line_tag)], [
-    html.span([attribute.class("line-number code-extras")], [
-      html.text(line_number_text),
-    ]),
-    html.span([attribute.attribute("dangerous-unescaped-html", line_text)], []),
-    html.span([attribute.class("inline-comment")], [
-      element.element(
-        components.line_discussion,
-        [
-          attribute.id("linediscussion" <> line_tag),
-          attribute.attribute(
-            "line-discussion",
-            discussion.get_structured_notes(model.discussion, line_id)
-              |> list.map(note.encode_structured_notes)
-              |> json.preprocessed_array
-              |> json.to_string,
-          ),
-          attribute.attribute("line-id", line_id),
-          attribute.attribute("line-number", line_number_text),
-          on_user_submitted_line_note(UserSubmittedNote),
-          server_component.include(["detail"]),
-        ],
-        [],
+  element.element(
+    components.line_discussion,
+    [
+      attribute.id(line_tag),
+      attribute.attribute(
+        "line-discussion",
+        discussion.get_structured_notes(model.discussion, line_id)
+          |> list.map(note.encode_structured_notes)
+          |> json.preprocessed_array
+          |> json.to_string,
       ),
-    ]),
-  ])
+      attribute.attribute("line-id", line_id),
+      attribute.attribute("line-number", line_number_text),
+      attribute.attribute("line-text", line_text),
+      on_user_submitted_line_note(UserSubmittedNote),
+      server_component.include(["detail"]),
+    ],
+    [],
+  )
 }
 
 pub fn style_code_tokens(line_text) {
@@ -212,7 +205,7 @@ pub fn style_code_tokens(line_text) {
 
   let assert Ok(keyword_regex) =
     regexp.from_string(
-      "\\b(constructor|contract|fallback|override|mapping|immutable|interface|constant|pragma|solidity|event|error|require|revert|using|for|emit|function|if|else|returns|return|memory|calldata|public|private|external|view|pure|payable|internal|import|enum|struct|storage|is)\\b",
+      "\\b(constructor|contract|fallback|override|mapping|immutable|interface|constant|pragma|library|solidity|event|error|require|revert|using|for|emit|function|if|else|returns|return|memory|calldata|public|private|external|view|pure|payable|internal|import|enum|struct|storage|is)\\b",
     )
 
   let styled_line =

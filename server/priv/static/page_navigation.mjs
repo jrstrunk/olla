@@ -9,6 +9,7 @@ let is_user_typing = false;
 window.addEventListener("keydown", (event) => {
   // If the key is a control key, prevent the default action and handle the key.
   // If the user is currently typing, do nothing.
+  console.log("got Keydown", event, is_user_typing);
   if (is_user_typing) {
     handle_input_escape(event) || handle_expanded_input_focus(event);
   } else {
@@ -68,10 +69,12 @@ function handle_expanded_input_focus(event) {
   return false;
 }
 
-// Focus a dicussion input logic
+// Focus a discussion input logic
 function handle_input_focus(event) {
   if (!event.ctrlKey && event.key === "e") {
     event.preventDefault();
+
+    console.log("input focusing");
 
     let overlay = get_line_discussion_overlay(
       current_selected_line_number,
@@ -97,34 +100,30 @@ function handle_input_focus(event) {
 }
 
 function get_line_discussion_input(line_number, discussion_lane) {
-  return get_discussion_shadow_root(
-    line_number,
-    discussion_lane
-  )?.querySelector("#new-comment-input");
+  return get_discussion_shadow_root(line_number)?.querySelector(
+    "#new-comment-input"
+  );
 }
 
 function get_line_discussion_overlay(line_number, discussion_lane) {
-  return get_discussion_shadow_root(
-    line_number,
-    discussion_lane
-  )?.querySelector("#line-discussion-overlay");
+  return get_discussion_shadow_root(line_number)?.querySelector(
+    "#line-discussion-overlay"
+  );
 }
 
 function get_line_discussion_expanded_input(line_number, discussion_lane) {
-  return get_discussion_shadow_root(
-    line_number,
-    discussion_lane
-  )?.querySelector("#expanded-message-box");
+  return get_discussion_shadow_root(line_number)?.querySelector(
+    "#expanded-message-box"
+  );
 }
 
 function get_line_discussion_expanded_input_container(
   line_number,
   discussion_lane
 ) {
-  return get_discussion_shadow_root(
-    line_number,
-    discussion_lane
-  )?.querySelector("#expanded-message");
+  return get_discussion_shadow_root(line_number)?.querySelector(
+    "#expanded-message"
+  );
 }
 
 // Arrow navigation on the audit page logic
@@ -153,6 +152,7 @@ function handle_discussion_focus(event) {
       current_selected_line_number,
       1
     );
+    console.log("Down to ", current_selected_line_number);
     focus_line_discussion(current_selected_line_number, discussion_lane);
   } else if (event.shiftKey && event.key === "ArrowUp") {
     event.preventDefault();
@@ -203,8 +203,8 @@ function handle_discussion_focus(event) {
 function findNextDiscussionLine(current_line, direction, step = 1) {
   const max_lines =
     document
-      .querySelector("lustre-server-component")
-      ?.shadowRoot?.querySelectorAll("p")?.length ?? current_line;
+      .querySelector("#audit-page")
+      ?.shadowRoot?.querySelectorAll("line-discussion")?.length ?? current_line;
 
   let line = current_line;
   // For page up/down, first jump by step amount
@@ -232,20 +232,13 @@ function focus_line_discussion(line_number, discussion_lane) {
 }
 
 function get_line_discussion(line_number, discussion_lane) {
-  return get_discussion_shadow_root(
-    line_number,
-    discussion_lane
-  )?.querySelector("#discussion-entry");
+  return get_discussion_shadow_root(line_number)?.querySelector(
+    "#discussion-entry"
+  );
 }
 
-function get_discussion_shadow_root(line_number, discussion_lane) {
-  let discussion =
-    discussion_lane === 1 ? "line-discussion" : "function-discussion";
-
-  // Until function discussions are implemented
-  discussion = "line-discussion";
-
+function get_discussion_shadow_root(line_number) {
   return document
     .querySelector("#audit-page")
-    ?.shadowRoot?.querySelector(`#L${line_number} ${discussion}`)?.shadowRoot;
+    ?.shadowRoot?.querySelector(`#L${line_number}`)?.shadowRoot;
 }

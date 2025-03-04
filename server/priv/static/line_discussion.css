@@ -616,6 +616,10 @@ video {
   width: 100%;
 }
 
+.flex-shrink {
+  flex-shrink: 1;
+}
+
 .grow {
   flex-grow: 1;
 }
