@@ -19,9 +19,14 @@ window.addEventListener("keydown", (event) => {
   }
 });
 
+window.addEventListener("user-clicked-discussion-preview", (event) => {
+  console.log("Clicked discussion preview", event.detail);
+  current_selected_line_number = event.detail.line_number;
+  discussion_lane = event.detail.discussion_lane;
+});
+
 window.addEventListener("user-focused-input", (event) => {
   is_user_typing = true;
-  console.log("User focused input on line", event.detail.line_number);
   current_selected_line_number = event.detail.line_number;
   discussion_lane = event.detail.discussion_lane;
 });
@@ -39,14 +44,11 @@ function handle_input_escape(event) {
 
 function handle_expanded_input_focus(event) {
   if (event.ctrlKey && event.key === "e") {
-    console.log("Ctrl + e");
     event.preventDefault();
     let exp = get_line_discussion_expanded_input(
       current_selected_line_number,
       discussion_lane
     );
-
-    console.log("Got expanded input", exp);
 
     let exp_cont = get_line_discussion_expanded_input_container(
       current_selected_line_number,

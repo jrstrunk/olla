@@ -132,6 +132,7 @@ pub type Msg {
   UserToggledExpandedMessage(for_note_id: String)
   UserToggledKeepNotesOpen
   UserToggledCloseNotes
+  UserClickedDiscussionPreview
   UserFocusedInput
   UserFocusedExpandedInput
   UserUnfocusedInput
@@ -278,6 +279,17 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     UserToggledCloseNotes -> #(
       Model(..model, keep_notes_open: False),
       effect.none(),
+    )
+    UserClickedDiscussionPreview -> #(
+      model,
+      event.emit(
+        events.user_clicked_discussion_preview,
+        json.object([
+          #("line_number", json.int(model.line_number)),
+          // 1 for line discussion
+          #("discussion_lane", json.int(1)),
+        ]),
+      ),
     )
     UserFocusedInput -> #(
       model,
@@ -592,6 +604,7 @@ fn inline_comment_preview_view(model: Model) {
         attribute.class("comment-preview"),
         attribute.id("discussion-entry"),
         attribute.attribute("tabindex", "0"),
+        event.on_click(UserClickedDiscussionPreview),
         attribute.style([
           #("animation-delay", int.to_string(model.line_number * 4) <> "ms"),
         ]),
@@ -611,6 +624,7 @@ fn inline_comment_preview_view(model: Model) {
         attribute.class("new-thread-preview"),
         attribute.id("discussion-entry"),
         attribute.attribute("tabindex", "0"),
+        event.on_click(UserClickedDiscussionPreview),
       ],
       [html.text("Start new thread")],
     ),

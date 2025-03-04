@@ -4170,6 +4170,7 @@ var line_discussion = "line-discussion";
 
 // build/dev/javascript/o11a_common/o11a/events.mjs
 var user_submitted_note = "user-submitted-line-note";
+var user_clicked_discussion_preview = "user-clicked-discussion-preview";
 var user_focused_input = "user-focused-input";
 var user_unfocused_input = "user-unfocused-input";
 
@@ -4716,6 +4717,8 @@ var UserToggledKeepNotesOpen = class extends CustomType {
 };
 var UserToggledCloseNotes = class extends CustomType {
 };
+var UserClickedDiscussionPreview = class extends CustomType {
+};
 var UserFocusedInput = class extends CustomType {
 };
 var UserFocusedExpandedInput = class extends CustomType {
@@ -4821,6 +4824,7 @@ function inline_comment_preview_view(model) {
           class$("comment-preview"),
           id("discussion-entry"),
           attribute("tabindex", "0"),
+          on_click(new UserClickedDiscussionPreview()),
           style(
             toList([
               ["animation-delay", to_string(model.line_number * 4) + "ms"]
@@ -4853,7 +4857,8 @@ function inline_comment_preview_view(model) {
         class$("select-none italic comment"),
         class$("new-thread-preview"),
         id("discussion-entry"),
-        attribute("tabindex", "0")
+        attribute("tabindex", "0"),
+        on_click(new UserClickedDiscussionPreview())
       ]),
       toList([text2("Start new thread")])
     )
@@ -5422,6 +5427,19 @@ function update(model, msg) {
         );
       })(),
       none()
+    ];
+  } else if (msg instanceof UserClickedDiscussionPreview) {
+    return [
+      model,
+      emit2(
+        user_clicked_discussion_preview,
+        object2(
+          toList([
+            ["line_number", int3(model.line_number)],
+            ["discussion_lane", int3(1)]
+          ])
+        )
+      )
     ];
   } else if (msg instanceof UserFocusedInput) {
     return [
