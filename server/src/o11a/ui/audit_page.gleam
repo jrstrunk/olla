@@ -81,7 +81,10 @@ pub fn get_skeleton(for page_path) {
     Error(simplifile.Enoent) -> {
       // Generates a skeleton page for the given page path, and writes it to disk.
       let skeleton: Result(String, snag.Snag) = {
-        use source <- result.try(preprocess_source(for: page_path))
+        use source <- result.try(
+          preprocess_source(for: page_path)
+          |> snag.map_error(simplifile.describe_error),
+        )
 
         let skeleton =
           Model(
@@ -114,7 +117,6 @@ pub fn get_skeleton(for page_path) {
 pub fn preprocess_source(for page_path) {
   config.get_full_page_path(for: page_path)
   |> simplifile.read
-  |> snag.map_error(simplifile.describe_error)
   |> result.map(string.split(_, on: "\n"))
   |> result.map(list.map(_, style_code_tokens))
 }

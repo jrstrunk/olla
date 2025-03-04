@@ -11,6 +11,7 @@ import o11a/server/audit_metadata
 import o11a/server/discussion
 import o11a/ui/audit_dashboard
 import o11a/ui/audit_page
+import simplifile
 import snag
 
 pub type Gateway {
@@ -76,18 +77,29 @@ pub fn start_gateway() -> Result(Gateway, snag.Snag) {
       dict.get(page_paths, audit_name)
       |> result.unwrap([])
       |> list.map(fn(page_path) {
-        use preprocessed_source <- result.try(audit_page.preprocess_source(
-          for: page_path,
-        ))
-        use actor <- result.map(
-          lustre.start_actor(
-            audit_page.app(),
-            audit_page.Model(page_path:, preprocessed_source:, discussion:),
-          )
-          |> snag.map_error(string.inspect),
-        )
+        case audit_page.preprocess_source(for: page_path) {
+          Ok(preprocessed_source) -> {
+            use actor <- result.map(
+              lustre.start_actor(
+                audit_page.app(),
+                audit_page.Model(page_path:, preprocessed_source:, discussion:),
+              )
+              |> snag.map_error(string.inspect),
+            )
 
-        concurrent_dict.insert(page_gateway, page_path, actor)
+            concurrent_dict.insert(page_gateway, page_path, actor)
+          }
+
+          // If we get a non-text file, just ignore it. Eventually we could 
+          // handle image files
+          Error(simplifile.NotUtf8) -> Ok(Nil)
+
+          Error(msg) ->
+            snag.error(msg |> simplifile.describe_error)
+            |> snag.context(
+              "Failed to preprocess page source for " <> page_path,
+            )
+        }
       })
       |> snagx.collect_errors
     })
