@@ -14,7 +14,8 @@ window.addEventListener("keydown", (event) => {
   } else {
     handle_discussion_focus(event) ||
       handle_input_focus(event) ||
-      handle_expanded_input_focus(event);
+      handle_expanded_input_focus(event) ||
+      handle_discussion_escape(event);
   }
 });
 
@@ -120,6 +121,16 @@ function get_line_discussion_expanded_input_container(
 }
 
 // Arrow navigation on the audit page logic
+
+function handle_discussion_escape(event) {
+  if (event.key === "Escape") {
+    console.log("Escaping discussion");
+    event.preventDefault();
+    get_line_discussion(current_selected_line_number, discussion_lane)?.blur();
+    return true;
+  }
+  return false;
+}
 
 function handle_discussion_focus(event) {
   if (!event.shiftKey && event.key === "ArrowUp") {
