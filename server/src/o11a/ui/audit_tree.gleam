@@ -19,6 +19,8 @@ const style = "
   overflow: auto;
   font-size: 0.9rem;
   padding-left: 1rem;
+  padding-top: .5rem;
+  padding-bottom: .5rem;
 }
 
 #audit-tree-header {

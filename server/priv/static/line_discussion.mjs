@@ -4139,6 +4139,16 @@ function on_click(msg) {
     return new Ok(msg);
   });
 }
+function on_focus(msg) {
+  return on2("focus", (_) => {
+    return new Ok(msg);
+  });
+}
+function on_blur(msg) {
+  return on2("blur", (_) => {
+    return new Ok(msg);
+  });
+}
 function value2(event2) {
   let _pipe = event2;
   return field("target", field("value", string))(
@@ -4160,6 +4170,8 @@ var line_discussion = "line-discussion";
 
 // build/dev/javascript/o11a_common/o11a/events.mjs
 var user_submitted_note = "user-submitted-line-note";
+var user_focused_input = "user-focused-input";
+var user_unfocused_input = "user-unfocused-input";
 
 // build/dev/javascript/o11a_common/o11a/note.mjs
 var Note = class extends CustomType {
@@ -4702,6 +4714,14 @@ var UserToggledExpandedMessage = class extends CustomType {
 };
 var UserToggledKeepNotesOpen = class extends CustomType {
 };
+var UserToggledCloseNotes = class extends CustomType {
+};
+var UserFocusedInput = class extends CustomType {
+};
+var UserFocusedExpandedInput = class extends CustomType {
+};
+var UserUnfocusedInput = class extends CustomType {
+};
 function init2(_) {
   return [
     new Model2(
@@ -4780,6 +4800,8 @@ function new_message_input_view(model) {
           on_input((var0) => {
             return new UserWroteNote(var0);
           }),
+          on_focus(new UserFocusedInput()),
+          on_blur(new UserUnfocusedInput()),
           on_ctrl_enter(new UserSubmittedNote()),
           value(model.current_note_draft)
         ])
@@ -4964,6 +4986,8 @@ function expanded_message_view(model) {
               return new UserWroteExpandedMessage(var0);
             }
           ),
+          on_focus(new UserFocusedExpandedInput()),
+          on_blur(new UserUnfocusedInput()),
           on_ctrl_enter(new UserSubmittedNote()),
           value(
             (() => {
@@ -5378,7 +5402,7 @@ function update(model, msg) {
       })(),
       none()
     ];
-  } else {
+  } else if (msg instanceof UserToggledCloseNotes) {
     return [
       (() => {
         let _record = model;
@@ -5399,10 +5423,65 @@ function update(model, msg) {
       })(),
       none()
     ];
+  } else if (msg instanceof UserFocusedInput) {
+    return [
+      model,
+      emit2(
+        user_focused_input,
+        object2(
+          toList([
+            ["line_number", int3(model.line_number)],
+            ["discussion_lane", int3(1)]
+          ])
+        )
+      )
+    ];
+  } else if (msg instanceof UserFocusedExpandedInput) {
+    return [
+      (() => {
+        let _record = model;
+        return new Model2(
+          _record.user_name,
+          _record.line_number,
+          _record.line_id,
+          _record.keep_notes_open,
+          _record.notes,
+          _record.current_note_draft,
+          _record.current_thread_id,
+          _record.current_thread_notes,
+          _record.active_thread,
+          true,
+          _record.current_expanded_message_draft,
+          _record.expanded_messages
+        );
+      })(),
+      emit2(
+        user_focused_input,
+        object2(
+          toList([
+            ["line_number", int3(model.line_number)],
+            ["discussion_lane", int3(1)]
+          ])
+        )
+      )
+    ];
+  } else {
+    return [
+      model,
+      emit2(
+        user_unfocused_input,
+        object2(
+          toList([
+            ["line_number", int3(model.line_number)],
+            ["discussion_lane", int3(1)]
+          ])
+        )
+      )
+    ];
   }
 }
 var name = line_discussion;
-var component_style = "\n:host {\n  display: inline-block;\n}\n\n/* Delay the overlay transitions by 1ms to they are done last, and any \n  actions on them can be done first (like focusing the input) */\n\n.new-thread-preview {\n  opacity: 0;\n  transition-property: opacity;\n  transition-delay: 1ms;\n}\n\n.comment-preview:focus,\n.new-thread-preview:focus {\n  outline: none;\n  text-decoration: underline;\n}\n\n#line-discussion-overlay {\n  visibility: hidden;\n  opacity: 0;\n  transition-property: opacity, visibility;\n  transition-delay: 1ms, 1ms;\n}\n\n#expanded-message {\n  visibility: hidden;\n  opacity: 0;\n  transition-property: opacity, visibility;\n  transition-delay: 1ms, 1ms;\n}\n\n/* When the new thread preview is hovered, delay the opacity transition to\n  avoid triggering it as the mouse swipes by. */\n\n.new-thread-preview:hover {\n  opacity: 1;\n  transition-property: opacity;\n  transition-delay: 25ms;\n}\n\n.new-thread-preview:hover + #line-discussion-overlay,\n.comment-preview:hover + #line-discussion-overlay {\n  visibility: visible;\n  opacity: 1;\n  transition-property: opacity, visible;\n  transition-delay: 25ms, 25ms;\n}\n\n.new-thread-preview:hover + #line-discussion-overlay #expanded-message.show-exp,\n.comment-preview:hover + #line-discussion-overlay #expanded-message.show-exp {\n  visibility: visible;\n  opacity: 1;\n  transition-property: opacity, visible;\n  transition-delay: 25ms, 25ms;\n}\n\n/* When the new thread preview is focused, immediately show the overlay to\n  provide snappy feedback. */\n\n.new-thread-preview:focus,\n.new-thread-preview:has(+ #line-discussion-overlay:hover),\n.new-thread-preview:has(+ #line-discussion-overlay:focus-within) {\n  opacity: 1;\n}\n\n.new-thread-preview:focus + #line-discussion-overlay,\n.comment-preview:focus + #line-discussion-overlay,\n#line-discussion-overlay:hover,\n#line-discussion-overlay:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\n.new-thread-preview:focus + #line-discussion-overlay #expanded-message.show-exp,\n.comment-preview:focus + #line-discussion-overlay #expanded-message.show-exp,\n#line-discussion-overlay:hover #expanded-message.show-exp,\n#line-discussion-overlay:focus-within #expanded-message.show-exp,\n#expanded-message.show-exp:hover,\n#expanded-message.show-exp:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\nbutton.icon-button {\n  background-color: var(--overlay-background-color);\n  color: var(--text-color);\n  border-radius: 4px;\n  border: none;\n  cursor: pointer;\n  padding: 0.3rem;\n}\n\nbutton.icon-button:hover {\n  background-color: var(--input-background-color);\n}\n\nbutton.icon-button svg {\n  height: 1.25rem;\n  width: 1.25rem;\n}\n\ninput, textarea {\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border-radius: 6px;\n}\n\ninput, textarea {\n  border: 1px solid var(--input-border-color);\n}\n\nhr {\n  border: 1px solid var(--comment-color);\n}\n\n.overlay {\n  position: absolute;\n  background-color: var(--overlay-background-color);\n  border: 1px solid var(--input-border-color);\n  border-radius: 6px;\n}\n\n\n";
+var component_style = "\n:host {\n  display: inline-block;\n}\n\n/* Delay the overlay transitions by 1ms to they are done last, and any \n  actions on them can be done first (like focusing the input) */\n\n.new-thread-preview {\n  opacity: 0;\n  transition-property: opacity;\n  transition-delay: 1ms;\n}\n\n.comment-preview:focus,\n.new-thread-preview:focus {\n  outline: none;\n  text-decoration: underline;\n}\n\n#line-discussion-overlay {\n  visibility: hidden;\n  opacity: 0;\n  transition-property: opacity, visibility;\n  transition-delay: 1ms, 1ms;\n}\n\n#expanded-message {\n  visibility: hidden;\n  opacity: 0;\n  transition-property: opacity, visibility;\n  transition-delay: 1ms, 1ms;\n}\n\n/* When the new thread preview is hovered, delay the opacity transition to\n  avoid triggering it as the mouse swipes by. */\n\n.new-thread-preview:hover {\n  opacity: 1;\n  transition-property: opacity;\n  transition-delay: 25ms;\n}\n\n.new-thread-preview:hover + #line-discussion-overlay,\n.comment-preview:hover + #line-discussion-overlay {\n  visibility: visible;\n  opacity: 1;\n  transition-property: opacity, visible;\n  transition-delay: 25ms, 25ms;\n}\n\n.new-thread-preview:hover + #line-discussion-overlay #expanded-message.show-exp,\n.comment-preview:hover + #line-discussion-overlay #expanded-message.show-exp {\n  visibility: visible;\n  opacity: 1;\n  transition-property: opacity, visible;\n  transition-delay: 25ms, 25ms;\n}\n\n/* When the new thread preview is focused, immediately show the overlay to\n  provide snappy feedback. */\n\n.new-thread-preview:focus,\n.new-thread-preview:has(+ #line-discussion-overlay:hover),\n.new-thread-preview:has(+ #line-discussion-overlay:focus-within) {\n  opacity: 1;\n}\n\n.new-thread-preview:focus + #line-discussion-overlay,\n.comment-preview:focus + #line-discussion-overlay,\n#line-discussion-overlay:hover,\n#line-discussion-overlay:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\n.new-thread-preview:focus + #line-discussion-overlay #expanded-message.show-exp,\n.comment-preview:focus + #line-discussion-overlay #expanded-message.show-exp,\n#line-discussion-overlay:hover #expanded-message.show-exp,\n#line-discussion-overlay:focus-within #expanded-message.show-exp,\n#expanded-message.show-exp:hover,\n#expanded-message.show-exp:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\nbutton.icon-button {\n  background-color: var(--overlay-background-color);\n  color: var(--text-color);\n  border-radius: 4px;\n  border: none;\n  cursor: pointer;\n  padding: 0.3rem;\n}\n\nbutton.icon-button:hover {\n  background-color: var(--input-background-color);\n}\n\nbutton.icon-button svg {\n  height: 1.25rem;\n  width: 1.25rem;\n}\n\ninput, textarea {\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border-radius: 6px;\n}\n\ninput, textarea {\n  border: 1px solid var(--input-border-color);\n}\n\nhr {\n  border: 1px solid var(--comment-color);\n}\n\n.overlay {\n  position: absolute;\n  background-color: var(--overlay-background-color);\n  border: 1px solid var(--input-border-color);\n  border-radius: 6px;\n}\n";
 function view(model) {
   return div(
     toList([

@@ -26,18 +26,20 @@ pub fn on_ctrl_enter(msg: msg) {
   }
 }
 
-pub fn on_e(msg: msg) {
-  use event <- event.on("keydown")
+pub fn on_input_no_propigation(msg: fn(String) -> msg) {
+  use event <- event.on("input")
+  event.stop_propagation(event)
 
-  let empty_error = [dynamic.DecodeError("", "", [])]
-
-  use key <- result.try(
-    decode.run(event, decode.field("key", decode.string, decode.success))
-    |> result.replace_error(empty_error),
+  decode.run(
+    event,
+    decode.subfield(["target", "value"], decode.string, decode.success),
   )
+  |> result.replace_error([dynamic.DecodeError("", "", [])])
+  |> result.map(msg)
+}
 
-  case key {
-    "e" -> Ok(msg)
-    _ -> Error(empty_error)
-  }
+pub fn suppress_keydown_propagation(msg) {
+  use event <- event.on("keydown")
+  event.stop_propagation(event)
+  Ok(msg)
 }

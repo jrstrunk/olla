@@ -1,49 +1,56 @@
 console.log("Starting page navigation");
 
 let current_selected_line_number = 16;
-// 1 for line discussion, 0 for function discussion
-let discussion_lane = 1;
 
-let control_keys = [
-  "ArrowUp",
-  "ArrowDown",
-  "ArrowLeft",
-  "ArrowRight",
-  "e",
-  "PageUp",
-  "PageDown",
-];
+let discussion_lane = 1; // 1 for line discussion, 0 for function discussion
+
+let is_user_typing = false;
 
 window.addEventListener("keydown", (event) => {
-  // If the key is a control key, prevent the default action
-  if (control_keys.includes(event.key)) {
-    event.preventDefault();
-
-    console.log("Got control key", event.key, event.ctrlKey, event.shiftKey);
-
-    handle_discussion_focus(event) || handle_input_focus(event);
+  // If the key is a control key, prevent the default action and handle the key.
+  // If the user is currently typing, do nothing.
+  if (is_user_typing) {
+    handle_input_escape(event) || handle_expanded_input_focus(event);
+  } else {
+    handle_discussion_focus(event) ||
+      handle_input_focus(event) ||
+      handle_expanded_input_focus(event);
   }
 });
 
-// Focus a dicussion input logic
-function handle_input_focus(event) {
-  if (!event.ctrlKey && event.key === "e") {
-    get_line_discussion_input(
-      current_selected_line_number,
-      discussion_lane
-    )?.focus();
-  } else if (event.ctrlKey && event.key === "e") {
-    console.log("Got ctrl e key", event.key);
+window.addEventListener("user-focused-input", (event) => {
+  is_user_typing = true;
+  console.log("User focused input on line", event.detail.line_number);
+  current_selected_line_number = event.detail.line_number;
+  discussion_lane = event.detail.discussion_lane;
+});
+
+window.addEventListener("user-unfocused-input", (event) => {
+  is_user_typing = false;
+});
+
+function handle_input_escape(event) {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    focus_line_discussion(current_selected_line_number, discussion_lane);
+  }
+}
+
+function handle_expanded_input_focus(event) {
+  if (event.ctrlKey && event.key === "e") {
+    console.log("Ctrl + e");
+    event.preventDefault();
     let exp = get_line_discussion_expanded_input(
       current_selected_line_number,
       discussion_lane
     );
 
+    console.log("Got expanded input", exp);
+
     let exp_cont = get_line_discussion_expanded_input_container(
       current_selected_line_number,
       discussion_lane
     );
-
 
     if (exp_cont?.classList.contains("hide-exp")) {
       exp_cont.classList.remove("hide-exp");
@@ -53,6 +60,17 @@ function handle_input_focus(event) {
     } else {
       exp?.focus();
     }
+  }
+}
+
+// Focus a dicussion input logic
+function handle_input_focus(event) {
+  if (!event.ctrlKey && event.key === "e") {
+    event.preventDefault();
+    get_line_discussion_input(
+      current_selected_line_number,
+      discussion_lane
+    )?.focus();
   } else {
     return false;
   }
@@ -105,18 +123,21 @@ function get_line_discussion_expanded_input_container(
 
 function handle_discussion_focus(event) {
   if (!event.shiftKey && event.key === "ArrowUp") {
+    event.preventDefault();
     current_selected_line_number = findNextDiscussionLine(
       current_selected_line_number,
       -1
     );
     focus_line_discussion(current_selected_line_number, discussion_lane);
   } else if (!event.shiftKey && event.key === "ArrowDown") {
+    event.preventDefault();
     current_selected_line_number = findNextDiscussionLine(
       current_selected_line_number,
       1
     );
     focus_line_discussion(current_selected_line_number, discussion_lane);
   } else if (event.shiftKey && event.key === "ArrowUp") {
+    event.preventDefault();
     current_selected_line_number = findNextDiscussionLine(
       current_selected_line_number,
       -1,
@@ -124,6 +145,7 @@ function handle_discussion_focus(event) {
     );
     focus_line_discussion(current_selected_line_number, discussion_lane);
   } else if (event.shiftKey && event.key === "ArrowDown") {
+    event.preventDefault();
     current_selected_line_number = findNextDiscussionLine(
       current_selected_line_number,
       1,
@@ -131,6 +153,7 @@ function handle_discussion_focus(event) {
     );
     focus_line_discussion(current_selected_line_number, discussion_lane);
   } else if (event.key === "PageUp") {
+    event.preventDefault();
     current_selected_line_number = findNextDiscussionLine(
       current_selected_line_number,
       -1,
@@ -138,6 +161,7 @@ function handle_discussion_focus(event) {
     );
     focus_line_discussion(current_selected_line_number, discussion_lane);
   } else if (event.key === "PageDown") {
+    event.preventDefault();
     current_selected_line_number = findNextDiscussionLine(
       current_selected_line_number,
       1,
@@ -145,9 +169,11 @@ function handle_discussion_focus(event) {
     );
     focus_line_discussion(current_selected_line_number, discussion_lane);
   } else if (event.key === "ArrowLeft") {
+    event.preventDefault();
     discussion_lane = Math.max(0, discussion_lane - 1);
     focus_line_discussion(current_selected_line_number, discussion_lane);
   } else if (event.key === "ArrowRight") {
+    event.preventDefault();
     discussion_lane = Math.min(1, discussion_lane + 1);
     focus_line_discussion(current_selected_line_number, discussion_lane);
   } else {

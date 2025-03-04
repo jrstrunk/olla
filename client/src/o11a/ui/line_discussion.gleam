@@ -3,6 +3,7 @@ import gleam/dict
 import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/int
+import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
@@ -131,6 +132,9 @@ pub type Msg {
   UserToggledExpandedMessage(for_note_id: String)
   UserToggledKeepNotesOpen
   UserToggledCloseNotes
+  UserFocusedInput
+  UserFocusedExpandedInput
+  UserUnfocusedInput
 }
 
 fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
@@ -275,6 +279,42 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       Model(..model, keep_notes_open: False),
       effect.none(),
     )
+    UserFocusedInput -> #(
+      model,
+      event.emit(
+        events.user_focused_input,
+        json.object([
+          #("line_number", json.int(model.line_number)),
+          // 1 for line discussion
+          #("discussion_lane", json.int(1)),
+        ]),
+      ),
+    )
+    // When the expanaded message box is focused, set the show_expanded_message_box
+    // to true. This makes sure the model state is in sync with any external
+    // calls to focus the expanded message box.
+    UserFocusedExpandedInput -> #(
+      Model(..model, show_expanded_message_box: True),
+      event.emit(
+        events.user_focused_input,
+        json.object([
+          #("line_number", json.int(model.line_number)),
+          // 1 for line discussion
+          #("discussion_lane", json.int(1)),
+        ]),
+      ),
+    )
+    UserUnfocusedInput -> #(
+      model,
+      event.emit(
+        events.user_unfocused_input,
+        json.object([
+          #("line_number", json.int(model.line_number)),
+          // 1 for line discussion
+          #("discussion_lane", json.int(1)),
+        ]),
+      ),
+    )
   }
 }
 
@@ -402,8 +442,6 @@ hr {
   border: 1px solid var(--input-border-color);
   border-radius: 6px;
 }
-
-
 "
 
 fn view(model: Model) -> element.Element(Msg) {
@@ -536,6 +574,8 @@ fn new_message_input_view(model: Model) {
       ),
       attribute.placeholder("Add a new comment"),
       event.on_input(UserWroteNote),
+      event.on_focus(UserFocusedInput),
+      event.on_blur(UserUnfocusedInput),
       eventx.on_ctrl_enter(UserSubmittedNote),
       attribute.value(model.current_note_draft),
     ]),
@@ -613,6 +653,8 @@ fn expanded_message_view(model: Model) {
           attribute.class(textarea_style),
           attribute.placeholder("Write an expanded message body"),
           event.on_input(UserWroteExpandedMessage),
+          event.on_focus(UserFocusedExpandedInput),
+          event.on_blur(UserUnfocusedInput),
           eventx.on_ctrl_enter(UserSubmittedNote),
           attribute.value(
             model.current_expanded_message_draft |> option.unwrap(""),

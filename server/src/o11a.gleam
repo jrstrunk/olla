@@ -32,7 +32,7 @@ type Context {
 pub fn main() {
   io.println("o11a is starting!")
 
-  let config = config.Config(port: 8401)
+  let config = config.Config(port: 8400)
 
   use
     gateway.Gateway(
