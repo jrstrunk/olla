@@ -572,6 +572,10 @@ video {
   z-index: 3;
 }
 
+.m-\[\.5rem\] {
+  margin: .5rem;
+}
+
 .mb-\[\.2rem\] {
   margin-bottom: .2rem;
 }
@@ -604,8 +608,8 @@ video {
   max-height: 30rem;
 }
 
-.w-\[140\%\] {
-  width: 140%;
+.w-\[100\%\] {
+  width: 100%;
 }
 
 .w-\[30rem\] {

@@ -526,6 +526,43 @@ fn view(model: Model) -> element.Element(Msg) {
   )
 }
 
+fn inline_comment_preview_view(model: Model) {
+  dict.get(model.notes, model.line_id)
+  |> result.try(list.first)
+  |> result.map(fn(note) {
+    html.span(
+      [
+        attribute.class("select-none italic comment font-code fade-in"),
+        attribute.class("comment-preview"),
+        attribute.id("discussion-entry"),
+        attribute.attribute("tabindex", "0"),
+        event.on_click(UserEnteredDiscussionPreview),
+        attribute.style([
+          #("animation-delay", int.to_string(model.line_number * 4) <> "ms"),
+        ]),
+      ],
+      [
+        html.text(case string.length(note.message) > 40 {
+          True -> note.message |> string.slice(0, length: 37) <> "..."
+          False -> note.message |> string.slice(0, length: 40)
+        }),
+      ],
+    )
+  })
+  |> result.unwrap(
+    html.span(
+      [
+        attribute.class("select-none italic comment"),
+        attribute.class("new-thread-preview"),
+        attribute.id("discussion-entry"),
+        attribute.attribute("tabindex", "0"),
+        event.on_click(UserEnteredDiscussionPreview),
+      ],
+      [html.text("Start new thread")],
+    ),
+  )
+}
+
 fn discussion_overlay_view(model: Model) {
   html.div(
     [
@@ -540,15 +577,12 @@ fn discussion_overlay_view(model: Model) {
         [
           attribute.id("comment-list"),
           attribute.class(
-            "flex flex-col-reverse p-[.5rem] overflow-auto max-h-[30rem] gap-[.5rem]",
+            "flex flex-col-reverse overflow-auto max-h-[30rem] gap-[.5rem] m-[.5rem]",
           ),
         ],
-        [
-          new_message_input_view(model),
-          element.fragment(comments_view(model)),
-          thread_header_view(model),
-        ],
+        [element.fragment(comments_view(model)), thread_header_view(model)],
       ),
+      new_message_input_view(model),
       expanded_message_view(model),
     ],
   )
@@ -625,70 +659,6 @@ fn comments_view(model: Model) {
   })
 }
 
-fn new_message_input_view(model: Model) {
-  html.div([attribute.class("flex justify-between items-center gap-[.35rem]")], [
-    html.button(
-      [
-        attribute.id("toggle-expanded-message-button"),
-        attribute.class("icon-button"),
-        event.on_click(UserToggledExpandedMessageBox(
-          !model.show_expanded_message_box,
-        )),
-      ],
-      [lucide.pencil_ruler([])],
-    ),
-    html.input([
-      attribute.id("new-comment-input"),
-      attribute.class(
-        "inline-block w-full grow text-[0.9rem] pl-2 pb-[.2rem] p-[0.3rem] border-[none] border-t border-solid;",
-      ),
-      attribute.placeholder("Add a new comment"),
-      event.on_input(UserWroteNote),
-      event.on_focus(UserFocusedInput),
-      event.on_blur(UserUnfocusedInput),
-      eventx.on_ctrl_enter(UserSubmittedNote),
-      attribute.value(model.current_note_draft),
-    ]),
-  ])
-}
-
-fn inline_comment_preview_view(model: Model) {
-  dict.get(model.notes, model.line_id)
-  |> result.try(list.first)
-  |> result.map(fn(note) {
-    html.span(
-      [
-        attribute.class("select-none italic comment font-code fade-in"),
-        attribute.class("comment-preview"),
-        attribute.id("discussion-entry"),
-        attribute.attribute("tabindex", "0"),
-        event.on_click(UserEnteredDiscussionPreview),
-        attribute.style([
-          #("animation-delay", int.to_string(model.line_number * 4) <> "ms"),
-        ]),
-      ],
-      [
-        html.text(case string.length(note.message) > 40 {
-          True -> note.message |> string.slice(0, length: 37) <> "..."
-          False -> note.message |> string.slice(0, length: 40)
-        }),
-      ],
-    )
-  })
-  |> result.unwrap(
-    html.span(
-      [
-        attribute.class("select-none italic comment"),
-        attribute.class("new-thread-preview"),
-        attribute.id("discussion-entry"),
-        attribute.attribute("tabindex", "0"),
-        event.on_click(UserEnteredDiscussionPreview),
-      ],
-      [html.text("Start new thread")],
-    ),
-  )
-}
-
 fn significance_badge_view(model: Model, note: note.Note) {
   let badge_style =
     "input-border rounded-md text-[0.65rem] pb-[0.15rem] pt-1 px-[0.5rem]"
@@ -705,8 +675,42 @@ fn significance_badge_view(model: Model, note: note.Note) {
   }
 }
 
+fn new_message_input_view(model: Model) {
+  html.div(
+    [
+      attribute.class(
+        "flex justify-between items-center gap-[.35rem] m-[.5rem]",
+      ),
+    ],
+    [
+      html.button(
+        [
+          attribute.id("toggle-expanded-message-button"),
+          attribute.class("icon-button"),
+          event.on_click(UserToggledExpandedMessageBox(
+            !model.show_expanded_message_box,
+          )),
+        ],
+        [lucide.pencil_ruler([])],
+      ),
+      html.input([
+        attribute.id("new-comment-input"),
+        attribute.class(
+          "inline-block w-full grow text-[0.9rem] pl-2 pb-[.2rem] p-[0.3rem] border-[none] border-t border-solid;",
+        ),
+        attribute.placeholder("Add a new comment"),
+        event.on_input(UserWroteNote),
+        event.on_focus(UserFocusedInput),
+        event.on_blur(UserUnfocusedInput),
+        eventx.on_ctrl_enter(UserSubmittedNote),
+        attribute.value(model.current_note_draft),
+      ]),
+    ],
+  )
+}
+
 fn expanded_message_view(model: Model) {
-  let expanded_message_style = "overlay p-[.5rem] flex w-[140%] h-60 z-[3] mt-2"
+  let expanded_message_style = "overlay p-[.5rem] flex w-[100%] h-60 z-[3] mt-2"
 
   let textarea_style = "grow text-[.95rem] resize-none p-[.3rem]"
 

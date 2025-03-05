@@ -47,6 +47,7 @@ const style = "
 .tree-item {
   margin-top: 0.25rem;
   margin-bottom: 0.25rem;
+  text-wrap: nowrap;
 }
 
 .tree-link {
