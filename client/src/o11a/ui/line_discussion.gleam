@@ -467,11 +467,10 @@ hr {
 }
 
 .overlay {
-  position: absolute;
   background-color: var(--overlay-background-color);
   border: 1px solid var(--input-border-color);
   border-radius: 6px;
-
+}
 
 p.loc {
   margin: 0;
@@ -491,6 +490,10 @@ p.loc {
 
 .inline-comment {
   margin-left: 2.5rem;
+}
+
+.absolute {
+  position: absolute;
 }
 "
 
@@ -568,21 +571,30 @@ fn discussion_overlay_view(model: Model) {
     [
       attribute.id("line-discussion-overlay"),
       attribute.class(
-        "overlay w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] bottom-[1.4rem]",
+        "absolute w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] bottom-[1.4rem]",
       ),
       event.on_click(UserToggledKeepNotesOpen),
     ],
     [
-      html.div(
-        [
-          attribute.id("comment-list"),
-          attribute.class(
-            "flex flex-col-reverse overflow-auto max-h-[30rem] gap-[.5rem] m-[.5rem]",
-          ),
-        ],
-        [element.fragment(comments_view(model)), thread_header_view(model)],
-      ),
-      new_message_input_view(model),
+      html.div([attribute.class("overlay p-[.5rem]")], [
+        case list.length(model.current_thread_notes) > 0 {
+          True ->
+            html.div(
+              [
+                attribute.id("comment-list"),
+                attribute.class(
+                  "flex flex-col-reverse overflow-auto max-h-[30rem] gap-[.5rem] mb-[.5rem]",
+                ),
+              ],
+              [
+                element.fragment(comments_view(model)),
+                thread_header_view(model),
+              ],
+            )
+          False -> element.fragment([])
+        },
+        new_message_input_view(model),
+      ]),
       expanded_message_view(model),
     ],
   )
@@ -676,41 +688,35 @@ fn significance_badge_view(model: Model, note: note.Note) {
 }
 
 fn new_message_input_view(model: Model) {
-  html.div(
-    [
+  html.div([attribute.class("flex justify-between items-center gap-[.35rem]")], [
+    html.button(
+      [
+        attribute.id("toggle-expanded-message-button"),
+        attribute.class("icon-button"),
+        event.on_click(UserToggledExpandedMessageBox(
+          !model.show_expanded_message_box,
+        )),
+      ],
+      [lucide.pencil_ruler([])],
+    ),
+    html.input([
+      attribute.id("new-comment-input"),
       attribute.class(
-        "flex justify-between items-center gap-[.35rem] m-[.5rem]",
+        "inline-block w-full grow text-[0.9rem] pl-2 pb-[.2rem] p-[0.3rem] border-[none] border-t border-solid;",
       ),
-    ],
-    [
-      html.button(
-        [
-          attribute.id("toggle-expanded-message-button"),
-          attribute.class("icon-button"),
-          event.on_click(UserToggledExpandedMessageBox(
-            !model.show_expanded_message_box,
-          )),
-        ],
-        [lucide.pencil_ruler([])],
-      ),
-      html.input([
-        attribute.id("new-comment-input"),
-        attribute.class(
-          "inline-block w-full grow text-[0.9rem] pl-2 pb-[.2rem] p-[0.3rem] border-[none] border-t border-solid;",
-        ),
-        attribute.placeholder("Add a new comment"),
-        event.on_input(UserWroteNote),
-        event.on_focus(UserFocusedInput),
-        event.on_blur(UserUnfocusedInput),
-        eventx.on_ctrl_enter(UserSubmittedNote),
-        attribute.value(model.current_note_draft),
-      ]),
-    ],
-  )
+      attribute.placeholder("Add a new comment"),
+      event.on_input(UserWroteNote),
+      event.on_focus(UserFocusedInput),
+      event.on_blur(UserUnfocusedInput),
+      eventx.on_ctrl_enter(UserSubmittedNote),
+      attribute.value(model.current_note_draft),
+    ]),
+  ])
 }
 
 fn expanded_message_view(model: Model) {
-  let expanded_message_style = "overlay p-[.5rem] flex w-[100%] h-60 z-[3] mt-2"
+  let expanded_message_style =
+    "absolute overlay p-[.5rem] flex w-[100%] h-60 z-[3] mt-2"
 
   let textarea_style = "grow text-[.95rem] resize-none p-[.3rem]"
 
