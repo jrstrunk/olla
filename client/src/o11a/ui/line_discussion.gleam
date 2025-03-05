@@ -729,11 +729,8 @@ fn expanded_message_view(model: Model) {
           event.on_focus(UserFocusedExpandedInput),
           event.on_blur(UserUnfocusedInput),
           eventx.on_ctrl_enter(UserSubmittedNote),
-          attribute.value(
-            model.current_expanded_message_draft |> option.unwrap(""),
-          ),
         ],
-        "Write an expanded message body ig",
+        model.current_expanded_message_draft |> option.unwrap(""),
       ),
     ],
   )

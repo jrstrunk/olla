@@ -4829,6 +4829,58 @@ function new_message_input_view(model) {
     ])
   );
 }
+function inline_comment_preview_view(model) {
+  let _pipe = map_get(model.notes, model.line_id);
+  let _pipe$1 = try$(_pipe, first);
+  let _pipe$2 = map3(
+    _pipe$1,
+    (note) => {
+      return span(
+        toList([
+          class$("select-none italic comment font-code fade-in"),
+          class$("comment-preview"),
+          id("discussion-entry"),
+          attribute("tabindex", "0"),
+          on_click(new UserEnteredDiscussionPreview()),
+          style(
+            toList([
+              ["animation-delay", to_string(model.line_number * 4) + "ms"]
+            ])
+          )
+        ]),
+        toList([
+          text2(
+            (() => {
+              let $ = string_length(note.message) > 40;
+              if ($) {
+                return (() => {
+                  let _pipe$22 = note.message;
+                  return slice(_pipe$22, 0, 37);
+                })() + "...";
+              } else {
+                let _pipe$22 = note.message;
+                return slice(_pipe$22, 0, 40);
+              }
+            })()
+          )
+        ])
+      );
+    }
+  );
+  return unwrap2(
+    _pipe$2,
+    span(
+      toList([
+        class$("select-none italic comment"),
+        class$("new-thread-preview"),
+        id("discussion-entry"),
+        attribute("tabindex", "0"),
+        on_click(new UserEnteredDiscussionPreview())
+      ]),
+      toList([text2("Start new thread")])
+    )
+  );
+}
 function significance_badge_view(model, note) {
   let badge_style = "input-border rounded-md text-[0.65rem] pb-[0.15rem] pt-1 px-[0.5rem]";
   let $ = significance_to_string(
@@ -4929,66 +4981,6 @@ function comments_view(model) {
     }
   );
 }
-function inline_comment_preview_view(model) {
-  let _pipe = map_get(model.notes, model.line_id);
-  let _pipe$1 = try$(_pipe, first);
-  let _pipe$2 = map3(
-    _pipe$1,
-    (note) => {
-      return fragment(
-        toList([
-          span(
-            toList([
-              class$("select-none italic comment font-code fade-in"),
-              class$("comment-preview"),
-              id("discussion-entry"),
-              attribute("tabindex", "0"),
-              on_click(new UserEnteredDiscussionPreview()),
-              style(
-                toList([
-                  [
-                    "animation-delay",
-                    to_string(model.line_number * 4) + "ms"
-                  ]
-                ])
-              )
-            ]),
-            toList([
-              text2(
-                (() => {
-                  let $ = string_length(note.message) > 40;
-                  if ($) {
-                    return (() => {
-                      let _pipe$22 = note.message;
-                      return slice(_pipe$22, 0, 37);
-                    })() + "...";
-                  } else {
-                    let _pipe$22 = note.message;
-                    return slice(_pipe$22, 0, 40);
-                  }
-                })()
-              )
-            ])
-          ),
-          significance_badge_view(model, note)
-        ])
-      );
-    }
-  );
-  return unwrap2(
-    _pipe$2,
-    span(
-      toList([
-        class$("select-none italic comment"),
-        class$("new-thread-preview"),
-        id("discussion-entry"),
-        attribute("tabindex", "0"),
-        on_click(new UserEnteredDiscussionPreview())
-      ]),
-      toList([text2("Start new thread")])
-    )
-  );
-}
 function expanded_message_view(model) {
   let expanded_message_style = "overlay p-[.5rem] flex w-[140%] h-40 z-[3] mt-2";
   let textarea_style = "grow text-[.95rem] resize-none p-[.3rem]";
@@ -5018,15 +5010,12 @@ function expanded_message_view(model) {
           ),
           on_focus(new UserFocusedExpandedInput()),
           on_blur(new UserUnfocusedInput()),
-          on_ctrl_enter(new UserSubmittedNote()),
-          value(
-            (() => {
-              let _pipe = model.current_expanded_message_draft;
-              return unwrap(_pipe, "");
-            })()
-          )
+          on_ctrl_enter(new UserSubmittedNote())
         ]),
-        "Write an expanded message body ig"
+        (() => {
+          let _pipe = model.current_expanded_message_draft;
+          return unwrap(_pipe, "");
+        })()
       )
     ])
   );
