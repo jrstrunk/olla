@@ -4982,18 +4982,17 @@ function comments_view(model) {
   );
 }
 function expanded_message_view(model) {
-  let expanded_message_style = "overlay p-[.5rem] flex w-[140%] h-40 z-[3] mt-2";
+  let expanded_message_style = "overlay p-[.5rem] flex w-[140%] h-60 z-[3] mt-2";
   let textarea_style = "grow text-[.95rem] resize-none p-[.3rem]";
   return div(
     toList([
-      class$(expanded_message_style),
       id("expanded-message"),
       (() => {
         let $ = model.show_expanded_message_box;
         if ($) {
-          return class$("show-exp");
+          return class$(expanded_message_style + " show-exp");
         } else {
-          return class$("hide-exp");
+          return class$(expanded_message_style);
         }
       })()
     ]),

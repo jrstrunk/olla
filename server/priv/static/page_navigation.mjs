@@ -56,8 +56,7 @@ function handle_expanded_input_focus(event) {
       discussion_lane
     );
 
-    if (exp_cont?.classList.contains("hide-exp")) {
-      exp_cont.classList.remove("hide-exp");
+    if (!exp_cont?.classList.contains("show-exp")) {
       exp_cont.classList.add("show-exp");
       // Wait for the styles to be applied after changing the class
       setTimeout(() => exp?.focus(), 50);
