@@ -3,6 +3,7 @@ import gleam/dict
 import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/int
+import gleam/io
 import gleam/json
 import gleam/list
 import gleam/option.{Some}
@@ -125,6 +126,8 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
   let line_number_text = int.to_string(line_number)
   let line_tag = "L" <> line_number_text
   let line_id = model.page_path <> "#" <> line_tag
+
+  io.println("Rendering line " <> line_id)
 
   use <- given.that(is_skeleton, return: fn() {
     html.p([attribute.class("loc"), attribute.id(line_tag)], [

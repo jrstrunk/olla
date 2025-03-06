@@ -3,6 +3,7 @@ import gleam/dict
 import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/int
+import gleam/io
 import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -498,6 +499,8 @@ p.loc {
 "
 
 fn view(model: Model) -> element.Element(Msg) {
+  io.println("Rendering line discussion " <> model.line_tag)
+
   html.p(
     [
       attribute.class("loc flex"),
