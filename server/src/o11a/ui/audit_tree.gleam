@@ -12,7 +12,7 @@ import o11a/ui/gateway
 const style = "
 #tree-grid {
   display: grid;
-  grid-template-columns: 12rem 4px 1fr 4px 40rem;
+  grid-template-columns: 12rem 4px 1fr 4px 20rem;
   /* these are critical for scrolling sections of the grid separately */
   height: 100%;
   width: 100%;
@@ -22,7 +22,6 @@ const style = "
 
 #file-tree {
   overflow: auto;
-  font-size: 0.9rem;
   padding-left: 1rem;
   padding-top: .5rem;
   padding-bottom: .5rem;
@@ -30,6 +29,10 @@ const style = "
 
 #audit-tree-header {
   text-wrap: nowrap;
+}
+
+#audit-files {
+  font-size: 0.9rem;
 }
 
 #tree-resizer, #panel-resizer {
@@ -176,7 +179,7 @@ fn audit_file_tree_view(audit_name, metadata) {
   let #(subdirs, direct_files) =
     dict.get(all_audit_files, audit_name) |> result.unwrap(#([], []))
 
-  html.div([attribute.class("audit-files")], [
+  html.div([attribute.id("audit-files")], [
     html.div([attribute.id(audit_name <> "-files")], [
       html.a(
         [

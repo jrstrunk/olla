@@ -5082,6 +5082,9 @@ function classify_message(message, is_thread_open) {
     if (message.startsWith("todo ")) {
       let rest = message.slice(5);
       return [new ToDo(), rest];
+    } else if (message.startsWith("todo: ")) {
+      let rest = message.slice(6);
+      return [new ToDo(), rest];
     } else if (message.startsWith("? ")) {
       let rest = message.slice(2);
       return [new Question(), rest];
@@ -5098,6 +5101,8 @@ function classify_message(message, is_thread_open) {
     if (message.startsWith("done ")) {
       let rest = message.slice(5);
       return [new ToDoDone(), rest];
+    } else if (message === "done") {
+      return [new ToDoDone(), "done"];
     } else if (message.startsWith(": ")) {
       let rest = message.slice(2);
       return [new Answer(), rest];

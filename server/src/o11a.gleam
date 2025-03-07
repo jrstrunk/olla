@@ -8,7 +8,6 @@ import gleam/result
 import gleam/string_tree
 import lib/server_componentx
 import lustre/element
-import lustre/element/html
 import mist
 import o11a/components
 import o11a/config
@@ -26,6 +25,7 @@ type Context {
   Context(
     dashboard_gateway: gateway.DashboardGateway,
     page_gateway: gateway.PageGateway,
+    page_dashboard_gateway: gateway.PageDashboardGateway,
     discussion_gateway: gateway.DiscussionGateway,
     audit_metadata_gateway: gateway.AuditMetaDataGateway,
   )
@@ -40,6 +40,7 @@ pub fn main() {
     gateway.Gateway(
       dashboard_gateway:,
       page_gateway:,
+      page_dashboard_gateway:,
       discussion_gateway:,
       audit_metadata_gateway:,
     )
@@ -49,6 +50,7 @@ pub fn main() {
     Context(
       dashboard_gateway:,
       page_gateway:,
+      page_dashboard_gateway:,
       discussion_gateway:,
       audit_metadata_gateway:,
     )
@@ -81,6 +83,16 @@ fn handler(req, context: Context) {
       let assert Ok(actor) =
         gateway.get_page_actor(
           context.page_gateway,
+          list.fold(component_path_segments, "", filepath.join),
+        )
+
+      server_componentx.get_connection(req, actor)
+    }
+
+    ["component-page-dashboard", ..component_path_segments] -> {
+      let assert Ok(actor) =
+        gateway.get_page_dashboard_actor(
+          context.page_dashboard_gateway,
           list.fold(component_path_segments, "", filepath.join),
         )
 
@@ -159,7 +171,11 @@ fn handle_wisp_request(req, context: Context) {
             skeleton,
           )
           |> audit_tree.view(
-            Some(html.h1([], [html.text("Hi panel")])),
+            Some(server_componentx.render_with_prerendered_skeleton(
+              filepath.join("component-page-dashboard", file_path),
+              components.audit_page,
+              "",
+            )),
             audit_name,
             with: context.audit_metadata_gateway,
           )

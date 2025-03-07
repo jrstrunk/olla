@@ -1,6 +1,7 @@
 import filepath
 import gleam/dict
 import gleam/list
+import gleam/option.{None, Some}
 import gleam/string
 import lib/persistent_concurrent_duplicate_dict as pcd_dict
 import lib/server_componentx
@@ -72,7 +73,7 @@ fn view(model: Model) -> element.Element(Msg) {
     unanswered_questions,
     unconfirmed_findings,
     confirmed_findings,
-  ) = find_open_notes(model.discussion)
+  ) = find_open_notes(model.discussion, for: None)
 
   html.div([attribute.style(container_styles)], [
     html.style([], style),
@@ -115,8 +116,18 @@ pub fn get_skeleton(for discussion) {
   |> view
 }
 
-pub fn find_open_notes(in discussion: discussion.Discussion) {
-  let all_notes = pcd_dict.to_list(discussion.notes)
+pub fn find_open_notes(in discussion: discussion.Discussion, for page_path) {
+  let all_notes = case page_path {
+    Some(page_path) ->
+      pcd_dict.to_list(discussion.notes)
+      |> list.filter(fn(note_data) {
+        // The note_id will be the page path + the line number, but we want
+        // everything in the page path
+        string.starts_with(note_data.0, page_path)
+      })
+
+    None -> pcd_dict.to_list(discussion.notes)
+  }
 
   let all_todos =
     list.filter(all_notes, fn(note) {

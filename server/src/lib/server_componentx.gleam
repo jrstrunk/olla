@@ -140,6 +140,10 @@ pub fn as_document(body: element.Element(msg)) {
         "",
       ),
       html.script(
+        [attribute.type_("module"), attribute.src("/page_panel.mjs")],
+        "",
+      ),
+      html.script(
         [
           attribute.type_("module"),
           attribute.src("/lustre-server-component.mjs"),
