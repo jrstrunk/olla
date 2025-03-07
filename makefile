@@ -17,6 +17,10 @@ run:
 clean-skeleton:
 	@(cd server/priv/audits && find . -type f -name "*skeleton.html" -delete)
 
+.PHONY: count-lines
+count-lines:
+	@(cd server/priv/audits && find . -type f -exec wc -l {} \; | sort -n)
+
 .PHONY: test
 test:
 	@for dir in $(SUBDIRS); do \

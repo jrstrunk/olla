@@ -67,14 +67,15 @@ pub fn get_all_audit_page_paths() {
     }
   })
   |> list.filter(fn(file_path) {
-    let gr = string.to_graphemes(file_path) |> list.reverse
-    case list.take(gr, 5), list.take(gr, 3) {
-      // ".html" files
-      ["l", "m", "t", "h", "."], _ -> False
-      // ".db" files
-      _, ["b", "d", "."] -> False
+    case string.to_graphemes(file_path) |> list.reverse {
+      // Allow .sol files
+      ["l", "o", "s", ".", ..] -> True
+      // Allow .rs files
+      ["s", "r", ".", ..] -> True
+      // Allow .md files
+      ["d", "m", ".", ..] -> True
       // everything else
-      _, _ -> True
+      _ -> False
     }
   })
   |> list.group(get_audit_name_from_page_path)
