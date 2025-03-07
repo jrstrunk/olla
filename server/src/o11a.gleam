@@ -3,10 +3,12 @@ import gleam/erlang/process
 import gleam/http/request
 import gleam/io
 import gleam/list
+import gleam/option.{None, Some}
 import gleam/result
 import gleam/string_tree
 import lib/server_componentx
 import lustre/element
+import lustre/element/html
 import mist
 import o11a/components
 import o11a/config
@@ -66,12 +68,14 @@ fn handler(req, context: Context) {
     ["lustre-server-component.mjs"] ->
       server_componentx.serve_lustre_framework()
 
-    ["styles.css" as stylesheet] | ["line_discussion.css" as stylesheet] ->
+    ["styles.css" as stylesheet]
+    | ["line_discussion.css" as stylesheet]
+    | ["page_panel.css" as stylesheet] ->
       server_componentx.serve_css(stylesheet)
 
-    ["line_discussion.mjs"] -> server_componentx.serve_js("line_discussion.mjs")
-
-    ["page_navigation.mjs"] -> server_componentx.serve_js("page_navigation.mjs")
+    ["line_discussion.mjs" as script]
+    | ["page_navigation.mjs" as script]
+    | ["page_panel.mjs" as script] -> server_componentx.serve_js(script)
 
     ["component-page", ..component_path_segments] -> {
       let assert Ok(actor) =
@@ -115,7 +119,7 @@ fn handle_wisp_request(req, context: Context) {
         filepath.join("component-dashboard", audit_name),
         _,
       )
-      |> audit_tree.view(audit_name, with: context.audit_metadata_gateway)
+      |> audit_tree.view(None, audit_name, with: context.audit_metadata_gateway)
       |> server_componentx.as_document
       |> element.to_document_string_builder
       |> wisp.html_response(200)
@@ -129,7 +133,11 @@ fn handle_wisp_request(req, context: Context) {
       {
         Ok(contents) ->
           audit_doc.view(contents)
-          |> audit_tree.view(audit_name, with: context.audit_metadata_gateway)
+          |> audit_tree.view(
+            None,
+            audit_name,
+            with: context.audit_metadata_gateway,
+          )
           |> server_componentx.as_static_document
           |> element.to_document_string_builder
           |> wisp.html_response(200)
@@ -150,7 +158,11 @@ fn handle_wisp_request(req, context: Context) {
             components.audit_page,
             skeleton,
           )
-          |> audit_tree.view(audit_name, with: context.audit_metadata_gateway)
+          |> audit_tree.view(
+            Some(html.h1([], [html.text("Hi panel")])),
+            audit_name,
+            with: context.audit_metadata_gateway,
+          )
           |> server_componentx.as_document
           |> element.to_document_string_builder
           |> wisp.html_response(200)

@@ -5001,7 +5001,7 @@ function new_message_input_view(model) {
   );
 }
 function expanded_message_view(model) {
-  let expanded_message_style = "absolute overlay p-[.5rem] flex w-[100%] h-60 z-[3] mt-2";
+  let expanded_message_style = "absolute overlay p-[.5rem] flex w-[100%] h-60 mt-2";
   let textarea_style = "grow text-[.95rem] resize-none p-[.3rem]";
   return div(
     toList([
@@ -5043,7 +5043,7 @@ function discussion_overlay_view(model) {
     toList([
       id("line-discussion-overlay"),
       class$(
-        "absolute w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] bottom-[1.4rem]"
+        "absolute z-[3] w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] bottom-[1.4rem]"
       ),
       on_click(new UserToggledKeepNotesOpen())
     ]),

@@ -1,6 +1,7 @@
 import filepath
 import gleam/dict
 import gleam/list
+import gleam/option.{None, Some}
 import gleam/result
 import gleam/string
 import lustre/attribute
@@ -11,8 +12,12 @@ import o11a/ui/gateway
 const style = "
 #tree-grid {
   display: grid;
-  grid-template-columns: 12rem 4px 1fr;
+  grid-template-columns: 12rem 4px 1fr 4px 40rem;
+  /* these are critical for scrolling sections of the grid separately */
   height: 100%;
+  width: 100%;
+  max-width: 100vw;
+  overflow: hidden;
 }
 
 #file-tree {
@@ -27,14 +32,14 @@ const style = "
   text-wrap: nowrap;
 }
 
-#tree-resizer {
+#tree-resizer, #panel-resizer {
   border-right: 1px solid var(--overlay-background-color);
   cursor: col-resize;
   margin-top: 0.5rem;
   margin-bottom: 0.5rem;
 }
 
-#tree-resizer:hover {
+#tree-resizer:hover, #panel-resizer:hover {
   background-color: var(--overlay-background-color);
 }
 
@@ -69,35 +74,74 @@ const style = "
 const resize_script = "
 document.addEventListener('DOMContentLoaded', function() {
 
-const resizer = document.querySelector('#tree-resizer');
-const leftSide = resizer.previousElementSibling;
-const container = resizer.parentElement;
+const container = document.querySelector('#tree-grid');
+const resizer1 = document.querySelector('#tree-resizer');
+const resizer2 = document.querySelector('#panel-resizer');
 
 let isResizing = false;
+let currentResizer = null;
+let initialX = 0;
+let initialFirstWidth = 0;
+let initialMiddleWidth = 0;
+let initialLastWidth = 0;
 
-resizer.addEventListener('mousedown', (e) => {
+function startResize(e, resizer) {
   isResizing = true;
+  currentResizer = resizer;
+  initialX = e.clientX;
+  
+  // Get initial widths
+  const gridColumns = getComputedStyle(container).gridTemplateColumns.split(' ');
+  initialFirstWidth = parseFloat(gridColumns[0]);
+  initialMiddleWidth = parseFloat(gridColumns[2]);
+  initialLastWidth = parseFloat(gridColumns[4]);
+
   document.addEventListener('mousemove', resize);
   document.addEventListener('mouseup', stopResize);
-});
+}
 
 function resize(e) {
   if (!isResizing) return;
-  const containerRect = container.getBoundingClientRect();
-  const newWidth = e.clientX - containerRect.left;
-  container.style.gridTemplateColumns = `${newWidth}px 4px 1fr`;
+
+  const diff = e.clientX - initialX;
+  const gridColumns = getComputedStyle(container).gridTemplateColumns.split(' ');
+
+  if (currentResizer === resizer1) {
+    // Adjust first and middle columns, keeping last column fixed
+    const newFirstWidth = Math.max(0, initialFirstWidth + diff);
+    const newMiddleWidth = Math.max(0, initialMiddleWidth - diff);
+    
+    container.style.gridTemplateColumns = `
+      ${newFirstWidth}px 4px ${newMiddleWidth}px 4px 40rem
+    `;
+  } else if (currentResizer === resizer2) {
+    // Adjust middle and last columns, keeping first column fixed
+    const newMiddleWidth = Math.max(0, initialMiddleWidth + diff);
+    const newLastWidth = Math.max(0, initialLastWidth - diff);
+    
+    container.style.gridTemplateColumns = `
+      12rem 4px ${newMiddleWidth}px 4px ${newLastWidth}px
+    `;
+  }
 }
 
 function stopResize() {
   isResizing = false;
+  currentResizer = null;
+
   document.removeEventListener('mousemove', resize);
   document.removeEventListener('mouseup', stopResize);
 }
 
+// Add event listeners for both resizer columns
+[resizer1, resizer2].forEach(resizer => {
+  resizer.addEventListener('mousedown', (e) => startResize(e, resizer));
+});
+
 });
 "
 
-pub fn view(contents, for audit_name, with metadata) {
+pub fn view(file_contents, side_panel, for audit_name, with metadata) {
   element.fragment([
     html.style([], style),
     html.script([], resize_script),
@@ -109,7 +153,15 @@ pub fn view(contents, for audit_name, with metadata) {
         audit_file_tree_view(audit_name, metadata),
       ]),
       html.div([attribute.id("tree-resizer")], []),
-      html.div([attribute.id("file-contents")], [contents]),
+      html.div([attribute.id("file-contents")], [file_contents]),
+      case option.is_some(side_panel) {
+        True -> html.div([attribute.id("panel-resizer")], [])
+        False -> element.fragment([])
+      },
+      case side_panel {
+        Some(side_panel) -> html.div([attribute.id("side-panel")], [side_panel])
+        None -> element.fragment([])
+      },
     ]),
   ])
 }

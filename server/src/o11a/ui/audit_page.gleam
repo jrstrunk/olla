@@ -65,6 +65,8 @@ pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 }
 
 fn view(model: Model, is_skeleton is_skeleton) -> element.Element(Msg) {
+  io.println("Rendering page " <> model.page_path)
+
   html.div([attribute.class("code-snippet")], [
     server_componentx.hide_skeleton(),
     ..list.index_map(model.preprocessed_source, fn(line, index) {
@@ -126,8 +128,6 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
   let line_number_text = int.to_string(line_number)
   let line_tag = "L" <> line_number_text
   let line_id = model.page_path <> "#" <> line_tag
-
-  io.println("Rendering line " <> line_id)
 
   use <- given.that(is_skeleton, return: fn() {
     html.p([attribute.class("loc"), attribute.id(line_tag)], [

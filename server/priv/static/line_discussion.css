@@ -568,6 +568,10 @@ video {
   left: -.3rem;
 }
 
+.z-\[2\] {
+  z-index: 2;
+}
+
 .z-\[3\] {
   z-index: 3;
 }

@@ -574,7 +574,7 @@ fn discussion_overlay_view(model: Model) {
     [
       attribute.id("line-discussion-overlay"),
       attribute.class(
-        "absolute w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] bottom-[1.4rem]",
+        "absolute z-[3] w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] bottom-[1.4rem]",
       ),
       event.on_click(UserToggledKeepNotesOpen),
     ],
@@ -719,7 +719,7 @@ fn new_message_input_view(model: Model) {
 
 fn expanded_message_view(model: Model) {
   let expanded_message_style =
-    "absolute overlay p-[.5rem] flex w-[100%] h-60 z-[3] mt-2"
+    "absolute overlay p-[.5rem] flex w-[100%] h-60 mt-2"
 
   let textarea_style = "grow text-[.95rem] resize-none p-[.3rem]"
 
