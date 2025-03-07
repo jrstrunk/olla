@@ -56,35 +56,35 @@ fn view(model: Model) -> element.Element(Msg) {
       html.h2(
         [
           attribute.class("mb-[.5rem] fade-in"),
-          attribute.style([#("animation-delay", "25ms")]),
+          attribute.style([#("animation-delay", "0ms")]),
         ],
         [html.text("incomplete todos")],
       ),
-      notes_view(incomplete_todos, 25),
+      notes_view(incomplete_todos, 0),
       html.h2(
         [
           attribute.class("mb-[.5rem] fade-in"),
-          attribute.style([#("animation-delay", "50ms")]),
+          attribute.style([#("animation-delay", "15ms")]),
         ],
         [html.text("unanswered questions")],
       ),
-      notes_view(unanswered_questions, 50),
+      notes_view(unanswered_questions, 15),
       html.h2(
         [
           attribute.class("mb-[.5rem] fade-in"),
-          attribute.style([#("animation-delay", "75ms")]),
+          attribute.style([#("animation-delay", "30ms")]),
         ],
         [html.text("unconfirmed findings")],
       ),
-      notes_view(unconfirmed_findings, 75),
+      notes_view(unconfirmed_findings, 30),
       html.h2(
         [
           attribute.class("mb-[.5rem] fade-in"),
-          attribute.style([#("animation-delay", "100ms")]),
+          attribute.style([#("animation-delay", "45ms")]),
         ],
         [html.text("confirmed findings")],
       ),
-      notes_view(confirmed_findings, 100),
+      notes_view(confirmed_findings, 45),
     ]),
   ])
 }
@@ -96,7 +96,7 @@ pub fn notes_view(notes, base_delay) {
         [
           attribute.class("fade-in"),
           attribute.style([
-            #("animation-delay", int.to_string(2 + base_delay) <> "ms"),
+            #("animation-delay", int.to_string(1 + base_delay) <> "ms"),
           ]),
         ],
         [html.text("none")],
@@ -116,7 +116,7 @@ pub fn notes_view(notes, base_delay) {
             attribute.style([
               #(
                 "animation-delay",
-                int.to_string({ { index + 1 } * 2 } + base_delay) <> "ms",
+                int.to_string(index + 1 + base_delay) <> "ms",
               ),
             ]),
           ],
