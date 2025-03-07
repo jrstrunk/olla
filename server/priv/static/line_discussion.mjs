@@ -1795,7 +1795,7 @@ function field(name2, inner_type) {
 
 // build/dev/javascript/gleam_stdlib/gleam_stdlib_decode_ffi.mjs
 function index2(data, key) {
-  const int5 = Number.isInteger(key);
+  const int4 = Number.isInteger(key);
   if (data instanceof Dict || data instanceof WeakMap || data instanceof Map) {
     const token2 = {};
     const entry = data.get(key, token2);
@@ -1812,12 +1812,12 @@ function index2(data, key) {
     }
     return new Error("Indexable");
   }
-  if (int5 && Array.isArray(data) || data && typeof data === "object" || data && Object.getPrototypeOf(data) === Object.prototype) {
+  if (int4 && Array.isArray(data) || data && typeof data === "object" || data && Object.getPrototypeOf(data) === Object.prototype) {
     if (key in data)
       return new Ok(new Some(data[key]));
     return new Ok(new None());
   }
-  return new Error(int5 ? "Indexable" : "Dict");
+  return new Error(int4 ? "Indexable" : "Dict");
 }
 function list(data, decode2, pushPath, index4, emptyList) {
   if (!(data instanceof List || Array.isArray(data))) {
@@ -3411,27 +3411,96 @@ function that(requirement, consequence, alternative) {
   }
 }
 
+// build/dev/javascript/gleam_time/gleam/time/duration.mjs
+var Duration = class extends CustomType {
+  constructor(seconds3, nanoseconds2) {
+    super();
+    this.seconds = seconds3;
+    this.nanoseconds = nanoseconds2;
+  }
+};
+function normalise(duration) {
+  let multiplier = 1e9;
+  let nanoseconds$1 = remainderInt(duration.nanoseconds, multiplier);
+  let overflow = duration.nanoseconds - nanoseconds$1;
+  let seconds$1 = duration.seconds + divideInt(overflow, multiplier);
+  let $ = nanoseconds$1 >= 0;
+  if ($) {
+    return new Duration(seconds$1, nanoseconds$1);
+  } else {
+    return new Duration(seconds$1 - 1, multiplier + nanoseconds$1);
+  }
+}
+function difference(left, right) {
+  let _pipe = new Duration(
+    right.seconds - left.seconds,
+    right.nanoseconds - left.nanoseconds
+  );
+  return normalise(_pipe);
+}
+function add2(left, right) {
+  let _pipe = new Duration(
+    left.seconds + right.seconds,
+    left.nanoseconds + right.nanoseconds
+  );
+  return normalise(_pipe);
+}
+function seconds(amount) {
+  return new Duration(amount, 0);
+}
+function nanoseconds(amount) {
+  let _pipe = new Duration(0, amount);
+  return normalise(_pipe);
+}
+function to_seconds_and_nanoseconds(duration) {
+  return [duration.seconds, duration.nanoseconds];
+}
+
 // build/dev/javascript/gtempo/gtempo/internal.mjs
-var imprecise_day_microseconds = 864e8;
+var day_microseconds = 864e8;
 function imprecise_days(days2) {
-  return days2 * imprecise_day_microseconds;
+  return days2 * day_microseconds;
 }
 function as_days_imprecise(microseconds2) {
-  return divideInt(microseconds2, imprecise_day_microseconds);
+  return divideInt(microseconds2, day_microseconds);
 }
-var hour_microseconds = 36e8;
-var minute_microseconds = 6e7;
-var second_microseconds = 1e6;
 
 // build/dev/javascript/gtempo/tempo_ffi.mjs
+var speedup = 1;
+var referenceTime = 0;
+var referenceStart = 0;
+var referenceMonotonicStart = 0;
+var mockTime = false;
+var freezeTime = false;
+var warpTime = 0;
+function warped_now() {
+  return Date.now() * 1e3 + warpTime;
+}
+function warped_now_monotonic() {
+  return Math.trunc(performance.now() * 1e3) + warpTime;
+}
 function now() {
-  return Date.now() * 1e3;
+  if (freezeTime) {
+    return referenceTime + warpTime;
+  } else if (mockTime) {
+    let realElaposed = warped_now() - referenceStart;
+    let spedupElapsed = Math.trunc(realElaposed * speedup);
+    return referenceTime + spedupElapsed;
+  }
+  return warped_now();
 }
 function local_offset() {
   return -(/* @__PURE__ */ new Date()).getTimezoneOffset();
 }
 function now_monotonic() {
-  return Math.trunc(performance.now() * 1e3);
+  if (freezeTime) {
+    return referenceTime + warpTime;
+  } else if (mockTime) {
+    let realElapsed = warped_now_monotonic() - referenceMonotonicStart;
+    let spedupElapsed = Math.trunc(realElapsed * speedup);
+    return referenceTime + spedupElapsed;
+  }
+  return warped_now_monotonic();
 }
 var unique = 1;
 function now_unique() {
@@ -3449,18 +3518,18 @@ var Instant = class extends CustomType {
   }
 };
 var DateTime = class extends CustomType {
-  constructor(date2, time2, offset2) {
+  constructor(date, time, offset2) {
     super();
-    this.date = date2;
-    this.time = time2;
+    this.date = date;
+    this.time = time;
     this.offset = offset2;
   }
 };
 var NaiveDateTime = class extends CustomType {
-  constructor(date2, time2) {
+  constructor(date, time) {
     super();
-    this.date = date2;
-    this.time = time2;
+    this.date = date;
+    this.time = time;
   }
 };
 var Offset = class extends CustomType {
@@ -3469,62 +3538,28 @@ var Offset = class extends CustomType {
     this.minutes = minutes2;
   }
 };
-var Date2 = class extends CustomType {
-  constructor(year, month, day) {
+var Date3 = class extends CustomType {
+  constructor(unix_days) {
     super();
-    this.year = year;
-    this.month = month;
-    this.day = day;
+    this.unix_days = unix_days;
   }
 };
-var Jan = class extends CustomType {
-};
-var Feb = class extends CustomType {
-};
-var Mar = class extends CustomType {
-};
-var Apr = class extends CustomType {
-};
-var May = class extends CustomType {
-};
-var Jun = class extends CustomType {
-};
-var Jul = class extends CustomType {
-};
-var Aug = class extends CustomType {
-};
-var Sep = class extends CustomType {
-};
-var Oct = class extends CustomType {
-};
-var Nov = class extends CustomType {
-};
-var Dec = class extends CustomType {
-};
-var MonthYear = class extends CustomType {
-  constructor(month, year) {
-    super();
-    this.month = month;
-    this.year = year;
-  }
-};
-var Time = class extends CustomType {
-  constructor(hour, minute, second, microsecond) {
-    super();
-    this.hour = hour;
-    this.minute = minute;
-    this.second = second;
-    this.microsecond = microsecond;
-  }
-};
-var Duration = class extends CustomType {
+var TimeOfDay2 = class extends CustomType {
   constructor(microseconds2) {
     super();
     this.microseconds = microseconds2;
   }
 };
-function datetime(date2, time2, offset2) {
-  return new DateTime(date2, time2, offset2);
+var LastInstantOfDay = class extends CustomType {
+};
+var EndOfDayLeapSecond = class extends CustomType {
+  constructor(microseconds2) {
+    super();
+    this.microseconds = microseconds2;
+  }
+};
+function datetime(date, time, offset2) {
+  return new DateTime(date, time, offset2);
 }
 function datetime_drop_offset(datetime2) {
   return new NaiveDateTime(datetime2.date, datetime2.time);
@@ -3535,399 +3570,165 @@ function naive_datetime_get_date(naive_datetime2) {
 function naive_datetime_get_time(naive_datetime2) {
   return naive_datetime2.time;
 }
-function offset_to_duration(offset2) {
-  let _pipe = -offset2.minutes * 6e7;
-  return new Duration(_pipe);
-}
-function date_get_year(date2) {
-  return date2.year;
-}
-function date_get_month(date2) {
-  return date2.month;
-}
-function date_get_month_year(date2) {
-  return new MonthYear(date2.month, date2.year);
-}
-function date_get_day(date2) {
-  return date2.day;
-}
-function month_from_int(month) {
-  if (month === 1) {
-    return new Ok(new Jan());
-  } else if (month === 2) {
-    return new Ok(new Feb());
-  } else if (month === 3) {
-    return new Ok(new Mar());
-  } else if (month === 4) {
-    return new Ok(new Apr());
-  } else if (month === 5) {
-    return new Ok(new May());
-  } else if (month === 6) {
-    return new Ok(new Jun());
-  } else if (month === 7) {
-    return new Ok(new Jul());
-  } else if (month === 8) {
-    return new Ok(new Aug());
-  } else if (month === 9) {
-    return new Ok(new Sep());
-  } else if (month === 10) {
-    return new Ok(new Oct());
-  } else if (month === 11) {
-    return new Ok(new Nov());
-  } else if (month === 12) {
-    return new Ok(new Dec());
-  } else {
-    return new Error(void 0);
-  }
-}
 function date_from_unix_seconds(unix_ts) {
-  let z = divideInt(unix_ts, 86400) + 719468;
-  let era = divideInt(
-    (() => {
-      let $2 = z >= 0;
-      if ($2) {
-        return z;
-      } else {
-        return z - 146096;
-      }
-    })(),
-    146097
-  );
-  let doe = z - era * 146097;
-  let yoe = divideInt(
-    doe - divideInt(doe, 1460) + divideInt(doe, 36524) - divideInt(
-      doe,
-      146096
-    ),
-    365
-  );
-  let y = yoe + era * 400;
-  let doy = doe - (365 * yoe + divideInt(yoe, 4) - divideInt(yoe, 100));
-  let mp = divideInt(5 * doy + 2, 153);
-  let d = doy - divideInt(153 * mp + 2, 5) + 1;
-  let m = mp + (() => {
-    let $2 = mp < 10;
-    if ($2) {
-      return 3;
-    } else {
-      return -9;
-    }
-  })();
-  let y$1 = (() => {
-    let $2 = m <= 2;
-    if ($2) {
-      return y + 1;
-    } else {
-      return y;
-    }
-  })();
-  let $ = month_from_int(m);
-  if (!$.isOk()) {
-    throw makeError(
-      "let_assert",
-      "tempo",
-      1734,
-      "date_from_unix_seconds",
-      "Pattern match failed, no pattern matched the value.",
-      { value: $ }
-    );
-  }
-  let month = $[0];
-  return new Date2(y$1, month, d);
+  return new Date3(divideInt(unix_ts, 86400));
+}
+function date_from_unix_micro(unix_micro) {
+  return new Date3(divideInt(unix_micro, day_microseconds));
 }
 function instant_as_utc_date(instant) {
-  return date_from_unix_seconds(divideInt(instant.timestamp_utc_us, 1e6));
+  return date_from_unix_micro(instant.timestamp_utc_us);
 }
-function date_from_unix_micro(unix_ts) {
-  return date_from_unix_seconds(divideInt(unix_ts, 1e6));
+function date_to_unix_seconds(date) {
+  return date.unix_days * 86400;
 }
-function month_year_prior(month_year) {
-  let $ = month_year.month;
-  if ($ instanceof Jan) {
-    return new MonthYear(new Dec(), month_year.year - 1);
-  } else if ($ instanceof Feb) {
-    return new MonthYear(new Jan(), month_year.year);
-  } else if ($ instanceof Mar) {
-    return new MonthYear(new Feb(), month_year.year);
-  } else if ($ instanceof Apr) {
-    return new MonthYear(new Mar(), month_year.year);
-  } else if ($ instanceof May) {
-    return new MonthYear(new Apr(), month_year.year);
-  } else if ($ instanceof Jun) {
-    return new MonthYear(new May(), month_year.year);
-  } else if ($ instanceof Jul) {
-    return new MonthYear(new Jun(), month_year.year);
-  } else if ($ instanceof Aug) {
-    return new MonthYear(new Jul(), month_year.year);
-  } else if ($ instanceof Sep) {
-    return new MonthYear(new Aug(), month_year.year);
-  } else if ($ instanceof Oct) {
-    return new MonthYear(new Sep(), month_year.year);
-  } else if ($ instanceof Nov) {
-    return new MonthYear(new Oct(), month_year.year);
-  } else {
-    return new MonthYear(new Nov(), month_year.year);
-  }
+function date_add(date, days2) {
+  return new Date3(date.unix_days + days2);
 }
-function month_year_next(month_year) {
-  let $ = month_year.month;
-  if ($ instanceof Jan) {
-    return new MonthYear(new Feb(), month_year.year);
-  } else if ($ instanceof Feb) {
-    return new MonthYear(new Mar(), month_year.year);
-  } else if ($ instanceof Mar) {
-    return new MonthYear(new Apr(), month_year.year);
-  } else if ($ instanceof Apr) {
-    return new MonthYear(new May(), month_year.year);
-  } else if ($ instanceof May) {
-    return new MonthYear(new Jun(), month_year.year);
-  } else if ($ instanceof Jun) {
-    return new MonthYear(new Jul(), month_year.year);
-  } else if ($ instanceof Jul) {
-    return new MonthYear(new Aug(), month_year.year);
-  } else if ($ instanceof Aug) {
-    return new MonthYear(new Sep(), month_year.year);
-  } else if ($ instanceof Sep) {
-    return new MonthYear(new Oct(), month_year.year);
-  } else if ($ instanceof Oct) {
-    return new MonthYear(new Nov(), month_year.year);
-  } else if ($ instanceof Nov) {
-    return new MonthYear(new Dec(), month_year.year);
-  } else {
-    return new MonthYear(new Jan(), month_year.year + 1);
-  }
+function date_subtract(date, days2) {
+  return new Date3(date.unix_days - days2);
 }
-function is_leap_year(year) {
-  let $ = remainderInt(year, 4) === 0;
-  if ($) {
-    let $1 = remainderInt(year, 100) === 0;
-    if ($1) {
-      let $2 = remainderInt(year, 400) === 0;
-      if ($2) {
-        return true;
-      } else {
-        return false;
-      }
-    } else {
-      return true;
-    }
-  } else {
-    return false;
-  }
-}
-function date_to_unix_seconds(date2) {
-  let full_years_since_epoch = date_get_year(date2) - 1970;
-  let full_elapsed_leap_years_since_epoch = divideInt(
-    full_years_since_epoch + 1,
-    4
-  );
-  let full_elapsed_non_leap_years_since_epoch = full_years_since_epoch - full_elapsed_leap_years_since_epoch;
-  let year_sec = full_elapsed_non_leap_years_since_epoch * 31536e3 + full_elapsed_leap_years_since_epoch * 31622400;
-  let feb_milli = (() => {
-    let $ = is_leap_year(
-      (() => {
-        let _pipe = date2;
-        return date_get_year(_pipe);
-      })()
+function time_normalise(time) {
+  if (time instanceof TimeOfDay2 && time.microseconds < 0) {
+    let microseconds2 = time.microseconds;
+    return new TimeOfDay2(
+      day_microseconds + remainderInt(
+        microseconds2,
+        day_microseconds
+      )
     );
-    if ($) {
-      return 2505600;
-    } else {
-      return 2419200;
-    }
-  })();
-  let month_sec = (() => {
-    let $ = (() => {
-      let _pipe = date2;
-      return date_get_month(_pipe);
-    })();
-    if ($ instanceof Jan) {
-      return 0;
-    } else if ($ instanceof Feb) {
-      return 2678400;
-    } else if ($ instanceof Mar) {
-      return 2678400 + feb_milli;
-    } else if ($ instanceof Apr) {
-      return 5356800 + feb_milli;
-    } else if ($ instanceof May) {
-      return 7948800 + feb_milli;
-    } else if ($ instanceof Jun) {
-      return 10627200 + feb_milli;
-    } else if ($ instanceof Jul) {
-      return 13219200 + feb_milli;
-    } else if ($ instanceof Aug) {
-      return 15897600 + feb_milli;
-    } else if ($ instanceof Sep) {
-      return 18576e3 + feb_milli;
-    } else if ($ instanceof Oct) {
-      return 21168e3 + feb_milli;
-    } else if ($ instanceof Nov) {
-      return 23846400 + feb_milli;
-    } else {
-      return 26438400 + feb_milli;
-    }
-  })();
-  let day_sec = (date_get_day(date2) - 1) * 86400;
-  return year_sec + month_sec + day_sec;
-}
-function date_to_unix_micro(date2) {
-  return date_to_unix_seconds(date2) * 1e6;
-}
-function month_year_days_of(my) {
-  let $ = my.month;
-  if ($ instanceof Jan) {
-    return 31;
-  } else if ($ instanceof Mar) {
-    return 31;
-  } else if ($ instanceof May) {
-    return 31;
-  } else if ($ instanceof Jul) {
-    return 31;
-  } else if ($ instanceof Aug) {
-    return 31;
-  } else if ($ instanceof Oct) {
-    return 31;
-  } else if ($ instanceof Dec) {
-    return 31;
+  } else if (time instanceof TimeOfDay2 && time.microseconds >= day_microseconds) {
+    let microseconds2 = time.microseconds;
+    return new TimeOfDay2(remainderInt(microseconds2, day_microseconds));
   } else {
-    let $1 = my.month;
-    if ($1 instanceof Apr) {
-      return 30;
-    } else if ($1 instanceof Jun) {
-      return 30;
-    } else if ($1 instanceof Sep) {
-      return 30;
-    } else if ($1 instanceof Nov) {
-      return 30;
-    } else {
-      let $2 = is_leap_year(my.year);
-      if ($2) {
-        return 29;
-      } else {
-        return 28;
-      }
-    }
+    return time;
   }
-}
-function date_subtract(loop$date, loop$days) {
-  while (true) {
-    let date2 = loop$date;
-    let days2 = loop$days;
-    let $ = days2 < date2.day;
-    if ($) {
-      return new Date2(date2.year, date2.month, date2.day - days2);
-    } else {
-      let prior_month = month_year_prior(
-        (() => {
-          let _pipe = date2;
-          return date_get_month_year(_pipe);
-        })()
-      );
-      loop$date = new Date2(
-        prior_month.year,
-        prior_month.month,
-        month_year_days_of(prior_month)
-      );
-      loop$days = days2 - date_get_day(date2);
-    }
-  }
-}
-function month_days_of(month, year) {
-  return month_year_days_of(new MonthYear(month, year));
-}
-function date_add(loop$date, loop$days) {
-  while (true) {
-    let date2 = loop$date;
-    let days2 = loop$days;
-    let days_left_this_month = month_days_of(date2.month, date2.year) - date2.day;
-    let $ = days2 <= days_left_this_month;
-    if ($) {
-      return new Date2(date2.year, date2.month, date2.day + days2);
-    } else {
-      let next_month = month_year_next(
-        (() => {
-          let _pipe = date2;
-          return date_get_month_year(_pipe);
-        })()
-      );
-      loop$date = new Date2(next_month.year, next_month.month, 1);
-      loop$days = days2 - days_left_this_month - 1;
-    }
-  }
-}
-function time_to_microseconds(time2) {
-  return time2.hour * hour_microseconds + time2.minute * minute_microseconds + time2.second * second_microseconds + time2.microsecond;
 }
 function time_from_microseconds(microseconds2) {
-  let in_range_micro = remainderInt(
-    microseconds2,
-    imprecise_day_microseconds
-  );
-  let adj_micro = (() => {
-    let $ = in_range_micro < 0;
-    if ($) {
-      return in_range_micro + imprecise_day_microseconds;
-    } else {
-      return in_range_micro;
-    }
-  })();
-  let hour = divideInt(adj_micro, 36e8);
-  let minute = divideInt(adj_micro - hour * 36e8, 6e7);
-  let second = divideInt(
-    adj_micro - hour * 36e8 - minute * 6e7,
-    1e6
-  );
-  let microsecond = adj_micro - hour * 36e8 - minute * 6e7 - second * 1e6;
-  return new Time(hour, minute, second, microsecond);
+  return new TimeOfDay2(microseconds2);
+}
+function time_to_microseconds(time) {
+  let $ = time_normalise(time);
+  if ($ instanceof TimeOfDay2) {
+    let microseconds2 = $.microseconds;
+    return microseconds2;
+  } else if ($ instanceof LastInstantOfDay) {
+    return day_microseconds;
+  } else {
+    let microsecond = $.microseconds;
+    return day_microseconds + microsecond;
+  }
 }
 function time_from_unix_micro(unix_ts) {
-  let _pipe = unix_ts - date_to_unix_micro(date_from_unix_micro(unix_ts));
-  return time_from_microseconds(_pipe);
+  return time_from_microseconds(remainderInt(unix_ts, day_microseconds));
 }
 function instant_as_utc_time(instant) {
   return time_from_unix_micro(instant.timestamp_utc_us);
 }
-function time_to_duration(time2) {
-  let _pipe = time_to_microseconds(time2);
-  return new Duration(_pipe);
+function duration_microseconds(microseconds2) {
+  return nanoseconds(microseconds2 * 1e3);
+}
+function offset_to_duration(offset2) {
+  let _pipe = -offset2.minutes * 6e7;
+  return duration_microseconds(_pipe);
+}
+function time_to_duration(time) {
+  let _pipe = time_to_microseconds(time);
+  return duration_microseconds(_pipe);
+}
+function duration_get_microseconds(duration) {
+  let $ = to_seconds_and_nanoseconds(duration);
+  let seconds3 = $[0];
+  let nanoseconds2 = $[1];
+  return seconds3 * 1e6 + divideInt(nanoseconds2, 1e3);
 }
 function time_add(a, b) {
-  let _pipe = time_to_microseconds(a) + b.microseconds;
-  return time_from_microseconds(_pipe);
+  let b_microseconds = duration_get_microseconds(b);
+  let $ = b_microseconds === 0;
+  if ($) {
+    return a;
+  } else {
+    if (a instanceof EndOfDayLeapSecond && b_microseconds + a.microseconds < 1e6) {
+      let microsecond = a.microseconds;
+      return new EndOfDayLeapSecond(microsecond + b_microseconds);
+    } else if (a instanceof EndOfDayLeapSecond) {
+      let _pipe = time_to_microseconds(a) + (b_microseconds - 1e6);
+      let _pipe$1 = time_from_microseconds(_pipe);
+      return time_normalise(_pipe$1);
+    } else {
+      let _pipe = time_to_microseconds(a) + b_microseconds;
+      let _pipe$1 = time_from_microseconds(_pipe);
+      return time_normalise(_pipe$1);
+    }
+  }
 }
 function time_subtract(a, b) {
-  let _pipe = time_to_microseconds(a) - b.microseconds;
-  return time_from_microseconds(_pipe);
+  let $ = duration_get_microseconds(b) === 0;
+  if ($) {
+    return a;
+  } else {
+    let _pipe = time_to_microseconds(a) - duration_get_microseconds(b);
+    let _pipe$1 = time_from_microseconds(_pipe);
+    return time_normalise(_pipe$1);
+  }
 }
-function duration(microseconds2) {
-  return new Duration(microseconds2);
+function duration_seconds_and_nanoseconds(seconds3, nanoseconds2) {
+  let _pipe = seconds(seconds3);
+  return add2(_pipe, nanoseconds(nanoseconds2));
 }
 function duration_days(days2) {
   let _pipe = days2;
   let _pipe$1 = imprecise_days(_pipe);
-  return duration(_pipe$1);
+  return duration_microseconds(_pipe$1);
 }
 function duration_increase(a, b) {
-  return new Duration(a.microseconds + b.microseconds);
+  return add2(a, b);
 }
-function duration_decrease(a, b) {
-  return new Duration(a.microseconds - b.microseconds);
-}
-function duration_absolute(duration2) {
-  let $ = duration2.microseconds < 0;
-  if ($) {
-    let _pipe = -duration2.microseconds;
-    return new Duration(_pipe);
+function duration_absolute(duration) {
+  let $ = to_seconds_and_nanoseconds(duration);
+  let seconds3 = $[0];
+  let nanoseconds2 = $[1];
+  let $1 = seconds3 >= 0 && nanoseconds2 >= 0;
+  if ($1) {
+    return duration;
   } else {
-    return duration2;
+    let seconds$1 = (() => {
+      let $2 = seconds3 < 0;
+      if ($2) {
+        return -seconds3;
+      } else {
+        return seconds3;
+      }
+    })();
+    let nanoseconds$1 = (() => {
+      let $2 = nanoseconds2 < 0;
+      if ($2) {
+        return -nanoseconds2;
+      } else {
+        return nanoseconds2;
+      }
+    })();
+    return duration_seconds_and_nanoseconds(seconds$1, nanoseconds$1);
   }
 }
-function duration_as_days(duration2) {
-  let _pipe = duration2.microseconds;
+function duration_inverse(dur) {
+  return difference(dur, seconds(0));
+}
+function duration_decrease(a, b) {
+  return add2(a, duration_inverse(b));
+}
+function duration_is_positive(dur) {
+  let $ = to_seconds_and_nanoseconds(dur);
+  let seconds3 = $[0];
+  let nanoseconds2 = $[1];
+  return seconds3 >= 0 && nanoseconds2 >= 0;
+}
+function duration_as_days(duration) {
+  let _pipe = duration_get_microseconds(duration);
   return as_days_imprecise(_pipe);
 }
-function duration_as_microseconds(duration2) {
-  return duration2.microseconds;
+function duration_as_microseconds(duration) {
+  return duration_get_microseconds(duration);
 }
 function offset_local_micro() {
   return local_offset() * 6e7;
@@ -3950,7 +3751,7 @@ function instant_as_utc_datetime(instant) {
 }
 function naive_datetime_subtract(datetime2, duration_to_subtract) {
   return lazy_guard(
-    duration_to_subtract.microseconds < 0,
+    !duration_is_positive(duration_to_subtract),
     () => {
       let _pipe = datetime2;
       return naive_datetime_add(_pipe, duration_absolute(duration_to_subtract));
@@ -3970,17 +3771,14 @@ function naive_datetime_subtract(datetime2, duration_to_subtract) {
       let $ = (() => {
         let $1 = new_time_as_micro < 0;
         if ($1) {
-          return [
-            new_time_as_micro + imprecise_day_microseconds,
-            days_to_sub + 1
-          ];
+          return [new_time_as_micro + day_microseconds, days_to_sub + 1];
         } else {
           return [new_time_as_micro, days_to_sub];
         }
       })();
       let new_time_as_micro$1 = $[0];
       let days_to_sub$1 = $[1];
-      let time_to_sub$1 = new Duration(
+      let time_to_sub$1 = duration_microseconds(
         time_to_microseconds(datetime2.time) - new_time_as_micro$1
       );
       let new_date$1 = (() => {
@@ -3997,7 +3795,7 @@ function naive_datetime_subtract(datetime2, duration_to_subtract) {
 }
 function naive_datetime_add(datetime2, duration_to_add) {
   return lazy_guard(
-    duration_to_add.microseconds < 0,
+    !duration_is_positive(duration_to_add),
     () => {
       let _pipe = datetime2;
       return naive_datetime_subtract(_pipe, duration_absolute(duration_to_add));
@@ -4015,19 +3813,16 @@ function naive_datetime_add(datetime2, duration_to_add) {
         return duration_as_microseconds(_pipe$2);
       })();
       let $ = (() => {
-        let $1 = new_time_as_micro >= imprecise_day_microseconds;
+        let $1 = new_time_as_micro >= day_microseconds;
         if ($1) {
-          return [
-            new_time_as_micro - imprecise_day_microseconds,
-            days_to_add + 1
-          ];
+          return [new_time_as_micro - day_microseconds, days_to_add + 1];
         } else {
           return [new_time_as_micro, days_to_add];
         }
       })();
       let new_time_as_micro$1 = $[0];
       let days_to_add$1 = $[1];
-      let time_to_add$1 = new Duration(
+      let time_to_add$1 = duration_microseconds(
         new_time_as_micro$1 - time_to_microseconds(datetime2.time)
       );
       let new_date$1 = (() => {
@@ -4055,14 +3850,14 @@ function datetime_apply_offset(datetime2) {
 function from_unix_seconds(unix_ts) {
   return date_from_unix_seconds(unix_ts);
 }
-function to_unix_seconds(date2) {
-  return date_to_unix_seconds(date2);
+function to_unix_seconds(date) {
+  return date_to_unix_seconds(date);
 }
 function from_unix_milli(unix_ts) {
   return from_unix_seconds(divideInt(unix_ts, 1e3));
 }
-function to_unix_milli(date2) {
-  return to_unix_seconds(date2) * 1e3;
+function to_unix_milli(date) {
+  return to_unix_seconds(date) * 1e3;
 }
 
 // build/dev/javascript/gtempo/tempo/time.mjs
@@ -4072,8 +3867,8 @@ function from_unix_milli2(unix_ts) {
 }
 
 // build/dev/javascript/gtempo/tempo/datetime.mjs
-function new$3(date2, time2, offset2) {
-  return datetime(date2, time2, offset2);
+function new$3(date, time, offset2) {
+  return datetime(date, time, offset2);
 }
 function from_unix_milli3(unix_ts) {
   return new$3(
@@ -4200,7 +3995,7 @@ var user_unfocused_input = "user-unfocused-input";
 
 // build/dev/javascript/o11a_common/o11a/note.mjs
 var Note = class extends CustomType {
-  constructor(note_id, parent_id, significance, user_name, message, expanded_message, time2, edited) {
+  constructor(note_id, parent_id, significance, user_name, message, expanded_message, time, edited) {
     super();
     this.note_id = note_id;
     this.parent_id = parent_id;
@@ -4208,7 +4003,7 @@ var Note = class extends CustomType {
     this.user_name = user_name;
     this.message = message;
     this.expanded_message = expanded_message;
-    this.time = time2;
+    this.time = time;
     this.edited = edited;
   }
 };
@@ -4411,7 +4206,7 @@ function note_decoder() {
                           return field2(
                             "time",
                             int2,
-                            (time2) => {
+                            (time) => {
                               return field2(
                                 "edited",
                                 bool,
@@ -4423,7 +4218,7 @@ function note_decoder() {
                                     user_name,
                                     message,
                                     expanded_message,
-                                    from_unix_milli3(time2),
+                                    from_unix_milli3(time),
                                     edited
                                   );
                                   return success(_pipe);
@@ -5052,7 +4847,9 @@ function discussion_overlay_view(model) {
         toList([class$("overlay p-[.5rem]")]),
         toList([
           (() => {
-            let $ = length(model.current_thread_notes) > 0;
+            let $ = is_some(model.active_thread) || length(
+              model.current_thread_notes
+            ) > 0;
             if ($) {
               return div(
                 toList([

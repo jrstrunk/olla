@@ -580,7 +580,10 @@ fn discussion_overlay_view(model: Model) {
     ],
     [
       html.div([attribute.class("overlay p-[.5rem]")], [
-        case list.length(model.current_thread_notes) > 0 {
+        case
+          option.is_some(model.active_thread)
+          || list.length(model.current_thread_notes) > 0
+        {
           True ->
             html.div(
               [
@@ -754,6 +757,7 @@ fn classify_message(message, is_thread_open is_thread_open) {
     False ->
       case message {
         "todo " <> rest -> #(note.ToDo, rest)
+        "todo: " <> rest -> #(note.ToDo, rest)
         "? " <> rest -> #(note.Question, rest)
         "! " <> rest -> #(note.FindingLead, rest)
         "@dev " <> rest -> #(note.DevelperQuestion, rest)
@@ -763,6 +767,7 @@ fn classify_message(message, is_thread_open is_thread_open) {
     True ->
       case message {
         "done " <> rest -> #(note.ToDoDone, rest)
+        "done" -> #(note.ToDoDone, "done")
         ": " <> rest -> #(note.Answer, rest)
         ". " <> rest -> #(note.FindingRejection, rest)
         "!! " <> rest -> #(note.FindingConfirmation, rest)
