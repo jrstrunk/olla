@@ -112,7 +112,7 @@ function resize(e) {
     const newMiddleWidth = Math.max(0, initialMiddleWidth - diff);
     
     container.style.gridTemplateColumns = `
-      ${newFirstWidth}px 4px ${newMiddleWidth}px 4px 40rem
+      ${newFirstWidth}px 4px ${newMiddleWidth}px 4px ${initialLastWidth}px
     `;
   } else if (currentResizer === resizer2) {
     // Adjust middle and last columns, keeping first column fixed
@@ -120,7 +120,7 @@ function resize(e) {
     const newLastWidth = Math.max(0, initialLastWidth - diff);
     
     container.style.gridTemplateColumns = `
-      12rem 4px ${newMiddleWidth}px 4px ${newLastWidth}px
+      ${initialFirstWidth}px 4px ${newMiddleWidth}px 4px ${newLastWidth}px
     `;
   }
 }
