@@ -16,6 +16,7 @@ import o11a/ui/audit_doc
 import o11a/ui/audit_page
 import o11a/ui/audit_tree
 import o11a/ui/gateway
+import o11a/ui/page_dashboard
 import simplifile
 import snag
 import wisp
@@ -174,7 +175,7 @@ fn handle_wisp_request(req, context: Context) {
             Some(server_componentx.render_with_prerendered_skeleton(
               filepath.join("component-page-dashboard", file_path),
               components.audit_page,
-              "",
+              page_dashboard.get_skeleton(),
             )),
             audit_name,
             with: context.audit_metadata_gateway,

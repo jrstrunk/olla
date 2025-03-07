@@ -1,4 +1,5 @@
 import gleam/dict
+import gleam/int
 import gleam/list
 import gleam/option.{Some}
 import gleam/pair
@@ -41,24 +42,6 @@ pub fn update(model: Model, _msg: Msg) -> #(Model, effect.Effect(Msg)) {
   #(model, effect.none())
 }
 
-const style = "
-.dashboard-link {
-  text-decoration: none;
-  color: var(--text-color);
-}
-
-.dashboard-link:hover {
-  text-decoration: underline;
-}
-
-h2 {
-  font-size: 1.5rem;
-  font-weight: bold;
-  margin-top: 1rem;
-  margin-bottom: 1rem;
-}
-"
-
 fn view(model: Model) -> element.Element(Msg) {
   let #(
     incomplete_todos,
@@ -68,44 +51,81 @@ fn view(model: Model) -> element.Element(Msg) {
   ) = dashboard.find_open_notes(model.discussion, for: Some(model.page_path))
 
   html.div([], [
-    html.style([], style),
     html.div([attribute.class("p-[.5rem]")], [
       server_componentx.hide_skeleton(),
-      html.h2([attribute.class("mb-[.5rem]")], [html.text("incomplete todos")]),
-      notes_view(incomplete_todos),
-      html.h2([attribute.class("mb-[.5rem]")], [
-        html.text("unanswered questions"),
-      ]),
-      notes_view(unanswered_questions),
-      html.h2([attribute.class("mb-[.5rem]")], [
-        html.text("unconfirmed findings"),
-      ]),
-      notes_view(unconfirmed_findings),
-      html.h2([attribute.class("mb-[.5rem]")], [html.text("confirmed findings")]),
-      notes_view(confirmed_findings),
+      html.h2(
+        [
+          attribute.class("mb-[.5rem] fade-in"),
+          attribute.style([#("animation-delay", "25ms")]),
+        ],
+        [html.text("incomplete todos")],
+      ),
+      notes_view(incomplete_todos, 25),
+      html.h2(
+        [
+          attribute.class("mb-[.5rem] fade-in"),
+          attribute.style([#("animation-delay", "50ms")]),
+        ],
+        [html.text("unanswered questions")],
+      ),
+      notes_view(unanswered_questions, 50),
+      html.h2(
+        [
+          attribute.class("mb-[.5rem] fade-in"),
+          attribute.style([#("animation-delay", "75ms")]),
+        ],
+        [html.text("unconfirmed findings")],
+      ),
+      notes_view(unconfirmed_findings, 75),
+      html.h2(
+        [
+          attribute.class("mb-[.5rem] fade-in"),
+          attribute.style([#("animation-delay", "100ms")]),
+        ],
+        [html.text("confirmed findings")],
+      ),
+      notes_view(confirmed_findings, 100),
     ]),
   ])
 }
 
-pub fn notes_view(notes) {
+pub fn notes_view(notes, base_delay) {
   html.ul([attribute.class("mb-[2rem]")], case notes {
-    [] -> [html.li([], [html.text("none")])]
+    [] -> [
+      html.li(
+        [
+          attribute.class("fade-in"),
+          attribute.style([
+            #("animation-delay", int.to_string(2 + base_delay) <> "ms"),
+          ]),
+        ],
+        [html.text("none")],
+      ),
+    ]
     _ ->
-      list.map(notes, fn(note: #(String, note.Note)) {
+      list.index_map(notes, fn(note: #(String, note.Note), index) {
         let line_number =
           note.0
           |> string.split_once("#")
           |> result.unwrap(#("", ""))
           |> pair.second
 
-        html.li([], [
-          html.text("(" <> line_number <> ") " <> { note.1 }.message),
-        ])
+        html.li(
+          [
+            attribute.class("fade-in"),
+            attribute.style([
+              #(
+                "animation-delay",
+                int.to_string({ { index + 1 } * 2 } + base_delay) <> "ms",
+              ),
+            ]),
+          ],
+          [html.text("(" <> line_number <> ") " <> { note.1 }.message)],
+        )
       })
   })
 }
 
-pub fn get_skeleton(for discussion) {
-  Model(discussion:, page_path: "")
-  |> view
+pub fn get_skeleton() {
+  ""
 }
