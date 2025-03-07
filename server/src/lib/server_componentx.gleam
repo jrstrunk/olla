@@ -194,8 +194,6 @@ pub fn serve_lustre_framework() {
   let path = config.get_priv_path(for: "static/lustre_server_component.mjs")
   let assert Ok(script) = mist.send_file(path, offset: 0, limit: None)
 
-  process.sleep(1000)
-
   response.new(200)
   |> response.prepend_header("content-type", "application/javascript")
   |> response.set_body(script)
