@@ -1,5 +1,4 @@
 import gleam/dict
-import gleam/int
 import gleam/list
 import gleam/option.{Some}
 import gleam/pair
@@ -50,82 +49,90 @@ fn view(model: Model) -> element.Element(Msg) {
     confirmed_findings,
   ) = dashboard.find_open_notes(model.discussion, for: Some(model.page_path))
 
-  html.div([], [
-    html.div([attribute.class("p-[.5rem]")], [
-      server_componentx.hide_skeleton(),
-      html.h2(
-        [
-          attribute.class("mb-[.5rem] fade-in"),
-          attribute.style([#("animation-delay", "0ms")]),
-        ],
-        [html.text("incomplete todos")],
-      ),
-      notes_view(incomplete_todos, 0),
-      html.h2(
-        [
-          attribute.class("mb-[.5rem] fade-in"),
-          attribute.style([#("animation-delay", "15ms")]),
-        ],
-        [html.text("unanswered questions")],
-      ),
-      notes_view(unanswered_questions, 15),
-      html.h2(
-        [
-          attribute.class("mb-[.5rem] fade-in"),
-          attribute.style([#("animation-delay", "30ms")]),
-        ],
-        [html.text("unconfirmed findings")],
-      ),
-      notes_view(unconfirmed_findings, 30),
-      html.h2(
-        [
-          attribute.class("mb-[.5rem] fade-in"),
-          attribute.style([#("animation-delay", "45ms")]),
-        ],
-        [html.text("confirmed findings")],
-      ),
-      notes_view(confirmed_findings, 45),
-    ]),
-  ])
+  let val =
+    html.div([], [
+      html.div([attribute.class("p-[.5rem]")], [
+        server_componentx.hide_skeleton(),
+        html.h2([attribute.class("mb-[.5rem]")], [html.text("incomplete todos")]),
+        notes_view(incomplete_todos),
+        html.h2([attribute.class("mb-[.5rem]")], [
+          html.text("unanswered questions"),
+        ]),
+        notes_view(unanswered_questions),
+        html.h2([attribute.class("mb-[.5rem]")], [
+          html.text("unconfirmed findings"),
+        ]),
+        notes_view(unconfirmed_findings),
+        html.h2([attribute.class("mb-[.5rem]")], [
+          html.text("confirmed findings"),
+        ]),
+        notes_view(confirmed_findings),
+      ]),
+    ])
+
+  // Update the skeleton so the initial render is up to date
+  discussion.set_skeleton(
+    model.discussion,
+    for: get_skeleton_key(model.page_path),
+    skeleton: val |> element.to_string,
+  )
+
+  val
 }
 
-pub fn notes_view(notes, base_delay) {
+pub fn notes_view(notes) {
   html.ul([attribute.class("mb-[2rem]")], case notes {
-    [] -> [
-      html.li(
-        [
-          attribute.class("fade-in"),
-          attribute.style([
-            #("animation-delay", int.to_string(1 + base_delay) <> "ms"),
-          ]),
-        ],
-        [html.text("none")],
-      ),
-    ]
+    [] -> [html.li([], [html.text("none")])]
     _ ->
-      list.index_map(notes, fn(note: #(String, note.Note), index) {
+      list.map(notes, fn(note: #(String, note.Note)) {
         let line_number =
           note.0
           |> string.split_once("#")
           |> result.unwrap(#("", ""))
           |> pair.second
 
-        html.li(
-          [
-            attribute.class("fade-in"),
-            attribute.style([
-              #(
-                "animation-delay",
-                int.to_string(index + 1 + base_delay) <> "ms",
-              ),
-            ]),
-          ],
-          [html.text("(" <> line_number <> ") " <> { note.1 }.message)],
-        )
+        html.li([], [
+          html.text("(" <> line_number <> ") " <> { note.1 }.message),
+        ])
       })
   })
 }
 
-pub fn get_skeleton() {
-  ""
+fn get_skeleton_key(for page_path) {
+  page_path <> "dsc"
+}
+
+pub fn get_skeleton(discussion, for page_path) {
+  case discussion.get_skeleton(discussion, for: get_skeleton_key(page_path)) {
+    Ok(skeleton) -> skeleton
+    Error(Nil) -> {
+      let skeleton =
+        html.div([], [
+          html.div([attribute.class("p-[.5rem]")], [
+            server_componentx.hide_skeleton(),
+            html.h2([attribute.class("mb-[.5rem]")], [
+              html.text("incomplete todos"),
+            ]),
+            html.p([attribute.class("comment mb-[2rem]")], [html.text("...")]),
+            html.h2([attribute.class("mb-[.5rem]")], [
+              html.text("unanswered questions"),
+            ]),
+            html.p([attribute.class("comment mb-[2rem]")], [html.text("...")]),
+            html.h2([attribute.class("mb-[.5rem]")], [
+              html.text("unconfirmed findings"),
+            ]),
+            html.p([attribute.class("comment mb-[2rem]")], [html.text("...")]),
+            html.h2([attribute.class("mb-[.5rem]")], [
+              html.text("confirmed findings"),
+            ]),
+            html.p([attribute.class("comment mb-[2rem]")], [html.text("...")]),
+          ]),
+        ])
+        |> element.to_string
+
+      discussion.set_skeleton(discussion, for: page_path <> "dsc", skeleton:)
+
+      skeleton
+    }
+  }
 }

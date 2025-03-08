@@ -2,6 +2,7 @@ import gleam/dynamic/decode
 import gleam/function
 import gleam/list
 import gleam/result
+import lib/concurrent_dict
 import lib/persistent_concurrent_duplicate_dict as pcd_dict
 import o11a/config
 import o11a/note
@@ -11,16 +12,11 @@ import tempo/datetime
 pub type Discussion {
   Discussion(
     audit_name: String,
-    notes: NoteCollection,
-    votes: NoteVoteCollection,
+    notes: pcd_dict.PersistentConcurrentDuplicateDict(String, note.Note),
+    votes: pcd_dict.PersistentConcurrentDuplicateDict(String, note.NoteVote),
+    skeletons: concurrent_dict.ConcurrentDict(String, String),
   )
 }
-
-pub type NoteCollection =
-  pcd_dict.PersistentConcurrentDuplicateDict(String, note.Note)
-
-pub type NoteVoteCollection =
-  pcd_dict.PersistentConcurrentDuplicateDict(String, note.NoteVote)
 
 pub fn get_audit_discussion(audit_name: String) {
   use notes <- result.try(pcd_dict.build(
@@ -39,8 +35,9 @@ pub fn get_audit_discussion(audit_name: String) {
     note_vote_persist_encoder,
     note_vote_persist_decoder(),
   ))
+  let skeletons = concurrent_dict.new()
 
-  Discussion(audit_name:, notes:, votes:)
+  Discussion(audit_name:, notes:, votes:, skeletons:)
   |> Ok
 }
 
@@ -100,7 +97,12 @@ pub fn note_vote_persist_decoder() {
 }
 
 pub fn empty_discussion(audit_name: String) {
-  Discussion(audit_name:, notes: pcd_dict.empty(), votes: pcd_dict.empty())
+  Discussion(
+    audit_name:,
+    notes: pcd_dict.empty(),
+    votes: pcd_dict.empty(),
+    skeletons: concurrent_dict.new(),
+  )
 }
 
 pub fn add_note(discussion: Discussion, note: note.Note) {
@@ -128,4 +130,12 @@ pub fn get_structured_notes(
       |> list.flatten
       |> list.append([#(parent_id, notes)])
   }
+}
+
+pub fn get_skeleton(discussion: Discussion, for for) {
+  concurrent_dict.get(discussion.skeletons, for)
+}
+
+pub fn set_skeleton(discussion: Discussion, for for, skeleton skeleton) {
+  concurrent_dict.insert(discussion.skeletons, for, skeleton)
 }

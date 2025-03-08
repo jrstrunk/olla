@@ -175,7 +175,13 @@ fn handle_wisp_request(req, context: Context) {
             Some(server_componentx.render_with_prerendered_skeleton(
               filepath.join("component-page-dashboard", file_path),
               components.audit_page,
-              page_dashboard.get_skeleton(),
+              page_dashboard.get_skeleton(
+                gateway.get_discussion(
+                  context.discussion_gateway,
+                  for: audit_name,
+                ),
+                for: file_path,
+              ),
             )),
             audit_name,
             with: context.audit_metadata_gateway,

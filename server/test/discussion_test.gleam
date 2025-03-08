@@ -1,6 +1,7 @@
 import gleam/function
 import gleam/option
 import gleeunit/should
+import lib/concurrent_dict
 import lib/persistent_concurrent_duplicate_dict as pcd_dict
 import o11a/note
 import o11a/server/discussion
@@ -41,6 +42,7 @@ pub fn structured_notes_test() {
       audit_name: "test",
       notes: notes,
       votes: pcd_dict.empty(),
+      skeletons: concurrent_dict.new(),
     )
 
   let first_note =
