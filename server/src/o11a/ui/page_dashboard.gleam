@@ -81,7 +81,7 @@ fn view(model: Model) -> element.Element(Msg) {
 }
 
 pub fn notes_view(notes) {
-  html.ul([attribute.class("mb-[2rem]")], case notes {
+  html.ul([attribute.class("mb-[2rem] text-[.9rem]")], case notes {
     [] -> [html.li([], [html.text("none")])]
     _ ->
       list.map(notes, fn(note: #(String, note.Note)) {
@@ -113,19 +113,27 @@ pub fn get_skeleton(discussion, for page_path) {
             html.h2([attribute.class("mb-[.5rem]")], [
               html.text("incomplete todos"),
             ]),
-            html.p([attribute.class("comment mb-[2rem]")], [html.text("...")]),
+            html.p([attribute.class("comment mb-[2rem] text-[.9rem]")], [
+              html.text("..."),
+            ]),
             html.h2([attribute.class("mb-[.5rem]")], [
               html.text("unanswered questions"),
             ]),
-            html.p([attribute.class("comment mb-[2rem]")], [html.text("...")]),
+            html.p([attribute.class("comment mb-[2rem] text-[.9rem]")], [
+              html.text("..."),
+            ]),
             html.h2([attribute.class("mb-[.5rem]")], [
               html.text("unconfirmed findings"),
             ]),
-            html.p([attribute.class("comment mb-[2rem]")], [html.text("...")]),
+            html.p([attribute.class("comment mb-[2rem] text-[.9rem]")], [
+              html.text("..."),
+            ]),
             html.h2([attribute.class("mb-[.5rem]")], [
               html.text("confirmed findings"),
             ]),
-            html.p([attribute.class("comment mb-[2rem]")], [html.text("...")]),
+            html.p([attribute.class("comment mb-[2rem] text-[.9rem]")], [
+              html.text("..."),
+            ]),
           ]),
         ])
         |> element.to_string

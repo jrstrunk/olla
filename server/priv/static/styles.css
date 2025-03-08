@@ -138,9 +138,13 @@ p.loc {
 }
 
 .mb-\[\.5rem\] {
-  margin-bottom: .5rem;
+  margin-bottom: 0.5rem;
 }
 
 .font-size-\[\.9rem\] {
-  font-size: .9rem;
+  font-size: 0.9rem;
+}
+
+.text-\[\.9rem\] {
+  font-size: 0.9rem;
 }
