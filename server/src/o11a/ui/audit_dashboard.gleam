@@ -4,7 +4,7 @@ import gleam/list
 import gleam/option.{None, Some}
 import gleam/string
 import lib/persistent_concurrent_duplicate_dict as pcd_dict
-import lib/server_componentx
+import lib/elementx
 import lustre
 import lustre/attribute
 import lustre/effect
@@ -78,7 +78,7 @@ fn view(model: Model) -> element.Element(Msg) {
   html.div([attribute.style(container_styles)], [
     html.style([], style),
     html.div([attribute.style([#("width", "40rem")])], [
-      server_componentx.hide_skeleton(),
+      elementx.hide_skeleton(),
       html.h1([], [
         html.text(
           model.discussion.audit_name |> string.capitalise <> " audit dashboard",

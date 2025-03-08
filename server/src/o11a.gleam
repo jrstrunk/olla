@@ -1,13 +1,17 @@
 import filepath
 import gleam/erlang/process
 import gleam/http/request
+import gleam/http/response
 import gleam/io
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/result
 import gleam/string_tree
+import lib/elementx
 import lib/server_componentx
+import lustre/attribute
 import lustre/element
+import lustre/element/html
 import mist
 import o11a/components
 import o11a/config
@@ -68,17 +72,15 @@ pub fn main() {
 
 fn handler(req, context: Context) {
   case request.path_segments(req) {
-    ["lustre-server-component.mjs"] ->
-      server_componentx.serve_lustre_framework()
+    ["lustre-server-component.mjs"] -> serve_lustre_framework()
 
     ["styles.css" as stylesheet]
     | ["line_discussion.css" as stylesheet]
-    | ["page_panel.css" as stylesheet] ->
-      server_componentx.serve_css(stylesheet)
+    | ["page_panel.css" as stylesheet] -> serve_css(stylesheet)
 
     ["line_discussion.mjs" as script]
     | ["page_navigation.mjs" as script]
-    | ["page_panel.mjs" as script] -> server_componentx.serve_js(script)
+    | ["page_panel.mjs" as script] -> serve_js(script)
 
     ["component-page", ..component_path_segments] -> {
       let assert Ok(actor) =
@@ -128,12 +130,19 @@ fn handle_wisp_request(req, context: Context) {
     [audit_name, "dashboard"] ->
       gateway.get_discussion(context.discussion_gateway, for: audit_name)
       |> audit_dashboard.get_skeleton
-      |> server_componentx.render_with_skeleton(
+      |> elementx.server_component_with_skeleton(
         filepath.join("component-dashboard", audit_name),
         _,
       )
-      |> audit_tree.view(None, audit_name, with: context.audit_metadata_gateway)
-      |> server_componentx.as_document
+      |> audit_tree.view(
+        None,
+        audit_name,
+        with: gateway.get_audit_metadata(
+          context.audit_metadata_gateway,
+          audit_name,
+        ),
+      )
+      |> as_document
       |> element.to_document_string_builder
       |> wisp.html_response(200)
 
@@ -149,9 +158,12 @@ fn handle_wisp_request(req, context: Context) {
           |> audit_tree.view(
             None,
             audit_name,
-            with: context.audit_metadata_gateway,
+            with: gateway.get_audit_metadata(
+              context.audit_metadata_gateway,
+              audit_name,
+            ),
           )
-          |> server_componentx.as_static_document
+          |> as_static_document
           |> element.to_document_string_builder
           |> wisp.html_response(200)
 
@@ -166,13 +178,13 @@ fn handle_wisp_request(req, context: Context) {
 
       case audit_page.get_skeleton(for: file_path) {
         Ok(skeleton) -> {
-          server_componentx.render_with_prerendered_skeleton(
+          elementx.server_component_with_prerendered_skeleton(
             filepath.join("component-page", file_path),
             components.audit_page,
             skeleton,
           )
           |> audit_tree.view(
-            Some(server_componentx.render_with_prerendered_skeleton(
+            Some(elementx.server_component_with_prerendered_skeleton(
               filepath.join("component-page-dashboard", file_path),
               components.audit_page,
               page_dashboard.get_skeleton(
@@ -184,9 +196,12 @@ fn handle_wisp_request(req, context: Context) {
               ),
             )),
             audit_name,
-            with: context.audit_metadata_gateway,
+            with: gateway.get_audit_metadata(
+              context.audit_metadata_gateway,
+              audit_name,
+            ),
           )
-          |> server_componentx.as_document
+          |> as_document
           |> element.to_document_string_builder
           |> wisp.html_response(200)
         }
@@ -198,4 +213,75 @@ fn handle_wisp_request(req, context: Context) {
       }
     }
   }
+}
+
+fn as_document(body: element.Element(msg)) {
+  html.html([], [
+    html.head([], [
+      html.link([
+        attribute.rel("stylesheet"),
+        attribute.href("/line_discussion.css"),
+      ]),
+      html.link([attribute.rel("stylesheet"), attribute.href("/styles.css")]),
+      html.script([attribute.type_("module"), attribute.src("/app.mjs")], ""),
+      html.script(
+        [attribute.type_("module"), attribute.src("/line_discussion.mjs")],
+        "",
+      ),
+      html.script(
+        [attribute.type_("module"), attribute.src("/page_navigation.mjs")],
+        "",
+      ),
+      html.script(
+        [attribute.type_("module"), attribute.src("/page_panel.mjs")],
+        "",
+      ),
+      html.script(
+        [
+          attribute.type_("module"),
+          attribute.src("/lustre-server-component.mjs"),
+        ],
+        "",
+      ),
+    ]),
+    html.body([], [body]),
+  ])
+}
+
+/// Returns the given element as a document, but without the lustre server
+/// component script tag
+pub fn as_static_document(body: element.Element(msg)) {
+  html.html([], [
+    html.head([], [
+      html.link([attribute.rel("stylesheet"), attribute.href("/styles.css")]),
+    ]),
+    html.body([], [body]),
+  ])
+}
+
+fn serve_lustre_framework() {
+  let path = config.get_priv_path(for: "static/lustre_server_component.mjs")
+  let assert Ok(script) = mist.send_file(path, offset: 0, limit: None)
+
+  response.new(200)
+  |> response.prepend_header("content-type", "application/javascript")
+  |> response.set_body(script)
+}
+
+fn serve_css(style_sheet_name) {
+  let path = config.get_priv_path(for: "static/" <> style_sheet_name)
+  let assert Ok(css) = mist.send_file(path, offset: 0, limit: None)
+
+  response.new(200)
+  |> response.prepend_header("content-type", "text/css")
+  |> response.set_body(css)
+}
+
+fn serve_js(js_file_name) {
+  let path = config.get_priv_path(for: "static/" <> js_file_name)
+  let assert Ok(js) = mist.send_file(path, offset: 0, limit: None)
+
+  response.new(200)
+  |> response.prepend_header("content-type", "text/javascript")
+  |> response.set_body(js)
 }

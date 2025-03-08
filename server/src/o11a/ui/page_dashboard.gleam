@@ -4,7 +4,7 @@ import gleam/option.{Some}
 import gleam/pair
 import gleam/result
 import gleam/string
-import lib/server_componentx
+import lib/elementx
 import lustre
 import lustre/attribute
 import lustre/effect
@@ -52,7 +52,7 @@ fn view(model: Model) -> element.Element(Msg) {
   let val =
     html.div([], [
       html.div([attribute.class("p-[.5rem]")], [
-        server_componentx.hide_skeleton(),
+        elementx.hide_skeleton(),
         html.h2([attribute.class("mb-[.5rem]")], [html.text("incomplete todos")]),
         notes_view(incomplete_todos),
         html.h2([attribute.class("mb-[.5rem]")], [
@@ -109,7 +109,6 @@ pub fn get_skeleton(discussion, for page_path) {
       let skeleton =
         html.div([], [
           html.div([attribute.class("p-[.5rem]")], [
-            server_componentx.hide_skeleton(),
             html.h2([attribute.class("mb-[.5rem]")], [
               html.text("incomplete todos"),
             ]),

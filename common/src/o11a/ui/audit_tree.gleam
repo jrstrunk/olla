@@ -7,7 +7,7 @@ import gleam/string
 import lustre/attribute
 import lustre/element
 import lustre/element/html
-import o11a/ui/gateway
+import o11a/audit_metadata
 
 const style = "
 #tree-grid {
@@ -169,11 +169,9 @@ pub fn view(file_contents, side_panel, for audit_name, with metadata) {
   ])
 }
 
-fn audit_file_tree_view(audit_name, metadata) {
-  let audit_metadata = gateway.get_audit_metadata(metadata, for: audit_name)
-
+fn audit_file_tree_view(audit_name, metadata: audit_metadata.AuditMetaData) {
   let all_audit_files =
-    audit_metadata.in_scope_files
+    metadata.in_scope_files
     |> group_files_by_parent
 
   let #(subdirs, direct_files) =

@@ -10,7 +10,7 @@ import gleam/option.{Some}
 import gleam/regexp
 import gleam/result
 import gleam/string
-import lib/server_componentx
+import lib/elementx
 import lustre
 import lustre/attribute
 import lustre/effect
@@ -68,7 +68,7 @@ fn view(model: Model, is_skeleton is_skeleton) -> element.Element(Msg) {
   io.println("Rendering page " <> model.page_path)
 
   html.div([attribute.class("code-snippet")], [
-    server_componentx.hide_skeleton(),
+    elementx.hide_skeleton(),
     ..list.index_map(model.preprocessed_source, fn(line, index) {
       loc_view(model, line, index + 1, is_skeleton)
     })

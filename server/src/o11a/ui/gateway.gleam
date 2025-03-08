@@ -6,8 +6,9 @@ import gleam/string
 import lib/concurrent_dict
 import lib/snagx
 import lustre
+import o11a/audit_metadata
 import o11a/config
-import o11a/server/audit_metadata
+import o11a/server/audit_metadata as server_audit_metadata
 import o11a/server/discussion
 import o11a/ui/audit_dashboard
 import o11a/ui/audit_page
@@ -61,7 +62,8 @@ pub fn start_gateway() -> Result(Gateway, snag.Snag) {
   use _ <- result.map(
     dict.keys(page_paths)
     |> list.map(fn(audit_name) {
-      let audit_metadata = audit_metadata.gather_metadata(for: audit_name)
+      let audit_metadata =
+        server_audit_metadata.gather_metadata(for: audit_name)
 
       concurrent_dict.insert(audit_metadata_gateway, audit_name, audit_metadata)
 

@@ -3,21 +3,18 @@ import gleam/dict
 import gleam/list
 import gleam/result
 import gleam/string
+import o11a/audit_metadata
 import o11a/config
 import simplifile
-
-pub type AuditMetaData {
-  AuditMetaData(
-    audit_name: String,
-    audit_formatted_name: String,
-    in_scope_files: List(String),
-  )
-}
 
 pub fn gather_metadata(for audit_name) {
   let in_scope_files = get_files_in_scope(for: audit_name)
 
-  AuditMetaData(audit_name:, audit_formatted_name: audit_name, in_scope_files:)
+  audit_metadata.AuditMetaData(
+    audit_name:,
+    audit_formatted_name: audit_name,
+    in_scope_files:,
+  )
 }
 
 fn get_files_in_scope(for audit_name) {
