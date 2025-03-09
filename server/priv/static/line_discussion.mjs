@@ -4245,6 +4245,8 @@ var FindingRejection = class extends CustomType {
 };
 var DevelperQuestion = class extends CustomType {
 };
+var Informational = class extends CustomType {
+};
 function note_significance_to_int(note_significance) {
   if (note_significance instanceof Comment) {
     return 1;
@@ -4262,8 +4264,10 @@ function note_significance_to_int(note_significance) {
     return 7;
   } else if (note_significance instanceof FindingRejection) {
     return 8;
-  } else {
+  } else if (note_significance instanceof DevelperQuestion) {
     return 9;
+  } else {
+    return 10;
   }
 }
 function significance_to_string(note_significance, thread_notes) {
@@ -4334,8 +4338,10 @@ function significance_to_string(note_significance, thread_notes) {
     }
   } else if (note_significance instanceof FindingConfirmation) {
     return new Some("Confirmation");
-  } else {
+  } else if (note_significance instanceof FindingRejection) {
     return new Some("Rejection");
+  } else {
+    return new Some("Informational");
   }
 }
 function note_significance_from_int(note_significance) {
@@ -4357,15 +4363,40 @@ function note_significance_from_int(note_significance) {
     return new FindingRejection();
   } else if (note_significance === 9) {
     return new DevelperQuestion();
+  } else if (note_significance === 10) {
+    return new Informational();
   } else {
     throw makeError(
       "panic",
       "o11a/note",
-      120,
+      124,
       "note_significance_from_int",
       "Invalid note significance found",
       {}
     );
+  }
+}
+function is_significance_threadable(note_significance) {
+  if (note_significance instanceof Comment) {
+    return false;
+  } else if (note_significance instanceof Question) {
+    return true;
+  } else if (note_significance instanceof Answer) {
+    return false;
+  } else if (note_significance instanceof ToDo) {
+    return true;
+  } else if (note_significance instanceof ToDoDone) {
+    return false;
+  } else if (note_significance instanceof FindingLead) {
+    return true;
+  } else if (note_significance instanceof FindingConfirmation) {
+    return false;
+  } else if (note_significance instanceof FindingRejection) {
+    return false;
+  } else if (note_significance instanceof DevelperQuestion) {
+    return true;
+  } else {
+    return false;
   }
 }
 function encode_note(note) {
@@ -4723,7 +4754,7 @@ function thread_header_view(model) {
               toList([
                 on_click(new UserClosedThread()),
                 class$(
-                  "icon-button flex gap-[.5rem] pl-[.5rem] pr-[.3rem] pt-[.3rem] pb-[.1rem]"
+                  "icon-button flex gap-[.5rem] pl-[.5rem] pr-[.3rem] pt-[.3rem] pb-[.1rem] mb-[.25rem]"
                 )
               ]),
               toList([text2("Close Thread"), x(toList([]))])
@@ -4824,16 +4855,23 @@ function comments_view(model) {
                       return fragment(toList([]));
                     }
                   })(),
-                  button(
-                    toList([
-                      id("switch-thread-button"),
-                      class$("icon-button p-[.3rem]"),
-                      on_click(
-                        new UserSwitchedToThread(note.note_id, note)
-                      )
-                    ]),
-                    toList([messages_square(toList([]))])
-                  )
+                  (() => {
+                    let $ = is_significance_threadable(note.significance);
+                    if ($) {
+                      return button(
+                        toList([
+                          id("switch-thread-button"),
+                          class$("icon-button p-[.3rem]"),
+                          on_click(
+                            new UserSwitchedToThread(note.note_id, note)
+                          )
+                        ]),
+                        toList([messages_square(toList([]))])
+                      );
+                    } else {
+                      return fragment(toList([]));
+                    }
+                  })()
                 ])
               )
             ])

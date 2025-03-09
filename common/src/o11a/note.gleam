@@ -125,6 +125,21 @@ pub fn note_significance_from_int(note_significance) {
   }
 }
 
+pub fn is_significance_threadable(note_significance) {
+  case note_significance {
+    Comment -> False
+    Question -> True
+    Answer -> False
+    ToDo -> True
+    ToDoDone -> False
+    FindingLead -> True
+    FindingConfirmation -> False
+    FindingRejection -> False
+    DevelperQuestion -> True
+    Informational -> True
+  }
+}
+
 pub type NoteVoteSigficance {
   UpVote
   DownVote

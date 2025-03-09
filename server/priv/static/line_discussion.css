@@ -572,6 +572,10 @@ video {
   z-index: 3;
 }
 
+.mb-\[\.25rem\] {
+  margin-bottom: .25rem;
+}
+
 .mb-\[\.2rem\] {
   margin-bottom: .2rem;
 }

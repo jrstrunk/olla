@@ -626,7 +626,7 @@ fn thread_header_view(model: Model) {
             [
               event.on_click(UserClosedThread),
               attribute.class(
-                "icon-button flex gap-[.5rem] pl-[.5rem] pr-[.3rem] pt-[.3rem] pb-[.1rem]",
+                "icon-button flex gap-[.5rem] pl-[.5rem] pr-[.3rem] pt-[.3rem] pb-[.1rem] mb-[.25rem]",
               ),
             ],
             [html.text("Close Thread"), lucide.x([])],
@@ -682,14 +682,18 @@ fn comments_view(model: Model) {
               )
             None -> element.fragment([])
           },
-          html.button(
-            [
-              attribute.id("switch-thread-button"),
-              attribute.class("icon-button p-[.3rem]"),
-              event.on_click(UserSwitchedToThread(note.note_id, note)),
-            ],
-            [lucide.messages_square([])],
-          ),
+          case note.is_significance_threadable(note.significance) {
+            True ->
+              html.button(
+                [
+                  attribute.id("switch-thread-button"),
+                  attribute.class("icon-button p-[.3rem]"),
+                  event.on_click(UserSwitchedToThread(note.note_id, note)),
+                ],
+                [lucide.messages_square([])],
+              )
+            False -> element.fragment([])
+          },
         ]),
       ]),
       // Comment main text
