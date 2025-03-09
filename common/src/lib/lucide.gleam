@@ -89,3 +89,87 @@ pub fn list_collapse(attributes: List(Attribute(a))) {
     ],
   )
 }
+
+pub fn maximize_2(attributes: List(Attribute(a))) {
+  svg.svg(
+    [
+      attribute("stroke-linejoin", "round"),
+      attribute("stroke-linecap", "round"),
+      attribute("stroke-width", "2"),
+      attribute("stroke", "currentColor"),
+      attribute("fill", "none"),
+      attribute("viewBox", "0 0 24 24"),
+      attribute("height", "24"),
+      attribute("width", "24"),
+      ..attributes
+    ],
+    [
+      svg.polyline([attribute("points", "15 3 21 3 21 9")]),
+      svg.polyline([attribute("points", "9 21 3 21 3 15")]),
+      svg.line([
+        attribute("y2", "10"),
+        attribute("y1", "3"),
+        attribute("x2", "14"),
+        attribute("x1", "21"),
+      ]),
+      svg.line([
+        attribute("y2", "14"),
+        attribute("y1", "21"),
+        attribute("x2", "10"),
+        attribute("x1", "3"),
+      ]),
+    ],
+  )
+}
+
+pub fn x(attributes: List(Attribute(a))) {
+  svg.svg(
+    [
+      attribute("stroke-linejoin", "round"),
+      attribute("stroke-linecap", "round"),
+      attribute("stroke-width", "2"),
+      attribute("stroke", "currentColor"),
+      attribute("fill", "none"),
+      attribute("viewBox", "0 0 24 24"),
+      attribute("height", "24"),
+      attribute("width", "24"),
+      ..attributes
+    ],
+    [
+      svg.path([attribute("d", "M18 6 6 18")]),
+      svg.path([attribute("d", "m6 6 12 12")]),
+    ],
+  )
+}
+
+pub fn minimize_2(attributes: List(Attribute(a))) {
+  svg.svg(
+    [
+      attribute("stroke-linejoin", "round"),
+      attribute("stroke-linecap", "round"),
+      attribute("stroke-width", "2"),
+      attribute("stroke", "currentColor"),
+      attribute("fill", "none"),
+      attribute("viewBox", "0 0 24 24"),
+      attribute("height", "24"),
+      attribute("width", "24"),
+      ..attributes
+    ],
+    [
+      svg.polyline([attribute("points", "4 14 10 14 10 20")]),
+      svg.polyline([attribute("points", "20 10 14 10 14 4")]),
+      svg.line([
+        attribute("y2", "3"),
+        attribute("y1", "10"),
+        attribute("x2", "21"),
+        attribute("x1", "14"),
+      ]),
+      svg.line([
+        attribute("y2", "14"),
+        attribute("y1", "21"),
+        attribute("x2", "10"),
+        attribute("x1", "3"),
+      ]),
+    ],
+  )
+}
