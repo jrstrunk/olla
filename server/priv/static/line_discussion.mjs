@@ -3983,6 +3983,12 @@ function on_input(msg) {
 
 // build/dev/javascript/lustre/lustre/element/svg.mjs
 var namespace = "http://www.w3.org/2000/svg";
+function line(attrs) {
+  return namespaced(namespace, "line", attrs, toList([]));
+}
+function polyline(attrs) {
+  return namespaced(namespace, "polyline", attrs, toList([]));
+}
 function svg(attrs, children2) {
   return namespaced(namespace, "svg", attrs, children2);
 }
@@ -4117,6 +4123,52 @@ function list_collapse(attributes) {
       path(toList([attribute("d", "M10 6h11")])),
       path(toList([attribute("d", "M10 12h11")])),
       path(toList([attribute("d", "M10 18h11")]))
+    ])
+  );
+}
+function maximize_2(attributes) {
+  return svg(
+    prepend(
+      attribute("stroke-linejoin", "round"),
+      prepend(
+        attribute("stroke-linecap", "round"),
+        prepend(
+          attribute("stroke-width", "2"),
+          prepend(
+            attribute("stroke", "currentColor"),
+            prepend(
+              attribute("fill", "none"),
+              prepend(
+                attribute("viewBox", "0 0 24 24"),
+                prepend(
+                  attribute("height", "24"),
+                  prepend(attribute("width", "24"), attributes)
+                )
+              )
+            )
+          )
+        )
+      )
+    ),
+    toList([
+      polyline(toList([attribute("points", "15 3 21 3 21 9")])),
+      polyline(toList([attribute("points", "9 21 3 21 3 15")])),
+      line(
+        toList([
+          attribute("y2", "10"),
+          attribute("y1", "3"),
+          attribute("x2", "14"),
+          attribute("x1", "21")
+        ])
+      ),
+      line(
+        toList([
+          attribute("y2", "14"),
+          attribute("y1", "21"),
+          attribute("x2", "10"),
+          attribute("x1", "3")
+        ])
+      )
     ])
   );
 }
@@ -4581,6 +4633,8 @@ var UserFocusedExpandedInput = class extends CustomType {
 };
 var UserUnfocusedInput = class extends CustomType {
 };
+var UserMaximizeThread = class extends CustomType {
+};
 function init2(_) {
   return [
     new Model2(
@@ -4696,7 +4750,22 @@ function thread_header_view(model) {
       ])
     );
   } else {
-    return fragment(toList([]));
+    return div(
+      toList([class$("flex items-center justify-between width-full")]),
+      toList([
+        span(
+          toList([class$("pt-[.1rem]")]),
+          toList([text2(model.line_tag)])
+        ),
+        button(
+          toList([
+            on_click(new UserMaximizeThread()),
+            class$("icon-button p-[.3rem] ")
+          ]),
+          toList([maximize_2(toList([]))])
+        )
+      ])
+    );
   }
 }
 function significance_badge_view(model, note) {

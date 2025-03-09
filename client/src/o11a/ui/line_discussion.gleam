@@ -643,7 +643,20 @@ fn thread_header_view(model: Model) {
         },
         html.hr([attribute.class("mt-[.5rem]")]),
       ])
-    None -> element.fragment([])
+    None ->
+      html.div(
+        [attribute.class("flex items-center justify-between width-full")],
+        [
+          html.span([attribute.class("pt-[.1rem]")], [html.text(model.line_tag)]),
+          html.button(
+            [
+              event.on_click(UserMaximizeThread),
+              attribute.class("icon-button p-[.3rem] "),
+            ],
+            [lucide.maximize_2([])],
+          ),
+        ],
+      )
   }
 }
 

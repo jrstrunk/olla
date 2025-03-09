@@ -741,6 +741,10 @@ video {
   padding-top: 0.25rem;
 }
 
+.pt-\[\.1rem\] {
+  padding-top: .1rem;
+}
+
 .pt-\[\.3rem\] {
   padding-top: .3rem;
 }
