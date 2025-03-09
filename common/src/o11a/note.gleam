@@ -38,6 +38,7 @@ pub type NoteSignificance {
   FindingConfirmation
   FindingRejection
   DevelperQuestion
+  Informational
 }
 
 pub fn note_significance_to_int(note_significance) {
@@ -51,6 +52,7 @@ pub fn note_significance_to_int(note_significance) {
     FindingConfirmation -> 7
     FindingRejection -> 8
     DevelperQuestion -> 9
+    Informational -> 10
   }
 }
 
@@ -103,6 +105,7 @@ pub fn significance_to_string(note_significance, thread_notes: List(Note)) {
       }
     FindingConfirmation -> Some("Confirmation")
     FindingRejection -> Some("Rejection")
+    Informational -> Some("Informational")
   }
 }
 
@@ -117,6 +120,7 @@ pub fn note_significance_from_int(note_significance) {
     7 -> FindingConfirmation
     8 -> FindingRejection
     9 -> DevelperQuestion
+    10 -> Informational
     _ -> panic as "Invalid note significance found"
   }
 }
