@@ -151,6 +151,7 @@ pub type Msg {
   UserFocusedInput
   UserFocusedExpandedInput
   UserUnfocusedInput
+  UserMaximizeThread
 }
 
 fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
@@ -351,6 +352,17 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         ]),
       ),
     )
+    UserMaximizeThread -> #(
+      model,
+      event.emit(
+        events.user_maximized_thread,
+        json.object([
+          #("line_number", json.int(model.line_number)),
+          // 1 for line discussion
+          #("discussion_lane", json.int(1)),
+        ]),
+      ),
+    )
   }
 }
 
@@ -441,7 +453,6 @@ button.icon-button {
   border-radius: 4px;
   border: none;
   cursor: pointer;
-  padding: 0.3rem;
 }
 
 button.icon-button:hover {
@@ -610,10 +621,17 @@ fn thread_header_view(model: Model) {
   case model.active_thread {
     Some(active_thread) ->
       html.div([], [
-        html.button([event.on_click(UserClosedThread)], [
-          html.text("Close Thread"),
+        html.div([attribute.class("flex justify-end width-full")], [
+          html.button(
+            [
+              event.on_click(UserClosedThread),
+              attribute.class(
+                "icon-button flex gap-[.5rem] pl-[.5rem] pr-[.3rem] pt-[.3rem] pb-[.1rem]",
+              ),
+            ],
+            [html.text("Close Thread"), lucide.x([])],
+          ),
         ]),
-        html.br([]),
         html.text("Current Thread: "),
         html.text(active_thread.parent_note.message),
         case active_thread.parent_note.expanded_message {
@@ -644,7 +662,7 @@ fn comments_view(model: Model) {
               html.button(
                 [
                   attribute.id("expand-message-button"),
-                  attribute.class("icon-button"),
+                  attribute.class("icon-button p-[.3rem]"),
                   event.on_click(UserToggledExpandedMessage(note.note_id)),
                 ],
                 [lucide.list_collapse([])],
@@ -654,7 +672,7 @@ fn comments_view(model: Model) {
           html.button(
             [
               attribute.id("switch-thread-button"),
-              attribute.class("icon-button"),
+              attribute.class("icon-button p-[.3rem]"),
               event.on_click(UserSwitchedToThread(note.note_id, note)),
             ],
             [lucide.messages_square([])],
@@ -698,7 +716,7 @@ fn new_message_input_view(model: Model) {
     html.button(
       [
         attribute.id("toggle-expanded-message-button"),
-        attribute.class("icon-button"),
+        attribute.class("icon-button p-[.3rem]"),
         event.on_click(UserToggledExpandedMessageBox(
           !model.show_expanded_message_box,
         )),

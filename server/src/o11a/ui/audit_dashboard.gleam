@@ -3,8 +3,8 @@ import gleam/dict
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/string
-import lib/persistent_concurrent_duplicate_dict as pcd_dict
 import lib/elementx
+import lib/persistent_concurrent_duplicate_dict as pcd_dict
 import lustre
 import lustre/attribute
 import lustre/effect

@@ -202,8 +202,8 @@ var Error = class extends Result {
     return false;
   }
 };
-function isEqual(x, y) {
-  let values2 = [x, y];
+function isEqual(x2, y) {
+  let values2 = [x2, y];
   while (values2.length) {
     let a = values2.pop();
     let b = values2.pop();
@@ -233,10 +233,10 @@ function isEqual(x, y) {
 }
 function getters(object3) {
   if (object3 instanceof Map) {
-    return [(x) => x.keys(), (x, y) => x.get(y)];
+    return [(x2) => x2.keys(), (x2, y) => x2.get(y)];
   } else {
     let extra = object3 instanceof globalThis.Error ? ["message"] : [];
-    return [(x) => [...extra, ...Object.keys(x)], (x, y) => x[y]];
+    return [(x2) => [...extra, ...Object.keys(x2)], (x2, y) => x2[y]];
   }
 }
 function unequalDates(a, b) {
@@ -285,11 +285,11 @@ function divideFloat(a, b) {
     return a / b;
   }
 }
-function makeError(variant, module, line, fn, message, extra) {
+function makeError(variant, module, line2, fn, message, extra) {
   let error = new globalThis.Error(message);
   error.gleam_error = variant;
   error.module = module;
-  error.line = line;
+  error.line = line2;
   error.function = fn;
   error.fn = fn;
   for (let k in extra)
@@ -319,24 +319,24 @@ function to_result(option, e) {
 }
 function unwrap(option, default$) {
   if (option instanceof Some) {
-    let x = option[0];
-    return x;
+    let x2 = option[0];
+    return x2;
   } else {
     return default$;
   }
 }
 function map(option, fun) {
   if (option instanceof Some) {
-    let x = option[0];
-    return new Some(fun(x));
+    let x2 = option[0];
+    return new Some(fun(x2));
   } else {
     return new None();
   }
 }
 function flatten(option) {
   if (option instanceof Some) {
-    let x = option[0];
-    return x;
+    let x2 = option[0];
+    return x2;
   } else {
     return new None();
   }
@@ -467,13 +467,13 @@ function mask(hash, shift) {
 function bitpos(hash, shift) {
   return 1 << mask(hash, shift);
 }
-function bitcount(x) {
-  x -= x >> 1 & 1431655765;
-  x = (x & 858993459) + (x >> 2 & 858993459);
-  x = x + (x >> 4) & 252645135;
-  x += x >> 8;
-  x += x >> 16;
-  return x & 127;
+function bitcount(x2) {
+  x2 -= x2 >> 1 & 1431655765;
+  x2 = (x2 & 858993459) + (x2 >> 2 & 858993459);
+  x2 = x2 + (x2 >> 4) & 252645135;
+  x2 += x2 >> 8;
+  x2 += x2 >> 16;
+  return x2 & 127;
 }
 function index(bitmap, bit) {
   return bitcount(bitmap & bit - 1);
@@ -1051,8 +1051,8 @@ var unequalDictSymbol = Symbol();
 // build/dev/javascript/gleam_stdlib/gleam_stdlib.mjs
 var Nil = void 0;
 var NOT_FOUND = {};
-function identity(x) {
-  return x;
+function identity(x2) {
+  return x2;
 }
 function parse_int(value3) {
   if (/^[-+]?(\d+)$/.test(value3)) {
@@ -1115,8 +1115,8 @@ function pop_grapheme(string5) {
 }
 function concat(xs) {
   let result = "";
-  for (const x of xs) {
-    result = result + x;
+  for (const x2 of xs) {
+    result = result + x2;
   }
   return result;
 }
@@ -1376,15 +1376,15 @@ function inspectUtfCodepoint(codepoint2) {
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/float.mjs
-function negate(x) {
-  return -1 * x;
+function negate(x2) {
+  return -1 * x2;
 }
-function round2(x) {
-  let $ = x >= 0;
+function round2(x2) {
+  let $ = x2 >= 0;
   if ($) {
-    return round(x);
+    return round(x2);
   } else {
-    return 0 - round(negate(x));
+    return 0 - round(negate(x2));
   }
 }
 
@@ -1661,8 +1661,8 @@ function is_ok(result) {
 }
 function map3(result, fun) {
   if (result.isOk()) {
-    let x = result[0];
-    return new Ok(fun(x));
+    let x2 = result[0];
+    return new Ok(fun(x2));
   } else {
     let e = result[0];
     return new Error(e);
@@ -1670,8 +1670,8 @@ function map3(result, fun) {
 }
 function map_error(result, fun) {
   if (result.isOk()) {
-    let x = result[0];
-    return new Ok(x);
+    let x2 = result[0];
+    return new Ok(x2);
   } else {
     let error = result[0];
     return new Error(fun(error));
@@ -1679,8 +1679,8 @@ function map_error(result, fun) {
 }
 function try$(result, fun) {
   if (result.isOk()) {
-    let x = result[0];
-    return fun(x);
+    let x2 = result[0];
+    return fun(x2);
   } else {
     let e = result[0];
     return new Error(e);
@@ -1699,8 +1699,8 @@ function unwrap2(result, default$) {
 }
 function replace_error(result, error) {
   if (result.isOk()) {
-    let x = result[0];
-    return new Ok(x);
+    let x2 = result[0];
+    return new Ok(x2);
   } else {
     return new Error(error);
   }
@@ -1750,8 +1750,8 @@ function push_path(error, name2) {
   let decoder = do_any(
     toList([
       decode_string,
-      (x) => {
-        return map3(decode_int(x), to_string);
+      (x2) => {
+        return map3(decode_int(x2), to_string);
       }
     ])
   );
@@ -2114,8 +2114,8 @@ function lazy_guard(requirement, consequence, alternative) {
 function object(entries) {
   return Object.fromEntries(entries);
 }
-function identity2(x) {
-  return x;
+function identity2(x2) {
+  return x2;
 }
 function do_null() {
   return null;
@@ -2173,9 +2173,9 @@ function spidermonkeyUnexpectedByteError(err, json) {
   const match = regex.exec(err.message);
   if (!match)
     return null;
-  const line = Number(match[2]);
+  const line2 = Number(match[2]);
   const column = Number(match[3]);
-  const position = getPositionFromMultiline(line, column, json);
+  const position = getPositionFromMultiline(line2, column, json);
   const byte = toHex(json[position]);
   return new UnexpectedByte(byte, position);
 }
@@ -2190,15 +2190,15 @@ function jsCoreUnexpectedByteError(err) {
 function toHex(char) {
   return "0x" + char.charCodeAt(0).toString(16).toUpperCase();
 }
-function getPositionFromMultiline(line, column, string5) {
-  if (line === 1)
+function getPositionFromMultiline(line2, column, string5) {
+  if (line2 === 1)
     return column - 1;
   let currentLn = 1;
   let position = 0;
   string5.split("").find((char, idx) => {
     if (char === "\n")
       currentLn += 1;
-    if (currentLn === line) {
+    if (currentLn === line2) {
       position = idx + column;
       return true;
     }
@@ -3925,9 +3925,6 @@ function hr(attrs) {
 function p(attrs, children2) {
   return element("p", attrs, children2);
 }
-function br(attrs) {
-  return element("br", attrs, toList([]));
-}
 function span(attrs, children2) {
   return element("span", attrs, children2);
 }
@@ -3984,6 +3981,176 @@ function on_input(msg) {
   );
 }
 
+// build/dev/javascript/lustre/lustre/element/svg.mjs
+var namespace = "http://www.w3.org/2000/svg";
+function svg(attrs, children2) {
+  return namespaced(namespace, "svg", attrs, children2);
+}
+function path(attrs) {
+  return namespaced(namespace, "path", attrs, toList([]));
+}
+
+// build/dev/javascript/o11a_common/lib/lucide.mjs
+function messages_square(attributes) {
+  return svg(
+    prepend(
+      attribute("stroke-linejoin", "round"),
+      prepend(
+        attribute("stroke-linecap", "round"),
+        prepend(
+          attribute("stroke-width", "2"),
+          prepend(
+            attribute("stroke", "currentColor"),
+            prepend(
+              attribute("fill", "none"),
+              prepend(
+                attribute("viewBox", "0 0 24 24"),
+                prepend(
+                  attribute("height", "24"),
+                  prepend(attribute("width", "24"), attributes)
+                )
+              )
+            )
+          )
+        )
+      )
+    ),
+    toList([
+      path(
+        toList([
+          attribute(
+            "d",
+            "M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"
+          )
+        ])
+      ),
+      path(
+        toList([
+          attribute("d", "M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1")
+        ])
+      )
+    ])
+  );
+}
+function pencil_ruler(attributes) {
+  return svg(
+    prepend(
+      attribute("stroke-linejoin", "round"),
+      prepend(
+        attribute("stroke-linecap", "round"),
+        prepend(
+          attribute("stroke-width", "2"),
+          prepend(
+            attribute("stroke", "currentColor"),
+            prepend(
+              attribute("fill", "none"),
+              prepend(
+                attribute("viewBox", "0 0 24 24"),
+                prepend(
+                  attribute("height", "24"),
+                  prepend(attribute("width", "24"), attributes)
+                )
+              )
+            )
+          )
+        )
+      )
+    ),
+    toList([
+      path(
+        toList([
+          attribute(
+            "d",
+            "M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"
+          )
+        ])
+      ),
+      path(toList([attribute("d", "m8 6 2-2")])),
+      path(toList([attribute("d", "m18 16 2-2")])),
+      path(
+        toList([
+          attribute(
+            "d",
+            "m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"
+          )
+        ])
+      ),
+      path(
+        toList([
+          attribute(
+            "d",
+            "M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+          )
+        ])
+      ),
+      path(toList([attribute("d", "m15 5 4 4")]))
+    ])
+  );
+}
+function list_collapse(attributes) {
+  return svg(
+    prepend(
+      attribute("stroke-linejoin", "round"),
+      prepend(
+        attribute("stroke-linecap", "round"),
+        prepend(
+          attribute("stroke-width", "2"),
+          prepend(
+            attribute("stroke", "currentColor"),
+            prepend(
+              attribute("fill", "none"),
+              prepend(
+                attribute("viewBox", "0 0 24 24"),
+                prepend(
+                  attribute("height", "24"),
+                  prepend(attribute("width", "24"), attributes)
+                )
+              )
+            )
+          )
+        )
+      )
+    ),
+    toList([
+      path(toList([attribute("d", "m3 10 2.5-2.5L3 5")])),
+      path(toList([attribute("d", "m3 19 2.5-2.5L3 14")])),
+      path(toList([attribute("d", "M10 6h11")])),
+      path(toList([attribute("d", "M10 12h11")])),
+      path(toList([attribute("d", "M10 18h11")]))
+    ])
+  );
+}
+function x(attributes) {
+  return svg(
+    prepend(
+      attribute("stroke-linejoin", "round"),
+      prepend(
+        attribute("stroke-linecap", "round"),
+        prepend(
+          attribute("stroke-width", "2"),
+          prepend(
+            attribute("stroke", "currentColor"),
+            prepend(
+              attribute("fill", "none"),
+              prepend(
+                attribute("viewBox", "0 0 24 24"),
+                prepend(
+                  attribute("height", "24"),
+                  prepend(attribute("width", "24"), attributes)
+                )
+              )
+            )
+          )
+        )
+      )
+    ),
+    toList([
+      path(toList([attribute("d", "M18 6 6 18")])),
+      path(toList([attribute("d", "m6 6 12 12")]))
+    ])
+  );
+}
+
 // build/dev/javascript/o11a_common/o11a/components.mjs
 var line_discussion = "line-discussion";
 
@@ -3992,6 +4159,7 @@ var user_submitted_note = "user-submitted-line-note";
 var user_clicked_discussion_preview = "user-clicked-discussion-preview";
 var user_focused_input = "user-focused-input";
 var user_unfocused_input = "user-unfocused-input";
+var user_maximized_thread = "user-maximized-thread";
 
 // build/dev/javascript/o11a_common/o11a/note.mjs
 var Note = class extends CustomType {
@@ -4312,146 +4480,6 @@ function on_ctrl_enter(msg) {
   );
 }
 
-// build/dev/javascript/lustre/lustre/element/svg.mjs
-var namespace = "http://www.w3.org/2000/svg";
-function svg(attrs, children2) {
-  return namespaced(namespace, "svg", attrs, children2);
-}
-function path(attrs) {
-  return namespaced(namespace, "path", attrs, toList([]));
-}
-
-// build/dev/javascript/o11a_client/lib/lucide.mjs
-function messages_square(attributes) {
-  return svg(
-    prepend(
-      attribute("stroke-linejoin", "round"),
-      prepend(
-        attribute("stroke-linecap", "round"),
-        prepend(
-          attribute("stroke-width", "2"),
-          prepend(
-            attribute("stroke", "currentColor"),
-            prepend(
-              attribute("fill", "none"),
-              prepend(
-                attribute("viewBox", "0 0 24 24"),
-                prepend(
-                  attribute("height", "24"),
-                  prepend(attribute("width", "24"), attributes)
-                )
-              )
-            )
-          )
-        )
-      )
-    ),
-    toList([
-      path(
-        toList([
-          attribute(
-            "d",
-            "M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"
-          )
-        ])
-      ),
-      path(
-        toList([
-          attribute("d", "M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1")
-        ])
-      )
-    ])
-  );
-}
-function pencil_ruler(attributes) {
-  return svg(
-    prepend(
-      attribute("stroke-linejoin", "round"),
-      prepend(
-        attribute("stroke-linecap", "round"),
-        prepend(
-          attribute("stroke-width", "2"),
-          prepend(
-            attribute("stroke", "currentColor"),
-            prepend(
-              attribute("fill", "none"),
-              prepend(
-                attribute("viewBox", "0 0 24 24"),
-                prepend(
-                  attribute("height", "24"),
-                  prepend(attribute("width", "24"), attributes)
-                )
-              )
-            )
-          )
-        )
-      )
-    ),
-    toList([
-      path(
-        toList([
-          attribute(
-            "d",
-            "M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"
-          )
-        ])
-      ),
-      path(toList([attribute("d", "m8 6 2-2")])),
-      path(toList([attribute("d", "m18 16 2-2")])),
-      path(
-        toList([
-          attribute(
-            "d",
-            "m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"
-          )
-        ])
-      ),
-      path(
-        toList([
-          attribute(
-            "d",
-            "M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
-          )
-        ])
-      ),
-      path(toList([attribute("d", "m15 5 4 4")]))
-    ])
-  );
-}
-function list_collapse(attributes) {
-  return svg(
-    prepend(
-      attribute("stroke-linejoin", "round"),
-      prepend(
-        attribute("stroke-linecap", "round"),
-        prepend(
-          attribute("stroke-width", "2"),
-          prepend(
-            attribute("stroke", "currentColor"),
-            prepend(
-              attribute("fill", "none"),
-              prepend(
-                attribute("viewBox", "0 0 24 24"),
-                prepend(
-                  attribute("height", "24"),
-                  prepend(attribute("width", "24"), attributes)
-                )
-              )
-            )
-          )
-        )
-      )
-    ),
-    toList([
-      path(toList([attribute("d", "m3 10 2.5-2.5L3 5")])),
-      path(toList([attribute("d", "m3 19 2.5-2.5L3 14")])),
-      path(toList([attribute("d", "M10 6h11")])),
-      path(toList([attribute("d", "M10 12h11")])),
-      path(toList([attribute("d", "M10 18h11")]))
-    ])
-  );
-}
-
 // build/dev/javascript/o11a_client/o11a/ui/line_discussion.mjs
 var Model2 = class extends CustomType {
   constructor(user_name, line_number, line_id, line_text, line_tag, line_number_text, keep_notes_open, notes, current_note_draft, current_thread_id, current_thread_notes, active_thread, show_expanded_message_box, current_expanded_message_draft, expanded_messages) {
@@ -4634,11 +4662,20 @@ function thread_header_view(model) {
     return div(
       toList([]),
       toList([
-        button(
-          toList([on_click(new UserClosedThread())]),
-          toList([text2("Close Thread")])
+        div(
+          toList([class$("flex justify-end width-full")]),
+          toList([
+            button(
+              toList([
+                on_click(new UserClosedThread()),
+                class$(
+                  "icon-button flex gap-[.5rem] pl-[.5rem] pr-[.3rem] pt-[.3rem] pb-[.1rem]"
+                )
+              ]),
+              toList([text2("Close Thread"), x(toList([]))])
+            )
+          ])
         ),
-        br(toList([])),
         text2("Current Thread: "),
         text2(active_thread.parent_note.message),
         (() => {
@@ -4707,7 +4744,7 @@ function comments_view(model) {
                       return button(
                         toList([
                           id("expand-message-button"),
-                          class$("icon-button"),
+                          class$("icon-button p-[.3rem]"),
                           on_click(
                             new UserToggledExpandedMessage(note.note_id)
                           )
@@ -4721,7 +4758,7 @@ function comments_view(model) {
                   button(
                     toList([
                       id("switch-thread-button"),
-                      class$("icon-button"),
+                      class$("icon-button p-[.3rem]"),
                       on_click(
                         new UserSwitchedToThread(note.note_id, note)
                       )
@@ -4769,7 +4806,7 @@ function new_message_input_view(model) {
       button(
         toList([
           id("toggle-expanded-message-button"),
-          class$("icon-button"),
+          class$("icon-button p-[.3rem]"),
           on_click(
             new UserToggledExpandedMessageBox(!model.show_expanded_message_box)
           )
@@ -5398,7 +5435,7 @@ function update(model, msg) {
         )
       )
     ];
-  } else {
+  } else if (msg instanceof UserUnfocusedInput) {
     return [
       model,
       emit2(
@@ -5411,10 +5448,23 @@ function update(model, msg) {
         )
       )
     ];
+  } else {
+    return [
+      model,
+      emit2(
+        user_maximized_thread,
+        object2(
+          toList([
+            ["line_number", int3(model.line_number)],
+            ["discussion_lane", int3(1)]
+          ])
+        )
+      )
+    ];
   }
 }
 var name = line_discussion;
-var component_style = "\n:host {\n  display: inline-block;\n}\n\n/* Delay the overlay transitions by 1ms to they are done last, and any \n  actions on them can be done first (like focusing the input) */\n\n.new-thread-preview {\n  opacity: 0;\n  transition-property: opacity;\n  transition-delay: 1ms;\n}\n\n.comment-preview:focus,\n.new-thread-preview:focus {\n  outline: none;\n  text-decoration: underline;\n}\n\n#line-discussion-overlay {\n  visibility: hidden;\n  opacity: 0;\n  transition-property: opacity, visibility;\n  transition-delay: 1ms, 1ms;\n}\n\n#expanded-message {\n  visibility: hidden;\n  opacity: 0;\n  transition-property: opacity, visibility;\n  transition-delay: 1ms, 1ms;\n}\n\n/* When the new thread preview is hovered */\n\np.loc:hover .new-thread-preview {\n  opacity: 1;\n}\n\n#line-discussion-overlay.show-dis,\n.comment-preview:hover + #line-discussion-overlay {\n  visibility: visible;\n  opacity: 1;\n}\n\n.new-thread-preview:hover + #line-discussion-overlay #expanded-message.show-exp,\n.comment-preview:hover + #line-discussion-overlay #expanded-message.show-exp {\n  visibility: visible;\n  opacity: 1;\n  transition-property: opacity, visible;\n  transition-delay: 25ms, 25ms;\n}\n\n/* When the new thread preview is focused, immediately show the overlay to\n  provide snappy feedback. */\n\n.new-thread-preview:focus,\n.new-thread-preview:has(+ #line-discussion-overlay:hover),\n.new-thread-preview:has(+ #line-discussion-overlay:focus-within) {\n  opacity: 1;\n}\n\n.new-thread-preview:focus + #line-discussion-overlay,\n.comment-preview:focus + #line-discussion-overlay,\n#line-discussion-overlay:hover,\n#line-discussion-overlay:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\n.new-thread-preview:focus + #line-discussion-overlay #expanded-message.show-exp,\n.comment-preview:focus + #line-discussion-overlay #expanded-message.show-exp,\n#line-discussion-overlay:hover #expanded-message.show-exp,\n#line-discussion-overlay:focus-within #expanded-message.show-exp,\n#expanded-message:hover,\n#expanded-message:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\nbutton.icon-button {\n  background-color: var(--overlay-background-color);\n  color: var(--text-color);\n  border-radius: 4px;\n  border: none;\n  cursor: pointer;\n  padding: 0.3rem;\n}\n\nbutton.icon-button:hover {\n  background-color: var(--input-background-color);\n}\n\nbutton.icon-button svg {\n  height: 1.25rem;\n  width: 1.25rem;\n}\n\ninput, textarea {\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border-radius: 6px;\n}\n\ninput, textarea {\n  border: 1px solid var(--input-border-color);\n}\n\nhr {\n  border: 1px solid var(--comment-color);\n}\n\n.overlay {\n  background-color: var(--overlay-background-color);\n  border: 1px solid var(--input-border-color);\n  border-radius: 6px;\n}\n\np.loc {\n  margin: 0;\n  white-space: pre;\n  height: 1.1875rem;\n  display: flex;\n  align-items: center;\n}\n\n.line-number {\n  display: inline-block;\n  margin-right: 1rem;\n  width: 2.5rem;\n  text-align: right;\n  flex-shrink: 0;\n}\n\n.inline-comment {\n  margin-left: 2.5rem;\n}\n\n.absolute {\n  position: absolute;\n}\n";
+var component_style = "\n:host {\n  display: inline-block;\n}\n\n/* Delay the overlay transitions by 1ms to they are done last, and any \n  actions on them can be done first (like focusing the input) */\n\n.new-thread-preview {\n  opacity: 0;\n  transition-property: opacity;\n  transition-delay: 1ms;\n}\n\n.comment-preview:focus,\n.new-thread-preview:focus {\n  outline: none;\n  text-decoration: underline;\n}\n\n#line-discussion-overlay {\n  visibility: hidden;\n  opacity: 0;\n  transition-property: opacity, visibility;\n  transition-delay: 1ms, 1ms;\n}\n\n#expanded-message {\n  visibility: hidden;\n  opacity: 0;\n  transition-property: opacity, visibility;\n  transition-delay: 1ms, 1ms;\n}\n\n/* When the new thread preview is hovered */\n\np.loc:hover .new-thread-preview {\n  opacity: 1;\n}\n\n#line-discussion-overlay.show-dis,\n.comment-preview:hover + #line-discussion-overlay {\n  visibility: visible;\n  opacity: 1;\n}\n\n.new-thread-preview:hover + #line-discussion-overlay #expanded-message.show-exp,\n.comment-preview:hover + #line-discussion-overlay #expanded-message.show-exp {\n  visibility: visible;\n  opacity: 1;\n  transition-property: opacity, visible;\n  transition-delay: 25ms, 25ms;\n}\n\n/* When the new thread preview is focused, immediately show the overlay to\n  provide snappy feedback. */\n\n.new-thread-preview:focus,\n.new-thread-preview:has(+ #line-discussion-overlay:hover),\n.new-thread-preview:has(+ #line-discussion-overlay:focus-within) {\n  opacity: 1;\n}\n\n.new-thread-preview:focus + #line-discussion-overlay,\n.comment-preview:focus + #line-discussion-overlay,\n#line-discussion-overlay:hover,\n#line-discussion-overlay:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\n.new-thread-preview:focus + #line-discussion-overlay #expanded-message.show-exp,\n.comment-preview:focus + #line-discussion-overlay #expanded-message.show-exp,\n#line-discussion-overlay:hover #expanded-message.show-exp,\n#line-discussion-overlay:focus-within #expanded-message.show-exp,\n#expanded-message:hover,\n#expanded-message:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\nbutton.icon-button {\n  background-color: var(--overlay-background-color);\n  color: var(--text-color);\n  border-radius: 4px;\n  border: none;\n  cursor: pointer;\n}\n\nbutton.icon-button:hover {\n  background-color: var(--input-background-color);\n}\n\nbutton.icon-button svg {\n  height: 1.25rem;\n  width: 1.25rem;\n}\n\ninput, textarea {\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border-radius: 6px;\n}\n\ninput, textarea {\n  border: 1px solid var(--input-border-color);\n}\n\nhr {\n  border: 1px solid var(--comment-color);\n}\n\n.overlay {\n  background-color: var(--overlay-background-color);\n  border: 1px solid var(--input-border-color);\n  border-radius: 6px;\n}\n\np.loc {\n  margin: 0;\n  white-space: pre;\n  height: 1.1875rem;\n  display: flex;\n  align-items: center;\n}\n\n.line-number {\n  display: inline-block;\n  margin-right: 1rem;\n  width: 2.5rem;\n  text-align: right;\n  flex-shrink: 0;\n}\n\n.inline-comment {\n  margin-left: 2.5rem;\n}\n\n.absolute {\n  position: absolute;\n}\n";
 function view(model) {
   console_log("Rendering line discussion " + model.line_tag);
   return p(
