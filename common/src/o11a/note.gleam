@@ -1,10 +1,7 @@
 import gleam/dict
-import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/json
 import gleam/option.{type Option}
-import gleam/result
-import gleam/string
 import tempo
 import tempo/datetime
 
@@ -105,30 +102,6 @@ pub type NoteVote {
 /// updated.
 pub type NoteVoteCollection =
   dict.Dict(String, List(NoteVote))
-
-pub fn encode_structured_notes(note: #(String, List(Note))) {
-  json.object([
-    #("note_id", json.string(note.0)),
-    #("thread_notes", json.array(note.1, encode_note)),
-  ])
-}
-
-pub fn decode_structured_notes(notes: dynamic.Dynamic) {
-  use notes <- result.try(decode.run(notes, decode.string))
-
-  json.parse(notes, decode.list(structured_note_decoder()))
-  |> result.replace_error([
-    decode.DecodeError("json-encoded note", string.inspect(notes), []),
-  ])
-}
-
-fn structured_note_decoder() {
-  use note_id <- decode.field("note_id", decode.string)
-  use thread_notes <- decode.field("thread_notes", decode.list(note_decoder()))
-
-  #(note_id, thread_notes)
-  |> decode.success
-}
 
 pub fn encode_note(note: Note) {
   json.object([

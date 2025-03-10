@@ -733,6 +733,10 @@ video {
   padding-left: 0.5rem;
 }
 
+.pl-\[\.1rem\] {
+  padding-left: .1rem;
+}
+
 .pl-\[\.5rem\] {
   padding-left: .5rem;
 }
@@ -745,6 +749,10 @@ video {
   padding-top: 0.25rem;
 }
 
+.pt-\[\.15rem\] {
+  padding-top: .15rem;
+}
+
 .pt-\[\.1rem\] {
   padding-top: .1rem;
 }
@@ -755,6 +763,10 @@ video {
 
 .text-\[\.95rem\] {
   font-size: .95rem;
+}
+
+.text-\[\.9rem\] {
+  font-size: .9rem;
 }
 
 .text-\[0\.65rem\] {
@@ -779,4 +791,8 @@ video {
 
 .outline {
   outline-style: solid;
+}
+
+.filter {
+  filter: var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow);
 }

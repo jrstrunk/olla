@@ -155,6 +155,9 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
     components.line_discussion,
     [
       attribute.id(line_tag),
+      attribute.attribute("line-number", line_number_text),
+      attribute.attribute("line-id", line_id),
+      attribute.attribute("line-text", line_text),
       attribute.attribute(
         "line-discussion",
         discussion.get_structured_notes(model.discussion, line_id)
@@ -162,9 +165,6 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
           |> json.preprocessed_array
           |> json.to_string,
       ),
-      attribute.attribute("line-id", line_id),
-      attribute.attribute("line-number", line_number_text),
-      attribute.attribute("line-text", line_text),
       on_user_submitted_line_note(UserSubmittedNote),
       server_component.include(["detail"]),
     ],

@@ -10,6 +10,7 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/set
 import gleam/string
+import lib/enumerate
 import lib/eventx
 import lib/lucide
 import lustre
@@ -91,7 +92,7 @@ fn init(_) -> #(Model, effect.Effect(Msg)) {
       line_tag: "",
       line_number_text: "",
       notes: dict.new(),
-      info_notes: dict.new(),
+      info_notes: [],
       current_note_draft: "",
       line_id: "",
       current_thread_id: "",
@@ -114,7 +115,7 @@ pub type Model {
     line_tag: String,
     line_number_text: String,
     notes: dict.Dict(String, List(computed_note.ComputedNote)),
-    info_notes: dict.Dict(String, List(computed_note.ComputedNote)),
+    info_notes: List(computed_note.ComputedNote),
     current_note_draft: String,
     current_thread_id: String,
     current_thread_notes: List(computed_note.ComputedNote),
@@ -183,10 +184,20 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     ServerSetLineText(line_text) -> #(Model(..model, line_text:), effect.none())
     ServerUpdatedNotes(notes) -> {
       let updated_notes = dict.from_list(notes)
+
+      let info_notes =
+        dict.get(updated_notes, model.line_id)
+        |> result.unwrap([])
+        |> list.filter(fn(computed_note) {
+          computed_note.significance == computed_note.Informational
+        })
+        |> list.reverse
+
       #(
         Model(
           ..model,
           notes: updated_notes,
+          info_notes:,
           current_thread_notes: dict.get(updated_notes, model.current_thread_id)
             |> result.unwrap([]),
         ),
@@ -517,72 +528,116 @@ p.loc {
 fn view(model: Model) -> element.Element(Msg) {
   io.println("Rendering line discussion " <> model.line_tag)
 
-  html.p(
-    [
-      attribute.class("loc flex"),
-      attribute.id(model.line_tag),
-      event.on_mouse_enter(UserEnteredDiscussionPreview),
-    ],
-    [
-      html.span([attribute.class("line-number code-extras")], [
-        html.text(model.line_number_text),
-      ]),
-      html.span(
-        [attribute.attribute("dangerous-unescaped-html", model.line_text)],
-        [],
-      ),
-      html.span([attribute.class("inline-comment")], [
-        html.div(
+  html.div([attribute.id("line-container")], [
+    element.fragment(
+      list.index_map(model.info_notes, fn(note, index) {
+        html.p(
           [
-            attribute.id("line-discussion-container"),
-            attribute.class("relative font-code"),
+            attribute.class("loc flex"),
+            attribute.id(note.note_id),
+            event.on_mouse_enter(UserEnteredDiscussionPreview),
           ],
           [
-            html.style([], component_style),
-            inline_comment_preview_view(model),
-            discussion_overlay_view(model),
+            html.span(
+              [attribute.class("line-number code-extras relative italic")],
+              [
+                html.text(model.line_number_text),
+                html.span(
+                  [
+                    attribute.class(
+                      "absolute code-extras pl-[.1rem] pt-[.15rem] text-[.9rem]",
+                    ),
+                  ],
+                  [html.text(enumerate.translate_number_to_letter(index + 1))],
+                ),
+              ],
+            ),
+            html.span([attribute.class("comment italic")], [
+              html.text(
+                enumerate.get_leading_spaces(model.line_text)
+                <> note.message
+                <> case note.expanded_message {
+                  Some(..) -> "*"
+                  None -> ""
+                },
+              ),
+            ]),
           ],
+        )
+      }),
+    ),
+    html.p(
+      [
+        attribute.class("loc flex"),
+        attribute.id(model.line_tag),
+        event.on_mouse_enter(UserEnteredDiscussionPreview),
+      ],
+      [
+        html.span([attribute.class("line-number code-extras")], [
+          html.text(model.line_number_text),
+        ]),
+        html.span(
+          [attribute.attribute("dangerous-unescaped-html", model.line_text)],
+          [],
         ),
-      ]),
-    ],
-  )
+        html.span([attribute.class("inline-comment")], [
+          html.div(
+            [
+              attribute.id("line-discussion-container"),
+              attribute.class("relative font-code"),
+            ],
+            [
+              html.style([], component_style),
+              inline_comment_preview_view(model),
+              discussion_overlay_view(model),
+            ],
+          ),
+        ]),
+      ],
+    ),
+  ])
 }
 
 fn inline_comment_preview_view(model: Model) {
-  dict.get(model.notes, model.line_id)
-  |> result.try(list.first)
-  |> result.map(fn(note) {
-    html.span(
-      [
-        attribute.class("select-none italic comment font-code fade-in"),
-        attribute.class("comment-preview"),
-        attribute.id("discussion-entry"),
-        attribute.attribute("tabindex", "0"),
-        event.on_click(UserEnteredDiscussionPreview),
-        attribute.style([
-          #("animation-delay", int.to_string(model.line_number * 4) <> "ms"),
-        ]),
-      ],
-      [
-        html.text(case string.length(note.message) > 40 {
-          True -> note.message |> string.slice(0, length: 37) <> "..."
-          False -> note.message |> string.slice(0, length: 40)
-        }),
-      ],
+  let note_result =
+    dict.get(model.notes, model.line_id)
+    |> result.try(
+      list.find(_, fn(note) { note.significance != computed_note.Informational }),
     )
-  })
-  |> result.unwrap(
-    html.span(
-      [
-        attribute.class("select-none italic comment"),
-        attribute.class("new-thread-preview"),
-        attribute.id("discussion-entry"),
-        attribute.attribute("tabindex", "0"),
-        event.on_click(UserEnteredDiscussionPreview),
-      ],
-      [html.text("Start new thread")],
-    ),
-  )
+
+  case note_result {
+    Ok(note) ->
+      html.span(
+        [
+          attribute.class("select-none italic comment font-code fade-in"),
+          attribute.class("comment-preview"),
+          attribute.id("discussion-entry"),
+          attribute.attribute("tabindex", "0"),
+          event.on_click(UserEnteredDiscussionPreview),
+          attribute.style([
+            #("animation-delay", int.to_string(model.line_number * 4) <> "ms"),
+          ]),
+        ],
+        [
+          html.text(case string.length(note.message) > 40 {
+            True -> note.message |> string.slice(0, length: 37) <> "..."
+            False -> note.message |> string.slice(0, length: 40)
+          }),
+        ],
+      )
+
+    Error(Nil) ->
+      html.span(
+        [
+          attribute.class("select-none italic comment"),
+          attribute.class("new-thread-preview"),
+          attribute.id("discussion-entry"),
+          attribute.attribute("tabindex", "0"),
+          event.on_click(UserEnteredDiscussionPreview),
+        ],
+        [html.text("Start new thread")],
+      )
+  }
 }
 
 fn discussion_overlay_view(model: Model) {
@@ -795,6 +850,7 @@ fn classify_message(message, is_thread_open is_thread_open) {
         "? " <> rest -> #(note.Question, rest)
         "! " <> rest -> #(note.FindingLead, rest)
         "@dev " <> rest -> #(note.DevelperQuestion, rest)
+        "info " <> rest -> #(note.Informational, rest)
         _ -> #(note.Comment, message)
       }
     // Users can only resolve actionalble threads in an open thread
@@ -805,6 +861,8 @@ fn classify_message(message, is_thread_open is_thread_open) {
         ": " <> rest -> #(note.Answer, rest)
         ". " <> rest -> #(note.FindingRejection, rest)
         "!! " <> rest -> #(note.FindingConfirmation, rest)
+        "incorrect " <> rest -> #(note.InformationalRejection, rest)
+        "correct " <> rest -> #(note.InformationalConfirmation, rest)
         _ -> #(note.Comment, message)
       }
   }
