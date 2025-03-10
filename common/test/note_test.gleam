@@ -24,7 +24,7 @@ pub fn encode_notes_round_trip_test() {
         message: "hello",
         expanded_message: option.None,
         time: note.example_note().time,
-        edited: False,
+        deleted: False,
       ),
     ]),
     #("L1", [
@@ -36,7 +36,7 @@ pub fn encode_notes_round_trip_test() {
         message: "world",
         expanded_message: option.None,
         time: note.example_note().time,
-        edited: False,
+        deleted: False,
       ),
       note.Note(
         note_id: "L3",
@@ -46,7 +46,7 @@ pub fn encode_notes_round_trip_test() {
         message: "hello2",
         expanded_message: option.None,
         time: note.example_note().time,
-        edited: False,
+        deleted: False,
       ),
     ]),
     #("L3", [
@@ -58,7 +58,7 @@ pub fn encode_notes_round_trip_test() {
         message: "world2",
         expanded_message: option.None,
         time: note.example_note().time,
-        edited: False,
+        deleted: False,
       ),
     ]),
   ]

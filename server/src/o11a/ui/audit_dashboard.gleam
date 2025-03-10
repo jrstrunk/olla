@@ -144,7 +144,7 @@ pub fn find_open_notes(in discussion: discussion.Discussion, for page_path) {
       let closing_note =
         list.find(thread_notes, fn(thread_note) {
           case { thread_note }.significance {
-            note.ToDoDone -> True
+            note.ToDoCompletion -> True
             _ -> False
           }
         })

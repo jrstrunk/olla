@@ -2,13 +2,14 @@ import gleam/dict
 import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/json
-import gleam/list
-import gleam/option.{type Option, None, Some}
+import gleam/option.{type Option}
 import gleam/result
 import gleam/string
 import tempo
 import tempo/datetime
 
+/// Represents the way data is stored in the database and how clients should
+/// send data to the server.
 pub type Note {
   Note(
     note_id: String,
@@ -18,12 +19,9 @@ pub type Note {
     message: String,
     expanded_message: Option(String),
     time: tempo.DateTime,
-    edited: Bool,
+    deleted: Bool,
   )
 }
-
-pub type NoteId =
-  #(Int, Int)
 
 pub type NoteCollection =
   dict.Dict(String, List(Note))
@@ -33,12 +31,14 @@ pub type NoteSignificance {
   Question
   Answer
   ToDo
-  ToDoDone
+  ToDoCompletion
   FindingLead
   FindingConfirmation
   FindingRejection
   DevelperQuestion
   Informational
+  InformationalRejection
+  InformationalConfirmation
 }
 
 pub fn note_significance_to_int(note_significance) {
@@ -47,65 +47,14 @@ pub fn note_significance_to_int(note_significance) {
     Question -> 2
     Answer -> 3
     ToDo -> 4
-    ToDoDone -> 5
+    ToDoCompletion -> 5
     FindingLead -> 6
     FindingConfirmation -> 7
     FindingRejection -> 8
     DevelperQuestion -> 9
     Informational -> 10
-  }
-}
-
-pub fn significance_to_string(note_significance, thread_notes: List(Note)) {
-  case note_significance {
-    Comment -> None
-    Question ->
-      case
-        list.find(thread_notes, fn(thread_note) {
-          thread_note.significance == Answer
-        })
-      {
-        Ok(..) -> Some("Answered")
-        Error(Nil) -> Some("Unanswered")
-      }
-    DevelperQuestion ->
-      case
-        list.find(thread_notes, fn(thread_note) {
-          thread_note.significance == Answer
-        })
-      {
-        Ok(..) -> Some("Answered")
-        Error(Nil) -> Some("Dev Question")
-      }
-    Answer -> Some("Answer")
-    ToDo ->
-      case
-        list.find(thread_notes, fn(thread_note) {
-          thread_note.significance == ToDoDone
-        })
-      {
-        Ok(..) -> Some("Completed")
-        Error(Nil) -> Some("ToDo")
-      }
-    ToDoDone -> Some("Completion")
-    FindingLead ->
-      case
-        list.find_map(thread_notes, fn(thread_note) {
-          case thread_note.significance {
-            FindingRejection -> Ok(FindingRejection)
-            FindingConfirmation -> Ok(FindingConfirmation)
-            _ -> Error(Nil)
-          }
-        })
-      {
-        Ok(FindingRejection) -> Some("Rejected")
-        Ok(FindingConfirmation) -> Some("Confirmed")
-        Ok(..) -> Some("Unconfirmed")
-        Error(Nil) -> Some("Unconfirmed")
-      }
-    FindingConfirmation -> Some("Confirmation")
-    FindingRejection -> Some("Rejection")
-    Informational -> Some("Informational")
+    InformationalRejection -> 11
+    InformationalConfirmation -> 12
   }
 }
 
@@ -115,28 +64,15 @@ pub fn note_significance_from_int(note_significance) {
     2 -> Question
     3 -> Answer
     4 -> ToDo
-    5 -> ToDoDone
+    5 -> ToDoCompletion
     6 -> FindingLead
     7 -> FindingConfirmation
     8 -> FindingRejection
     9 -> DevelperQuestion
     10 -> Informational
+    11 -> InformationalRejection
+    12 -> InformationalConfirmation
     _ -> panic as "Invalid note significance found"
-  }
-}
-
-pub fn is_significance_threadable(note_significance) {
-  case note_significance {
-    Comment -> False
-    Question -> True
-    Answer -> False
-    ToDo -> True
-    ToDoDone -> False
-    FindingLead -> True
-    FindingConfirmation -> False
-    FindingRejection -> False
-    DevelperQuestion -> True
-    Informational -> True
   }
 }
 
@@ -168,7 +104,7 @@ pub type NoteVote {
 /// stored here instead of in the notes data so it can easily and quickly be
 /// updated.
 pub type NoteVoteCollection =
-  dict.Dict(NoteId, List(NoteVote))
+  dict.Dict(String, List(NoteVote))
 
 pub fn encode_structured_notes(note: #(String, List(Note))) {
   json.object([
@@ -196,29 +132,26 @@ fn structured_note_decoder() {
 
 pub fn encode_note(note: Note) {
   json.object([
-    #("note_id", json.string(note.note_id)),
-    #("parent_id", json.string(note.parent_id)),
-    #("significance", json.int(note.significance |> note_significance_to_int)),
-    #("user_name", json.string(note.user_name)),
-    #("message", json.string(note.message)),
-    #("expanded_message", json.nullable(note.expanded_message, json.string)),
-    #("time", json.int(note.time |> datetime.to_unix_milli)),
-    #("edited", json.bool(note.edited)),
+    #("n", json.string(note.note_id)),
+    #("p", json.string(note.parent_id)),
+    #("s", json.int(note.significance |> note_significance_to_int)),
+    #("u", json.string(note.user_name)),
+    #("m", json.string(note.message)),
+    #("x", json.nullable(note.expanded_message, json.string)),
+    #("t", json.int(note.time |> datetime.to_unix_milli)),
+    #("d", json.bool(note.deleted)),
   ])
 }
 
 pub fn note_decoder() {
-  use note_id <- decode.field("note_id", decode.string)
-  use parent_id <- decode.field("parent_id", decode.string)
-  use significance <- decode.field("significance", decode.int)
-  use user_name <- decode.field("user_name", decode.string)
-  use message <- decode.field("message", decode.string)
-  use expanded_message <- decode.field(
-    "expanded_message",
-    decode.optional(decode.string),
-  )
-  use time <- decode.field("time", decode.int)
-  use edited <- decode.field("edited", decode.bool)
+  use note_id <- decode.field("n", decode.string)
+  use parent_id <- decode.field("p", decode.string)
+  use significance <- decode.field("s", decode.int)
+  use user_name <- decode.field("u", decode.string)
+  use message <- decode.field("m", decode.string)
+  use expanded_message <- decode.field("x", decode.optional(decode.string))
+  use time <- decode.field("t", decode.int)
+  use deleted <- decode.field("d", decode.bool)
 
   Note(
     note_id:,
@@ -228,21 +161,21 @@ pub fn note_decoder() {
     message:,
     expanded_message:,
     time: datetime.from_unix_milli(time),
-    edited:,
+    deleted:,
   )
   |> decode.success
 }
 
 pub fn example_note() {
   Note(
-    note_id: "1-10000",
+    note_id: "user02110000",
     parent_id: "Example",
     significance: Comment,
     user_name: "system",
     message: "Wow bro great finding that is really cool",
     expanded_message: option.None,
     time: datetime.literal("2021-01-01T00:00:00Z"),
-    edited: False,
+    deleted: False,
   )
 }
 
@@ -257,7 +190,7 @@ pub fn example_note_thread() {
         message: "world",
         expanded_message: option.None,
         time: example_note().time,
-        edited: False,
+        deleted: False,
       ),
       Note(
         note_id: "L3",
@@ -267,7 +200,7 @@ pub fn example_note_thread() {
         message: "hello2",
         expanded_message: option.None,
         time: example_note().time,
-        edited: False,
+        deleted: False,
       ),
     ]),
     #("L50", [
@@ -279,7 +212,7 @@ pub fn example_note_thread() {
         message: "hello",
         expanded_message: option.None,
         time: example_note().time,
-        edited: False,
+        deleted: False,
       ),
     ]),
     #("L3", [
@@ -291,7 +224,7 @@ pub fn example_note_thread() {
         message: "world2",
         expanded_message: option.None,
         time: example_note().time,
-        edited: False,
+        deleted: False,
       ),
     ]),
   ]

@@ -19,6 +19,7 @@ import lustre/element/html
 import lustre/event
 import lustre/server_component
 import o11a/components
+import o11a/computed_note
 import o11a/config
 import o11a/events
 import o11a/note
@@ -157,7 +158,7 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
       attribute.attribute(
         "line-discussion",
         discussion.get_structured_notes(model.discussion, line_id)
-          |> list.map(note.encode_structured_notes)
+          |> list.map(computed_note.encode_structured_notes)
           |> json.preprocessed_array
           |> json.to_string,
       ),

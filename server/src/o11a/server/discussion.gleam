@@ -4,6 +4,7 @@ import gleam/list
 import gleam/result
 import lib/concurrent_dict
 import lib/persistent_concurrent_duplicate_dict as pcd_dict
+import o11a/computed_note
 import o11a/config
 import o11a/note
 import tempo/datetime
@@ -70,7 +71,7 @@ pub fn note_persist_decoder() {
     message:,
     expanded_message:,
     time: datetime.from_unix_milli(time),
-    edited: False,
+    deleted: False,
   )
   |> decode.success
 }
@@ -116,26 +117,34 @@ pub fn subscribe_to_note_updates(discussion: Discussion, effect: fn() -> Nil) {
 pub fn get_structured_notes(
   discussion: Discussion,
   starting_from parent_id: String,
-) -> List(#(String, List(note.Note))) {
+) -> List(#(String, List(computed_note.ComputedNote))) {
   let notes =
     pcd_dict.get(discussion.notes, parent_id)
     |> list.sort(fn(a, b) { datetime.compare(b.time, a.time) })
 
-  case notes {
+  let computed_notes =
+    list.map(notes, fn(note) {
+      computed_note.from_note(
+        note,
+        pcd_dict.get(discussion.notes, note.note_id),
+      )
+    })
+
+  case computed_notes {
     [] -> []
     _ ->
-      list.map(notes, fn(note) {
-        get_structured_notes(discussion, note.note_id)
+      list.map(computed_notes, fn(computed_note) {
+        get_structured_notes(discussion, computed_note.note_id)
       })
       |> list.flatten
-      |> list.append([#(parent_id, notes)])
+      |> list.append([#(parent_id, computed_notes)])
   }
 }
 
-pub fn get_skeleton(discussion: Discussion, for for) {
-  concurrent_dict.get(discussion.skeletons, for)
+pub fn get_skeleton(discussion: Discussion, for view) {
+  concurrent_dict.get(discussion.skeletons, view)
 }
 
-pub fn set_skeleton(discussion: Discussion, for for, skeleton skeleton) {
-  concurrent_dict.insert(discussion.skeletons, for, skeleton)
+pub fn set_skeleton(discussion: Discussion, for view, skeleton skeleton) {
+  concurrent_dict.insert(discussion.skeletons, view, skeleton)
 }

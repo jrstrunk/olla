@@ -19,6 +19,7 @@ import lustre/element
 import lustre/element/html
 import lustre/event
 import o11a/components
+import o11a/computed_note
 import o11a/events
 import o11a/note
 import tempo/datetime
@@ -43,7 +44,7 @@ pub fn component() {
     view,
     dict.from_list([
       #("line-discussion", fn(dy) {
-        case note.decode_structured_notes(dy) {
+        case computed_note.decode_structured_notes(dy) {
           Ok(notes) -> Ok(ServerUpdatedNotes(notes))
           Error(..) ->
             Error([
@@ -90,7 +91,7 @@ fn init(_) -> #(Model, effect.Effect(Msg)) {
       line_tag: "",
       line_number_text: "",
       notes: dict.new(),
-      keep_notes_open: False,
+      info_notes: dict.new(),
       current_note_draft: "",
       line_id: "",
       current_thread_id: "",
@@ -112,11 +113,11 @@ pub type Model {
     line_text: String,
     line_tag: String,
     line_number_text: String,
-    keep_notes_open: Bool,
-    notes: dict.Dict(String, List(note.Note)),
+    notes: dict.Dict(String, List(computed_note.ComputedNote)),
+    info_notes: dict.Dict(String, List(computed_note.ComputedNote)),
     current_note_draft: String,
     current_thread_id: String,
-    current_thread_notes: List(note.Note),
+    current_thread_notes: List(computed_note.ComputedNote),
     active_thread: Option(ActiveThread),
     show_expanded_message_box: Bool,
     current_expanded_message_draft: Option(String),
@@ -127,7 +128,7 @@ pub type Model {
 pub type ActiveThread {
   ActiveThread(
     current_thread_id: String,
-    parent_note: note.Note,
+    parent_note: computed_note.ComputedNote,
     prior_thread_id: String,
     prior_thread: Option(ActiveThread),
   )
@@ -137,16 +138,17 @@ pub type Msg {
   ServerSetLineId(String)
   ServerSetLineNumber(Int)
   ServerSetLineText(String)
-  ServerUpdatedNotes(List(#(String, List(note.Note))))
+  ServerUpdatedNotes(List(#(String, List(computed_note.ComputedNote))))
   UserWroteNote(String)
   UserSubmittedNote
-  UserSwitchedToThread(new_thread_id: String, parent_note: note.Note)
+  UserSwitchedToThread(
+    new_thread_id: String,
+    parent_note: computed_note.ComputedNote,
+  )
   UserClosedThread
   UserToggledExpandedMessageBox(Bool)
   UserWroteExpandedMessage(String)
   UserToggledExpandedMessage(for_note_id: String)
-  UserToggledKeepNotesOpen
-  UserToggledCloseNotes
   UserEnteredDiscussionPreview
   UserFocusedInput
   UserFocusedExpandedInput
@@ -200,17 +202,30 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         #(model, effect.none())
       })
 
-      let now = instant.now() |> instant.as_utc_datetime
+      let now = instant.now()
+      let now_dt = now |> instant.as_utc_datetime
 
-      // Microseconds aren't available in the browser so just get milli :(
       let note_id =
-        model.user_name <> now |> datetime.to_unix_milli |> int.to_string
+        model.user_name
+        <> now
+        |> instant.to_unique_int
+        |> int.to_string
+        <> now_dt
+        |> datetime.to_unix_milli
+        |> int.to_string
 
       let #(significance, message) =
         classify_message(
           model.current_note_draft,
           is_thread_open: option.is_some(model.active_thread),
         )
+
+      let expanded_message = case
+        model.current_expanded_message_draft |> option.map(string.trim)
+      {
+        Some("") -> None
+        msg -> msg
+      }
 
       let note =
         note.Note(
@@ -219,9 +234,9 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
           significance:,
           user_name: "user" <> int.random(100) |> int.to_string,
           message:,
-          expanded_message: model.current_expanded_message_draft,
-          time: now,
-          edited: False,
+          expanded_message:,
+          time: now_dt,
+          deleted: False,
         )
 
       #(
@@ -295,16 +310,6 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
           effect.none(),
         )
       }
-    // Currently these do not do anything, but they could be used to
-    // implement better note viewing
-    UserToggledKeepNotesOpen -> #(
-      Model(..model, keep_notes_open: True),
-      effect.none(),
-    )
-    UserToggledCloseNotes -> #(
-      Model(..model, keep_notes_open: False),
-      effect.none(),
-    )
     UserEnteredDiscussionPreview -> #(
       model,
       event.emit(
@@ -371,7 +376,7 @@ const component_style = "
   display: inline-block;
 }
 
-/* Delay the overlay transitions by 1ms to they are done last, and any 
+/* Delay the overlay transitions by 1ms so they are done last, and any 
   actions on them can be done first (like focusing the input) */
 
 .new-thread-preview {
@@ -587,7 +592,6 @@ fn discussion_overlay_view(model: Model) {
       attribute.class(
         "absolute z-[3] w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] bottom-[1.4rem]",
       ),
-      event.on_click(UserToggledKeepNotesOpen),
     ],
     [
       html.div([attribute.class("overlay p-[.5rem]")], [
@@ -667,7 +671,7 @@ fn comments_view(model: Model) {
       html.div([attribute.class("flex justify-between mb-[.2rem]")], [
         html.div([attribute.class("flex gap-[.5rem] items-start")], [
           html.p([], [html.text(note.user_name)]),
-          significance_badge_view(model, note),
+          significance_badge_view(note.significance),
         ]),
         html.div([attribute.class("flex gap-[.5rem]")], [
           case note.expanded_message {
@@ -682,7 +686,7 @@ fn comments_view(model: Model) {
               )
             None -> element.fragment([])
           },
-          case note.is_significance_threadable(note.significance) {
+          case computed_note.is_significance_threadable(note.significance) {
             True ->
               html.button(
                 [
@@ -712,16 +716,11 @@ fn comments_view(model: Model) {
   })
 }
 
-fn significance_badge_view(model: Model, note: note.Note) {
+fn significance_badge_view(sig: computed_note.ComputedNoteSignificance) {
   let badge_style =
     "input-border rounded-md text-[0.65rem] pb-[0.15rem] pt-1 px-[0.5rem]"
 
-  case
-    note.significance_to_string(
-      note.significance,
-      dict.get(model.notes, note.note_id) |> result.unwrap([]),
-    )
-  {
+  case computed_note.significance_to_string(sig) {
     Some(significance) ->
       html.span([attribute.class(badge_style)], [html.text(significance)])
     None -> element.fragment([])
@@ -801,8 +800,8 @@ fn classify_message(message, is_thread_open is_thread_open) {
     // Users can only resolve actionalble threads in an open thread
     True ->
       case message {
-        "done " <> rest -> #(note.ToDoDone, rest)
-        "done" -> #(note.ToDoDone, "done")
+        "done " <> rest -> #(note.ToDoCompletion, rest)
+        "done" -> #(note.ToDoCompletion, "done")
         ": " <> rest -> #(note.Answer, rest)
         ". " <> rest -> #(note.FindingRejection, rest)
         "!! " <> rest -> #(note.FindingConfirmation, rest)
