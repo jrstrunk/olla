@@ -1,19 +1,15 @@
+import gleam/int
 import gleam/list
 import lamb
-import tempo
-import tempo/duration
+import tempo/instant
 
 pub type ConcurrentDict(key, val) =
   lamb.Table(key, val)
 
 pub fn new() {
-  // Wait to make sure there is not a naming collision between tables. This
-  // could be done better by getting the unqiue value from tempo.instant
-  tempo.sleep(duration.milliseconds(1))
-
   let assert Ok(table) =
     lamb.create(
-      tempo.format_utc(tempo.ISO8601Micro),
+      "cd" <> instant.now() |> instant.to_unique_int |> int.to_string,
       lamb.Public,
       lamb.Set,
       True,
