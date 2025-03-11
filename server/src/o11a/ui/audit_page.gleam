@@ -139,70 +139,77 @@ fn loc_view(model: Model, line_text, line_number) {
     })
     |> list.reverse
 
-  html.div([attribute.class("line-container")], [
-    element.fragment(
-      list.index_map(info_notes, fn(note, index) {
-        html.p([attribute.class("loc flex"), attribute.id(note.note_id)], [
-          html.span(
-            [attribute.class("line-number code-extras relative italic")],
-            [
-              html.text(line_number_text),
-              html.span(
-                [
-                  attribute.class(
-                    "absolute code-extras pl-[.1rem] pt-[.15rem] text-[.9rem]",
-                  ),
-                ],
-                [html.text(enumerate.translate_number_to_letter(index + 1))],
+  html.div(
+    [
+      attribute.id(line_tag),
+      attribute.class("line-container"),
+      attribute.data("line-number", line_number_text),
+    ],
+    [
+      element.fragment(
+        list.index_map(info_notes, fn(note, index) {
+          html.p([attribute.class("loc flex"), attribute.id(note.note_id)], [
+            html.span(
+              [attribute.class("line-number code-extras relative italic")],
+              [
+                html.text(line_number_text),
+                html.span(
+                  [
+                    attribute.class(
+                      "absolute code-extras pl-[.1rem] pt-[.15rem] text-[.9rem]",
+                    ),
+                  ],
+                  [html.text(enumerate.translate_number_to_letter(index + 1))],
+                ),
+              ],
+            ),
+            html.span([attribute.class("comment italic")], [
+              html.text(
+                enumerate.get_leading_spaces(line_text)
+                <> note.message
+                <> case note.expanded_message {
+                  Some(..) -> "*"
+                  None -> ""
+                },
               ),
-            ],
-          ),
-          html.span([attribute.class("comment italic")], [
-            html.text(
-              enumerate.get_leading_spaces(line_text)
-              <> note.message
-              <> case note.expanded_message {
-                Some(..) -> "*"
-                None -> ""
-              },
-            ),
-          ]),
-        ])
-      }),
-    ),
-    html.p([attribute.class("loc flex"), attribute.id(line_tag)], [
-      html.span([attribute.class("line-number code-extras")], [
-        html.text(line_number_text),
-      ]),
-      html.span(
-        [attribute.attribute("dangerous-unescaped-html", line_text)],
-        [],
+            ]),
+          ])
+        }),
       ),
-      html.span([attribute.class("inline-comment relative font-code")], [
-        inline_comment_preview_view(parent_notes),
-        element.element(
-          components.line_discussion,
-          [
-            attribute.class(
-              "absolute z-[3] w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] bottom-[1.4rem]",
-            ),
-            attribute.attribute("line-number", line_number_text),
-            attribute.attribute("line-id", line_id),
-            attribute.attribute(
-              "line-discussion",
-              notes
-                |> list.map(computed_note.encode_structured_notes)
-                |> json.preprocessed_array
-                |> json.to_string,
-            ),
-            on_user_submitted_line_note(UserSubmittedNote),
-            server_component.include(["detail"]),
-          ],
+      html.p([attribute.class("loc flex")], [
+        html.span([attribute.class("line-number code-extras")], [
+          html.text(line_number_text),
+        ]),
+        html.span(
+          [attribute.attribute("dangerous-unescaped-html", line_text)],
           [],
         ),
+        html.span([attribute.class("inline-comment relative font-code")], [
+          inline_comment_preview_view(parent_notes),
+          element.element(
+            components.line_discussion,
+            [
+              attribute.class(
+                "absolute z-[3] w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] bottom-[1.4rem]",
+              ),
+              attribute.attribute("line-number", line_number_text),
+              attribute.attribute("line-id", line_id),
+              attribute.attribute(
+                "line-discussion",
+                notes
+                  |> list.map(computed_note.encode_structured_notes)
+                  |> json.preprocessed_array
+                  |> json.to_string,
+              ),
+              on_user_submitted_line_note(UserSubmittedNote),
+              server_component.include(["detail"]),
+            ],
+            [],
+          ),
+        ]),
       ]),
-    ]),
-  ])
+    ],
+  )
 }
 
 fn inline_comment_preview_view(parent_notes: List(computed_note.ComputedNote)) {

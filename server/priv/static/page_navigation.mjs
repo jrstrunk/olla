@@ -20,16 +20,33 @@ window.addEventListener("keydown", (event) => {
   }
 });
 
-window.addEventListener("user-clicked-discussion-preview", (event) => {
-  console.log("Clicked discussion preview", event.detail);
-  current_selected_line_number = event.detail.line_number;
-  discussion_lane = event.detail.discussion_lane;
+let user_trigger_loc_event = "user-triggered-discussion-preview-select";
+
+window.addEventListener(user_trigger_loc_event, (e) => {
+  console.log("Triggered discussion preview select", e.detail.line_number);
+  current_selected_line_number = e.detail.line_number;
+});
+
+document.addEventListener("DOMContentLoaded", function () {
+  // Wait for the server component to render first. When an event is added to
+  // the lustre runtime then we can listen for that instead of setting a time out
+  setTimeout(() => {
+    document
+      .querySelector("#audit-page")
+      .shadowRoot.querySelectorAll(".line-container")
+      .forEach((element) => {
+        element.addEventListener("mouseenter", (e) => {
+          const event = new CustomEvent(user_trigger_loc_event, {
+            detail: { line_number: parseInt(e.target.dataset.lineNumber) },
+          });
+          window.dispatchEvent(event);
+        });
+      });
+  }, 1000);
 });
 
 window.addEventListener("user-focused-input", (event) => {
   is_user_typing = true;
-  current_selected_line_number = event.detail.line_number;
-  discussion_lane = event.detail.discussion_lane;
 });
 
 window.addEventListener("user-unfocused-input", (event) => {
