@@ -2,6 +2,7 @@ import gleam/dynamic/decode
 import gleam/function
 import gleam/list
 import gleam/result
+import gleam/string
 import lib/concurrent_dict
 import lib/persistent_concurrent_duplicate_dict as pcd_dict
 import o11a/computed_note
@@ -133,7 +134,9 @@ pub fn get_structured_notes(
         pcd_dict.get(discussion.notes, note.note_id),
       )
     })
-    |> list.filter(fn(computed_note) { computed_note.note_id != "edit" })
+    |> list.filter(fn(computed_note) {
+      computed_note.note_id |> string.slice(0, 4) != "edit"
+    })
 
   case computed_notes {
     [] -> []

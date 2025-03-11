@@ -197,18 +197,18 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       let now = instant.now()
       let now_dt = now |> instant.as_utc_datetime
 
+      let note_id =
+        model.user_name
+        <> now
+        |> instant.to_unique_int
+        |> int.to_string
+        <> now_dt
+        |> datetime.to_unix_milli
+        |> int.to_string
+
       let #(note_id, parent_id) = case model.editing_note {
-        Some(note) -> #("edit", note.note_id)
-        None -> #(
-          model.user_name
-            <> now
-          |> instant.to_unique_int
-          |> int.to_string
-            <> now_dt
-          |> datetime.to_unix_milli
-          |> int.to_string,
-          model.current_thread_id,
-        )
+        Some(note) -> #("edit" <> note_id, note.note_id)
+        None -> #(note_id, model.current_thread_id)
       }
 
       let #(significance, message) =
