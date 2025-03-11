@@ -58,6 +58,7 @@ pub fn init(init_model: Model) -> #(Model, effect.Effect(Msg)) {
 pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
     UserSubmittedNote(note) -> {
+      echo note
       let assert Ok(Nil) = discussion.add_note(model.discussion, note)
       #(model, effect.none())
     }

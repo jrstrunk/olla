@@ -91,6 +91,7 @@ fn init(_) -> #(Model, effect.Effect(Msg)) {
       show_expanded_message_box: False,
       current_expanded_message_draft: None,
       expanded_messages: set.new(),
+      editing_note: None,
     ),
     effect.none(),
   )
@@ -111,6 +112,7 @@ pub type Model {
     show_expanded_message_box: Bool,
     current_expanded_message_draft: Option(String),
     expanded_messages: set.Set(String),
+    editing_note: Option(computed_note.ComputedNote),
   )
 }
 
@@ -142,6 +144,8 @@ pub type Msg {
   UserFocusedExpandedInput
   UserUnfocusedInput
   UserMaximizeThread
+  UserEditedNote(computed_note.ComputedNote)
+  UserCancelledEdit
 }
 
 fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
@@ -193,14 +197,19 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       let now = instant.now()
       let now_dt = now |> instant.as_utc_datetime
 
-      let note_id =
-        model.user_name
-        <> now
-        |> instant.to_unique_int
-        |> int.to_string
-        <> now_dt
-        |> datetime.to_unix_milli
-        |> int.to_string
+      let #(note_id, parent_id) = case model.editing_note {
+        Some(note) -> #("edit", note.note_id)
+        None -> #(
+          model.user_name
+            <> now
+          |> instant.to_unique_int
+          |> int.to_string
+            <> now_dt
+          |> datetime.to_unix_milli
+          |> int.to_string,
+          model.current_thread_id,
+        )
+      }
 
       let #(significance, message) =
         classify_message(
@@ -218,7 +227,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       let note =
         note.Note(
           note_id:,
-          parent_id: model.current_thread_id,
+          parent_id:,
           significance:,
           user_name: "user" <> int.random(100) |> int.to_string,
           message:,
@@ -227,12 +236,16 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
           deleted: False,
         )
 
+      echo "Submitting note"
+      echo note
+
       #(
         Model(
           ..model,
           current_note_draft: "",
           current_expanded_message_draft: None,
           show_expanded_message_box: False,
+          editing_note: None,
         ),
         event.emit(events.user_submitted_note, note.encode_note(note)),
       )
@@ -355,6 +368,25 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
           #("discussion_lane", json.int(1)),
         ]),
       ),
+    )
+    UserEditedNote(note) -> #(
+      Model(
+        ..model,
+        current_note_draft: get_message_classification_prefix(note.significance)
+          <> note.message,
+        current_expanded_message_draft: note.expanded_message,
+        editing_note: Some(note),
+      ),
+      effect.none(),
+    )
+    UserCancelledEdit -> #(
+      Model(
+        ..model,
+        current_note_draft: "",
+        current_expanded_message_draft: None,
+        editing_note: None,
+      ),
+      effect.none(),
     )
   }
 }
@@ -503,6 +535,14 @@ fn comments_view(model: Model) {
           significance_badge_view(note.significance),
         ]),
         html.div([attribute.class("flex gap-[.5rem]")], [
+          html.button(
+            [
+              attribute.id("edit-message-button"),
+              attribute.class("icon-button p-[.3rem]"),
+              event.on_click(UserEditedNote(note)),
+            ],
+            [lucide.pencil([])],
+          ),
           case note.expanded_message {
             Some(_) ->
               html.button(
@@ -568,6 +608,18 @@ fn new_message_input_view(model: Model) {
       ],
       [lucide.pencil_ruler([])],
     ),
+    case model.editing_note {
+      Some(..) ->
+        html.button(
+          [
+            attribute.id("cancel-message-edit-button"),
+            attribute.class("icon-button p-[.3rem]"),
+            event.on_click(UserCancelledEdit),
+          ],
+          [lucide.x([])],
+        )
+      None -> element.fragment([])
+    },
     html.input([
       attribute.id("new-comment-input"),
       attribute.class(
@@ -619,31 +671,51 @@ fn classify_message(message, is_thread_open is_thread_open) {
     // Users can only start actionalble threads in the main thread
     False ->
       case message {
-        "todo " <> rest -> #(note.ToDo, rest)
         "todo: " <> rest -> #(note.ToDo, rest)
-        "? " <> rest -> #(note.Question, rest)
-        "! " <> rest -> #(note.FindingLead, rest)
-        "@dev " <> rest -> #(note.DevelperQuestion, rest)
-        "@dev: " <> rest -> #(note.DevelperQuestion, rest)
-        "info " <> rest -> #(note.Informational, rest)
+        "q: " <> rest -> #(note.Question, rest)
+        "question: " <> rest -> #(note.Question, rest)
+        "finding: " <> rest -> #(note.FindingLead, rest)
+        "dev: " <> rest -> #(note.DevelperQuestion, rest)
         "info: " <> rest -> #(note.Informational, rest)
         _ -> #(note.Comment, message)
       }
     // Users can only resolve actionalble threads in an open thread
     True ->
       case message {
-        "done " <> rest -> #(note.ToDoCompletion, rest)
-        "done: " <> rest -> #(note.ToDoCompletion, rest)
-        "done:" -> #(note.ToDoCompletion, "done")
         "done" -> #(note.ToDoCompletion, "done")
-        ": " <> rest -> #(note.Answer, rest)
-        ". " <> rest -> #(note.FindingRejection, rest)
-        "!! " <> rest -> #(note.FindingConfirmation, rest)
-        "incorrect " <> rest -> #(note.InformationalRejection, rest)
+        "done: " <> rest -> #(note.ToDoCompletion, rest)
+        "a: " <> rest -> #(note.Answer, rest)
+        "answer: " <> rest -> #(note.Answer, rest)
+        "reject: " <> rest -> #(note.FindingRejection, rest)
+        "confirm: " <> rest -> #(note.FindingConfirmation, rest)
         "incorrect: " <> rest -> #(note.InformationalRejection, rest)
-        "correct " <> rest -> #(note.InformationalConfirmation, rest)
         "correct: " <> rest -> #(note.InformationalConfirmation, rest)
         _ -> #(note.Comment, message)
       }
+  }
+}
+
+fn get_message_classification_prefix(
+  significance: computed_note.ComputedNoteSignificance,
+) {
+  case significance {
+    computed_note.Answer -> "a: "
+    computed_note.AnsweredDeveloperQuestion -> "dev: "
+    computed_note.AnsweredQuestion -> "q: "
+    computed_note.Comment -> ""
+    computed_note.CompleteToDo -> "todo: "
+    computed_note.ConfirmedFinding -> "finding: "
+    computed_note.FindingConfirmation -> "confirm: "
+    computed_note.FindingRejection -> "reject: "
+    computed_note.IncompleteToDo -> "todo: "
+    computed_note.Informational -> "info: "
+    computed_note.InformationalConfirmation -> "correct: "
+    computed_note.InformationalRejection -> "incorrect: "
+    computed_note.RejectedFinding -> "finding: "
+    computed_note.RejectedInformational -> "info: "
+    computed_note.ToDoCompletion -> "done: "
+    computed_note.UnansweredDeveloperQuestion -> "dev: "
+    computed_note.UnansweredQuestion -> "q: "
+    computed_note.UnconfirmedFinding -> "finding: "
   }
 }

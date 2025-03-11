@@ -209,15 +209,21 @@ pub fn from_note(note: note.Note, thread_notes: List(note.Note)) {
 
   // Find the most recent edit of the note
   let edited_note =
-    list.find(thread_notes, fn(thread_note) {
-      thread_note.note_id == note.note_id
-    })
+    list.find(thread_notes, fn(thread_note) { thread_note.note_id == "edit" })
 
-  // Store whether or not the note was edited
-  let edited = result.is_ok(edited_note)
-
-  // Shadow the note with the most recent edit if any
-  let note = edited_note |> result.unwrap(note)
+  // Update the note with the most recent edited messages  if any
+  let #(note, edited) = case edited_note {
+    Ok(edit) -> #(
+      note.Note(
+        ..note,
+        message: edit.message,
+        expanded_message: edit.expanded_message,
+        significance: edit.significance,
+      ),
+      True,
+    )
+    Error(Nil) -> #(note, False)
+  }
 
   let significance = case note.significance {
     note.Comment -> Comment

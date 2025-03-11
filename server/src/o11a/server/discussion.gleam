@@ -133,6 +133,7 @@ pub fn get_structured_notes(
         pcd_dict.get(discussion.notes, note.note_id),
       )
     })
+    |> list.filter(fn(computed_note) { computed_note.note_id != "edit" })
 
   case computed_notes {
     [] -> []

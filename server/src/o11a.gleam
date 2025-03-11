@@ -50,7 +50,6 @@ pub fn main() {
       audit_metadata_gateway:,
     )
   <- result.map(gateway.start_gateway())
-
   let context =
     Context(
       dashboard_gateway:,
