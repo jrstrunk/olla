@@ -25,10 +25,9 @@ import o11a/events
 import o11a/note
 import o11a/server/discussion
 import simplifile
-import snag
 
 pub fn app() -> lustre.App(Model, Model, Msg) {
-  lustre.component(init, update, view(_, False), dict.new())
+  lustre.component(init, update, cached_view, dict.new())
 }
 
 pub type Msg {
@@ -65,57 +64,38 @@ pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   }
 }
 
-fn view(model: Model, is_skeleton is_skeleton) -> element.Element(Msg) {
+fn cached_view(model: Model) -> element.Element(Msg) {
+  let render = view(model)
+
+  // Update the skeleton so the initial render on the client's request is up to
+  // date with server state.
+  discussion.set_skeleton(
+    model.discussion,
+    for: get_skeleton_key(model.page_path),
+    skeleton: render |> element.to_string,
+  )
+
+  render
+}
+
+fn get_skeleton_key(for page_path) {
+  "adpg" <> page_path
+}
+
+pub fn get_skeleton(discussion, for page_path) {
+  discussion.get_skeleton(discussion, for: get_skeleton_key(page_path))
+  |> result.unwrap("")
+}
+
+fn view(model: Model) -> element.Element(Msg) {
   io.println("Rendering page " <> model.page_path)
 
   html.div([attribute.class("code-snippet")], [
     elementx.hide_skeleton(),
     ..list.index_map(model.preprocessed_source, fn(line, index) {
-      loc_view(model, line, index + 1, is_skeleton)
+      loc_view(model, line, index + 1)
     })
   ])
-}
-
-pub fn get_skeleton(for page_path) {
-  let skeleton_path = config.get_full_page_skeleton_path(for: page_path)
-
-  case simplifile.read(skeleton_path) {
-    Ok(skeleton) -> Ok(skeleton)
-
-    Error(simplifile.Enoent) -> {
-      // Generates a skeleton page for the given page path, and writes it to disk.
-      let skeleton: Result(String, snag.Snag) = {
-        use source <- result.try(
-          preprocess_source(for: page_path)
-          |> snag.map_error(simplifile.describe_error),
-        )
-
-        let skeleton =
-          Model(
-            page_path:,
-            preprocessed_source: source,
-            discussion: discussion.empty_discussion(page_path),
-          )
-          |> view(is_skeleton: True)
-          |> element.to_string
-
-        use Nil <- result.map(
-          simplifile.write(skeleton, to: skeleton_path)
-          |> snag.map_error(simplifile.describe_error),
-        )
-
-        skeleton
-      }
-
-      case skeleton {
-        Ok(skeleton) -> Ok(skeleton)
-
-        Error(msg) -> string.inspect(msg) |> snag.error
-      }
-    }
-
-    Error(msg) -> string.inspect(msg) |> snag.error
-  }
 }
 
 pub fn preprocess_source(for page_path) {
@@ -125,22 +105,10 @@ pub fn preprocess_source(for page_path) {
   |> result.map(list.map(_, style_code_tokens))
 }
 
-fn loc_view(model: Model, line_text, line_number, is_skeleton is_skeleton) {
+fn loc_view(model: Model, line_text, line_number) {
   let line_number_text = int.to_string(line_number)
   let line_tag = "L" <> line_number_text
   let line_id = model.page_path <> "#" <> line_tag
-
-  use <- given.that(is_skeleton, return: fn() {
-    html.p([attribute.class("loc"), attribute.id(line_tag)], [
-      html.span([attribute.class("line-number code-extras")], [
-        html.text(line_number_text),
-      ]),
-      html.span(
-        [attribute.attribute("dangerous-unescaped-html", line_text)],
-        [],
-      ),
-    ])
-  })
 
   use <- given.that(line_text == "", return: fn() {
     html.p([attribute.class("loc"), attribute.id(line_tag)], [

@@ -15,7 +15,7 @@ import o11a/server/discussion
 import o11a/ui/audit_dashboard as dashboard
 
 pub fn app() -> lustre.App(Model, Model, Msg) {
-  lustre.component(init, update, view, dict.new())
+  lustre.component(init, update, cached_view, dict.new())
 }
 
 pub type Msg {
@@ -41,6 +41,20 @@ pub fn update(model: Model, _msg: Msg) -> #(Model, effect.Effect(Msg)) {
   #(model, effect.none())
 }
 
+fn cached_view(model: Model) -> element.Element(Msg) {
+  let render = view(model)
+
+  // Update the skeleton so the initial render on the client's request is up to
+  // date with server state.
+  discussion.set_skeleton(
+    model.discussion,
+    for: get_skeleton_key(model.page_path),
+    skeleton: render |> element.to_string,
+  )
+
+  render
+}
+
 fn view(model: Model) -> element.Element(Msg) {
   let #(
     incomplete_todos,
@@ -49,35 +63,23 @@ fn view(model: Model) -> element.Element(Msg) {
     confirmed_findings,
   ) = dashboard.find_open_notes(model.discussion, for: Some(model.page_path))
 
-  let val =
-    html.div([], [
-      html.div([attribute.class("p-[.5rem]")], [
-        elementx.hide_skeleton(),
-        html.h2([attribute.class("mb-[.5rem]")], [html.text("incomplete todos")]),
-        notes_view(incomplete_todos),
-        html.h2([attribute.class("mb-[.5rem]")], [
-          html.text("unanswered questions"),
-        ]),
-        notes_view(unanswered_questions),
-        html.h2([attribute.class("mb-[.5rem]")], [
-          html.text("unconfirmed findings"),
-        ]),
-        notes_view(unconfirmed_findings),
-        html.h2([attribute.class("mb-[.5rem]")], [
-          html.text("confirmed findings"),
-        ]),
-        notes_view(confirmed_findings),
+  html.div([], [
+    html.div([attribute.class("p-[.5rem]")], [
+      elementx.hide_skeleton(),
+      html.h2([attribute.class("mb-[.5rem]")], [html.text("incomplete todos")]),
+      notes_view(incomplete_todos),
+      html.h2([attribute.class("mb-[.5rem]")], [
+        html.text("unanswered questions"),
       ]),
-    ])
-
-  // Update the skeleton so the initial render is up to date
-  discussion.set_skeleton(
-    model.discussion,
-    for: get_skeleton_key(model.page_path),
-    skeleton: val |> element.to_string,
-  )
-
-  val
+      notes_view(unanswered_questions),
+      html.h2([attribute.class("mb-[.5rem]")], [
+        html.text("unconfirmed findings"),
+      ]),
+      notes_view(unconfirmed_findings),
+      html.h2([attribute.class("mb-[.5rem]")], [html.text("confirmed findings")]),
+      notes_view(confirmed_findings),
+    ]),
+  ])
 }
 
 pub fn notes_view(notes) {
@@ -99,7 +101,7 @@ pub fn notes_view(notes) {
 }
 
 fn get_skeleton_key(for page_path) {
-  page_path <> "dsc"
+  "dsc" <> page_path
 }
 
 pub fn get_skeleton(discussion, for page_path) {

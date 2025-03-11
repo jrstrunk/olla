@@ -176,41 +176,28 @@ fn handle_wisp_request(req, context: Context) {
     [audit_name, ..] as file_path_segments -> {
       let file_path = list.fold(file_path_segments, "", filepath.join)
 
-      case audit_page.get_skeleton(for: file_path) {
-        Ok(skeleton) -> {
-          elementx.server_component_with_prerendered_skeleton(
-            filepath.join("component-page", file_path),
-            components.audit_page,
-            skeleton,
-          )
-          |> audit_tree.view(
-            Some(elementx.server_component_with_prerendered_skeleton(
-              filepath.join("component-page-dashboard", file_path),
-              components.audit_page,
-              page_dashboard.get_skeleton(
-                gateway.get_discussion(
-                  context.discussion_gateway,
-                  for: audit_name,
-                ),
-                for: file_path,
-              ),
-            )),
-            audit_name,
-            with: gateway.get_audit_metadata(
-              context.audit_metadata_gateway,
-              audit_name,
-            ),
-          )
-          |> as_document
-          |> element.to_document_string_builder
-          |> wisp.html_response(200)
-        }
-
-        Error(snag) ->
-          snag.pretty_print(snag)
-          |> string_tree.from_string
-          |> wisp.html_response(500)
-      }
+      elementx.server_component_with_prerendered_skeleton(
+        filepath.join("component-page", file_path),
+        components.audit_page,
+        gateway.get_discussion(context.discussion_gateway, for: audit_name)
+          |> audit_page.get_skeleton(for: file_path),
+      )
+      |> audit_tree.view(
+        Some(elementx.server_component_with_prerendered_skeleton(
+          filepath.join("component-page-dashboard", file_path),
+          components.audit_page,
+          gateway.get_discussion(context.discussion_gateway, for: audit_name)
+            |> page_dashboard.get_skeleton(for: file_path),
+        )),
+        audit_name,
+        with: gateway.get_audit_metadata(
+          context.audit_metadata_gateway,
+          audit_name,
+        ),
+      )
+      |> as_document
+      |> element.to_document_string_builder
+      |> wisp.html_response(200)
     }
   }
 }
