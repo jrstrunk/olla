@@ -114,6 +114,10 @@ pub fn subscribe_to_note_updates(discussion: Discussion, effect: fn() -> Nil) {
   pcd_dict.subscribe(discussion.notes, effect)
 }
 
+pub fn get_notes(discussion: Discussion, only_for parent_id: String) {
+  pcd_dict.get(discussion.notes, parent_id)
+}
+
 pub fn get_structured_notes(
   discussion: Discussion,
   starting_from parent_id: String,

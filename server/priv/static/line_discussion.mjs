@@ -1175,29 +1175,6 @@ function float_to_string(float4) {
     }
   }
 }
-function string_length(string5) {
-  if (string5 === "") {
-    return 0;
-  }
-  const iterator = graphemes_iterator(string5);
-  if (iterator) {
-    let i = 0;
-    for (const _ of iterator) {
-      i++;
-    }
-    return i;
-  } else {
-    return string5.match(/./gsu).length;
-  }
-}
-function graphemes(string5) {
-  const iterator = graphemes_iterator(string5);
-  if (iterator) {
-    return List.fromArray(Array.from(iterator).map((item) => item.segment));
-  } else {
-    return List.fromArray(string5.match(/./gsu));
-  }
-}
 var segmenter = void 0;
 function graphemes_iterator(string5) {
   if (globalThis.Intl && Intl.Segmenter) {
@@ -1219,44 +1196,12 @@ function pop_grapheme(string5) {
     return new Error(Nil);
   }
 }
-function join(xs, separator) {
-  const iterator = xs[Symbol.iterator]();
-  let result = iterator.next().value || "";
-  let current = iterator.next();
-  while (!current.done) {
-    result = result + separator + current.value;
-    current = iterator.next();
-  }
-  return result;
-}
 function concat(xs) {
   let result = "";
   for (const x2 of xs) {
     result = result + x2;
   }
   return result;
-}
-function string_slice(string5, idx, len) {
-  if (len <= 0 || idx >= string5.length) {
-    return "";
-  }
-  const iterator = graphemes_iterator(string5);
-  if (iterator) {
-    while (idx-- > 0) {
-      iterator.next();
-    }
-    let result = "";
-    while (len-- > 0) {
-      const v = iterator.next().value;
-      if (v === void 0) {
-        break;
-      }
-      result += v.segment;
-    }
-    return result;
-  } else {
-    return string5.match(/./gsu).slice(idx, idx + len).join("");
-  }
 }
 var unicode_whitespaces = [
   " ",
@@ -1608,33 +1553,6 @@ function reverse_and_prepend(loop$prefix, loop$suffix) {
 function reverse(list3) {
   return reverse_and_prepend(list3, toList([]));
 }
-function filter_loop(loop$list, loop$fun, loop$acc) {
-  while (true) {
-    let list3 = loop$list;
-    let fun = loop$fun;
-    let acc = loop$acc;
-    if (list3.hasLength(0)) {
-      return reverse(acc);
-    } else {
-      let first$1 = list3.head;
-      let rest$1 = list3.tail;
-      let new_acc = (() => {
-        let $ = fun(first$1);
-        if ($) {
-          return prepend(first$1, acc);
-        } else {
-          return acc;
-        }
-      })();
-      loop$list = rest$1;
-      loop$fun = fun;
-      loop$acc = new_acc;
-    }
-  }
-}
-function filter(list3, predicate) {
-  return filter_loop(list3, predicate, toList([]));
-}
 function map_loop(loop$list, loop$fun, loop$acc) {
   while (true) {
     let list3 = loop$list;
@@ -1653,28 +1571,6 @@ function map_loop(loop$list, loop$fun, loop$acc) {
 }
 function map2(list3, fun) {
   return map_loop(list3, fun, toList([]));
-}
-function index_map_loop(loop$list, loop$fun, loop$index, loop$acc) {
-  while (true) {
-    let list3 = loop$list;
-    let fun = loop$fun;
-    let index4 = loop$index;
-    let acc = loop$acc;
-    if (list3.hasLength(0)) {
-      return reverse(acc);
-    } else {
-      let first$1 = list3.head;
-      let rest$1 = list3.tail;
-      let acc$1 = prepend(fun(first$1, index4), acc);
-      loop$list = rest$1;
-      loop$fun = fun;
-      loop$index = index4 + 1;
-      loop$acc = acc$1;
-    }
-  }
-}
-function index_map(list3, fun) {
-  return index_map_loop(list3, fun, 0, toList([]));
 }
 function append_loop(loop$first, loop$second) {
   while (true) {
@@ -1730,70 +1626,8 @@ function index_fold_loop(loop$over, loop$acc, loop$with, loop$index) {
 function index_fold(list3, initial, fun) {
   return index_fold_loop(list3, initial, fun, 0);
 }
-function find2(loop$list, loop$is_desired) {
-  while (true) {
-    let list3 = loop$list;
-    let is_desired = loop$is_desired;
-    if (list3.hasLength(0)) {
-      return new Error(void 0);
-    } else {
-      let first$1 = list3.head;
-      let rest$1 = list3.tail;
-      let $ = is_desired(first$1);
-      if ($) {
-        return new Ok(first$1);
-      } else {
-        loop$list = rest$1;
-        loop$is_desired = is_desired;
-      }
-    }
-  }
-}
-function take_while_loop(loop$list, loop$predicate, loop$acc) {
-  while (true) {
-    let list3 = loop$list;
-    let predicate = loop$predicate;
-    let acc = loop$acc;
-    if (list3.hasLength(0)) {
-      return reverse(acc);
-    } else {
-      let first$1 = list3.head;
-      let rest$1 = list3.tail;
-      let $ = predicate(first$1);
-      if ($) {
-        loop$list = rest$1;
-        loop$predicate = predicate;
-        loop$acc = prepend(first$1, acc);
-      } else {
-        return reverse(acc);
-      }
-    }
-  }
-}
-function take_while(list3, predicate) {
-  return take_while_loop(list3, predicate, toList([]));
-}
 
 // build/dev/javascript/gleam_stdlib/gleam/string.mjs
-function slice(string5, idx, len) {
-  let $ = len < 0;
-  if ($) {
-    return "";
-  } else {
-    let $1 = idx < 0;
-    if ($1) {
-      let translated_idx = string_length(string5) + idx;
-      let $2 = translated_idx < 0;
-      if ($2) {
-        return "";
-      } else {
-        return string_slice(string5, translated_idx, len);
-      }
-    } else {
-      return string_slice(string5, idx, len);
-    }
-  }
-}
 function trim(string5) {
   let _pipe = string5;
   let _pipe$1 = trim_start(_pipe);
@@ -4128,11 +3962,6 @@ function on_click(msg) {
     return new Ok(msg);
   });
 }
-function on_mouse_enter(msg) {
-  return on2("mouseenter", (_) => {
-    return new Ok(msg);
-  });
-}
 function on_focus(msg) {
   return on2("focus", (_) => {
     return new Ok(msg);
@@ -4760,84 +4589,6 @@ var user_focused_input = "user-focused-input";
 var user_unfocused_input = "user-unfocused-input";
 var user_maximized_thread = "user-maximized-thread";
 
-// build/dev/javascript/o11a_client/lib/enumerate.mjs
-function translate_number_to_letter(loop$number) {
-  while (true) {
-    let number = loop$number;
-    if (number === 1) {
-      return "a";
-    } else if (number === 2) {
-      return "b";
-    } else if (number === 3) {
-      return "c";
-    } else if (number === 4) {
-      return "d";
-    } else if (number === 5) {
-      return "e";
-    } else if (number === 6) {
-      return "f";
-    } else if (number === 7) {
-      return "g";
-    } else if (number === 8) {
-      return "h";
-    } else if (number === 9) {
-      return "i";
-    } else if (number === 10) {
-      return "j";
-    } else if (number === 11) {
-      return "k";
-    } else if (number === 12) {
-      return "l";
-    } else if (number === 13) {
-      return "m";
-    } else if (number === 14) {
-      return "n";
-    } else if (number === 15) {
-      return "o";
-    } else if (number === 16) {
-      return "p";
-    } else if (number === 17) {
-      return "q";
-    } else if (number === 18) {
-      return "r";
-    } else if (number === 19) {
-      return "s";
-    } else if (number === 20) {
-      return "t";
-    } else if (number === 21) {
-      return "u";
-    } else if (number === 22) {
-      return "v";
-    } else if (number === 23) {
-      return "w";
-    } else if (number === 24) {
-      return "x";
-    } else if (number === 25) {
-      return "y";
-    } else if (number === 26) {
-      return "z";
-    } else {
-      let quotient = divideInt(number - 1, 26);
-      let remainder = remainderInt(number - 1, 26);
-      if (quotient === 0) {
-        loop$number = remainder + 1;
-      } else {
-        return translate_number_to_letter(quotient) + translate_number_to_letter(
-          remainder + 1
-        );
-      }
-    }
-  }
-}
-function get_leading_spaces(string5) {
-  let _pipe = string5;
-  let _pipe$1 = graphemes(_pipe);
-  let _pipe$2 = take_while(_pipe$1, (char) => {
-    return char === " ";
-  });
-  return join(_pipe$2, "");
-}
-
 // build/dev/javascript/o11a_client/lib/eventx.mjs
 function on_ctrl_enter(msg) {
   return on2(
@@ -4878,16 +4629,14 @@ function on_ctrl_enter(msg) {
 
 // build/dev/javascript/o11a_client/o11a/ui/line_discussion.mjs
 var Model2 = class extends CustomType {
-  constructor(user_name, line_number, line_id, line_text, line_tag, line_number_text, notes, info_notes, current_note_draft, current_thread_id, current_thread_notes, active_thread, show_expanded_message_box, current_expanded_message_draft, expanded_messages) {
+  constructor(user_name, line_number, line_id, line_tag, line_number_text, notes, current_note_draft, current_thread_id, current_thread_notes, active_thread, show_expanded_message_box, current_expanded_message_draft, expanded_messages) {
     super();
     this.user_name = user_name;
     this.line_number = line_number;
     this.line_id = line_id;
-    this.line_text = line_text;
     this.line_tag = line_tag;
     this.line_number_text = line_number_text;
     this.notes = notes;
-    this.info_notes = info_notes;
     this.current_note_draft = current_note_draft;
     this.current_thread_id = current_thread_id;
     this.current_thread_notes = current_thread_notes;
@@ -4913,12 +4662,6 @@ var ServerSetLineId = class extends CustomType {
   }
 };
 var ServerSetLineNumber = class extends CustomType {
-  constructor(x0) {
-    super();
-    this[0] = x0;
-  }
-};
-var ServerSetLineText = class extends CustomType {
   constructor(x0) {
     super();
     this[0] = x0;
@@ -4983,9 +4726,7 @@ function init2(_) {
       "",
       "",
       "",
-      "",
       new_map(),
-      toList([]),
       "",
       "",
       toList([]),
@@ -4996,69 +4737,6 @@ function init2(_) {
     ),
     none()
   ];
-}
-function inline_comment_preview_view(model) {
-  let note_result = (() => {
-    let _pipe = map_get(model.notes, model.line_id);
-    return try$(
-      _pipe,
-      (_capture) => {
-        return find2(
-          _capture,
-          (note) => {
-            return !isEqual(
-              note.significance,
-              new Informational2()
-            );
-          }
-        );
-      }
-    );
-  })();
-  if (note_result.isOk()) {
-    let note = note_result[0];
-    return span(
-      toList([
-        class$("select-none italic comment font-code fade-in"),
-        class$("comment-preview"),
-        id("discussion-entry"),
-        attribute("tabindex", "0"),
-        on_click(new UserEnteredDiscussionPreview()),
-        style(
-          toList([
-            ["animation-delay", to_string(model.line_number * 4) + "ms"]
-          ])
-        )
-      ]),
-      toList([
-        text2(
-          (() => {
-            let $ = string_length(note.message) > 40;
-            if ($) {
-              return (() => {
-                let _pipe = note.message;
-                return slice(_pipe, 0, 37);
-              })() + "...";
-            } else {
-              let _pipe = note.message;
-              return slice(_pipe, 0, 40);
-            }
-          })()
-        )
-      ])
-    );
-  } else {
-    return span(
-      toList([
-        class$("select-none italic comment"),
-        class$("new-thread-preview"),
-        id("discussion-entry"),
-        attribute("tabindex", "0"),
-        on_click(new UserEnteredDiscussionPreview())
-      ]),
-      toList([text2("Start new thread")])
-    );
-  }
 }
 function thread_header_view(model) {
   let $ = model.active_thread;
@@ -5293,46 +4971,6 @@ function expanded_message_view(model) {
     ])
   );
 }
-function discussion_overlay_view(model) {
-  return div(
-    toList([
-      id("line-discussion-overlay"),
-      class$(
-        "absolute z-[3] w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] bottom-[1.4rem]"
-      )
-    ]),
-    toList([
-      div(
-        toList([class$("overlay p-[.5rem]")]),
-        toList([
-          (() => {
-            let $ = is_some(model.active_thread) || length(
-              model.current_thread_notes
-            ) > 0;
-            if ($) {
-              return div(
-                toList([
-                  id("comment-list"),
-                  class$(
-                    "flex flex-col-reverse overflow-auto max-h-[30rem] gap-[.5rem] mb-[.5rem]"
-                  )
-                ]),
-                toList([
-                  fragment(comments_view(model)),
-                  thread_header_view(model)
-                ])
-              );
-            } else {
-              return fragment(toList([]));
-            }
-          })(),
-          new_message_input_view(model)
-        ])
-      ),
-      expanded_message_view(model)
-    ])
-  );
-}
 function classify_message(message, is_thread_open) {
   if (!is_thread_open) {
     if (message.startsWith("todo ")) {
@@ -5350,8 +4988,14 @@ function classify_message(message, is_thread_open) {
     } else if (message.startsWith("@dev ")) {
       let rest = message.slice(5);
       return [new DevelperQuestion(), rest];
+    } else if (message.startsWith("@dev: ")) {
+      let rest = message.slice(6);
+      return [new DevelperQuestion(), rest];
     } else if (message.startsWith("info ")) {
       let rest = message.slice(5);
+      return [new Informational(), rest];
+    } else if (message.startsWith("info: ")) {
+      let rest = message.slice(6);
       return [new Informational(), rest];
     } else {
       return [new Comment(), message];
@@ -5360,6 +5004,11 @@ function classify_message(message, is_thread_open) {
     if (message.startsWith("done ")) {
       let rest = message.slice(5);
       return [new ToDoCompletion(), rest];
+    } else if (message.startsWith("done: ")) {
+      let rest = message.slice(6);
+      return [new ToDoCompletion(), rest];
+    } else if (message === "done:") {
+      return [new ToDoCompletion(), "done"];
     } else if (message === "done") {
       return [new ToDoCompletion(), "done"];
     } else if (message.startsWith(": ")) {
@@ -5374,8 +5023,14 @@ function classify_message(message, is_thread_open) {
     } else if (message.startsWith("incorrect ")) {
       let rest = message.slice(10);
       return [new InformationalRejection(), rest];
+    } else if (message.startsWith("incorrect: ")) {
+      let rest = message.slice(11);
+      return [new InformationalRejection(), rest];
     } else if (message.startsWith("correct ")) {
       let rest = message.slice(8);
+      return [new InformationalConfirmation(), rest];
+    } else if (message.startsWith("correct: ")) {
+      let rest = message.slice(9);
       return [new InformationalConfirmation(), rest];
     } else {
       return [new Comment(), message];
@@ -5392,11 +5047,9 @@ function update(model, msg) {
           _record.user_name,
           _record.line_number,
           line_id,
-          _record.line_text,
           _record.line_tag,
           _record.line_number_text,
           _record.notes,
-          _record.info_notes,
           _record.current_note_draft,
           line_id,
           (() => {
@@ -5421,36 +5074,9 @@ function update(model, msg) {
           _record.user_name,
           line_number,
           _record.line_id,
-          _record.line_text,
           "L" + line_number_text,
           line_number_text,
           _record.notes,
-          _record.info_notes,
-          _record.current_note_draft,
-          _record.current_thread_id,
-          _record.current_thread_notes,
-          _record.active_thread,
-          _record.show_expanded_message_box,
-          _record.current_expanded_message_draft,
-          _record.expanded_messages
-        );
-      })(),
-      none()
-    ];
-  } else if (msg instanceof ServerSetLineText) {
-    let line_text = msg[0];
-    return [
-      (() => {
-        let _record = model;
-        return new Model2(
-          _record.user_name,
-          _record.line_number,
-          _record.line_id,
-          line_text,
-          _record.line_tag,
-          _record.line_number_text,
-          _record.notes,
-          _record.info_notes,
           _record.current_note_draft,
           _record.current_thread_id,
           _record.current_thread_notes,
@@ -5465,20 +5091,6 @@ function update(model, msg) {
   } else if (msg instanceof ServerUpdatedNotes) {
     let notes = msg[0];
     let updated_notes = from_list(notes);
-    let info_notes = (() => {
-      let _pipe = map_get(updated_notes, model.line_id);
-      let _pipe$1 = unwrap2(_pipe, toList([]));
-      let _pipe$2 = filter(
-        _pipe$1,
-        (computed_note) => {
-          return isEqual(
-            computed_note.significance,
-            new Informational2()
-          );
-        }
-      );
-      return reverse(_pipe$2);
-    })();
     return [
       (() => {
         let _record = model;
@@ -5486,11 +5098,9 @@ function update(model, msg) {
           _record.user_name,
           _record.line_number,
           _record.line_id,
-          _record.line_text,
           _record.line_tag,
           _record.line_number_text,
           updated_notes,
-          info_notes,
           _record.current_note_draft,
           _record.current_thread_id,
           (() => {
@@ -5514,11 +5124,9 @@ function update(model, msg) {
           _record.user_name,
           _record.line_number,
           _record.line_id,
-          _record.line_text,
           _record.line_tag,
           _record.line_number_text,
           _record.notes,
-          _record.info_notes,
           draft,
           _record.current_thread_id,
           _record.current_thread_notes,
@@ -5589,11 +5197,9 @@ function update(model, msg) {
               _record.user_name,
               _record.line_number,
               _record.line_id,
-              _record.line_text,
               _record.line_tag,
               _record.line_number_text,
               _record.notes,
-              _record.info_notes,
               "",
               _record.current_thread_id,
               _record.current_thread_notes,
@@ -5617,11 +5223,9 @@ function update(model, msg) {
           _record.user_name,
           _record.line_number,
           _record.line_id,
-          _record.line_text,
           _record.line_tag,
           _record.line_number_text,
           _record.notes,
-          _record.info_notes,
           _record.current_note_draft,
           new_thread_id,
           (() => {
@@ -5670,11 +5274,9 @@ function update(model, msg) {
           _record.user_name,
           _record.line_number,
           _record.line_id,
-          _record.line_text,
           _record.line_tag,
           _record.line_number_text,
           _record.notes,
-          _record.info_notes,
           _record.current_note_draft,
           new_current_thread_id,
           (() => {
@@ -5698,11 +5300,9 @@ function update(model, msg) {
           _record.user_name,
           _record.line_number,
           _record.line_id,
-          _record.line_text,
           _record.line_tag,
           _record.line_number_text,
           _record.notes,
-          _record.info_notes,
           _record.current_note_draft,
           _record.current_thread_id,
           _record.current_thread_notes,
@@ -5723,11 +5323,9 @@ function update(model, msg) {
           _record.user_name,
           _record.line_number,
           _record.line_id,
-          _record.line_text,
           _record.line_tag,
           _record.line_number_text,
           _record.notes,
-          _record.info_notes,
           _record.current_note_draft,
           _record.current_thread_id,
           _record.current_thread_notes,
@@ -5750,11 +5348,9 @@ function update(model, msg) {
             _record.user_name,
             _record.line_number,
             _record.line_id,
-            _record.line_text,
             _record.line_tag,
             _record.line_number_text,
             _record.notes,
-            _record.info_notes,
             _record.current_note_draft,
             _record.current_thread_id,
             _record.current_thread_notes,
@@ -5774,11 +5370,9 @@ function update(model, msg) {
             _record.user_name,
             _record.line_number,
             _record.line_id,
-            _record.line_text,
             _record.line_tag,
             _record.line_number_text,
             _record.notes,
-            _record.info_notes,
             _record.current_note_draft,
             _record.current_thread_id,
             _record.current_thread_notes,
@@ -5825,11 +5419,9 @@ function update(model, msg) {
           _record.user_name,
           _record.line_number,
           _record.line_id,
-          _record.line_text,
           _record.line_tag,
           _record.line_number_text,
           _record.notes,
-          _record.info_notes,
           _record.current_note_draft,
           _record.current_thread_id,
           _record.current_thread_notes,
@@ -5878,98 +5470,41 @@ function update(model, msg) {
   }
 }
 var name = line_discussion;
-var component_style = "\n:host {\n  display: inline-block;\n}\n\n/* Delay the overlay transitions by 1ms so they are done last, and any \n  actions on them can be done first (like focusing the input) */\n\n.new-thread-preview {\n  opacity: 0;\n  transition-property: opacity;\n  transition-delay: 1ms;\n}\n\n.comment-preview:focus,\n.new-thread-preview:focus {\n  outline: none;\n  text-decoration: underline;\n}\n\n#line-discussion-overlay {\n  visibility: hidden;\n  opacity: 0;\n  transition-property: opacity, visibility;\n  transition-delay: 1ms, 1ms;\n}\n\n#expanded-message {\n  visibility: hidden;\n  opacity: 0;\n  transition-property: opacity, visibility;\n  transition-delay: 1ms, 1ms;\n}\n\n/* When the new thread preview is hovered */\n\np.loc:hover .new-thread-preview {\n  opacity: 1;\n}\n\n#line-discussion-overlay.show-dis,\n.comment-preview:hover + #line-discussion-overlay {\n  visibility: visible;\n  opacity: 1;\n}\n\n.new-thread-preview:hover + #line-discussion-overlay #expanded-message.show-exp,\n.comment-preview:hover + #line-discussion-overlay #expanded-message.show-exp {\n  visibility: visible;\n  opacity: 1;\n  transition-property: opacity, visible;\n  transition-delay: 25ms, 25ms;\n}\n\n/* When the new thread preview is focused, immediately show the overlay to\n  provide snappy feedback. */\n\n.new-thread-preview:focus,\n.new-thread-preview:has(+ #line-discussion-overlay:hover),\n.new-thread-preview:has(+ #line-discussion-overlay:focus-within) {\n  opacity: 1;\n}\n\n.new-thread-preview:focus + #line-discussion-overlay,\n.comment-preview:focus + #line-discussion-overlay,\n#line-discussion-overlay:hover,\n#line-discussion-overlay:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\n.new-thread-preview:focus + #line-discussion-overlay #expanded-message.show-exp,\n.comment-preview:focus + #line-discussion-overlay #expanded-message.show-exp,\n#line-discussion-overlay:hover #expanded-message.show-exp,\n#line-discussion-overlay:focus-within #expanded-message.show-exp,\n#expanded-message:hover,\n#expanded-message:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\nbutton.icon-button {\n  background-color: var(--overlay-background-color);\n  color: var(--text-color);\n  border-radius: 4px;\n  border: none;\n  cursor: pointer;\n}\n\nbutton.icon-button:hover {\n  background-color: var(--input-background-color);\n}\n\nbutton.icon-button svg {\n  height: 1.25rem;\n  width: 1.25rem;\n}\n\ninput, textarea {\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border-radius: 6px;\n}\n\ninput, textarea {\n  border: 1px solid var(--input-border-color);\n}\n\nhr {\n  border: 1px solid var(--comment-color);\n}\n\n.overlay {\n  background-color: var(--overlay-background-color);\n  border: 1px solid var(--input-border-color);\n  border-radius: 6px;\n}\n\np.loc {\n  margin: 0;\n  white-space: pre;\n  height: 1.1875rem;\n  display: flex;\n  align-items: center;\n}\n\n.line-number {\n  display: inline-block;\n  margin-right: 1rem;\n  width: 2.5rem;\n  text-align: right;\n  flex-shrink: 0;\n}\n\n.inline-comment {\n  margin-left: 2.5rem;\n}\n\n.absolute {\n  position: absolute;\n}\n";
+var component_style = "\n:host {\n  display: inline-block;\n}\n\n/* Delay the overlay transitions by 1ms so they are done last, and any \n  actions on them can be done first (like focusing the input) */\n\n#expanded-message {\n  visibility: hidden;\n  opacity: 0;\n  transition-property: opacity, visibility;\n  transition-delay: 1ms, 1ms;\n}\n\n#expanded-message.show-exp,\n#expanded-message:focus-within {\n  visibility: visible;\n  opacity: 1;\n}\n\nbutton.icon-button {\n  background-color: var(--overlay-background-color);\n  color: var(--text-color);\n  border-radius: 4px;\n  border: none;\n  cursor: pointer;\n}\n\nbutton.icon-button:hover {\n  background-color: var(--input-background-color);\n}\n\nbutton.icon-button svg {\n  height: 1.25rem;\n  width: 1.25rem;\n}\n\ninput, textarea {\n  background-color: var(--input-background-color);\n  color: var(--text-color);\n  border-radius: 6px;\n}\n\ninput, textarea {\n  border: 1px solid var(--input-border-color);\n}\n\nhr {\n  border: 1px solid var(--comment-color);\n}\n\n.overlay {\n  background-color: var(--overlay-background-color);\n  border: 1px solid var(--input-border-color);\n  border-radius: 6px;\n}\n\n.absolute {\n  position: absolute;\n}\n";
 function view(model) {
   console_log("Rendering line discussion " + model.line_tag);
   return div(
-    toList([id("line-container")]),
+    toList([id("line-discussion-overlay")]),
     toList([
-      fragment(
-        index_map(
-          model.info_notes,
-          (note, index4) => {
-            return p(
-              toList([
-                class$("loc flex"),
-                id(note.note_id),
-                on_mouse_enter(new UserEnteredDiscussionPreview())
-              ]),
-              toList([
-                span(
-                  toList([
-                    class$("line-number code-extras relative italic")
-                  ]),
-                  toList([
-                    text2(model.line_number_text),
-                    span(
-                      toList([
-                        class$(
-                          "absolute code-extras pl-[.1rem] pt-[.15rem] text-[.9rem]"
-                        )
-                      ]),
-                      toList([
-                        text2(
-                          translate_number_to_letter(index4 + 1)
-                        )
-                      ])
-                    )
-                  ])
-                ),
-                span(
-                  toList([class$("comment italic")]),
-                  toList([
-                    text2(
-                      get_leading_spaces(model.line_text) + note.message + (() => {
-                        let $ = note.expanded_message;
-                        if ($ instanceof Some) {
-                          return "*";
-                        } else {
-                          return "";
-                        }
-                      })()
-                    )
-                  ])
-                )
-              ])
-            );
-          }
-        )
-      ),
-      p(
+      style2(toList([]), component_style),
+      div(
+        toList([class$("overlay p-[.5rem]")]),
         toList([
-          class$("loc flex"),
-          id(model.line_tag),
-          on_mouse_enter(new UserEnteredDiscussionPreview())
-        ]),
-        toList([
-          span(
-            toList([class$("line-number code-extras")]),
-            toList([text2(model.line_number_text)])
-          ),
-          span(
-            toList([
-              attribute("dangerous-unescaped-html", model.line_text)
-            ]),
-            toList([])
-          ),
-          span(
-            toList([class$("inline-comment")]),
-            toList([
-              div(
+          (() => {
+            let $ = is_some(model.active_thread) || length(
+              model.current_thread_notes
+            ) > 0;
+            if ($) {
+              return div(
                 toList([
-                  id("line-discussion-container"),
-                  class$("relative font-code")
+                  id("comment-list"),
+                  class$(
+                    "flex flex-col-reverse overflow-auto max-h-[30rem] gap-[.5rem] mb-[.5rem]"
+                  )
                 ]),
                 toList([
-                  style2(toList([]), component_style),
-                  inline_comment_preview_view(model),
-                  discussion_overlay_view(model)
+                  fragment(comments_view(model)),
+                  thread_header_view(model)
                 ])
-              )
-            ])
-          )
+              );
+            } else {
+              return fragment(toList([]));
+            }
+          })(),
+          new_message_input_view(model)
         ])
-      )
+      ),
+      expanded_message_view(model)
     ])
   );
 }
@@ -6046,26 +5581,6 @@ function component2() {
                 toList([
                   new DecodeError(
                     "line-number",
-                    inspect2(dy),
-                    toList([])
-                  )
-                ])
-              );
-            }
-          }
-        ],
-        [
-          "line-text",
-          (dy) => {
-            let $ = run(dy, string3);
-            if ($.isOk()) {
-              let line_text = $[0];
-              return new Ok(new ServerSetLineText(line_text));
-            } else {
-              return new Error(
-                toList([
-                  new DecodeError(
-                    "line-text",
                     inspect2(dy),
                     toList([])
                   )

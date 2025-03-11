@@ -6,11 +6,12 @@ import gleam/int
 import gleam/io
 import gleam/json
 import gleam/list
-import gleam/option.{Some}
+import gleam/option.{None, Some}
 import gleam/regexp
 import gleam/result
 import gleam/string
 import lib/elementx
+import lib/enumerate
 import lustre
 import lustre/attribute
 import lustre/effect
@@ -119,25 +120,123 @@ fn loc_view(model: Model, line_text, line_number) {
     ])
   })
 
-  element.element(
-    components.line_discussion,
-    [
-      attribute.id(line_tag),
-      attribute.attribute("line-number", line_number_text),
-      attribute.attribute("line-id", line_id),
-      attribute.attribute("line-text", line_text),
-      attribute.attribute(
-        "line-discussion",
-        discussion.get_structured_notes(model.discussion, line_id)
-          |> list.map(computed_note.encode_structured_notes)
-          |> json.preprocessed_array
-          |> json.to_string,
+  let notes = discussion.get_structured_notes(model.discussion, line_id)
+
+  let parent_notes =
+    list.filter_map(notes, fn(note) {
+      case note.0 == line_id {
+        True -> Ok(note.1)
+        False -> Error(Nil)
+      }
+    })
+    |> list.first
+    |> result.unwrap([])
+
+  let info_notes =
+    parent_notes
+    |> list.filter(fn(computed_note) {
+      computed_note.significance == computed_note.Informational
+    })
+    |> list.reverse
+
+  html.div([attribute.class("line-container")], [
+    element.fragment(
+      list.index_map(info_notes, fn(note, index) {
+        html.p([attribute.class("loc flex"), attribute.id(note.note_id)], [
+          html.span(
+            [attribute.class("line-number code-extras relative italic")],
+            [
+              html.text(line_number_text),
+              html.span(
+                [
+                  attribute.class(
+                    "absolute code-extras pl-[.1rem] pt-[.15rem] text-[.9rem]",
+                  ),
+                ],
+                [html.text(enumerate.translate_number_to_letter(index + 1))],
+              ),
+            ],
+          ),
+          html.span([attribute.class("comment italic")], [
+            html.text(
+              enumerate.get_leading_spaces(line_text)
+              <> note.message
+              <> case note.expanded_message {
+                Some(..) -> "*"
+                None -> ""
+              },
+            ),
+          ]),
+        ])
+      }),
+    ),
+    html.p([attribute.class("loc flex"), attribute.id(line_tag)], [
+      html.span([attribute.class("line-number code-extras")], [
+        html.text(line_number_text),
+      ]),
+      html.span(
+        [attribute.attribute("dangerous-unescaped-html", line_text)],
+        [],
       ),
-      on_user_submitted_line_note(UserSubmittedNote),
-      server_component.include(["detail"]),
-    ],
-    [],
-  )
+      html.span([attribute.class("inline-comment relative font-code")], [
+        inline_comment_preview_view(parent_notes),
+        element.element(
+          components.line_discussion,
+          [
+            attribute.class(
+              "absolute z-[3] w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] bottom-[1.4rem]",
+            ),
+            attribute.attribute("line-number", line_number_text),
+            attribute.attribute("line-id", line_id),
+            attribute.attribute(
+              "line-discussion",
+              notes
+                |> list.map(computed_note.encode_structured_notes)
+                |> json.preprocessed_array
+                |> json.to_string,
+            ),
+            on_user_submitted_line_note(UserSubmittedNote),
+            server_component.include(["detail"]),
+          ],
+          [],
+        ),
+      ]),
+    ]),
+  ])
+}
+
+fn inline_comment_preview_view(parent_notes: List(computed_note.ComputedNote)) {
+  let note_result =
+    list.find(parent_notes, fn(note) {
+      note.significance != computed_note.Informational
+    })
+
+  case note_result {
+    Ok(note) ->
+      html.span(
+        [
+          attribute.class("code-extras font-code fade-in"),
+          attribute.class("comment-preview discussion-entry"),
+          attribute.attribute("tabindex", "0"),
+        ],
+        [
+          html.text(case string.length(note.message) > 40 {
+            True -> note.message |> string.slice(0, length: 37) <> "..."
+            False -> note.message |> string.slice(0, length: 40)
+          }),
+        ],
+      )
+
+    Error(Nil) ->
+      html.span(
+        [
+          attribute.class("code-extras"),
+          attribute.class("new-thread-preview discussion-entry"),
+          attribute.attribute("tabindex", "0"),
+        ],
+        [html.text("Start new thread")],
+      )
+  }
 }
 
 pub fn style_code_tokens(line_text) {

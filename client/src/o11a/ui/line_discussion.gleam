@@ -10,7 +10,6 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/set
 import gleam/string
-import lib/enumerate
 import lib/eventx
 import lib/lucide
 import lustre
@@ -72,13 +71,6 @@ pub fn component() {
             Error([dynamic.DecodeError("line-number", string.inspect(dy), [])])
         }
       }),
-      #("line-text", fn(dy) {
-        case decode.run(dy, decode.string) {
-          Ok(line_text) -> Ok(ServerSetLineText(line_text))
-          Error(..) ->
-            Error([dynamic.DecodeError("line-text", string.inspect(dy), [])])
-        }
-      }),
     ]),
   )
 }
@@ -88,11 +80,9 @@ fn init(_) -> #(Model, effect.Effect(Msg)) {
     Model(
       user_name: "guest",
       line_number: 0,
-      line_text: "",
       line_tag: "",
       line_number_text: "",
       notes: dict.new(),
-      info_notes: [],
       current_note_draft: "",
       line_id: "",
       current_thread_id: "",
@@ -111,11 +101,9 @@ pub type Model {
     user_name: String,
     line_number: Int,
     line_id: String,
-    line_text: String,
     line_tag: String,
     line_number_text: String,
     notes: dict.Dict(String, List(computed_note.ComputedNote)),
-    info_notes: List(computed_note.ComputedNote),
     current_note_draft: String,
     current_thread_id: String,
     current_thread_notes: List(computed_note.ComputedNote),
@@ -138,7 +126,6 @@ pub type ActiveThread {
 pub type Msg {
   ServerSetLineId(String)
   ServerSetLineNumber(Int)
-  ServerSetLineText(String)
   ServerUpdatedNotes(List(#(String, List(computed_note.ComputedNote))))
   UserWroteNote(String)
   UserSubmittedNote
@@ -181,23 +168,13 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         effect.none(),
       )
     }
-    ServerSetLineText(line_text) -> #(Model(..model, line_text:), effect.none())
     ServerUpdatedNotes(notes) -> {
       let updated_notes = dict.from_list(notes)
-
-      let info_notes =
-        dict.get(updated_notes, model.line_id)
-        |> result.unwrap([])
-        |> list.filter(fn(computed_note) {
-          computed_note.significance == computed_note.Informational
-        })
-        |> list.reverse
 
       #(
         Model(
           ..model,
           notes: updated_notes,
-          info_notes:,
           current_thread_notes: dict.get(updated_notes, model.current_thread_id)
             |> result.unwrap([]),
         ),
@@ -390,25 +367,6 @@ const component_style = "
 /* Delay the overlay transitions by 1ms so they are done last, and any 
   actions on them can be done first (like focusing the input) */
 
-.new-thread-preview {
-  opacity: 0;
-  transition-property: opacity;
-  transition-delay: 1ms;
-}
-
-.comment-preview:focus,
-.new-thread-preview:focus {
-  outline: none;
-  text-decoration: underline;
-}
-
-#line-discussion-overlay {
-  visibility: hidden;
-  opacity: 0;
-  transition-property: opacity, visibility;
-  transition-delay: 1ms, 1ms;
-}
-
 #expanded-message {
   visibility: hidden;
   opacity: 0;
@@ -416,48 +374,7 @@ const component_style = "
   transition-delay: 1ms, 1ms;
 }
 
-/* When the new thread preview is hovered */
-
-p.loc:hover .new-thread-preview {
-  opacity: 1;
-}
-
-#line-discussion-overlay.show-dis,
-.comment-preview:hover + #line-discussion-overlay {
-  visibility: visible;
-  opacity: 1;
-}
-
-.new-thread-preview:hover + #line-discussion-overlay #expanded-message.show-exp,
-.comment-preview:hover + #line-discussion-overlay #expanded-message.show-exp {
-  visibility: visible;
-  opacity: 1;
-  transition-property: opacity, visible;
-  transition-delay: 25ms, 25ms;
-}
-
-/* When the new thread preview is focused, immediately show the overlay to
-  provide snappy feedback. */
-
-.new-thread-preview:focus,
-.new-thread-preview:has(+ #line-discussion-overlay:hover),
-.new-thread-preview:has(+ #line-discussion-overlay:focus-within) {
-  opacity: 1;
-}
-
-.new-thread-preview:focus + #line-discussion-overlay,
-.comment-preview:focus + #line-discussion-overlay,
-#line-discussion-overlay:hover,
-#line-discussion-overlay:focus-within {
-  visibility: visible;
-  opacity: 1;
-}
-
-.new-thread-preview:focus + #line-discussion-overlay #expanded-message.show-exp,
-.comment-preview:focus + #line-discussion-overlay #expanded-message.show-exp,
-#line-discussion-overlay:hover #expanded-message.show-exp,
-#line-discussion-overlay:focus-within #expanded-message.show-exp,
-#expanded-message:hover,
+#expanded-message.show-exp,
 #expanded-message:focus-within {
   visibility: visible;
   opacity: 1;
@@ -500,26 +417,6 @@ hr {
   border-radius: 6px;
 }
 
-p.loc {
-  margin: 0;
-  white-space: pre;
-  height: 1.1875rem;
-  display: flex;
-  align-items: center;
-}
-
-.line-number {
-  display: inline-block;
-  margin-right: 1rem;
-  width: 2.5rem;
-  text-align: right;
-  flex-shrink: 0;
-}
-
-.inline-comment {
-  margin-left: 2.5rem;
-}
-
 .absolute {
   position: absolute;
 }
@@ -528,152 +425,29 @@ p.loc {
 fn view(model: Model) -> element.Element(Msg) {
   io.println("Rendering line discussion " <> model.line_tag)
 
-  html.div([attribute.id("line-container")], [
-    element.fragment(
-      list.index_map(model.info_notes, fn(note, index) {
-        html.p(
-          [
-            attribute.class("loc flex"),
-            attribute.id(note.note_id),
-            event.on_mouse_enter(UserEnteredDiscussionPreview),
-          ],
-          [
-            html.span(
-              [attribute.class("line-number code-extras relative italic")],
-              [
-                html.text(model.line_number_text),
-                html.span(
-                  [
-                    attribute.class(
-                      "absolute code-extras pl-[.1rem] pt-[.15rem] text-[.9rem]",
-                    ),
-                  ],
-                  [html.text(enumerate.translate_number_to_letter(index + 1))],
-                ),
-              ],
-            ),
-            html.span([attribute.class("comment italic")], [
-              html.text(
-                enumerate.get_leading_spaces(model.line_text)
-                <> note.message
-                <> case note.expanded_message {
-                  Some(..) -> "*"
-                  None -> ""
-                },
-              ),
-            ]),
-          ],
-        )
-      }),
-    ),
-    html.p(
-      [
-        attribute.class("loc flex"),
-        attribute.id(model.line_tag),
-        event.on_mouse_enter(UserEnteredDiscussionPreview),
-      ],
-      [
-        html.span([attribute.class("line-number code-extras")], [
-          html.text(model.line_number_text),
-        ]),
-        html.span(
-          [attribute.attribute("dangerous-unescaped-html", model.line_text)],
-          [],
-        ),
-        html.span([attribute.class("inline-comment")], [
+  html.div([attribute.id("line-discussion-overlay")], [
+    html.style([], component_style),
+    html.div([attribute.class("overlay p-[.5rem]")], [
+      case
+        option.is_some(model.active_thread)
+        || list.length(model.current_thread_notes) > 0
+      {
+        True ->
           html.div(
             [
-              attribute.id("line-discussion-container"),
-              attribute.class("relative font-code"),
+              attribute.id("comment-list"),
+              attribute.class(
+                "flex flex-col-reverse overflow-auto max-h-[30rem] gap-[.5rem] mb-[.5rem]",
+              ),
             ],
-            [
-              html.style([], component_style),
-              inline_comment_preview_view(model),
-              discussion_overlay_view(model),
-            ],
-          ),
-        ]),
-      ],
-    ),
+            [element.fragment(comments_view(model)), thread_header_view(model)],
+          )
+        False -> element.fragment([])
+      },
+      new_message_input_view(model),
+    ]),
+    expanded_message_view(model),
   ])
-}
-
-fn inline_comment_preview_view(model: Model) {
-  let note_result =
-    dict.get(model.notes, model.line_id)
-    |> result.try(
-      list.find(_, fn(note) { note.significance != computed_note.Informational }),
-    )
-
-  case note_result {
-    Ok(note) ->
-      html.span(
-        [
-          attribute.class("select-none italic comment font-code fade-in"),
-          attribute.class("comment-preview"),
-          attribute.id("discussion-entry"),
-          attribute.attribute("tabindex", "0"),
-          event.on_click(UserEnteredDiscussionPreview),
-          attribute.style([
-            #("animation-delay", int.to_string(model.line_number * 4) <> "ms"),
-          ]),
-        ],
-        [
-          html.text(case string.length(note.message) > 40 {
-            True -> note.message |> string.slice(0, length: 37) <> "..."
-            False -> note.message |> string.slice(0, length: 40)
-          }),
-        ],
-      )
-
-    Error(Nil) ->
-      html.span(
-        [
-          attribute.class("select-none italic comment"),
-          attribute.class("new-thread-preview"),
-          attribute.id("discussion-entry"),
-          attribute.attribute("tabindex", "0"),
-          event.on_click(UserEnteredDiscussionPreview),
-        ],
-        [html.text("Start new thread")],
-      )
-  }
-}
-
-fn discussion_overlay_view(model: Model) {
-  html.div(
-    [
-      attribute.id("line-discussion-overlay"),
-      attribute.class(
-        "absolute z-[3] w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] bottom-[1.4rem]",
-      ),
-    ],
-    [
-      html.div([attribute.class("overlay p-[.5rem]")], [
-        case
-          option.is_some(model.active_thread)
-          || list.length(model.current_thread_notes) > 0
-        {
-          True ->
-            html.div(
-              [
-                attribute.id("comment-list"),
-                attribute.class(
-                  "flex flex-col-reverse overflow-auto max-h-[30rem] gap-[.5rem] mb-[.5rem]",
-                ),
-              ],
-              [
-                element.fragment(comments_view(model)),
-                thread_header_view(model),
-              ],
-            )
-          False -> element.fragment([])
-        },
-        new_message_input_view(model),
-      ]),
-      expanded_message_view(model),
-    ],
-  )
 }
 
 fn thread_header_view(model: Model) {
@@ -850,19 +624,25 @@ fn classify_message(message, is_thread_open is_thread_open) {
         "? " <> rest -> #(note.Question, rest)
         "! " <> rest -> #(note.FindingLead, rest)
         "@dev " <> rest -> #(note.DevelperQuestion, rest)
+        "@dev: " <> rest -> #(note.DevelperQuestion, rest)
         "info " <> rest -> #(note.Informational, rest)
+        "info: " <> rest -> #(note.Informational, rest)
         _ -> #(note.Comment, message)
       }
     // Users can only resolve actionalble threads in an open thread
     True ->
       case message {
         "done " <> rest -> #(note.ToDoCompletion, rest)
+        "done: " <> rest -> #(note.ToDoCompletion, rest)
+        "done:" -> #(note.ToDoCompletion, "done")
         "done" -> #(note.ToDoCompletion, "done")
         ": " <> rest -> #(note.Answer, rest)
         ". " <> rest -> #(note.FindingRejection, rest)
         "!! " <> rest -> #(note.FindingConfirmation, rest)
         "incorrect " <> rest -> #(note.InformationalRejection, rest)
+        "incorrect: " <> rest -> #(note.InformationalRejection, rest)
         "correct " <> rest -> #(note.InformationalConfirmation, rest)
+        "correct: " <> rest -> #(note.InformationalConfirmation, rest)
         _ -> #(note.Comment, message)
       }
   }

@@ -75,7 +75,7 @@ function handle_input_focus(event) {
 
     console.log("input focusing");
 
-    let overlay = get_line_discussion_overlay(
+    let overlay = get_line_discussion_component(
       current_selected_line_number,
       discussion_lane
     );
@@ -87,8 +87,14 @@ function handle_input_focus(event) {
 
     if (!overlay?.classList.contains("show-dis")) {
       overlay.classList.add("show-dis");
-      // Wait for the styles to be applied after changing the class
-      setTimeout(() => inp?.focus(), 50);
+      // Wait for the styles to be applied after changing the class to show the
+      // overlay so we can focus it. Then after it is focused, we can remove
+      // the class because the :focus selector will take over showing the
+      // overlay when appropriate.
+      setTimeout(() => {
+        inp?.focus();
+        overlay.classList.remove("show-dis");
+      }, 50);
     } else {
       inp?.focus();
     }
@@ -104,10 +110,10 @@ function get_line_discussion_input(line_number, discussion_lane) {
   );
 }
 
-function get_line_discussion_overlay(line_number, discussion_lane) {
-  return get_discussion_shadow_root(line_number)?.querySelector(
-    "#line-discussion-overlay"
-  );
+function get_line_discussion_component(line_number, discussion_lane) {
+  return document
+    .querySelector("#audit-page")
+    ?.shadowRoot?.querySelector(`#L${line_number} line-discussion`);
 }
 
 function get_line_discussion_expanded_input(line_number, discussion_lane) {
@@ -131,7 +137,10 @@ function handle_discussion_escape(event) {
   if (event.key === "Escape") {
     console.log("Escaping discussion");
     event.preventDefault();
-    get_line_discussion(current_selected_line_number, discussion_lane)?.blur();
+    get_line_discussion_entry(
+      current_selected_line_number,
+      discussion_lane
+    )?.blur();
     return true;
   }
   return false;
@@ -216,7 +225,7 @@ function findNextDiscussionLine(current_line, direction, step = 1) {
   while (line >= 1 && line <= max_lines) {
     if (line < 1 || line > max_lines) break;
 
-    if (get_line_discussion(line, discussion_lane)) {
+    if (get_line_discussion_entry(line, discussion_lane)) {
       return line;
     }
 
@@ -227,17 +236,17 @@ function findNextDiscussionLine(current_line, direction, step = 1) {
 }
 
 function focus_line_discussion(line_number, discussion_lane) {
-  get_line_discussion(line_number, discussion_lane)?.focus();
+  get_line_discussion_entry(line_number, discussion_lane)?.focus();
 }
 
-function get_line_discussion(line_number, discussion_lane) {
-  return get_discussion_shadow_root(line_number)?.querySelector(
-    "#discussion-entry"
-  );
+function get_line_discussion_entry(line_number, discussion_lane) {
+  return document
+    .querySelector("#audit-page")
+    ?.shadowRoot?.querySelector(`#L${line_number} .discussion-entry`);
 }
 
 function get_discussion_shadow_root(line_number) {
   return document
     .querySelector("#audit-page")
-    ?.shadowRoot?.querySelector(`#L${line_number}`)?.shadowRoot;
+    ?.shadowRoot?.querySelector(`#L${line_number} line-discussion`)?.shadowRoot;
 }
