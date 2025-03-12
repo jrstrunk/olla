@@ -545,277 +545,6 @@ function bitArrayValidateRange(bitArray, start2, end) {
     throw new globalThis.Error(msg);
   }
 }
-function bitArraySlice(bitArray, start2, end) {
-  end ??= bitArray.bitSize;
-  bitArrayValidateRange(bitArray, start2, end);
-  if (start2 === end) {
-    return new BitArray(new Uint8Array());
-  }
-  if (start2 === 0 && end === bitArray.bitSize) {
-    return bitArray;
-  }
-  start2 += bitArray.bitOffset;
-  end += bitArray.bitOffset;
-  const startByteIndex = Math.trunc(start2 / 8);
-  const endByteIndex = Math.trunc((end + 7) / 8);
-  const byteLength = endByteIndex - startByteIndex;
-  let buffer;
-  if (startByteIndex === 0 && byteLength === bitArray.rawBuffer.byteLength) {
-    buffer = bitArray.rawBuffer;
-  } else {
-    buffer = new Uint8Array(
-      bitArray.rawBuffer.buffer,
-      bitArray.rawBuffer.byteOffset + startByteIndex,
-      byteLength
-    );
-  }
-  return new BitArray(buffer, end - start2, start2 % 8);
-}
-function bitArraySliceToInt(bitArray, start2, end, isBigEndian, isSigned) {
-  bitArrayValidateRange(bitArray, start2, end);
-  if (start2 === end) {
-    return 0;
-  }
-  start2 += bitArray.bitOffset;
-  end += bitArray.bitOffset;
-  const isStartByteAligned = start2 % 8 === 0;
-  const isEndByteAligned = end % 8 === 0;
-  if (isStartByteAligned && isEndByteAligned) {
-    return intFromAlignedSlice(
-      bitArray,
-      start2 / 8,
-      end / 8,
-      isBigEndian,
-      isSigned
-    );
-  }
-  const size = end - start2;
-  const startByteIndex = Math.trunc(start2 / 8);
-  const endByteIndex = Math.trunc((end - 1) / 8);
-  if (startByteIndex == endByteIndex) {
-    const mask2 = 255 >> start2 % 8;
-    const unusedLowBitCount = (8 - end % 8) % 8;
-    let value3 = (bitArray.rawBuffer[startByteIndex] & mask2) >> unusedLowBitCount;
-    if (isSigned) {
-      const highBit = 2 ** (size - 1);
-      if (value3 >= highBit) {
-        value3 -= highBit * 2;
-      }
-    }
-    return value3;
-  }
-  if (size <= 53) {
-    return intFromUnalignedSliceUsingNumber(
-      bitArray.rawBuffer,
-      start2,
-      end,
-      isBigEndian,
-      isSigned
-    );
-  } else {
-    return intFromUnalignedSliceUsingBigInt(
-      bitArray.rawBuffer,
-      start2,
-      end,
-      isBigEndian,
-      isSigned
-    );
-  }
-}
-function intFromAlignedSlice(bitArray, start2, end, isBigEndian, isSigned) {
-  const byteSize = end - start2;
-  if (byteSize <= 6) {
-    return intFromAlignedSliceUsingNumber(
-      bitArray.rawBuffer,
-      start2,
-      end,
-      isBigEndian,
-      isSigned
-    );
-  } else {
-    return intFromAlignedSliceUsingBigInt(
-      bitArray.rawBuffer,
-      start2,
-      end,
-      isBigEndian,
-      isSigned
-    );
-  }
-}
-function intFromAlignedSliceUsingNumber(buffer, start2, end, isBigEndian, isSigned) {
-  const byteSize = end - start2;
-  let value3 = 0;
-  if (isBigEndian) {
-    for (let i = start2; i < end; i++) {
-      value3 *= 256;
-      value3 += buffer[i];
-    }
-  } else {
-    for (let i = end - 1; i >= start2; i--) {
-      value3 *= 256;
-      value3 += buffer[i];
-    }
-  }
-  if (isSigned) {
-    const highBit = 2 ** (byteSize * 8 - 1);
-    if (value3 >= highBit) {
-      value3 -= highBit * 2;
-    }
-  }
-  return value3;
-}
-function intFromAlignedSliceUsingBigInt(buffer, start2, end, isBigEndian, isSigned) {
-  const byteSize = end - start2;
-  let value3 = 0n;
-  if (isBigEndian) {
-    for (let i = start2; i < end; i++) {
-      value3 *= 256n;
-      value3 += BigInt(buffer[i]);
-    }
-  } else {
-    for (let i = end - 1; i >= start2; i--) {
-      value3 *= 256n;
-      value3 += BigInt(buffer[i]);
-    }
-  }
-  if (isSigned) {
-    const highBit = 1n << BigInt(byteSize * 8 - 1);
-    if (value3 >= highBit) {
-      value3 -= highBit * 2n;
-    }
-  }
-  return Number(value3);
-}
-function intFromUnalignedSliceUsingNumber(buffer, start2, end, isBigEndian, isSigned) {
-  const isStartByteAligned = start2 % 8 === 0;
-  let size = end - start2;
-  let byteIndex = Math.trunc(start2 / 8);
-  let value3 = 0;
-  if (isBigEndian) {
-    if (!isStartByteAligned) {
-      const leadingBitsCount = 8 - start2 % 8;
-      value3 = buffer[byteIndex++] & (1 << leadingBitsCount) - 1;
-      size -= leadingBitsCount;
-    }
-    while (size >= 8) {
-      value3 *= 256;
-      value3 += buffer[byteIndex++];
-      size -= 8;
-    }
-    if (size > 0) {
-      value3 *= 2 ** size;
-      value3 += buffer[byteIndex] >> 8 - size;
-    }
-  } else {
-    if (isStartByteAligned) {
-      let size2 = end - start2;
-      let scale = 1;
-      while (size2 >= 8) {
-        value3 += buffer[byteIndex++] * scale;
-        scale *= 256;
-        size2 -= 8;
-      }
-      value3 += (buffer[byteIndex] >> 8 - size2) * scale;
-    } else {
-      const highBitsCount = start2 % 8;
-      const lowBitsCount = 8 - highBitsCount;
-      let size2 = end - start2;
-      let scale = 1;
-      while (size2 >= 8) {
-        const byte = buffer[byteIndex] << highBitsCount | buffer[byteIndex + 1] >> lowBitsCount;
-        value3 += (byte & 255) * scale;
-        scale *= 256;
-        size2 -= 8;
-        byteIndex++;
-      }
-      if (size2 > 0) {
-        const lowBitsUsed = size2 - Math.max(0, size2 - lowBitsCount);
-        let trailingByte = (buffer[byteIndex] & (1 << lowBitsCount) - 1) >> lowBitsCount - lowBitsUsed;
-        size2 -= lowBitsUsed;
-        if (size2 > 0) {
-          trailingByte *= 2 ** size2;
-          trailingByte += buffer[byteIndex + 1] >> 8 - size2;
-        }
-        value3 += trailingByte * scale;
-      }
-    }
-  }
-  if (isSigned) {
-    const highBit = 2 ** (end - start2 - 1);
-    if (value3 >= highBit) {
-      value3 -= highBit * 2;
-    }
-  }
-  return value3;
-}
-function intFromUnalignedSliceUsingBigInt(buffer, start2, end, isBigEndian, isSigned) {
-  const isStartByteAligned = start2 % 8 === 0;
-  let size = end - start2;
-  let byteIndex = Math.trunc(start2 / 8);
-  let value3 = 0n;
-  if (isBigEndian) {
-    if (!isStartByteAligned) {
-      const leadingBitsCount = 8 - start2 % 8;
-      value3 = BigInt(buffer[byteIndex++] & (1 << leadingBitsCount) - 1);
-      size -= leadingBitsCount;
-    }
-    while (size >= 8) {
-      value3 *= 256n;
-      value3 += BigInt(buffer[byteIndex++]);
-      size -= 8;
-    }
-    if (size > 0) {
-      value3 <<= BigInt(size);
-      value3 += BigInt(buffer[byteIndex] >> 8 - size);
-    }
-  } else {
-    if (isStartByteAligned) {
-      let size2 = end - start2;
-      let shift = 0n;
-      while (size2 >= 8) {
-        value3 += BigInt(buffer[byteIndex++]) << shift;
-        shift += 8n;
-        size2 -= 8;
-      }
-      value3 += BigInt(buffer[byteIndex] >> 8 - size2) << shift;
-    } else {
-      const highBitsCount = start2 % 8;
-      const lowBitsCount = 8 - highBitsCount;
-      let size2 = end - start2;
-      let shift = 0n;
-      while (size2 >= 8) {
-        const byte = buffer[byteIndex] << highBitsCount | buffer[byteIndex + 1] >> lowBitsCount;
-        value3 += BigInt(byte & 255) << shift;
-        shift += 8n;
-        size2 -= 8;
-        byteIndex++;
-      }
-      if (size2 > 0) {
-        const lowBitsUsed = size2 - Math.max(0, size2 - lowBitsCount);
-        let trailingByte = (buffer[byteIndex] & (1 << lowBitsCount) - 1) >> lowBitsCount - lowBitsUsed;
-        size2 -= lowBitsUsed;
-        if (size2 > 0) {
-          trailingByte <<= size2;
-          trailingByte += buffer[byteIndex + 1] >> 8 - size2;
-        }
-        value3 += BigInt(trailingByte) << shift;
-      }
-    }
-  }
-  if (isSigned) {
-    const highBit = 2n ** BigInt(end - start2 - 1);
-    if (value3 >= highBit) {
-      value3 -= highBit * 2n;
-    }
-  }
-  return Number(value3);
-}
-function bitArrayValidateRange(bitArray, start2, end) {
-  if (start2 < 0 || start2 > bitArray.bitSize || end < start2 || end > bitArray.bitSize) {
-    const msg = `Invalid bit array slice: start = ${start2}, end = ${end}, bit size = ${bitArray.bitSize}`;
-    throw new globalThis.Error(msg);
-  }
-}
 var Result = class _Result extends CustomType {
   // @internal
   static isResult(data) {
@@ -2788,9 +2517,6 @@ function parse(json, decoder) {
   return do_parse(json, decoder);
 }
 function string4(input2) {
-  return identity2(input2);
-}
-function bool2(input2) {
   return identity2(input2);
 }
 function int3(input2) {
@@ -4788,50 +4514,13 @@ function pencil(attributes) {
     ])
   );
 }
-function pencil(attributes) {
-  return svg(
-    prepend(
-      attribute("stroke-linejoin", "round"),
-      prepend(
-        attribute("stroke-linecap", "round"),
-        prepend(
-          attribute("stroke-width", "2"),
-          prepend(
-            attribute("stroke", "currentColor"),
-            prepend(
-              attribute("fill", "none"),
-              prepend(
-                attribute("viewBox", "0 0 24 24"),
-                prepend(
-                  attribute("height", "24"),
-                  prepend(attribute("width", "24"), attributes)
-                )
-              )
-            )
-          )
-        )
-      )
-    ),
-    toList([
-      path(
-        toList([
-          attribute(
-            "d",
-            "M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
-          )
-        ])
-      ),
-      path(toList([attribute("d", "m15 5 4 4")]))
-    ])
-  );
-}
 
 // build/dev/javascript/o11a_common/o11a/components.mjs
 var line_discussion = "line-discussion";
 
 // build/dev/javascript/o11a_common/o11a/note.mjs
 var Note = class extends CustomType {
-  constructor(note_id, parent_id, significance, user_name, message, expanded_message, time, deleted) {
+  constructor(note_id, parent_id, significance, user_name, message, expanded_message, time, modifier) {
     super();
     this.note_id = note_id;
     this.parent_id = parent_id;
@@ -4840,7 +4529,7 @@ var Note = class extends CustomType {
     this.message = message;
     this.expanded_message = expanded_message;
     this.time = time;
-    this.deleted = deleted;
+    this.modifier = modifier;
   }
 };
 var Comment = class extends CustomType {
@@ -4866,6 +4555,10 @@ var Informational = class extends CustomType {
 var InformationalRejection = class extends CustomType {
 };
 var InformationalConfirmation = class extends CustomType {
+};
+var None2 = class extends CustomType {
+};
+var Edit = class extends CustomType {
 };
 function note_significance_to_int(note_significance) {
   if (note_significance instanceof Comment) {
@@ -4894,6 +4587,15 @@ function note_significance_to_int(note_significance) {
     return 12;
   }
 }
+function note_modifier_to_int(note_modifier) {
+  if (note_modifier instanceof None2) {
+    return 0;
+  } else if (note_modifier instanceof Edit) {
+    return 1;
+  } else {
+    return 2;
+  }
+}
 function encode_note(note) {
   return object2(
     toList([
@@ -4920,7 +4622,15 @@ function encode_note(note) {
           })()
         )
       ],
-      ["d", bool2(note.deleted)]
+      [
+        "d",
+        int3(
+          (() => {
+            let _pipe = note.modifier;
+            return note_modifier_to_int(_pipe);
+          })()
+        )
+      ]
     ])
   );
 }
@@ -5246,7 +4956,6 @@ function on_ctrl_enter(msg) {
 // build/dev/javascript/o11a_client/o11a/ui/line_discussion.mjs
 var Model2 = class extends CustomType {
   constructor(user_name, line_number, line_id, line_tag, line_number_text, notes, current_note_draft, current_thread_id, current_thread_notes, active_thread, show_expanded_message_box, current_expanded_message_draft, expanded_messages, editing_note) {
-  constructor(user_name, line_number, line_id, line_tag, line_number_text, notes, current_note_draft, current_thread_id, current_thread_notes, active_thread, show_expanded_message_box, current_expanded_message_draft, expanded_messages, editing_note) {
     super();
     this.user_name = user_name;
     this.line_number = line_number;
@@ -5261,7 +4970,6 @@ var Model2 = class extends CustomType {
     this.show_expanded_message_box = show_expanded_message_box;
     this.current_expanded_message_draft = current_expanded_message_draft;
     this.expanded_messages = expanded_messages;
-    this.editing_note = editing_note;
     this.editing_note = editing_note;
   }
 };
@@ -5345,14 +5053,6 @@ var UserEditedNote = class extends CustomType {
 };
 var UserCancelledEdit = class extends CustomType {
 };
-var UserEditedNote = class extends CustomType {
-  constructor(x0) {
-    super();
-    this[0] = x0;
-  }
-};
-var UserCancelledEdit = class extends CustomType {
-};
 function init2(_) {
   return [
     new Model2(
@@ -5368,8 +5068,6 @@ function init2(_) {
       new None(),
       false,
       new None(),
-      new$2(),
-      new None()
       new$2(),
       new None()
     ),
@@ -5468,14 +5166,6 @@ function comments_view(model) {
               div(
                 toList([class$("flex gap-[.5rem]")]),
                 toList([
-                  button(
-                    toList([
-                      id("edit-message-button"),
-                      class$("icon-button p-[.3rem]"),
-                      on_click(new UserEditedNote(note))
-                    ]),
-                    toList([pencil(toList([]))])
-                  ),
                   button(
                     toList([
                       id("edit-message-button"),
@@ -5583,21 +5273,6 @@ function new_message_input_view(model) {
           return fragment(toList([]));
         }
       })(),
-      (() => {
-        let $ = model.editing_note;
-        if ($ instanceof Some) {
-          return button(
-            toList([
-              id("cancel-message-edit-button"),
-              class$("icon-button p-[.3rem]"),
-              on_click(new UserCancelledEdit())
-            ]),
-            toList([x(toList([]))])
-          );
-        } else {
-          return fragment(toList([]));
-        }
-      })(),
       input(
         toList([
           id("new-comment-input"),
@@ -5658,26 +5333,17 @@ function expanded_message_view(model) {
 function classify_message(message, is_thread_open) {
   if (!is_thread_open) {
     if (message.startsWith("todo: ")) {
-    if (message.startsWith("todo: ")) {
       let rest = message.slice(6);
       return [new ToDo(), rest];
     } else if (message.startsWith("q: ")) {
       let rest = message.slice(3);
-    } else if (message.startsWith("q: ")) {
-      let rest = message.slice(3);
       return [new Question(), rest];
-    } else if (message.startsWith("question: ")) {
-      let rest = message.slice(10);
-      return [new Question(), rest];
-    } else if (message.startsWith("finding: ")) {
-      let rest = message.slice(9);
     } else if (message.startsWith("question: ")) {
       let rest = message.slice(10);
       return [new Question(), rest];
     } else if (message.startsWith("finding: ")) {
       let rest = message.slice(9);
       return [new FindingLead(), rest];
-    } else if (message.startsWith("dev: ")) {
     } else if (message.startsWith("dev: ")) {
       let rest = message.slice(5);
       return [new DevelperQuestion(), rest];
@@ -5690,29 +5356,18 @@ function classify_message(message, is_thread_open) {
   } else {
     if (message === "done") {
       return [new ToDoCompletion(), "done"];
-    if (message === "done") {
-      return [new ToDoCompletion(), "done"];
     } else if (message.startsWith("done: ")) {
       let rest = message.slice(6);
       return [new ToDoCompletion(), rest];
     } else if (message.startsWith("a: ")) {
       let rest = message.slice(3);
-    } else if (message.startsWith("a: ")) {
-      let rest = message.slice(3);
       return [new Answer(), rest];
-    } else if (message.startsWith("answer: ")) {
-      let rest = message.slice(8);
-      return [new Answer(), rest];
-    } else if (message.startsWith("reject: ")) {
-      let rest = message.slice(8);
     } else if (message.startsWith("answer: ")) {
       let rest = message.slice(8);
       return [new Answer(), rest];
     } else if (message.startsWith("reject: ")) {
       let rest = message.slice(8);
       return [new FindingRejection(), rest];
-    } else if (message.startsWith("confirm: ")) {
-      let rest = message.slice(9);
     } else if (message.startsWith("confirm: ")) {
       let rest = message.slice(9);
       return [new FindingConfirmation(), rest];
@@ -5725,45 +5380,6 @@ function classify_message(message, is_thread_open) {
     } else {
       return [new Comment(), message];
     }
-  }
-}
-function get_message_classification_prefix(significance) {
-  if (significance instanceof Answer2) {
-    return "a: ";
-  } else if (significance instanceof AnsweredDeveloperQuestion) {
-    return "dev: ";
-  } else if (significance instanceof AnsweredQuestion) {
-    return "q: ";
-  } else if (significance instanceof Comment2) {
-    return "";
-  } else if (significance instanceof CompleteToDo) {
-    return "todo: ";
-  } else if (significance instanceof ConfirmedFinding) {
-    return "finding: ";
-  } else if (significance instanceof FindingConfirmation2) {
-    return "confirm: ";
-  } else if (significance instanceof FindingRejection2) {
-    return "reject: ";
-  } else if (significance instanceof IncompleteToDo) {
-    return "todo: ";
-  } else if (significance instanceof Informational2) {
-    return "info: ";
-  } else if (significance instanceof InformationalConfirmation2) {
-    return "correct: ";
-  } else if (significance instanceof InformationalRejection2) {
-    return "incorrect: ";
-  } else if (significance instanceof RejectedFinding) {
-    return "finding: ";
-  } else if (significance instanceof RejectedInformational) {
-    return "info: ";
-  } else if (significance instanceof ToDoCompletion2) {
-    return "done: ";
-  } else if (significance instanceof UnansweredDeveloperQuestion) {
-    return "dev: ";
-  } else if (significance instanceof UnansweredQuestion) {
-    return "q: ";
-  } else {
-    return "finding: ";
   }
 }
 function get_message_classification_prefix(significance) {
@@ -5829,8 +5445,6 @@ function update(model, msg) {
           _record.current_expanded_message_draft,
           _record.expanded_messages,
           _record.editing_note
-          _record.expanded_messages,
-          _record.editing_note
         );
       })(),
       none()
@@ -5854,8 +5468,6 @@ function update(model, msg) {
           _record.active_thread,
           _record.show_expanded_message_box,
           _record.current_expanded_message_draft,
-          _record.expanded_messages,
-          _record.editing_note
           _record.expanded_messages,
           _record.editing_note
         );
@@ -5886,8 +5498,6 @@ function update(model, msg) {
           _record.current_expanded_message_draft,
           _record.expanded_messages,
           _record.editing_note
-          _record.expanded_messages,
-          _record.editing_note
         );
       })(),
       none()
@@ -5912,8 +5522,6 @@ function update(model, msg) {
           _record.current_expanded_message_draft,
           _record.expanded_messages,
           _record.editing_note
-          _record.expanded_messages,
-          _record.editing_note
         );
       })(),
       none()
@@ -5930,36 +5538,25 @@ function update(model, msg) {
           let _pipe = now4;
           return as_utc_datetime(_pipe);
         })();
-        let $ = (() => {
-          let $12 = model.editing_note;
-          if ($12 instanceof Some) {
-            let note2 = $12[0];
-            return ["edit", note2.note_id];
-          } else {
-            return [
-              model.user_name + (() => {
-                let _pipe = now4;
-                let _pipe$1 = to_unique_int(_pipe);
-                return to_string(_pipe$1);
-              })() + (() => {
-                let _pipe = now_dt;
-                let _pipe$1 = to_unix_milli2(_pipe);
-                return to_string(_pipe$1);
-              })(),
-              model.current_thread_id
-            ];
-          }
+        let note_id = model.user_name + (() => {
+          let _pipe = now4;
+          let _pipe$1 = to_unique_int(_pipe);
+          return to_string(_pipe$1);
+        })() + (() => {
+          let _pipe = now_dt;
+          let _pipe$1 = to_unix_milli2(_pipe);
+          return to_string(_pipe$1);
         })();
         let $ = (() => {
           let $12 = model.editing_note;
           if ($12 instanceof Some) {
             let note2 = $12[0];
-            return ["edit" + note_id, note2.note_id];
+            return [new Edit(), note2.note_id];
           } else {
-            return [note_id, model.current_thread_id];
+            return [new None2(), model.current_thread_id];
           }
         })();
-        let note_id$1 = $[0];
+        let modifier = $[0];
         let parent_id = $[1];
         let $1 = classify_message(
           model.current_note_draft,
@@ -5967,25 +5564,20 @@ function update(model, msg) {
         );
         let significance = $1[0];
         let message = $1[1];
-        let significance = $1[0];
-        let message = $1[1];
         let expanded_message = (() => {
-          let $2 = (() => {
           let $2 = (() => {
             let _pipe = model.current_expanded_message_draft;
             return map(_pipe, trim);
           })();
           if ($2 instanceof Some && $2[0] === "") {
-          if ($2 instanceof Some && $2[0] === "") {
             return new None();
           } else {
-            let msg$1 = $2;
             let msg$1 = $2;
             return msg$1;
           }
         })();
         let note = new Note(
-          note_id$1,
+          note_id,
           parent_id,
           significance,
           "user" + (() => {
@@ -5995,10 +5587,8 @@ function update(model, msg) {
           message,
           expanded_message,
           now_dt,
-          false
+          modifier
         );
-        echo("Submitting note", "src/o11a/ui/line_discussion.gleam", 239);
-        echo(note, "src/o11a/ui/line_discussion.gleam", 240);
         echo("Submitting note", "src/o11a/ui/line_discussion.gleam", 239);
         echo(note, "src/o11a/ui/line_discussion.gleam", 240);
         return [
@@ -6017,8 +5607,6 @@ function update(model, msg) {
               _record.active_thread,
               false,
               new None(),
-              _record.expanded_messages,
-              new None()
               _record.expanded_messages,
               new None()
             );
@@ -6056,8 +5644,6 @@ function update(model, msg) {
           ),
           _record.show_expanded_message_box,
           _record.current_expanded_message_draft,
-          _record.expanded_messages,
-          _record.editing_note
           _record.expanded_messages,
           _record.editing_note
         );
@@ -6105,8 +5691,6 @@ function update(model, msg) {
           _record.current_expanded_message_draft,
           _record.expanded_messages,
           _record.editing_note
-          _record.expanded_messages,
-          _record.editing_note
         );
       })(),
       none()
@@ -6131,8 +5715,6 @@ function update(model, msg) {
           _record.current_expanded_message_draft,
           _record.expanded_messages,
           _record.editing_note
-          _record.expanded_messages,
-          _record.editing_note
         );
       })(),
       none()
@@ -6155,8 +5737,6 @@ function update(model, msg) {
           _record.active_thread,
           _record.show_expanded_message_box,
           new Some(expanded_message),
-          _record.expanded_messages,
-          _record.editing_note
           _record.expanded_messages,
           _record.editing_note
         );
@@ -6185,8 +5765,6 @@ function update(model, msg) {
             _record.current_expanded_message_draft,
             delete$2(model.expanded_messages, for_note_id),
             _record.editing_note
-            delete$2(model.expanded_messages, for_note_id),
-            _record.editing_note
           );
         })(),
         none()
@@ -6208,8 +5786,6 @@ function update(model, msg) {
             _record.active_thread,
             _record.show_expanded_message_box,
             _record.current_expanded_message_draft,
-            insert2(model.expanded_messages, for_note_id),
-            _record.editing_note
             insert2(model.expanded_messages, for_note_id),
             _record.editing_note
           );
@@ -6262,8 +5838,6 @@ function update(model, msg) {
           _record.current_expanded_message_draft,
           _record.expanded_messages,
           _record.editing_note
-          _record.expanded_messages,
-          _record.editing_note
         );
       })(),
       emit2(
@@ -6289,7 +5863,6 @@ function update(model, msg) {
         )
       )
     ];
-  } else if (msg instanceof UserMaximizeThread) {
   } else if (msg instanceof UserMaximizeThread) {
     return [
       model,
@@ -6319,7 +5892,14 @@ function update(model, msg) {
           _record.current_thread_id,
           _record.current_thread_notes,
           _record.active_thread,
-          _record.show_expanded_message_box,
+          (() => {
+            let $ = note.expanded_message;
+            if ($ instanceof Some) {
+              return true;
+            } else {
+              return false;
+            }
+          })(),
           note.expanded_message,
           _record.expanded_messages,
           new Some(note)
@@ -6342,54 +5922,7 @@ function update(model, msg) {
           _record.current_thread_id,
           _record.current_thread_notes,
           _record.active_thread,
-          _record.show_expanded_message_box,
-          new None(),
-          _record.expanded_messages,
-          new None()
-        );
-      })(),
-      none()
-    ];
-  } else if (msg instanceof UserEditedNote) {
-    let note = msg[0];
-    return [
-      (() => {
-        let _record = model;
-        return new Model2(
-          _record.user_name,
-          _record.line_number,
-          _record.line_id,
-          _record.line_tag,
-          _record.line_number_text,
-          _record.notes,
-          get_message_classification_prefix(note.significance) + note.message,
-          _record.current_thread_id,
-          _record.current_thread_notes,
-          _record.active_thread,
-          _record.show_expanded_message_box,
-          note.expanded_message,
-          _record.expanded_messages,
-          new Some(note)
-        );
-      })(),
-      none()
-    ];
-  } else {
-    return [
-      (() => {
-        let _record = model;
-        return new Model2(
-          _record.user_name,
-          _record.line_number,
-          _record.line_id,
-          _record.line_tag,
-          _record.line_number_text,
-          _record.notes,
-          "",
-          _record.current_thread_id,
-          _record.current_thread_notes,
-          _record.active_thread,
-          _record.show_expanded_message_box,
+          false,
           new None(),
           _record.expanded_messages,
           new None()
@@ -6522,150 +6055,6 @@ function component2() {
       ])
     )
   );
-}
-function echo(value3, file, line2) {
-  const grey = "\x1B[90m";
-  const reset_color = "\x1B[39m";
-  const file_line = `${file}:${line2}`;
-  const string_value = echo$inspect(value3);
-  if (typeof process === "object" && process.stderr?.write) {
-    const string5 = `${grey}${file_line}${reset_color}
-${string_value}
-`;
-    process.stderr.write(string5);
-  } else if (typeof Deno === "object") {
-    const string5 = `${grey}${file_line}${reset_color}
-${string_value}
-`;
-    Deno.stderr.writeSync(new TextEncoder().encode(string5));
-  } else {
-    const string5 = `${file_line}
-${string_value}`;
-    console.log(string5);
-  }
-  return value3;
-}
-function echo$inspectString(str) {
-  let new_str = '"';
-  for (let i = 0; i < str.length; i++) {
-    let char = str[i];
-    if (char == "\n")
-      new_str += "\\n";
-    else if (char == "\r")
-      new_str += "\\r";
-    else if (char == "	")
-      new_str += "\\t";
-    else if (char == "\f")
-      new_str += "\\f";
-    else if (char == "\\")
-      new_str += "\\\\";
-    else if (char == '"')
-      new_str += '\\"';
-    else if (char < " " || char > "~" && char < "\xA0") {
-      new_str += "\\u{" + char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0") + "}";
-    } else {
-      new_str += char;
-    }
-  }
-  new_str += '"';
-  return new_str;
-}
-function echo$inspectDict(map6) {
-  let body = "dict.from_list([";
-  let first2 = true;
-  let key_value_pairs = [];
-  map6.forEach((value3, key) => {
-    key_value_pairs.push([key, value3]);
-  });
-  key_value_pairs.sort();
-  key_value_pairs.forEach(([key, value3]) => {
-    if (!first2)
-      body = body + ", ";
-    body = body + "#(" + echo$inspect(key) + ", " + echo$inspect(value3) + ")";
-    first2 = false;
-  });
-  return body + "])";
-}
-function echo$inspectCustomType(record) {
-  const props = Object.keys(record).map((label) => {
-    const value3 = echo$inspect(record[label]);
-    return isNaN(parseInt(label)) ? `${label}: ${value3}` : value3;
-  }).join(", ");
-  return props ? `${record.constructor.name}(${props})` : record.constructor.name;
-}
-function echo$inspectObject(v) {
-  const name2 = Object.getPrototypeOf(v)?.constructor?.name || "Object";
-  const props = [];
-  for (const k of Object.keys(v)) {
-    props.push(`${echo$inspect(k)}: ${echo$inspect(v[k])}`);
-  }
-  const body = props.length ? " " + props.join(", ") + " " : "";
-  const head = name2 === "Object" ? "" : name2 + " ";
-  return `//js(${head}{${body}})`;
-}
-function echo$inspect(v) {
-  const t = typeof v;
-  if (v === true)
-    return "True";
-  if (v === false)
-    return "False";
-  if (v === null)
-    return "//js(null)";
-  if (v === void 0)
-    return "Nil";
-  if (t === "string")
-    return echo$inspectString(v);
-  if (t === "bigint" || t === "number")
-    return v.toString();
-  if (Array.isArray(v))
-    return `#(${v.map(echo$inspect).join(", ")})`;
-  if (v instanceof List)
-    return `[${v.toArray().map(echo$inspect).join(", ")}]`;
-  if (v instanceof UtfCodepoint)
-    return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
-  if (v instanceof BitArray)
-    return echo$inspectBitArray(v);
-  if (v instanceof CustomType)
-    return echo$inspectCustomType(v);
-  if (echo$isDict(v))
-    return echo$inspectDict(v);
-  if (v instanceof Set)
-    return `//js(Set(${[...v].map(echo$inspect).join(", ")}))`;
-  if (v instanceof RegExp)
-    return `//js(${v})`;
-  if (v instanceof Date)
-    return `//js(Date("${v.toISOString()}"))`;
-  if (v instanceof Function) {
-    const args = [];
-    for (const i of Array(v.length).keys())
-      args.push(String.fromCharCode(i + 97));
-    return `//fn(${args.join(", ")}) { ... }`;
-  }
-  return echo$inspectObject(v);
-}
-function echo$inspectBitArray(bitArray) {
-  let endOfAlignedBytes = bitArray.bitOffset + 8 * Math.trunc(bitArray.bitSize / 8);
-  let alignedBytes = bitArraySlice(bitArray, bitArray.bitOffset, endOfAlignedBytes);
-  let remainingUnalignedBits = bitArray.bitSize % 8;
-  if (remainingUnalignedBits > 0) {
-    let remainingBits = bitArraySliceToInt(bitArray, endOfAlignedBytes, bitArray.bitSize, false, false);
-    let alignedBytesArray = Array.from(alignedBytes.rawBuffer);
-    let suffix = `${remainingBits}:size(${remainingUnalignedBits})`;
-    if (alignedBytesArray.length === 0) {
-      return `<<${suffix}>>`;
-    } else {
-      return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}, ${suffix}>>`;
-    }
-  } else {
-    return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}>>`;
-  }
-}
-function echo$isDict(value3) {
-  try {
-    return value3 instanceof Dict;
-  } catch {
-    return false;
-  }
 }
 function echo(value3, file, line2) {
   const grey = "\x1B[90m";

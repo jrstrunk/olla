@@ -210,7 +210,7 @@ pub fn from_note(note: note.Note, thread_notes: List(note.Note)) {
   // Find the most recent edit of the note
   let edited_note =
     list.find(thread_notes, fn(thread_note) {
-      thread_note.note_id |> string.slice(0, 4) == "edit"
+      thread_note.modifier == note.Edit
     })
 
   // Update the note with the most recent edited messages  if any

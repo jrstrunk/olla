@@ -206,9 +206,9 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         |> datetime.to_unix_milli
         |> int.to_string
 
-      let #(note_id, parent_id) = case model.editing_note {
-        Some(note) -> #("edit" <> note_id, note.note_id)
-        None -> #(note_id, model.current_thread_id)
+      let #(modifier, parent_id) = case model.editing_note {
+        Some(note) -> #(note.Edit, note.note_id)
+        None -> #(note.None, model.current_thread_id)
       }
 
       let #(significance, message) =
@@ -233,11 +233,8 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
           message:,
           expanded_message:,
           time: now_dt,
-          deleted: False,
+          modifier:,
         )
-
-      echo "Submitting note"
-      echo note
 
       #(
         Model(
@@ -376,6 +373,10 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
           <> note.message,
         current_expanded_message_draft: note.expanded_message,
         editing_note: Some(note),
+        show_expanded_message_box: case note.expanded_message {
+          Some(..) -> True
+          None -> False
+        },
       ),
       effect.none(),
     )
@@ -385,6 +386,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         current_note_draft: "",
         current_expanded_message_draft: None,
         editing_note: None,
+        show_expanded_message_box: False,
       ),
       effect.none(),
     )

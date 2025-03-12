@@ -16,7 +16,7 @@ pub type Note {
     message: String,
     expanded_message: Option(String),
     time: tempo.DateTime,
-    deleted: Bool,
+    modifier: NoteModifier,
   )
 }
 
@@ -69,7 +69,30 @@ pub fn note_significance_from_int(note_significance) {
     10 -> Informational
     11 -> InformationalRejection
     12 -> InformationalConfirmation
-    _ -> panic as "Invalid note significance found"
+    _ -> panic as "Invalid note significance given"
+  }
+}
+
+pub type NoteModifier {
+  None
+  Edit
+  Delete
+}
+
+pub fn note_modifier_to_int(note_modifier) {
+  case note_modifier {
+    None -> 0
+    Edit -> 1
+    Delete -> 2
+  }
+}
+
+pub fn note_modifier_from_int(note_modifier) {
+  case note_modifier {
+    0 -> None
+    1 -> Edit
+    2 -> Delete
+    _ -> panic as "Invalid note modifier given"
   }
 }
 
@@ -112,7 +135,7 @@ pub fn encode_note(note: Note) {
     #("m", json.string(note.message)),
     #("x", json.nullable(note.expanded_message, json.string)),
     #("t", json.int(note.time |> datetime.to_unix_milli)),
-    #("d", json.bool(note.deleted)),
+    #("d", json.int(note.modifier |> note_modifier_to_int)),
   ])
 }
 
@@ -124,7 +147,7 @@ pub fn note_decoder() {
   use message <- decode.field("m", decode.string)
   use expanded_message <- decode.field("x", decode.optional(decode.string))
   use time <- decode.field("t", decode.int)
-  use deleted <- decode.field("d", decode.bool)
+  use modifier <- decode.field("d", decode.int)
 
   Note(
     note_id:,
@@ -134,7 +157,7 @@ pub fn note_decoder() {
     message:,
     expanded_message:,
     time: datetime.from_unix_milli(time),
-    deleted:,
+    modifier: note_modifier_from_int(modifier),
   )
   |> decode.success
 }
@@ -148,7 +171,7 @@ pub fn example_note() {
     message: "Wow bro great finding that is really cool",
     expanded_message: option.None,
     time: datetime.literal("2021-01-01T00:00:00Z"),
-    deleted: False,
+    modifier: None,
   )
 }
 
@@ -163,7 +186,7 @@ pub fn example_note_thread() {
         message: "world",
         expanded_message: option.None,
         time: example_note().time,
-        deleted: False,
+        modifier: None,
       ),
       Note(
         note_id: "L3",
@@ -173,7 +196,7 @@ pub fn example_note_thread() {
         message: "hello2",
         expanded_message: option.None,
         time: example_note().time,
-        deleted: False,
+        modifier: None,
       ),
     ]),
     #("L50", [
@@ -185,7 +208,7 @@ pub fn example_note_thread() {
         message: "hello",
         expanded_message: option.None,
         time: example_note().time,
-        deleted: False,
+        modifier: None,
       ),
     ]),
     #("L3", [
@@ -197,7 +220,7 @@ pub fn example_note_thread() {
         message: "world2",
         expanded_message: option.None,
         time: example_note().time,
-        deleted: False,
+        modifier: None,
       ),
     ]),
   ]

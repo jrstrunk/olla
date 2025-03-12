@@ -2,7 +2,6 @@ import gleam/dynamic/decode
 import gleam/function
 import gleam/list
 import gleam/result
-import gleam/string
 import lib/concurrent_dict
 import lib/persistent_concurrent_duplicate_dict as pcd_dict
 import o11a/computed_note
@@ -52,6 +51,7 @@ pub fn note_persist_encoder(note: note.Note) {
     pcd_dict.text(note.message),
     pcd_dict.text_nullable(note.expanded_message),
     pcd_dict.int(datetime.to_unix_milli(note.time)),
+    pcd_dict.int(note.modifier |> note.note_modifier_to_int),
   ]
 }
 
@@ -63,6 +63,7 @@ pub fn note_persist_decoder() {
   use message <- decode.field(4, decode.string)
   use expanded_message <- decode.field(5, decode.optional(decode.string))
   use time <- decode.field(6, decode.int)
+  use modifier <- decode.field(7, decode.int)
 
   note.Note(
     note_id:,
@@ -72,7 +73,7 @@ pub fn note_persist_decoder() {
     message:,
     expanded_message:,
     time: datetime.from_unix_milli(time),
-    deleted: False,
+    modifier: note.note_modifier_from_int(modifier),
   )
   |> decode.success
 }
@@ -128,14 +129,12 @@ pub fn get_structured_notes(
     |> list.sort(fn(a, b) { datetime.compare(b.time, a.time) })
 
   let computed_notes =
-    list.map(notes, fn(note) {
+    list.filter(notes, fn(note) { note.modifier == note.None })
+    |> list.map(fn(note) {
       computed_note.from_note(
         note,
         pcd_dict.get(discussion.notes, note.note_id),
       )
-    })
-    |> list.filter(fn(computed_note) {
-      computed_note.note_id |> string.slice(0, 4) != "edit"
     })
 
   case computed_notes {
