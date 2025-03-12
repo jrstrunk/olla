@@ -190,6 +190,12 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       effect.none(),
     )
     UserSubmittedNote -> {
+      let #(significance, message) =
+        classify_message(
+          model.current_note_draft,
+          is_thread_open: option.is_some(model.active_thread),
+        )
+
       use <- given.that(model.current_note_draft == "", return: fn() {
         #(model, effect.none())
       })
@@ -210,12 +216,6 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         Some(note) -> #(note.Edit, note.note_id)
         None -> #(note.None, model.current_thread_id)
       }
-
-      let #(significance, message) =
-        classify_message(
-          model.current_note_draft,
-          is_thread_open: option.is_some(model.active_thread),
-        )
 
       let expanded_message = case
         model.current_expanded_message_draft |> option.map(string.trim)
