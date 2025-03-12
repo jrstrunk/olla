@@ -1,3 +1,4 @@
+import argv
 import concurrent_dict
 import filepath
 import gleam/erlang/process
@@ -40,9 +41,13 @@ type Context {
 }
 
 pub fn main() {
-  io.println("o11a is starting!")
+  let config = case argv.load().arguments {
+    [] -> config.get_prod_config()
+    ["dev"] -> config.get_dev_config()
+    _ -> panic as "Unrecognized argument given"
+  }
 
-  let config = config.Config(port: 8400)
+  io.println("o11a is starting!")
 
   let skeletons = concurrent_dict.new()
 

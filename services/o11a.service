@@ -1,0 +1,13 @@
+[Unit]
+Description=O11a Web Server
+
+[Service]
+WorkingDirectory=/home/john/olla/server
+User=john
+ExecStart=/home/linuxbrew/.linuxbrew/bin/gleam run
+Environment=PATH=/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/home/john/.local/bin
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -8,6 +8,14 @@ pub type Config {
   Config(port: Int)
 }
 
+pub fn get_prod_config() {
+  Config(port: 8413)
+}
+
+pub fn get_dev_config() {
+  Config(port: 8400)
+}
+
 // Gets the full path to the priv, plus the provided local path
 pub fn get_priv_path(for local_path) {
   let assert Ok(priv) = erlang.priv_directory("o11a")

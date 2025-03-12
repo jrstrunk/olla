@@ -11,7 +11,7 @@ run:
   && gleam run -m lustre/dev build component o11a/ui/line_discussion --minify --outdir="../server/priv/static" \
 	&& gleam run -m lustre/dev build component o11a/ui/function_discussion --minify --outdir="../server/priv/static" \
 	&& cd ../server \
-	add && gleam run)
+	add && gleam run dev)
 
 .PHONY: clean-skeleton
 clean-skeleton:
