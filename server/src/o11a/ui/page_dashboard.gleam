@@ -1,3 +1,4 @@
+import concurrent_dict
 import gleam/dict
 import gleam/list
 import gleam/option.{Some}
@@ -23,7 +24,11 @@ pub type Msg {
 }
 
 pub type Model {
-  Model(discussion: discussion.Discussion, page_path: String)
+  Model(
+    discussion: discussion.Discussion,
+    page_path: String,
+    skeletons: concurrent_dict.ConcurrentDict(String, String),
+  )
 }
 
 pub fn init(init_model: Model) -> #(Model, effect.Effect(Msg)) {
@@ -46,10 +51,10 @@ fn cached_view(model: Model) -> element.Element(Msg) {
 
   // Update the skeleton so the initial render on the client's request is up to
   // date with server state.
-  discussion.set_skeleton(
-    model.discussion,
-    for: get_skeleton_key(model.page_path),
-    skeleton: render |> element.to_string,
+  concurrent_dict.insert(
+    model.skeletons,
+    get_skeleton_key(model.page_path),
+    render |> element.to_string,
   )
 
   render
@@ -104,44 +109,7 @@ fn get_skeleton_key(for page_path) {
   "dsc" <> page_path
 }
 
-pub fn get_skeleton(discussion, for page_path) {
-  case discussion.get_skeleton(discussion, for: get_skeleton_key(page_path)) {
-    Ok(skeleton) -> skeleton
-    Error(Nil) -> {
-      let skeleton =
-        html.div([], [
-          html.div([attribute.class("p-[.5rem]")], [
-            html.h2([attribute.class("mb-[.5rem]")], [
-              html.text("incomplete todos"),
-            ]),
-            html.p([attribute.class("comment mb-[2rem] text-[.9rem]")], [
-              html.text("..."),
-            ]),
-            html.h2([attribute.class("mb-[.5rem]")], [
-              html.text("unanswered questions"),
-            ]),
-            html.p([attribute.class("comment mb-[2rem] text-[.9rem]")], [
-              html.text("..."),
-            ]),
-            html.h2([attribute.class("mb-[.5rem]")], [
-              html.text("unconfirmed findings"),
-            ]),
-            html.p([attribute.class("comment mb-[2rem] text-[.9rem]")], [
-              html.text("..."),
-            ]),
-            html.h2([attribute.class("mb-[.5rem]")], [
-              html.text("confirmed findings"),
-            ]),
-            html.p([attribute.class("comment mb-[2rem] text-[.9rem]")], [
-              html.text("..."),
-            ]),
-          ]),
-        ])
-        |> element.to_string
-
-      discussion.set_skeleton(discussion, for: page_path <> "dsc", skeleton:)
-
-      skeleton
-    }
-  }
+pub fn get_skeleton(skeletons, for page_path) {
+  concurrent_dict.get(skeletons, get_skeleton_key(page_path))
+  |> result.unwrap("")
 }

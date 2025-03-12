@@ -1,3 +1,4 @@
+import concurrent_dict
 import filepath
 import gleam/erlang/process
 import gleam/http/request
@@ -6,6 +7,7 @@ import gleam/io
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/result
+import gleam/string
 import gleam/string_tree
 import lib/elementx
 import lib/server_componentx
@@ -23,6 +25,7 @@ import o11a/ui/gateway
 import o11a/ui/page_dashboard
 import simplifile
 import snag
+import tempo/instant
 import wisp
 import wisp/wisp_mist
 
@@ -31,8 +34,8 @@ type Context {
     dashboard_gateway: gateway.DashboardGateway,
     page_gateway: gateway.PageGateway,
     page_dashboard_gateway: gateway.PageDashboardGateway,
-    discussion_gateway: gateway.DiscussionGateway,
     audit_metadata_gateway: gateway.AuditMetaDataGateway,
+    skeletons: concurrent_dict.ConcurrentDict(String, String),
   )
 }
 
@@ -41,22 +44,24 @@ pub fn main() {
 
   let config = config.Config(port: 8400)
 
+  let skeletons = concurrent_dict.new()
+
   use
     gateway.Gateway(
       dashboard_gateway:,
       page_gateway:,
       page_dashboard_gateway:,
-      discussion_gateway:,
       audit_metadata_gateway:,
     )
-  <- result.map(gateway.start_gateway())
+  <- result.map(gateway.start_gateway(skeletons))
+
   let context =
     Context(
       dashboard_gateway:,
       page_gateway:,
       page_dashboard_gateway:,
-      discussion_gateway:,
       audit_metadata_gateway:,
+      skeletons:,
     )
 
   let assert Ok(_) =
@@ -127,10 +132,10 @@ fn handle_wisp_request(req, context: Context) {
       )
 
     [audit_name, "dashboard"] ->
-      gateway.get_discussion(context.discussion_gateway, for: audit_name)
-      |> audit_dashboard.get_skeleton
-      |> elementx.server_component_with_skeleton(
+      audit_dashboard.get_skeleton(context.skeletons, for: audit_name)
+      |> elementx.server_component_with_prerendered_skeleton(
         filepath.join("component-dashboard", audit_name),
+        components.audit_dashboard,
         _,
       )
       |> audit_tree.view(
@@ -150,7 +155,12 @@ fn handle_wisp_request(req, context: Context) {
       case
         config.get_audit_path(for: audit_name)
         |> filepath.join(readme)
-        |> simplifile.read
+        |> fn(path) {
+          let start = instant.now()
+          let c = simplifile.read(path)
+          echo instant.format_since(start)
+          c
+        }
         |> snag.map_error(simplifile.describe_error)
       {
         Ok(contents) ->
@@ -180,16 +190,24 @@ fn handle_wisp_request(req, context: Context) {
       elementx.server_component_with_prerendered_skeleton(
         filepath.join("component-page", file_path),
         components.audit_page,
-        gateway.get_discussion(context.discussion_gateway, for: audit_name)
-          |> audit_page.get_skeleton(for: file_path),
+        audit_page.get_skeleton(context.skeletons, for: file_path),
       )
       |> audit_tree.view(
-        Some(elementx.server_component_with_prerendered_skeleton(
-          filepath.join("component-page-dashboard", file_path),
-          components.audit_page,
-          gateway.get_discussion(context.discussion_gateway, for: audit_name)
-            |> page_dashboard.get_skeleton(for: file_path),
-        )),
+        Some(
+          elementx.server_component_with_prerendered_skeleton(
+            filepath.join("component-page-dashboard", file_path),
+            components.audit_page,
+            {
+              let start = instant.now()
+              let skel =
+                page_dashboard.get_skeleton(context.skeletons, for: file_path)
+
+              echo skel |> string.length
+              echo instant.format_since(start)
+              skel
+            },
+          ),
+        ),
         audit_name,
         on: file_path,
         with: gateway.get_audit_metadata(

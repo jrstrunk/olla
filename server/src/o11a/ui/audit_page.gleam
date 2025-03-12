@@ -1,3 +1,4 @@
+import concurrent_dict
 import given
 import gleam/dict
 import gleam/dynamic
@@ -41,6 +42,7 @@ pub type Model {
     page_path: String,
     preprocessed_source: List(String),
     discussion: discussion.Discussion,
+    skeletons: concurrent_dict.ConcurrentDict(String, String),
   )
 }
 
@@ -68,10 +70,10 @@ pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 fn cached_view(model: Model) -> element.Element(Msg) {
   // Update the skeleton so the initial render on the client's request is up to
   // date with server state.
-  discussion.set_skeleton(
-    model.discussion,
-    for: get_skeleton_key(model.page_path),
-    skeleton: view(model, is_skeleton: True) |> element.to_string,
+  concurrent_dict.insert(
+    model.skeletons,
+    get_skeleton_key(model.page_path),
+    view(model, is_skeleton: True) |> element.to_string,
   )
 
   view(model, is_skeleton: False)
@@ -81,8 +83,8 @@ fn get_skeleton_key(for page_path) {
   "adpg" <> page_path
 }
 
-pub fn get_skeleton(discussion, for page_path) {
-  discussion.get_skeleton(discussion, for: get_skeleton_key(page_path))
+pub fn get_skeleton(skeletons, for page_path) {
+  concurrent_dict.get(skeletons, get_skeleton_key(page_path))
   |> result.unwrap("")
 }
 

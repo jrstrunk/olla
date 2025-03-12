@@ -1,7 +1,9 @@
+import concurrent_dict
 import filepath
 import gleam/dict
 import gleam/list
 import gleam/option.{None, Some}
+import gleam/result
 import gleam/string
 import lib/elementx
 import lib/persistent_concurrent_duplicate_dict as pcd_dict
@@ -14,7 +16,7 @@ import o11a/note
 import o11a/server/discussion
 
 pub fn app() -> lustre.App(Model, Model, Msg) {
-  lustre.component(init, update, view, dict.new())
+  lustre.component(init, update, cached_view, dict.new())
 }
 
 pub type Msg {
@@ -22,7 +24,10 @@ pub type Msg {
 }
 
 pub type Model {
-  Model(discussion: discussion.Discussion)
+  Model(
+    discussion: discussion.Discussion,
+    skeletons: concurrent_dict.ConcurrentDict(String, String),
+  )
 }
 
 pub fn init(init_model: Model) -> #(Model, effect.Effect(Msg)) {
@@ -64,6 +69,20 @@ h2 {
   margin-bottom: 1rem;
 }
 "
+
+fn cached_view(model: Model) -> element.Element(Msg) {
+  let render = view(model)
+
+  // Update the skeleton so the initial render on the client's request is up to
+  // date with server state.
+  concurrent_dict.insert(
+    model.skeletons,
+    get_skeleton_key(model.discussion.audit_name),
+    render |> element.to_string,
+  )
+
+  render
+}
 
 fn view(model: Model) -> element.Element(Msg) {
   let container_styles = [#("margin-left", "2rem")]
@@ -111,9 +130,13 @@ fn notes_view(notes) {
   )
 }
 
-pub fn get_skeleton(for discussion) {
-  Model(discussion:)
-  |> view
+fn get_skeleton_key(for audit_name) {
+  "dsh" <> audit_name
+}
+
+pub fn get_skeleton(skeletons, for audit_name) {
+  concurrent_dict.get(skeletons, get_skeleton_key(audit_name))
+  |> result.unwrap("")
 }
 
 pub fn find_open_notes(in discussion: discussion.Discussion, for page_path) {

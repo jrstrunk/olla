@@ -1,5 +1,5 @@
+import concurrent_dict
 import gleeunit/should
-import lib/concurrent_dict
 
 pub fn nested_concurrent_dict_test() {
   let cd = concurrent_dict.new()
