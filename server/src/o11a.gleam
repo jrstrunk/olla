@@ -74,10 +74,10 @@ fn handler(req, context: Context) {
     ["lustre-server-component.mjs"] -> serve_lustre_framework()
 
     ["styles.css" as stylesheet]
-    | ["line_discussion.css" as stylesheet]
+    | ["line_discussion.min.css" as stylesheet]
     | ["page_panel.css" as stylesheet] -> serve_css(stylesheet)
 
-    ["line_discussion.mjs" as script]
+    ["line_discussion.min.mjs" as script]
     | ["page_navigation.mjs" as script]
     | ["page_panel.mjs" as script] -> serve_js(script)
 
@@ -136,6 +136,7 @@ fn handle_wisp_request(req, context: Context) {
       |> audit_tree.view(
         None,
         audit_name,
+        on: audit_name <> "/dashboard",
         with: gateway.get_audit_metadata(
           context.audit_metadata_gateway,
           audit_name,
@@ -157,6 +158,7 @@ fn handle_wisp_request(req, context: Context) {
           |> audit_tree.view(
             None,
             audit_name,
+            on: audit_name <> "/" <> readme,
             with: gateway.get_audit_metadata(
               context.audit_metadata_gateway,
               audit_name,
@@ -189,6 +191,7 @@ fn handle_wisp_request(req, context: Context) {
             |> page_dashboard.get_skeleton(for: file_path),
         )),
         audit_name,
+        on: file_path,
         with: gateway.get_audit_metadata(
           context.audit_metadata_gateway,
           audit_name,
@@ -206,12 +209,11 @@ fn as_document(body: element.Element(msg)) {
     html.head([], [
       html.link([
         attribute.rel("stylesheet"),
-        attribute.href("/line_discussion.css"),
+        attribute.href("/line_discussion.min.css"),
       ]),
       html.link([attribute.rel("stylesheet"), attribute.href("/styles.css")]),
-      html.script([attribute.type_("module"), attribute.src("/app.mjs")], ""),
       html.script(
-        [attribute.type_("module"), attribute.src("/line_discussion.mjs")],
+        [attribute.type_("module"), attribute.src("/line_discussion.min.mjs")],
         "",
       ),
       html.script(

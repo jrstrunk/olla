@@ -64,6 +64,10 @@ const style = "
   color: var(--text-color);
 }
 
+.underline {
+  text-decoration: underline;
+}
+
 .tree-link:hover {
   text-decoration: underline;
 }
@@ -144,7 +148,13 @@ function stopResize() {
 });
 "
 
-pub fn view(file_contents, side_panel, for audit_name, with metadata) {
+pub fn view(
+  file_contents,
+  side_panel,
+  for audit_name,
+  on current_file_path,
+  with metadata,
+) {
   element.fragment([
     html.style([], style),
     html.script([], resize_script),
@@ -153,7 +163,7 @@ pub fn view(file_contents, side_panel, for audit_name, with metadata) {
         html.h3([attribute.id("audit-tree-header")], [
           html.text(audit_name <> " files"),
         ]),
-        audit_file_tree_view(audit_name, metadata),
+        audit_file_tree_view(audit_name, current_file_path, metadata),
       ]),
       html.div([attribute.id("tree-resizer")], []),
       html.div([attribute.id("file-contents")], [file_contents]),
@@ -169,7 +179,11 @@ pub fn view(file_contents, side_panel, for audit_name, with metadata) {
   ])
 }
 
-fn audit_file_tree_view(audit_name, metadata: audit_metadata.AuditMetaData) {
+fn audit_file_tree_view(
+  audit_name,
+  current_file_path,
+  metadata: audit_metadata.AuditMetaData,
+) {
   let all_audit_files =
     metadata.in_scope_files
     |> group_files_by_parent
@@ -177,12 +191,20 @@ fn audit_file_tree_view(audit_name, metadata: audit_metadata.AuditMetaData) {
   let #(subdirs, direct_files) =
     dict.get(all_audit_files, audit_name) |> result.unwrap(#([], []))
 
+  let dashboard_path = audit_name <> "/dashboard"
+
   html.div([attribute.id("audit-files")], [
     html.div([attribute.id(audit_name <> "-files")], [
       html.a(
         [
-          attribute.class("tree-item tree-link"),
-          attribute.href("/" <> audit_name <> "/dashboard"),
+          attribute.class(
+            "tree-item tree-link"
+            <> case current_file_path == dashboard_path {
+              True -> " underline"
+              False -> ""
+            },
+          ),
+          attribute.href("/" <> dashboard_path),
           attribute.rel("prefetch"),
         ],
         [html.text("dashboard")],
@@ -190,7 +212,13 @@ fn audit_file_tree_view(audit_name, metadata: audit_metadata.AuditMetaData) {
       ..list.map(direct_files, fn(file) {
         html.a(
           [
-            attribute.class("tree-item tree-link"),
+            attribute.class(
+              "tree-item tree-link"
+              <> case file == current_file_path {
+                True -> " underline"
+                False -> ""
+              },
+            ),
             attribute.href("/" <> file),
             attribute.rel("prefetch"),
           ],
@@ -200,13 +228,18 @@ fn audit_file_tree_view(audit_name, metadata: audit_metadata.AuditMetaData) {
     ]),
     html.div(
       [attribute.id(audit_name <> "-dirs")],
-      list.map(subdirs, sub_file_tree_view(_, all_audit_files)),
+      list.map(subdirs, sub_file_tree_view(
+        _,
+        current_file_path,
+        all_audit_files,
+      )),
     ),
   ])
 }
 
 fn sub_file_tree_view(
   dir_name,
+  current_file_path,
   all_audit_files: dict.Dict(String, #(List(String), List(String))),
 ) {
   let #(subdirs, direct_files) =
@@ -218,14 +251,24 @@ fn sub_file_tree_view(
     ]),
     html.div(
       [attribute.id(dir_name <> "-dirs"), attribute.class("nested-tree-items")],
-      list.map(subdirs, sub_file_tree_view(_, all_audit_files)),
+      list.map(subdirs, sub_file_tree_view(
+        _,
+        current_file_path,
+        all_audit_files,
+      )),
     ),
     html.div(
       [attribute.id(dir_name <> "-files"), attribute.class("nested-tree-items")],
       list.map(direct_files, fn(file) {
         html.a(
           [
-            attribute.class("tree-item tree-link"),
+            attribute.class(
+              "tree-item tree-link"
+              <> case file == current_file_path {
+                True -> " underline"
+                False -> ""
+              },
+            ),
             attribute.href("/" <> file),
             attribute.rel("prefetch"),
           ],

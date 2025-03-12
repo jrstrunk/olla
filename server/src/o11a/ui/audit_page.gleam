@@ -66,17 +66,15 @@ pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 }
 
 fn cached_view(model: Model) -> element.Element(Msg) {
-  let render = view(model)
-
   // Update the skeleton so the initial render on the client's request is up to
   // date with server state.
   discussion.set_skeleton(
     model.discussion,
     for: get_skeleton_key(model.page_path),
-    skeleton: render |> element.to_string,
+    skeleton: view(model, is_skeleton: True) |> element.to_string,
   )
 
-  render
+  view(model, is_skeleton: False)
 }
 
 fn get_skeleton_key(for page_path) {
@@ -88,13 +86,16 @@ pub fn get_skeleton(discussion, for page_path) {
   |> result.unwrap("")
 }
 
-fn view(model: Model) -> element.Element(Msg) {
+fn view(model: Model, is_skeleton is_skeleton) -> element.Element(Msg) {
   io.println("Rendering page " <> model.page_path)
 
   html.div([attribute.class("code-snippet")], [
-    elementx.hide_skeleton(),
+    case is_skeleton {
+      True -> element.fragment([])
+      False -> elementx.hide_skeleton()
+    },
     ..list.index_map(model.preprocessed_source, fn(line, index) {
-      loc_view(model, line, index + 1)
+      loc_view(model, line, index + 1, is_skeleton)
     })
   ])
 }
@@ -106,7 +107,7 @@ pub fn preprocess_source(for page_path) {
   |> result.map(list.map(_, style_code_tokens))
 }
 
-fn loc_view(model: Model, line_text, line_number) {
+fn loc_view(model: Model, line_text, line_number, is_skeleton) {
   let line_number_text = int.to_string(line_number)
   let line_tag = "L" <> line_number_text
   let line_id = model.page_path <> "#" <> line_tag
@@ -186,26 +187,30 @@ fn loc_view(model: Model, line_text, line_number) {
         ),
         html.span([attribute.class("inline-comment relative font-code")], [
           inline_comment_preview_view(parent_notes),
-          element.element(
-            components.line_discussion,
-            [
-              attribute.class(
-                "absolute z-[3] w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] bottom-[1.4rem]",
-              ),
-              attribute.attribute("line-number", line_number_text),
-              attribute.attribute("line-id", line_id),
-              attribute.attribute(
-                "line-discussion",
-                notes
-                  |> list.map(computed_note.encode_structured_notes)
-                  |> json.preprocessed_array
-                  |> json.to_string,
-              ),
-              on_user_submitted_line_note(UserSubmittedNote),
-              server_component.include(["detail"]),
-            ],
-            [],
-          ),
+          case is_skeleton {
+            True -> element.fragment([])
+            False ->
+              element.element(
+                components.line_discussion,
+                [
+                  attribute.class(
+                    "absolute z-[3] w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] bottom-[1.4rem]",
+                  ),
+                  attribute.attribute("line-number", line_number_text),
+                  attribute.attribute("line-id", line_id),
+                  attribute.attribute(
+                    "line-discussion",
+                    notes
+                      |> list.map(computed_note.encode_structured_notes)
+                      |> json.preprocessed_array
+                      |> json.to_string,
+                  ),
+                  on_user_submitted_line_note(UserSubmittedNote),
+                  server_component.include(["detail"]),
+                ],
+                [],
+              )
+          },
         ]),
       ]),
     ],
