@@ -26,6 +26,23 @@ pub fn on_ctrl_enter(msg: msg) {
   }
 }
 
+pub fn on_up_arrow(msg: msg) {
+  use event <- event.on("keydown")
+
+  let empty_error = [dynamic.DecodeError("", "", [])]
+
+  use key <- result.try(
+    decode.field("key", decode.string, decode.success)
+    |> decode.run(event, _)
+    |> result.replace_error(empty_error),
+  )
+
+  case key {
+    "ArrowUp" -> Ok(msg)
+    _ -> Error(empty_error)
+  }
+}
+
 pub fn on_input_no_propigation(msg: fn(String) -> msg) {
   use event <- event.on("input")
   event.stop_propagation(event)

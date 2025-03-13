@@ -147,6 +147,7 @@ pub type Msg {
   UserUnfocusedInput
   UserMaximizeThread
   UserEditedNote(computed_note.ComputedNote)
+  UserEditedPriorNote
   UserCancelledEdit
 }
 
@@ -185,14 +186,14 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         effect.none(),
       )
     }
-    UserWroteNote(draft) -> #(
-      Model(..model, current_note_draft: draft),
-      effect.none(),
-    )
+    UserWroteNote(draft) -> {
+      echo "user wrote note"
+      #(Model(..model, current_note_draft: draft), effect.none())
+    }
     UserSubmittedNote -> {
       let #(significance, message) =
         classify_message(
-          model.current_note_draft,
+          model.current_note_draft |> string.trim,
           is_thread_open: option.is_some(model.active_thread),
         )
 
@@ -386,6 +387,15 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       ),
       effect.none(),
     )
+    UserEditedPriorNote -> {
+      case list.first(model.current_thread_notes) {
+        Ok(prior_note) -> #(
+          model,
+          effect.from(fn(dispatch) { dispatch(UserEditedNote(prior_note)) }),
+        )
+        Error(Nil) -> #(model, effect.none())
+      }
+    }
     UserCancelledEdit -> #(
       Model(
         ..model,
@@ -573,7 +583,7 @@ fn new_message_input_view(model: Model) {
       event.on_input(UserWroteNote),
       event.on_focus(UserFocusedInput),
       event.on_blur(UserUnfocusedInput),
-      eventx.on_ctrl_enter(UserSubmittedNote),
+      on_input_keydown(UserSubmittedNote, UserEditedPriorNote),
       attribute.value(model.current_note_draft),
     ]),
   ])
@@ -661,5 +671,29 @@ fn get_message_classification_prefix(
     computed_note.UnansweredDeveloperQuestion -> "dev: "
     computed_note.UnansweredQuestion -> "q: "
     computed_note.UnconfirmedFinding -> "finding: "
+  }
+}
+
+fn on_input_keydown(enter_msg, up_msg) {
+  use event <- event.on("keydown")
+
+  let decoder = {
+    use ctrl_key <- decode.field("ctrlKey", decode.bool)
+    use key <- decode.field("key", decode.string)
+
+    decode.success(#(ctrl_key, key))
+  }
+
+  let empty_error = [dynamic.DecodeError("", "", [])]
+
+  use #(ctrl_key, key) <- result.try(
+    decode.run(event, decoder)
+    |> result.replace_error(empty_error),
+  )
+
+  case ctrl_key, key {
+    True, "Enter" -> Ok(enter_msg)
+    _, "ArrowUp" -> Ok(up_msg)
+    _, _ -> Error(empty_error)
   }
 }
