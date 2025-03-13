@@ -191,12 +191,18 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton) {
           inline_comment_preview_view(parent_notes),
           case is_skeleton {
             True -> element.fragment([])
+            // The line discussion component is too close to the edge of the
+            // screen, so we want to show it below the line
             False ->
               element.element(
                 components.line_discussion,
                 [
                   attribute.class(
-                    "absolute z-[3] w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] bottom-[1.4rem]",
+                    "absolute z-[3] w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] "
+                    <> case line_number < 27 {
+                      True -> "top-[1.4rem]"
+                      False -> "bottom-[1.4rem]"
+                    },
                   ),
                   attribute.attribute("line-number", line_number_text),
                   attribute.attribute("line-id", line_id),

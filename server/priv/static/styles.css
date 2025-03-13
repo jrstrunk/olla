@@ -251,6 +251,14 @@ line-discussion:focus-within {
   user-select: none;
 }
 
+.top-\[1\.4rem\] {
+  top: 1.4rem;
+}
+
+.bottom-\[1\.4rem\] {
+  bottom: 1.4rem;
+}
+
 /* Tree view */
 #tree-grid {
   display: grid;
