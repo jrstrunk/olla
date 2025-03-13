@@ -27,6 +27,13 @@ window.addEventListener(user_trigger_loc_event, (e) => {
   current_selected_line_number = e.detail.line_number;
 });
 
+let user_clicked_discussion_preview_event = "user-clicked-discussion-preview";
+
+window.addEventListener(user_clicked_discussion_preview_event, (e) => {
+  console.log("User clicked discussion preview");
+  do_input_focus();
+});
+
 document.addEventListener("DOMContentLoaded", function () {
   // Wait for the server component to render first. When an event is added to
   // the lustre runtime then we can listen for that instead of setting a time out
@@ -39,6 +46,16 @@ document.addEventListener("DOMContentLoaded", function () {
           const event = new CustomEvent(user_trigger_loc_event, {
             detail: { line_number: parseInt(e.target.dataset.lineNumber) },
           });
+          window.dispatchEvent(event);
+        });
+      });
+
+    document
+      .querySelector("#audit-page")
+      .shadowRoot.querySelectorAll(".discussion-entry")
+      .forEach((element) => {
+        element.addEventListener("click", (e) => {
+          const event = new CustomEvent(user_clicked_discussion_preview_event);
           window.dispatchEvent(event);
         });
       });
@@ -76,7 +93,7 @@ function handle_expanded_input_focus(event) {
     if (!exp_cont?.classList.contains("show-exp")) {
       exp_cont.classList.add("show-exp");
       // Wait for the styles to be applied after changing the class
-      setTimeout(() => exp?.focus(), 50);
+      setTimeout(() => exp?.focus(), 15);
     } else {
       exp?.focus();
     }
@@ -90,35 +107,37 @@ function handle_input_focus(event) {
   if (!event.ctrlKey && event.key === "e") {
     event.preventDefault();
 
-    console.log("input focusing");
-
-    let overlay = get_line_discussion_component(
-      current_selected_line_number,
-      discussion_lane
-    );
-
-    let inp = get_line_discussion_input(
-      current_selected_line_number,
-      discussion_lane
-    );
-
-    if (!overlay?.classList.contains("show-dis")) {
-      overlay.classList.add("show-dis");
-      // Wait for the styles to be applied after changing the class to show the
-      // overlay so we can focus it. Then after it is focused, we can remove
-      // the class because the :focus selector will take over showing the
-      // overlay when appropriate.
-      setTimeout(() => {
-        inp?.focus();
-        overlay.classList.remove("show-dis");
-      }, 50);
-    } else {
-      inp?.focus();
-    }
+    do_input_focus();
 
     return true;
   }
   return false;
+}
+
+function do_input_focus() {
+  let overlay = get_line_discussion_component(
+    current_selected_line_number,
+    discussion_lane
+  );
+
+  let inp = get_line_discussion_input(
+    current_selected_line_number,
+    discussion_lane
+  );
+
+  if (!overlay?.classList.contains("show-dis")) {
+    overlay.classList.add("show-dis");
+    // Wait for the styles to be applied after changing the class to show the
+    // overlay so we can focus it. Then after it is focused, we can remove
+    // the class because the :focus selector will take over showing the
+    // overlay when appropriate.
+    setTimeout(() => {
+      inp?.focus();
+      overlay.classList.remove("show-dis");
+    }, 15);
+  } else {
+    inp?.focus();
+  }
 }
 
 function get_line_discussion_input(line_number, discussion_lane) {
