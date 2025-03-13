@@ -8,6 +8,7 @@ import gleam/io
 import gleam/json
 import gleam/list
 import gleam/option.{None, Some}
+import gleam/pair
 import gleam/regexp
 import gleam/result
 import gleam/string
@@ -135,11 +136,15 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton) {
       }
     })
 
+  let leading_spaces = enumerate.get_leading_spaces(line_text)
+
   let info_notes =
     parent_notes
     |> list.filter(fn(computed_note) {
       computed_note.significance == computed_note.Informational
     })
+    |> list.map(split_info_note(_, leading_spaces))
+    |> list.flatten
 
   html.div(
     [
@@ -148,9 +153,11 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton) {
       attribute.data("line-number", line_number_text),
     ],
     [
-      element.fragment(
-        list.index_map(info_notes, fn(note, index) {
-          html.p([attribute.class("loc flex"), attribute.id(note.note_id)], [
+      element.keyed(element.fragment, {
+        use note, index <- list.index_map(info_notes)
+
+        let child =
+          html.p([attribute.class("loc flex")], [
             html.span(
               [attribute.class("line-number code-extras relative italic")],
               [
@@ -166,18 +173,12 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton) {
               ],
             ),
             html.span([attribute.class("comment italic")], [
-              html.text(
-                enumerate.get_leading_spaces(line_text)
-                <> note.message
-                <> case note.expanded_message {
-                  Some(..) -> "*"
-                  None -> ""
-                },
-              ),
+              html.text(leading_spaces <> note.1),
             ]),
           ])
-        }),
-      ),
+
+        #(note.0, child)
+      }),
       html.p([attribute.class("loc flex")], [
         html.span([attribute.class("line-number code-extras")], [
           html.text(line_number_text),
@@ -371,6 +372,57 @@ pub fn style_code_tokens(line_text) {
       html.span([attribute.class("comment")], [html.text(match_content)])
       |> element.to_string
     _ -> ""
+  }
+}
+
+fn split_info_note(note: computed_note.ComputedNote, leading_spaces) {
+  note.message
+  |> split_info_comment(note.expanded_message != None, leading_spaces)
+  |> list.index_map(fn(comment, index) {
+    #(note.note_id <> int.to_string(index), comment)
+  })
+}
+
+pub fn split_info_comment(
+  comment: String,
+  contains_expanded_message: Bool,
+  leading_spaces,
+) {
+  let comment_length = string.length(comment)
+  let columns_remaining = 80 - string.length(leading_spaces)
+
+  case comment_length <= columns_remaining {
+    True -> [
+      comment
+      <> case contains_expanded_message {
+        True -> "^"
+        False -> ""
+      },
+    ]
+    False -> {
+      let backwards =
+        string.slice(comment, 0, columns_remaining)
+        |> string.reverse
+
+      let in_limit_comment_length =
+        backwards
+        |> string.split_once(" ")
+        |> result.unwrap(#("", backwards))
+        |> pair.second
+        |> string.length
+
+      let rest =
+        string.slice(
+          comment,
+          in_limit_comment_length + 1,
+          length: comment_length,
+        )
+
+      [
+        string.slice(comment, 0, in_limit_comment_length),
+        ..split_info_comment(rest, contains_expanded_message, leading_spaces)
+      ]
+    }
   }
 }
 

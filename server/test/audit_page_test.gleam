@@ -35,3 +35,15 @@ pub fn style_code_tokens_number_test() {
     "<span class=\"type\">uint256</span> hello <span class=\"operator\">=</span> <span class=\"number\">10</span>;",
   )
 }
+
+pub fn split_info_comment_test() {
+  audit_page.split_info_comment("hello world", False, "")
+  |> should.equal(["hello world"])
+
+  "hello world this is a really long comment that is going to be split somewhere around here"
+  |> audit_page.split_info_comment(True, "")
+  |> should.equal([
+    "hello world this is a really long comment that is going to be split somewhere",
+    "around here^",
+  ])
+}
