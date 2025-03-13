@@ -175,31 +175,25 @@ pub fn is_significance_threadable(note_significance) {
   }
 }
 
-pub fn encode_structured_notes(note: #(String, List(ComputedNote))) {
-  json.object([
-    #("note_id", json.string(note.0)),
-    #("thread_notes", json.array(note.1, encode_computed_note)),
-  ])
+pub fn encode_computed_notes(note: List(ComputedNote)) {
+  json.array(note, encode_computed_note)
 }
 
-pub fn decode_structured_notes(notes: dynamic.Dynamic) {
+pub fn decode_computed_notes(notes: dynamic.Dynamic) {
   use notes <- result.try(decode.run(notes, decode.string))
 
-  json.parse(notes, decode.list(structured_note_decoder()))
-  |> result.replace_error([
-    decode.DecodeError("json-encoded computed note", string.inspect(notes), []),
-  ])
-}
-
-fn structured_note_decoder() {
-  use note_id <- decode.field("note_id", decode.string)
-  use thread_notes <- decode.field(
-    "thread_notes",
-    decode.list(computed_note_decoder()),
+  use notes <- result.map(
+    json.parse(notes, decode.list(computed_note_decoder()))
+    |> result.replace_error([
+      decode.DecodeError(
+        "json-encoded computed note",
+        string.inspect(notes),
+        [],
+      ),
+    ]),
   )
 
-  #(note_id, thread_notes)
-  |> decode.success
+  list.group(notes, by: fn(note) { note.parent_id })
 }
 
 pub fn from_note(note: note.Note, thread_notes: List(note.Note)) {

@@ -11,7 +11,7 @@ import lustre/attribute
 import lustre/effect
 import lustre/element
 import lustre/element/html
-import o11a/note
+import o11a/computed_note
 import o11a/server/discussion
 import o11a/ui/audit_dashboard as dashboard
 
@@ -91,16 +91,14 @@ pub fn notes_view(notes) {
   html.ul([attribute.class("mb-[2rem] text-[.9rem]")], case notes {
     [] -> [html.li([], [html.text("none")])]
     _ ->
-      list.map(notes, fn(note: #(String, note.Note)) {
+      list.map(notes, fn(note: computed_note.ComputedNote) {
         let line_number =
-          note.0
+          note.parent_id
           |> string.split_once("#")
           |> result.unwrap(#("", ""))
           |> pair.second
 
-        html.li([], [
-          html.text("(" <> line_number <> ") " <> { note.1 }.message),
-        ])
+        html.li([], [html.text("(" <> line_number <> ") " <> note.message)])
       })
   })
 }

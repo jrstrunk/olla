@@ -3,16 +3,16 @@ import filepath
 import gleam/dict
 import gleam/list
 import gleam/option.{None, Some}
+import gleam/pair
 import gleam/result
 import gleam/string
 import lib/elementx
-import lib/persistent_concurrent_duplicate_dict as pcd_dict
 import lustre
 import lustre/attribute
 import lustre/effect
 import lustre/element
 import lustre/element/html
-import o11a/note
+import o11a/computed_note
 import o11a/server/discussion
 
 pub fn app() -> lustre.App(Model, Model, Msg) {
@@ -118,13 +118,16 @@ fn view(model: Model) -> element.Element(Msg) {
 fn notes_view(notes) {
   html.ul(
     [],
-    list.map(notes, fn(note: #(String, note.Note)) {
+    list.map(notes, fn(note: computed_note.ComputedNote) {
       html.li([], [
         html.a(
-          [attribute.href("/" <> note.0), attribute.class("dashboard-link")],
-          [html.text(note.0 |> filepath.base_name)],
+          [
+            attribute.href("/" <> note.parent_id),
+            attribute.class("dashboard-link"),
+          ],
+          [html.text(note.parent_id |> filepath.base_name)],
         ),
-        html.text(" - " <> { note.1 }.message),
+        html.text(" - " <> note.message),
       ])
     }),
   )
@@ -140,116 +143,70 @@ pub fn get_skeleton(skeletons, for audit_name) {
 }
 
 pub fn find_open_notes(in discussion: discussion.Discussion, for page_path) {
-  let all_notes = case page_path {
-    Some(page_path) ->
-      pcd_dict.to_list(discussion.notes)
-      |> list.filter(fn(note_data) {
-        // The note_id will be the page path + the line number, but we want
-        // everything in the page path
-        string.starts_with(note_data.0, page_path)
-      })
+  let all_notes =
+    case page_path {
+      Some(page_path) ->
+        discussion.get_all_notes(discussion)
+        |> list.filter_map(fn(note_data) {
+          // The note_id will be the page path + the line number, but we want
+          // everything in the page path
+          case string.starts_with(note_data.0, page_path) {
+            True -> Ok(note_data.1)
+            False -> Error(Nil)
+          }
+        })
 
-    None -> pcd_dict.to_list(discussion.notes)
-  }
+      None ->
+        discussion.get_all_notes(discussion)
+        |> list.map(pair.second)
+    }
+    |> list.flatten
 
-  let all_todos =
+  let incomplete_todos =
     list.filter(all_notes, fn(note) {
-      case { note.1 }.significance {
-        note.ToDo -> True
+      case note.significance {
+        computed_note.IncompleteToDo -> True
         _ -> False
       }
     })
 
-  let incomplete_todos =
-    list.filter(all_todos, fn(note) {
-      let thread_notes = pcd_dict.get(discussion.notes, { note.1 }.note_id)
-
-      let closing_note =
-        list.find(thread_notes, fn(thread_note) {
-          case { thread_note }.significance {
-            note.ToDoCompletion -> True
-            _ -> False
-          }
-        })
-
-      // If we do not find a done note, then the todo is still open.
-      case closing_note {
-        Ok(..) -> False
-        Error(Nil) -> True
-      }
-    })
-
-  let all_questions =
+  let _complete_todos =
     list.filter(all_notes, fn(note) {
-      case { note.1 }.significance {
-        note.Question -> True
+      case note.significance {
+        computed_note.CompleteToDo -> True
         _ -> False
       }
     })
 
   let unanswered_questions =
-    list.filter(all_questions, fn(note) {
-      let thread_notes = pcd_dict.get(discussion.notes, { note.1 }.note_id)
-
-      let closing_note =
-        list.find(thread_notes, fn(thread_note) {
-          case { thread_note }.significance {
-            note.Answer -> True
-            _ -> False
-          }
-        })
-
-      // If we do not find an answer, then the question is still unanswered.
-      case closing_note {
-        Ok(..) -> False
-        Error(Nil) -> True
+    list.filter(all_notes, fn(note) {
+      case note.significance {
+        computed_note.UnansweredQuestion -> True
+        _ -> False
       }
     })
 
-  let all_findings =
+  let _answered_questions =
     list.filter(all_notes, fn(note) {
-      case { note.1 }.significance {
-        note.FindingLead -> True
+      case note.significance {
+        computed_note.AnsweredQuestion -> True
         _ -> False
       }
     })
 
   let unconfirmed_findings =
-    list.filter(all_findings, fn(note) {
-      let thread_notes = pcd_dict.get(discussion.notes, { note.1 }.note_id)
-
-      let closing_note =
-        list.find(thread_notes, fn(thread_note) {
-          case { thread_note }.significance {
-            note.FindingRejection -> True
-            note.FindingConfirmation -> True
-            _ -> False
-          }
-        })
-
-      // If we do not find a rejection, then the finding is still open.
-      case closing_note {
-        Ok(..) -> False
-        Error(Nil) -> True
+    list.filter(all_notes, fn(note) {
+      case note.significance {
+        computed_note.UnconfirmedFinding -> True
+        _ -> False
       }
     })
 
   let confirmed_findings =
-    list.filter(all_findings, fn(note) {
-      let thread_notes = pcd_dict.get(discussion.notes, { note.1 }.note_id)
-
-      let closing_note =
-        list.find(thread_notes, fn(thread_note) {
-          case { thread_note }.significance {
-            note.FindingConfirmation -> True
-            _ -> False
-          }
-        })
-
-      // If we do not find a rejection, then the finding is still open.
-      case closing_note {
-        Ok(..) -> True
-        Error(Nil) -> False
+    list.filter(all_notes, fn(note) {
+      case note.significance {
+        computed_note.ConfirmedFinding -> True
+        _ -> False
       }
     })
 

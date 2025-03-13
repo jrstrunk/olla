@@ -62,7 +62,7 @@ pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
 
       concurrent_dict.insert(audit_metadata_gateway, audit_name, audit_metadata)
 
-      use discussion <- result.try(discussion.get_audit_discussion(audit_name))
+      use discussion <- result.try(discussion.build_audit_discussion(audit_name))
 
       use audit_dashboard_actor <- result.try(
         lustre.start_actor(

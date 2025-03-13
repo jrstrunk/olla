@@ -96,6 +96,12 @@ pub fn get_notes_persist_path(for audit_name) {
 }
 
 /// Gets the path to the audit's notes database
+pub fn get_topics_persist_path(for audit_name) {
+  [get_audit_path(for: audit_name), "topics.db"]
+  |> list.fold("/", filepath.join)
+}
+
+/// Gets the path to the audit's notes database
 pub fn get_votes_persist_path(for audit_name) {
   [get_audit_path(for: audit_name), "votes.db"]
   |> list.fold("/", filepath.join)

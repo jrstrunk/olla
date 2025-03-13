@@ -160,12 +160,7 @@ fn handle_wisp_request(req, context: Context) {
       case
         config.get_audit_path(for: audit_name)
         |> filepath.join(readme)
-        |> fn(path) {
-          let start = instant.now()
-          let c = simplifile.read(path)
-          echo instant.format_since(start)
-          c
-        }
+        |> simplifile.read
         |> snag.map_error(simplifile.describe_error)
       {
         Ok(contents) ->
@@ -198,21 +193,11 @@ fn handle_wisp_request(req, context: Context) {
         audit_page.get_skeleton(context.skeletons, for: file_path),
       )
       |> audit_tree.view(
-        Some(
-          elementx.server_component_with_prerendered_skeleton(
-            filepath.join("component-page-dashboard", file_path),
-            components.audit_page,
-            {
-              let start = instant.now()
-              let skel =
-                page_dashboard.get_skeleton(context.skeletons, for: file_path)
-
-              echo skel |> string.length
-              echo instant.format_since(start)
-              skel
-            },
-          ),
-        ),
+        Some(elementx.server_component_with_prerendered_skeleton(
+          filepath.join("component-page-dashboard", file_path),
+          components.audit_page,
+          page_dashboard.get_skeleton(context.skeletons, for: file_path),
+        )),
         audit_name,
         on: file_path,
         with: gateway.get_audit_metadata(

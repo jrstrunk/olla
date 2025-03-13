@@ -44,13 +44,15 @@ pub fn component() {
     view,
     dict.from_list([
       #("line-discussion", fn(dy) {
-        case computed_note.decode_structured_notes(dy) {
+        let res = case computed_note.decode_computed_notes(dy) {
           Ok(notes) -> Ok(ServerUpdatedNotes(notes))
           Error(..) ->
             Error([
               dynamic.DecodeError("line-discussion", string.inspect(dy), []),
             ])
         }
+
+        res
       }),
       #("line-id", fn(dy) {
         case decode.run(dy, decode.string) {
@@ -128,7 +130,7 @@ pub type ActiveThread {
 pub type Msg {
   ServerSetLineId(String)
   ServerSetLineNumber(Int)
-  ServerUpdatedNotes(List(#(String, List(computed_note.ComputedNote))))
+  ServerUpdatedNotes(dict.Dict(String, List(computed_note.ComputedNote)))
   UserWroteNote(String)
   UserSubmittedNote
   UserSwitchedToThread(
@@ -172,9 +174,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         effect.none(),
       )
     }
-    ServerUpdatedNotes(notes) -> {
-      let updated_notes = dict.from_list(notes)
-
+    ServerUpdatedNotes(updated_notes) -> {
       #(
         Model(
           ..model,
@@ -244,7 +244,13 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
           show_expanded_message_box: False,
           editing_note: None,
         ),
-        event.emit(events.user_submitted_note, note.encode_note(note)),
+        event.emit(
+          events.user_submitted_note,
+          json.object([
+            #("note", note.encode_note(note)),
+            #("line_id", json.string(model.line_id)),
+          ]),
+        ),
       )
     }
     UserSwitchedToThread(new_thread_id:, parent_note:) -> #(

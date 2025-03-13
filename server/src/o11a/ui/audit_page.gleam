@@ -33,7 +33,7 @@ pub fn app() -> lustre.App(Model, Model, Msg) {
 }
 
 pub type Msg {
-  UserSubmittedNote(note: note.Note)
+  UserSubmittedNote(note: note.Note, line_id: String)
   ServerUpdatedDiscussion
 }
 
@@ -59,8 +59,8 @@ pub fn init(init_model: Model) -> #(Model, effect.Effect(Msg)) {
 
 pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
-    UserSubmittedNote(note) -> {
-      let assert Ok(Nil) = discussion.add_note(model.discussion, note)
+    UserSubmittedNote(note, line_id) -> {
+      let assert Ok(Nil) = discussion.add_note(model.discussion, note, line_id)
       #(model, effect.none())
     }
     ServerUpdatedDiscussion -> #(model, effect.none())
@@ -123,24 +123,23 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton) {
     ])
   })
 
-  let notes = discussion.get_structured_notes(model.discussion, line_id)
+  let notes =
+    discussion.get_notes(model.discussion, line_id)
+    |> result.unwrap([])
 
   let parent_notes =
     list.filter_map(notes, fn(note) {
-      case note.0 == line_id {
-        True -> Ok(note.1)
+      case note.parent_id == line_id {
+        True -> Ok(note)
         False -> Error(Nil)
       }
     })
-    |> list.first
-    |> result.unwrap([])
 
   let info_notes =
     parent_notes
     |> list.filter(fn(computed_note) {
       computed_note.significance == computed_note.Informational
     })
-    |> list.reverse
 
   html.div(
     [
@@ -203,8 +202,7 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton) {
                   attribute.attribute(
                     "line-discussion",
                     notes
-                      |> list.map(computed_note.encode_structured_notes)
-                      |> json.preprocessed_array
+                      |> computed_note.encode_computed_notes
                       |> json.to_string,
                   ),
                   on_user_submitted_line_note(UserSubmittedNote),
@@ -221,9 +219,8 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton) {
 
 fn inline_comment_preview_view(parent_notes: List(computed_note.ComputedNote)) {
   let note_result =
-    list.find(parent_notes, fn(note) {
-      note.significance != computed_note.Informational
-    })
+    list.reverse(parent_notes)
+    |> list.find(fn(note) { note.significance != computed_note.Informational })
 
   case note_result {
     Ok(note) ->
@@ -385,11 +382,19 @@ pub fn on_user_submitted_line_note(msg) {
   use note <- result.try(
     decode.run(
       event,
-      decode.field("detail", note.note_decoder(), decode.success),
+      decode.subfield(["detail", "note"], note.note_decoder(), decode.success),
     )
     |> result.replace_error(empty_error),
   )
 
-  msg(note)
+  use line_id <- result.try(
+    decode.run(
+      event,
+      decode.subfield(["detail", "line_id"], decode.string, decode.success),
+    )
+    |> result.replace_error(empty_error),
+  )
+
+  msg(note, line_id)
   |> Ok
 }

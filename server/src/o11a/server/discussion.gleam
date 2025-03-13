@@ -3,6 +3,7 @@ import gleam/function
 import gleam/list
 import gleam/result
 import lib/persistent_concurrent_duplicate_dict as pcd_dict
+import lib/persistent_concurrent_structured_dict as pcs_dict
 import o11a/computed_note
 import o11a/config
 import o11a/note
@@ -12,20 +13,29 @@ import tempo/datetime
 pub type Discussion {
   Discussion(
     audit_name: String,
-    notes: pcd_dict.PersistentConcurrentDuplicateDict(String, note.Note),
+    notes: pcs_dict.PersistentConcurrentStructuredDict(
+      String,
+      note.Note,
+      String,
+      List(computed_note.ComputedNote),
+    ),
     votes: pcd_dict.PersistentConcurrentDuplicateDict(String, note.NoteVote),
   )
 }
 
-pub fn get_audit_discussion(audit_name: String) {
-  use notes <- result.try(pcd_dict.build(
+pub fn build_audit_discussion(audit_name: String) {
+  use notes <- result.try(pcs_dict.build(
     config.get_notes_persist_path(for: audit_name),
     function.identity,
     function.identity,
     note.example_note(),
     note_persist_encoder,
     note_persist_decoder(),
+    function.identity,
+    function.identity,
+    builder: build_structured_notes,
   ))
+
   use votes <- result.try(pcd_dict.build(
     config.get_votes_persist_path(for: audit_name),
     function.identity,
@@ -96,46 +106,77 @@ pub fn note_vote_persist_decoder() {
   |> decode.success
 }
 
-pub fn empty_discussion(audit_name: String) {
-  Discussion(audit_name:, notes: pcd_dict.empty(), votes: pcd_dict.empty())
-}
-
-pub fn add_note(discussion: Discussion, note: note.Note) {
-  pcd_dict.insert(discussion.notes, note.parent_id, note)
+pub fn add_note(discussion: Discussion, note: note.Note, line_id topic: String) {
+  pcs_dict.insert(discussion.notes, note.parent_id, note, topic:)
 }
 
 pub fn subscribe_to_note_updates(discussion: Discussion, effect: fn() -> Nil) {
-  pcd_dict.subscribe(discussion.notes, effect)
+  pcs_dict.subscribe(discussion.notes, effect)
 }
 
-pub fn get_notes(discussion: Discussion, only_for parent_id: String) {
-  pcd_dict.get(discussion.notes, parent_id)
-}
-
-pub fn get_structured_notes(
+pub fn subscribe_to_line_updates(
   discussion: Discussion,
+  line_id topic: String,
+  run effect: fn() -> Nil,
+) {
+  pcs_dict.subscribe_to_topic(discussion.notes, topic, effect)
+}
+
+pub fn get_notes(discussion: Discussion, line_id topic: String) {
+  pcs_dict.get(discussion.notes, topic:)
+}
+
+pub fn get_all_notes(discussion: Discussion) {
+  pcs_dict.to_list(discussion.notes)
+}
+
+fn build_structured_notes(
+  notes_dict: pcd_dict.PersistentConcurrentDuplicateDict(String, note.Note),
   starting_from parent_id: String,
-) -> List(#(String, List(computed_note.ComputedNote))) {
+) {
   let notes =
-    pcd_dict.get(discussion.notes, parent_id)
-    |> list.sort(fn(a, b) { datetime.compare(b.time, a.time) })
+    pcd_dict.get(notes_dict, parent_id)
+    |> list.sort(fn(a, b) { datetime.compare(a.time, b.time) })
 
   let computed_notes =
-    list.filter(notes, fn(note) { note.modifier == note.None })
+    list.filter(notes, fn(note) {
+      note.modifier != note.Edit && note.modifier != note.Delete
+    })
     |> list.map(fn(note) {
-      computed_note.from_note(
-        note,
-        pcd_dict.get(discussion.notes, note.note_id),
-      )
+      computed_note.from_note(note, pcd_dict.get(notes_dict, note.note_id))
     })
 
   case computed_notes {
     [] -> []
     _ ->
       list.map(computed_notes, fn(computed_note) {
-        get_structured_notes(discussion, computed_note.note_id)
+        build_structured_notes(notes_dict, computed_note.note_id)
       })
       |> list.flatten
-      |> list.append([#(parent_id, computed_notes)])
+      |> list.append(computed_notes)
   }
 }
+// fn build_structured_notes_old(
+//   notes_dict: pcd_dict.PersistentConcurrentDuplicateDict(String, note.Note),
+//   starting_from parent_id: String,
+// ) -> List(#(String, List(computed_note.ComputedNote))) {
+//   let notes =
+//     pcd_dict.get(notes_dict, parent_id)
+//     |> list.sort(fn(a, b) { datetime.compare(b.time, a.time) })
+
+//   let computed_notes =
+//     list.filter(notes, fn(note) { note.modifier == note.None })
+//     |> list.map(fn(note) {
+//       computed_note.from_note(note, pcd_dict.get(notes_dict, note.note_id))
+//     })
+
+//   case computed_notes {
+//     [] -> []
+//     _ ->
+//       list.map(computed_notes, fn(computed_note) {
+//         build_structured_notes_old(notes_dict, computed_note.note_id)
+//       })
+//       |> list.flatten
+//       |> list.append([#(parent_id, computed_notes)])
+//   }
+// }
