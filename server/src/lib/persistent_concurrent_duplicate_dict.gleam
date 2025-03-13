@@ -25,6 +25,7 @@ pub type ConnectionActorState(key, val) {
 
 pub type ConnectionActorMsg(key, val) {
   PersistData(key, val, reply: process.Subject(Result(Nil, snag.Snag)))
+  PersistTopic(String, reply: process.Subject(Result(Nil, snag.Snag)))
 }
 
 pub fn handle_persist_data(msg, state: ConnectionActorState(key, val)) {
@@ -43,6 +44,17 @@ pub fn handle_persist_data(msg, state: ConnectionActorState(key, val)) {
         expecting: decode.success(Nil),
       )
       |> snag.map_error(string.inspect)
+      |> snag.context("Unable to insert data")
+      |> result.replace(Nil)
+      |> process.send(reply, _)
+    }
+    PersistTopic(topic, reply) -> {
+      sqlight.exec(
+        { "INSERT OR IGNORE INTO topics (topic) VALUES ('" <> topic <> "')" },
+        on: state.conn,
+      )
+      |> snag.map_error(string.inspect)
+      |> snag.context("Unable to add topic to topics table")
       |> result.replace(Nil)
       |> process.send(reply, _)
     }
@@ -55,6 +67,7 @@ pub opaque type PersistentConcurrentDuplicateDict(key, val) {
   PersistentConcurrentDuplicateDict(
     connection_actor: process.Subject(ConnectionActorMsg(key, val)),
     data: concurrent_duplicate_dict.ConcurrentDuplicateDict(key, val),
+    topics: concurrent_duplicate_dict.ConcurrentDuplicateDict(String, Nil),
     subscribers: concurrent_duplicate_dict.ConcurrentDuplicateDict(
       Nil,
       fn() -> Nil,
@@ -108,9 +121,19 @@ pub fn build(
     |> snag.context("Unable to create table schema"),
   )
 
-  // Sadly to keep to keep interface abstraction, we have to gather all keys
+  let topics_schema =
+    "CREATE TABLE IF NOT EXISTS topics (topic TEXT NOT NULL UNIQUE)"
+
+  use Nil <- result.try(
+    sqlight.exec(topics_schema, on: conn)
+    |> snag.map_error(string.inspect)
+    |> snag.context("Unable to create topics schema"),
+  )
+
+  // To keep to keep interface abstraction, we have to gather all keys
   // first, then query for each key's data. This avoids the user having to
-  // write a decoder that is aware of how this lib works.
+  // write a decoder that is aware of how this lib works, but also has a one
+  // time performance cost.
 
   use keys <- result.try(
     sqlight.query(
@@ -153,6 +176,17 @@ pub fn build(
     <> column_binds
     <> ")"
 
+  use topics <- result.try(
+    sqlight.query(
+      "SELECT DISTINCT topic FROM topics",
+      with: [],
+      on: conn,
+      expecting: decode.field(0, decode.string, decode.success),
+    )
+    |> snag.map_error(string.inspect)
+    |> snag.context("Unable to query for topics"),
+  )
+
   use connection_actor <- result.try(
     ConnectionActorState(conn:, insert_query:, key_encoder:, val_encoder:)
     |> actor.start(handle_persist_data)
@@ -162,6 +196,8 @@ pub fn build(
   PersistentConcurrentDuplicateDict(
     connection_actor:,
     data:,
+    topics: list.map(topics, fn(topic) { #(topic, Nil) })
+      |> concurrent_duplicate_dict.from_list,
     subscribers: concurrent_duplicate_dict.new(),
   )
   |> Ok
@@ -199,12 +235,32 @@ pub fn to_list(pcd: PersistentConcurrentDuplicateDict(key, val)) {
   concurrent_duplicate_dict.to_list(pcd.data)
 }
 
+pub fn topics(pcd: PersistentConcurrentDuplicateDict(key, val)) {
+  concurrent_duplicate_dict.keys(pcd.topics)
+}
+
+pub fn add_topic(pcd: PersistentConcurrentDuplicateDict(key, val), topic) {
+  case concurrent_duplicate_dict.get(pcd.topics, topic) {
+    [] -> {
+      use Nil <- result.map(
+        process.try_call(pcd.connection_actor, PersistTopic(topic, _), 10_000)
+        |> snag.map_error(string.inspect)
+        |> result.flatten,
+      )
+
+      concurrent_duplicate_dict.insert(pcd.topics, topic, Nil)
+    }
+    _ -> Ok(Nil)
+  }
+}
+
 /// Creates an empty dictionary that will fail to store any data, but can 
 /// satisfy type requirements and will always return no data.
 pub fn empty() {
   PersistentConcurrentDuplicateDict(
     connection_actor: process.new_subject(),
     data: concurrent_duplicate_dict.new(),
+    topics: concurrent_duplicate_dict.new(),
     subscribers: concurrent_duplicate_dict.new(),
   )
 }
