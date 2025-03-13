@@ -5,15 +5,20 @@ import gleam/string
 import simplifile
 
 pub type Config {
-  Config(port: Int)
+  Config(port: Int, env: ServerEnv)
+}
+
+pub type ServerEnv {
+  Prod
+  Dev
 }
 
 pub fn get_prod_config() {
-  Config(port: 8413)
+  Config(port: 8413, env: Prod)
 }
 
 pub fn get_dev_config() {
-  Config(port: 8400)
+  Config(port: 8400, env: Dev)
 }
 
 // Gets the full path to the priv, plus the provided local path

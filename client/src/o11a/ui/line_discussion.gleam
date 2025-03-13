@@ -399,74 +399,10 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   }
 }
 
-const component_style = "
-:host {
-  display: inline-block;
-}
-
-/* Delay the overlay transitions by 1ms so they are done last, and any 
-  actions on them can be done first (like focusing the input) */
-
-#expanded-message {
-  visibility: hidden;
-  opacity: 0;
-  transition-property: opacity, visibility;
-  transition-delay: 1ms, 1ms;
-}
-
-#expanded-message.show-exp,
-#expanded-message:focus-within {
-  visibility: visible;
-  opacity: 1;
-}
-
-button.icon-button {
-  background-color: var(--overlay-background-color);
-  color: var(--text-color);
-  border-radius: 4px;
-  border: none;
-  cursor: pointer;
-}
-
-button.icon-button:hover {
-  background-color: var(--input-background-color);
-}
-
-button.icon-button svg {
-  height: 1.25rem;
-  width: 1.25rem;
-}
-
-input, textarea {
-  background-color: var(--input-background-color);
-  color: var(--text-color);
-  border-radius: 6px;
-}
-
-input, textarea {
-  border: 1px solid var(--input-border-color);
-}
-
-hr {
-  border: 1px solid var(--comment-color);
-}
-
-.overlay {
-  background-color: var(--overlay-background-color);
-  border: 1px solid var(--input-border-color);
-  border-radius: 6px;
-}
-
-.absolute {
-  position: absolute;
-}
-"
-
 fn view(model: Model) -> element.Element(Msg) {
   io.println("Rendering line discussion " <> model.line_tag)
 
   html.div([attribute.id("line-discussion-overlay")], [
-    html.style([], component_style),
     html.div([attribute.class("overlay p-[.5rem]")], [
       case
         option.is_some(model.active_thread)

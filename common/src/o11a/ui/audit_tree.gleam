@@ -9,145 +9,6 @@ import lustre/element
 import lustre/element/html
 import o11a/audit_metadata
 
-const style = "
-#tree-grid {
-  display: grid;
-  grid-template-columns: 12rem 4px 1fr 4px 20rem;
-  /* these are critical for scrolling sections of the grid separately */
-  height: 100%;
-  width: 100%;
-  max-width: 100vw;
-  overflow: hidden;
-}
-
-#file-tree {
-  overflow: auto;
-  padding-left: 1rem;
-  padding-top: .5rem;
-  padding-bottom: .5rem;
-}
-
-#audit-tree-header {
-  text-wrap: nowrap;
-}
-
-#audit-files {
-  font-size: 0.9rem;
-}
-
-#tree-resizer, #panel-resizer {
-  border-right: 1px solid var(--overlay-background-color);
-  cursor: col-resize;
-  margin-top: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-#tree-resizer:hover, #panel-resizer:hover {
-  background-color: var(--overlay-background-color);
-}
-
-#file-contents {
-  overflow: auto;
-  padding-top: .5rem;
-  padding-bottom: .5rem;
-}
-
-.tree-item {
-  margin-top: 0.25rem;
-  margin-bottom: 0.25rem;
-  text-wrap: nowrap;
-}
-
-.tree-link {
-  text-decoration: none;
-  display: block;
-  color: var(--text-color);
-}
-
-.underline {
-  text-decoration: underline;
-}
-
-.tree-link:hover {
-  text-decoration: underline;
-}
-
-.nested-tree-items {
-  padding-left: 0.75rem;
-  border-left: 1px solid var(--input-background-color);
-}
-"
-
-const resize_script = "
-document.addEventListener('DOMContentLoaded', function() {
-
-const container = document.querySelector('#tree-grid');
-const resizer1 = document.querySelector('#tree-resizer');
-const resizer2 = document.querySelector('#panel-resizer');
-
-let isResizing = false;
-let currentResizer = null;
-let initialX = 0;
-let initialFirstWidth = 0;
-let initialMiddleWidth = 0;
-let initialLastWidth = 0;
-
-function startResize(e, resizer) {
-  isResizing = true;
-  currentResizer = resizer;
-  initialX = e.clientX;
-  
-  // Get initial widths
-  const gridColumns = getComputedStyle(container).gridTemplateColumns.split(' ');
-  initialFirstWidth = parseFloat(gridColumns[0]);
-  initialMiddleWidth = parseFloat(gridColumns[2]);
-  initialLastWidth = parseFloat(gridColumns[4]);
-
-  document.addEventListener('mousemove', resize);
-  document.addEventListener('mouseup', stopResize);
-}
-
-function resize(e) {
-  if (!isResizing) return;
-
-  const diff = e.clientX - initialX;
-  const gridColumns = getComputedStyle(container).gridTemplateColumns.split(' ');
-
-  if (currentResizer === resizer1) {
-    // Adjust first and middle columns, keeping last column fixed
-    const newFirstWidth = Math.max(0, initialFirstWidth + diff);
-    const newMiddleWidth = Math.max(0, initialMiddleWidth - diff);
-    
-    container.style.gridTemplateColumns = `
-      ${newFirstWidth}px 4px ${newMiddleWidth}px 4px ${initialLastWidth}px
-    `;
-  } else if (currentResizer === resizer2) {
-    // Adjust middle and last columns, keeping first column fixed
-    const newMiddleWidth = Math.max(0, initialMiddleWidth + diff);
-    const newLastWidth = Math.max(0, initialLastWidth - diff);
-    
-    container.style.gridTemplateColumns = `
-      ${initialFirstWidth}px 4px ${newMiddleWidth}px 4px ${newLastWidth}px
-    `;
-  }
-}
-
-function stopResize() {
-  isResizing = false;
-  currentResizer = null;
-
-  document.removeEventListener('mousemove', resize);
-  document.removeEventListener('mouseup', stopResize);
-}
-
-// Add event listeners for both resizer columns
-[resizer1, resizer2].forEach(resizer => {
-  resizer.addEventListener('mousedown', (e) => startResize(e, resizer));
-});
-
-});
-"
-
 pub fn view(
   file_contents,
   side_panel,
@@ -155,27 +16,23 @@ pub fn view(
   on current_file_path,
   with metadata,
 ) {
-  element.fragment([
-    html.style([], style),
-    html.script([], resize_script),
-    html.div([attribute.id("tree-grid")], [
-      html.div([attribute.id("file-tree")], [
-        html.h3([attribute.id("audit-tree-header")], [
-          html.text(audit_name <> " files"),
-        ]),
-        audit_file_tree_view(audit_name, current_file_path, metadata),
+  html.div([attribute.id("tree-grid")], [
+    html.div([attribute.id("file-tree")], [
+      html.h3([attribute.id("audit-tree-header")], [
+        html.text(audit_name <> " files"),
       ]),
-      html.div([attribute.id("tree-resizer")], []),
-      html.div([attribute.id("file-contents")], [file_contents]),
-      case option.is_some(side_panel) {
-        True -> html.div([attribute.id("panel-resizer")], [])
-        False -> element.fragment([])
-      },
-      case side_panel {
-        Some(side_panel) -> html.div([attribute.id("side-panel")], [side_panel])
-        None -> element.fragment([])
-      },
+      audit_file_tree_view(audit_name, current_file_path, metadata),
     ]),
+    html.div([attribute.id("tree-resizer")], []),
+    html.div([attribute.id("file-contents")], [file_contents]),
+    case option.is_some(side_panel) {
+      True -> html.div([attribute.id("panel-resizer")], [])
+      False -> element.fragment([])
+    },
+    case side_panel {
+      Some(side_panel) -> html.div([attribute.id("side-panel")], [side_panel])
+      None -> element.fragment([])
+    },
   ])
 }
 

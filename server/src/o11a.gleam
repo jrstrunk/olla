@@ -8,7 +8,6 @@ import gleam/io
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/result
-import gleam/string
 import gleam/string_tree
 import lib/elementx
 import lib/server_componentx
@@ -26,12 +25,12 @@ import o11a/ui/gateway
 import o11a/ui/page_dashboard
 import simplifile
 import snag
-import tempo/instant
 import wisp
 import wisp/wisp_mist
 
 type Context {
   Context(
+    config: config.Config,
     dashboard_gateway: gateway.DashboardGateway,
     page_gateway: gateway.PageGateway,
     page_dashboard_gateway: gateway.PageDashboardGateway,
@@ -62,6 +61,7 @@ pub fn main() {
 
   let context =
     Context(
+      config:,
       dashboard_gateway:,
       page_gateway:,
       page_dashboard_gateway:,
@@ -85,11 +85,12 @@ fn handler(req, context: Context) {
 
     ["styles.css" as stylesheet]
     | ["line_discussion.min.css" as stylesheet]
-    | ["page_panel.css" as stylesheet] -> serve_css(stylesheet)
+    | ["page_panel.css" as stylesheet] -> serve_css(stylesheet, context.config)
 
     ["line_discussion.min.mjs" as script]
     | ["page_navigation.mjs" as script]
-    | ["page_panel.mjs" as script] -> serve_js(script)
+    | ["panel_resizer.mjs" as script]
+    | ["page_panel.mjs" as script] -> serve_js(script, context.config)
 
     ["component-page", ..component_path_segments] -> {
       let assert Ok(actor) =
@@ -229,6 +230,10 @@ fn as_document(body: element.Element(msg)) {
         "",
       ),
       html.script(
+        [attribute.type_("module"), attribute.src("/panel_resizer.mjs")],
+        "",
+      ),
+      html.script(
         [attribute.type_("module"), attribute.src("/page_panel.mjs")],
         "",
       ),
@@ -262,22 +267,45 @@ fn serve_lustre_framework() {
   response.new(200)
   |> response.prepend_header("content-type", "application/javascript")
   |> response.set_body(script)
+  |> response.set_header("cache-control", "max-age=604800, must-revalidate")
 }
 
-fn serve_css(style_sheet_name) {
+fn serve_css(style_sheet_name, config: config.Config) {
   let path = config.get_priv_path(for: "static/" <> style_sheet_name)
   let assert Ok(css) = mist.send_file(path, offset: 0, limit: None)
 
   response.new(200)
   |> response.prepend_header("content-type", "text/css")
   |> response.set_body(css)
+  |> fn(resp) {
+    case config.env {
+      config.Prod ->
+        resp
+        |> response.set_header(
+          "cache-control",
+          "max-age=604800, must-revalidate",
+        )
+      config.Dev -> resp
+    }
+  }
 }
 
-fn serve_js(js_file_name) {
+fn serve_js(js_file_name, config: config.Config) {
   let path = config.get_priv_path(for: "static/" <> js_file_name)
   let assert Ok(js) = mist.send_file(path, offset: 0, limit: None)
 
   response.new(200)
   |> response.prepend_header("content-type", "text/javascript")
   |> response.set_body(js)
+  |> fn(resp) {
+    case config.env {
+      config.Prod ->
+        resp
+        |> response.set_header(
+          "cache-control",
+          "max-age=604800, must-revalidate",
+        )
+      config.Dev -> resp
+    }
+  }
 }
