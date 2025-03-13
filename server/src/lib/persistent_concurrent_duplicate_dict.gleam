@@ -1,8 +1,10 @@
 import filepath
 import gleam/dynamic/decode
+import gleam/erlang/process
 import gleam/int
 import gleam/list
 import gleam/option
+import gleam/otp/actor
 import gleam/result
 import gleam/string
 import lib/concurrent_duplicate_dict
@@ -12,22 +14,52 @@ import simplifile
 import snag
 import sqlight
 
-pub opaque type PersistentConcurrentDuplicateDict(key, val) {
-  PersistentConcurrentDuplicateDict(
+pub type ConnectionActorState(key, val) {
+  ConnectionActorState(
     conn: sqlight.Connection,
     insert_query: String,
     key_encoder: fn(key) -> String,
     val_encoder: fn(val) -> List(Value),
+  )
+}
+
+pub type ConnectionActorMsg(key, val) {
+  PersistData(key, val, reply: process.Subject(Result(Nil, snag.Snag)))
+}
+
+pub fn handle_persist_data(msg, state: ConnectionActorState(key, val)) {
+  case msg {
+    PersistData(key, val, reply) -> {
+      let encoded_key = state.key_encoder(key)
+      let encoded_vals = state.val_encoder(val)
+
+      sqlight.query(
+        state.insert_query,
+        on: state.conn,
+        with: [
+          sqlight.text(encoded_key),
+          ..list.map(encoded_vals, translate_persist_type)
+        ],
+        expecting: decode.success(Nil),
+      )
+      |> snag.map_error(string.inspect)
+      |> result.replace(Nil)
+      |> process.send(reply, _)
+    }
+  }
+
+  actor.continue(state)
+}
+
+pub opaque type PersistentConcurrentDuplicateDict(key, val) {
+  PersistentConcurrentDuplicateDict(
+    connection_actor: process.Subject(ConnectionActorMsg(key, val)),
     data: concurrent_duplicate_dict.ConcurrentDuplicateDict(key, val),
     subscribers: concurrent_duplicate_dict.ConcurrentDuplicateDict(
       Nil,
       fn() -> Nil,
     ),
   )
-}
-
-pub type SubscriptionMsg {
-  ValueInserted
 }
 
 /// Field schema should be the SQLite column schema for the fields of the
@@ -94,7 +126,7 @@ pub fn build(
   let select_data_query =
     "SELECT " <> column_names <> " FROM persist WHERE pcdd_key = ?"
 
-  use data_list <- result.map(
+  use data_list <- result.try(
     list.map(keys, fn(key) {
       use key_data <- result.map(
         sqlight.query(
@@ -121,14 +153,18 @@ pub fn build(
     <> column_binds
     <> ")"
 
+  use connection_actor <- result.try(
+    ConnectionActorState(conn:, insert_query:, key_encoder:, val_encoder:)
+    |> actor.start(handle_persist_data)
+    |> snag.map_error(string.inspect),
+  )
+
   PersistentConcurrentDuplicateDict(
-    conn:,
-    insert_query:,
-    key_encoder:,
-    val_encoder:,
+    connection_actor:,
     data:,
     subscribers: concurrent_duplicate_dict.new(),
   )
+  |> Ok
 }
 
 pub fn get(pcd: PersistentConcurrentDuplicateDict(key, val), key) {
@@ -136,21 +172,11 @@ pub fn get(pcd: PersistentConcurrentDuplicateDict(key, val), key) {
 }
 
 pub fn insert(pcdd: PersistentConcurrentDuplicateDict(key, val), key, val) {
-  let encoded_key = pcdd.key_encoder(key)
-  let encoded_vals = pcdd.val_encoder(val)
-
   // First persist the data in the disk database
-  use _ <- result.map(
-    sqlight.query(
-      pcdd.insert_query,
-      on: pcdd.conn,
-      with: [
-        sqlight.text(encoded_key),
-        ..list.map(encoded_vals, translate_persist_type)
-      ],
-      expecting: decode.success(Nil),
-    )
-    |> snag.map_error(string.inspect),
+  use Nil <- result.map(
+    process.try_call(pcdd.connection_actor, PersistData(key, val, _), 100_000)
+    |> snag.map_error(string.inspect)
+    |> result.flatten,
   )
 
   // If that succeeds, then add it to the in-memory store
@@ -176,12 +202,8 @@ pub fn to_list(pcd: PersistentConcurrentDuplicateDict(key, val)) {
 /// Creates an empty dictionary that will fail to store any data, but can 
 /// satisfy type requirements and will always return no data.
 pub fn empty() {
-  let assert Ok(conn) = sqlight.open(":memory:")
   PersistentConcurrentDuplicateDict(
-    conn:,
-    insert_query: "",
-    key_encoder: string.inspect,
-    val_encoder: fn(_) { [] },
+    connection_actor: process.new_subject(),
     data: concurrent_duplicate_dict.new(),
     subscribers: concurrent_duplicate_dict.new(),
   )
