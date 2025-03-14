@@ -115,14 +115,19 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton) {
   let line_tag = "L" <> line_number_text
   let line_id = model.page_path <> "#" <> line_tag
 
-  use <- given.that(line_text == "", return: fn() {
-    html.p([attribute.class("loc"), attribute.id(line_tag)], [
-      html.span([attribute.class("line-number code-extras")], [
-        html.text(line_number_text),
-      ]),
-      html.text(" "),
-    ])
-  })
+  let trimmed_line_text = line_text |> string.trim
+
+  use <- given.that(
+    trimmed_line_text == "" || trimmed_line_text == "}",
+    return: fn() {
+      html.p([attribute.class("loc"), attribute.id(line_tag)], [
+        html.span([attribute.class("line-number code-extras")], [
+          html.text(line_number_text),
+        ]),
+        html.text(line_text),
+      ])
+    },
+  )
 
   let notes =
     discussion.get_notes(model.discussion, line_id)
