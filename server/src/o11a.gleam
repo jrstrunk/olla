@@ -19,7 +19,7 @@ import o11a/components
 import o11a/config
 import o11a/ui/audit_dashboard
 import o11a/ui/audit_doc
-import o11a/ui/audit_page
+import o11a/ui/audit_page_sol
 import o11a/ui/audit_tree
 import o11a/ui/gateway
 import o11a/ui/page_dashboard
@@ -153,7 +153,7 @@ fn handle_wisp_request(req, context: Context) {
         with: gateway.get_audit_metadata(
           context.audit_metadata_gateway,
           audit_name,
-        ),
+        ).in_scope_files,
       )
       |> as_document
       |> element.to_document_string_builder
@@ -175,7 +175,7 @@ fn handle_wisp_request(req, context: Context) {
             with: gateway.get_audit_metadata(
               context.audit_metadata_gateway,
               audit_name,
-            ),
+            ).in_scope_files,
           )
           |> as_static_document
           |> element.to_document_string_builder
@@ -192,13 +192,13 @@ fn handle_wisp_request(req, context: Context) {
 
       elementx.server_component_with_prerendered_skeleton(
         filepath.join("component-page", file_path),
-        components.audit_page,
-        audit_page.get_skeleton(context.skeletons, for: file_path),
+        components.audit_page_sol,
+        audit_page_sol.get_skeleton(context.skeletons, for: file_path),
       )
       |> audit_tree.view(
         Some(elementx.server_component_with_prerendered_skeleton(
           filepath.join("component-page-dashboard", file_path),
-          components.audit_page,
+          components.page_dashboard,
           page_dashboard.get_skeleton(context.skeletons, for: file_path),
         )),
         audit_name,
@@ -206,7 +206,7 @@ fn handle_wisp_request(req, context: Context) {
         with: gateway.get_audit_metadata(
           context.audit_metadata_gateway,
           audit_name,
-        ),
+        ).in_scope_files,
       )
       |> as_document
       |> element.to_document_string_builder

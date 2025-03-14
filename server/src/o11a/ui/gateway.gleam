@@ -11,7 +11,7 @@ import o11a/config
 import o11a/server/audit_metadata as server_audit_metadata
 import o11a/server/discussion
 import o11a/ui/audit_dashboard
-import o11a/ui/audit_page
+import o11a/ui/audit_page_sol
 import o11a/ui/page_dashboard
 import simplifile
 import snag
@@ -28,7 +28,7 @@ pub type Gateway {
 pub type PageGateway =
   concurrent_dict.ConcurrentDict(
     String,
-    process.Subject(lustre.Action(audit_page.Msg, lustre.ServerComponent)),
+    process.Subject(lustre.Action(audit_page_sol.Msg, lustre.ServerComponent)),
   )
 
 pub type PageDashboardGateway =
@@ -57,8 +57,10 @@ pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
   use _ <- result.map(
     dict.keys(page_paths)
     |> list.map(fn(audit_name) {
-      let audit_metadata =
+      use audit_metadata <- result.try(
         server_audit_metadata.gather_metadata(for: audit_name)
+        |> snag.context("Failed to gather metadata for " <> audit_name),
+      )
 
       concurrent_dict.insert(audit_metadata_gateway, audit_name, audit_metadata)
 
@@ -81,12 +83,12 @@ pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
       dict.get(page_paths, audit_name)
       |> result.unwrap([])
       |> list.map(fn(page_path) {
-        case audit_page.preprocess_source(for: page_path) {
+        case audit_page_sol.preprocess_source(for: page_path) {
           Ok(preprocessed_source) -> {
             use actor <- result.try(
               lustre.start_actor(
-                audit_page.app(),
-                audit_page.Model(
+                audit_page_sol.app(),
+                audit_page_sol.Model(
                   page_path:,
                   preprocessed_source:,
                   discussion:,
@@ -158,11 +160,10 @@ pub fn get_audit_metadata(
   for audit_name,
 ) {
   concurrent_dict.get(audit_metadata_gateway, audit_name)
-  |> result.unwrap(
-    audit_metadata.AuditMetaData(
-      audit_name: audit_name,
-      audit_formatted_name: audit_name,
-      in_scope_files: [],
-    ),
-  )
+  |> result.unwrap(audit_metadata.AuditMetaData(
+    audit_name: audit_name,
+    audit_formatted_name: audit_name,
+    in_scope_files: [],
+    source_files: dict.new(),
+  ))
 }
