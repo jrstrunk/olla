@@ -83,6 +83,8 @@ fn handler(req, context: Context) {
   case request.path_segments(req) {
     ["lustre-server-component.mjs"] -> serve_lustre_framework()
 
+    ["favicon.ico"] -> serve_favicon(context.config)
+
     ["styles.css" as stylesheet]
     | ["line_discussion.min.css" as stylesheet]
     | ["page_panel.css" as stylesheet] -> serve_css(stylesheet, context.config)
@@ -217,6 +219,12 @@ fn as_document(body: element.Element(msg)) {
   html.html([], [
     html.head([], [
       html.link([
+        attribute.rel("icon"),
+        attribute.href(
+          "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🕵️</text></svg>",
+        ),
+      ]),
+      html.link([
         attribute.rel("stylesheet"),
         attribute.href("/line_discussion.min.css"),
       ]),
@@ -308,4 +316,14 @@ fn serve_js(js_file_name, config: config.Config) {
       config.Dev -> resp
     }
   }
+}
+
+fn serve_favicon(config: config.Config) {
+  let path = config.get_priv_path(for: "static/favicon.ico")
+  let assert Ok(favicon) = mist.send_file(path, offset: 0, limit: None)
+
+  response.new(200)
+  |> response.prepend_header("content-type", "image/x-icon")
+  |> response.set_body(favicon)
+  |> response.set_header("cache-control", "max-age=604800, must-revalidate")
 }
