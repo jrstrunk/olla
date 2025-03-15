@@ -43,7 +43,32 @@ pub fn component() {
     update,
     view,
     dict.from_list([
-      #("line-discussion", fn(dy) {
+      #("dsc-data", fn(dy) {
+        case decode.run(dy, decode.string) {
+          Ok(data) -> {
+            let decoder = {
+              use topic_id <- decode.field("topic_id", decode.string)
+              use topic_title <- decode.field("topic_title", decode.string)
+              use line_number <- decode.field("line_number", decode.int)
+              decode.success(#(topic_id, topic_title, line_number))
+            }
+
+            case json.parse(data, decoder) {
+              Ok(#(topic_id, topic_title, line_number)) ->
+                Ok(ServerSetDiscussionData(
+                  topic_id:,
+                  topic_title:,
+                  line_number:,
+                ))
+              Error(..) ->
+                Error([dynamic.DecodeError("dsc-data", string.inspect(dy), [])])
+            }
+          }
+          Error(..) ->
+            Error([dynamic.DecodeError("dsc-data", string.inspect(dy), [])])
+        }
+      }),
+      #("dsc", fn(dy) {
         let res = case computed_note.decode_computed_notes(dy) {
           Ok(notes) -> Ok(ServerUpdatedNotes(notes))
           Error(..) ->
@@ -54,25 +79,6 @@ pub fn component() {
 
         res
       }),
-      #("line-id", fn(dy) {
-        case decode.run(dy, decode.string) {
-          Ok(line_id) -> Ok(ServerSetLineId(line_id))
-          Error(..) ->
-            Error([dynamic.DecodeError("line-id", string.inspect(dy), [])])
-        }
-      }),
-      #("line-number", fn(dy) {
-        case decode.run(dy, decode.string) {
-          Ok(line_number) ->
-            case int.parse(line_number) {
-              Ok(line_number) -> Ok(ServerSetLineNumber(line_number))
-              Error(Nil) ->
-                Error([dynamic.DecodeError("line-number", line_number, [])])
-            }
-          Error(..) ->
-            Error([dynamic.DecodeError("line-number", string.inspect(dy), [])])
-        }
-      }),
     ]),
   )
 }
@@ -82,11 +88,10 @@ fn init(_) -> #(Model, effect.Effect(Msg)) {
     Model(
       user_name: "guest",
       line_number: 0,
-      line_tag: "",
-      line_number_text: "",
+      topic_id: "",
+      topic_title: "",
       notes: dict.new(),
       current_note_draft: "",
-      line_id: "",
       current_thread_id: "",
       current_thread_notes: [],
       active_thread: option.None,
@@ -103,9 +108,8 @@ pub type Model {
   Model(
     user_name: String,
     line_number: Int,
-    line_id: String,
-    line_tag: String,
-    line_number_text: String,
+    topic_id: String,
+    topic_title: String,
     notes: dict.Dict(String, List(computed_note.ComputedNote)),
     current_note_draft: String,
     current_thread_id: String,
@@ -128,8 +132,11 @@ pub type ActiveThread {
 }
 
 pub type Msg {
-  ServerSetLineId(String)
-  ServerSetLineNumber(Int)
+  ServerSetDiscussionData(
+    topic_id: String,
+    topic_title: String,
+    line_number: Int,
+  )
   ServerUpdatedNotes(dict.Dict(String, List(computed_note.ComputedNote)))
   UserWroteNote(String)
   UserSubmittedNote
@@ -153,28 +160,18 @@ pub type Msg {
 
 fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
-    ServerSetLineId(line_id) -> #(
+    ServerSetDiscussionData(topic_id, topic_title, line_number) -> #(
       Model(
         ..model,
-        line_id:,
-        current_thread_id: line_id,
-        current_thread_notes: dict.get(model.notes, line_id)
+        topic_id:,
+        topic_title:,
+        line_number:,
+        current_thread_id: topic_id,
+        current_thread_notes: dict.get(model.notes, topic_id)
           |> result.unwrap([]),
       ),
       effect.none(),
     )
-    ServerSetLineNumber(line_number) -> {
-      let line_number_text = int.to_string(line_number)
-      #(
-        Model(
-          ..model,
-          line_number:,
-          line_number_text:,
-          line_tag: "L" <> line_number_text,
-        ),
-        effect.none(),
-      )
-    }
     ServerUpdatedNotes(updated_notes) -> {
       #(
         Model(
@@ -249,7 +246,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
           events.user_submitted_note,
           json.object([
             #("note", note.encode_note(note)),
-            #("line_id", json.string(model.line_id)),
+            #("topic_id", json.string(model.topic_id)),
           ]),
         ),
       )
@@ -277,7 +274,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 
       let new_current_thread_id =
         option.map(new_active_thread, fn(thread) { thread.current_thread_id })
-        |> option.unwrap(model.line_id)
+        |> option.unwrap(model.topic_id)
 
       #(
         Model(
@@ -410,7 +407,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 }
 
 fn view(model: Model) -> element.Element(Msg) {
-  io.println("Rendering line discussion " <> model.line_tag)
+  io.println("Rendering line discussion " <> model.topic_title)
 
   html.div([attribute.id("line-discussion-overlay")], [
     html.div([attribute.class("overlay p-[.5rem]")], [
@@ -466,7 +463,9 @@ fn thread_header_view(model: Model) {
       html.div(
         [attribute.class("flex items-center justify-between width-full")],
         [
-          html.span([attribute.class("pt-[.1rem]")], [html.text(model.line_tag)]),
+          html.span([attribute.class("pt-[.1rem] underline")], [
+            html.text(model.topic_title),
+          ]),
           html.button(
             [
               event.on_click(UserMaximizeThread),

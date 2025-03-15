@@ -224,8 +224,9 @@ pub fn preprocess_source(
       ContractDefinition ->
         line_text
         |> process_contract_definition_line(
-          audit_metadata,
-          source_file_metadata,
+          page_path:,
+          audit_metadata:,
+          source_file_metadata:,
         )
       LibraryDeclaration -> line_text |> style_code_tokens |> PreprocessedLine
       ConstructorDefinition ->
@@ -277,6 +278,7 @@ pub type PreprocessedSourceLine(msg) {
 pub type PreprocessedLineElement(msg) {
   PreprocessedLine(preprocessed_line_text: String)
   PreprocessedContractDefinition(
+    contract_id: String,
     contract_name: String,
     contract_inheritances: List(ExternalReference),
     process_line: fn(element.Element(msg), List(element.Element(msg))) ->
@@ -444,9 +446,10 @@ pub fn process_import_line(
 }
 
 pub fn process_contract_definition_line(
-  line_text,
-  audit_metadata,
-  source_file_metadata: audit_metadata.SourceFileMetaData,
+  page_path page_path,
+  line_text line_text,
+  audit_metadata audit_metadata,
+  source_file_metadata source_file_metadata: audit_metadata.SourceFileMetaData,
 ) {
   case string.split_once(line_text, " is ") {
     Ok(#(contract_name, contract_inheritance)) -> {
@@ -489,6 +492,7 @@ pub fn process_contract_definition_line(
       }
 
       PreprocessedContractDefinition(
+        contract_id: page_path <> "#" <> contract_name,
         contract_name:,
         contract_inheritances:,
         process_line:,
@@ -517,6 +521,7 @@ pub fn process_contract_definition_line(
       }
 
       PreprocessedContractDefinition(
+        contract_id: page_path <> "#" <> contract_name,
         contract_name:,
         contract_inheritances: [],
         process_line:,
@@ -562,7 +567,7 @@ pub fn style_code_tokens(line_text) {
 
   let assert Ok(keyword_regex) =
     regexp.from_string(
-      "\\b(constructor|contract|fallback|override|mapping|immutable|interface|constant|library|event|error|require|revert|using|for|emit|function|if|else|returns|return|memory|calldata|public|private|external|view|pure|payable|internal|import|enum|struct|storage|is)\\b",
+      "\\b(constructor|contract|fallback|override|mapping|immutable|interface|constant|library|abstract|event|error|require|revert|using|for|emit|function|if|else|returns|return|memory|calldata|public|private|external|view|pure|payable|internal|import|enum|struct|storage|is)\\b",
     )
 
   let styled_line =

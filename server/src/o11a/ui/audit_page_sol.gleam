@@ -32,7 +32,7 @@ pub fn app() -> lustre.App(Model, Model, Msg) {
 }
 
 pub type Msg {
-  UserSubmittedNote(note: note.Note, line_id: String)
+  UserSubmittedNote(note: note.Note, topic_id: String)
   ServerUpdatedDiscussion
 }
 
@@ -58,8 +58,9 @@ pub fn init(init_model: Model) -> #(Model, effect.Effect(Msg)) {
 
 pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
-    UserSubmittedNote(note, line_id) -> {
-      let assert Ok(Nil) = discussion.add_note(model.discussion, note, line_id)
+    UserSubmittedNote(note:, topic_id:) -> {
+      let assert Ok(Nil) =
+        discussion.add_note(model.discussion, note, topic_id:)
       #(model, effect.none())
     }
     ServerUpdatedDiscussion -> #(model, effect.none())
@@ -113,25 +114,94 @@ fn loc_view(
     ])
   })
 
-  let notes =
-    discussion.get_notes(model.discussion, loc.line_id)
-    |> result.unwrap([])
+  case loc.preprocessed_line {
+    preprocessor_sol.PreprocessedLine(preprocessed_line_text) -> {
+      line_container_view(
+        model:,
+        loc:,
+        topic_id: loc.line_id,
+        topic_title: "Line " <> loc.line_number_text,
+        line_element: html.span(
+          [
+            attribute.attribute(
+              "dangerous-unescaped-html",
+              preprocessed_line_text,
+            ),
+          ],
+          [],
+        ),
+        is_skeleton:,
+      )
+    }
 
-  let parent_notes =
-    list.filter_map(notes, fn(note) {
-      case note.parent_id == loc.line_id {
-        True -> Ok(note)
-        False -> Error(Nil)
-      }
-    })
+    preprocessor_sol.PreprocessedContractDefinition(
+      contract_id:,
+      contract_name:,
+      contract_inheritances:,
+      process_line:,
+    ) -> {
+      line_container_view(
+        model:,
+        loc:,
+        topic_id: contract_id,
+        topic_title: "Contract " <> contract_name,
+        line_element: process_line(
+          html.div([attribute.class(contract_name)], []),
+          list.map(contract_inheritances, fn(inheritance) {
+            html.span([attribute.class(inheritance.id <> " contract")], [
+              html.text(inheritance.name),
+            ])
+          }),
+        ),
+        is_skeleton:,
+      )
+    }
+  }
+}
 
-  let info_notes =
-    parent_notes
-    |> list.filter(fn(computed_note) {
-      computed_note.significance == computed_note.Informational
-    })
-    |> list.map(split_info_note(_, loc.leading_spaces))
-    |> list.flatten
+fn inline_comment_preview_view(parent_notes: List(computed_note.ComputedNote)) {
+  let note_result =
+    list.reverse(parent_notes)
+    |> list.find(fn(note) { note.significance != computed_note.Informational })
+
+  case note_result {
+    Ok(note) ->
+      html.span(
+        [
+          attribute.class("code-extras font-code fade-in"),
+          attribute.class("comment-preview discussion-entry"),
+          attribute.attribute("tabindex", "0"),
+        ],
+        [
+          html.text(case string.length(note.message) > 40 {
+            True -> note.message |> string.slice(0, length: 37) <> "..."
+            False -> note.message |> string.slice(0, length: 40)
+          }),
+        ],
+      )
+
+    Error(Nil) ->
+      html.span(
+        [
+          attribute.class("code-extras"),
+          attribute.class("new-thread-preview discussion-entry"),
+          attribute.attribute("tabindex", "0"),
+        ],
+        [html.text("Start new thread")],
+      )
+  }
+}
+
+fn line_container_view(
+  model model: Model,
+  loc loc: preprocessor_sol.PreprocessedSourceLine(Msg),
+  topic_id topic_id: String,
+  topic_title topic_title: String,
+  line_element line_element,
+  is_skeleton is_skeleton,
+) {
+  let #(notes, parent_notes, info_notes) =
+    get_notes(model.discussion, loc.leading_spaces, topic_id)
 
   html.div(
     [
@@ -170,135 +240,75 @@ fn loc_view(
         html.span([attribute.class("line-number code-extras")], [
           html.text(loc.line_number_text),
         ]),
-        case loc.preprocessed_line {
-          preprocessor_sol.PreprocessedLine(preprocessed_line_text) ->
-            element.fragment([
-              html.span(
+        line_element,
+        html.span([attribute.class("inline-comment relative font-code")], [
+          inline_comment_preview_view(parent_notes),
+          case is_skeleton {
+            True -> element.fragment([])
+            False ->
+              element.element(
+                components.line_discussion,
                 [
-                  attribute.attribute(
-                    "dangerous-unescaped-html",
-                    preprocessed_line_text,
+                  attribute.class(
+                    "absolute z-[3] w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] "
+                    // The line discussion component is too close to the edge of the
+                    // screen, so we want to show it below the line
+                    <> case loc.line_number < 27 {
+                      True -> "top-[1.4rem]"
+                      False -> "bottom-[1.4rem]"
+                    },
                   ),
+                  attribute.attribute(
+                    "dsc-data",
+                    json.object([
+                      #("topic_id", json.string(topic_id)),
+                      #("topic_title", json.string(topic_title)),
+                      #("line_number", json.int(loc.line_number)),
+                    ])
+                      |> json.to_string,
+                  ),
+                  attribute.attribute(
+                    "dsc",
+                    computed_note.encode_computed_notes(notes) |> json.to_string,
+                  ),
+                  on_user_submitted_line_note(UserSubmittedNote),
+                  server_component.include(["detail"]),
                 ],
                 [],
-              ),
-              html.span([attribute.class("inline-comment relative font-code")], [
-                inline_comment_preview_view(parent_notes),
-                case is_skeleton {
-                  True -> element.fragment([])
-                  // The line discussion component is too close to the edge of the
-                  // screen, so we want to show it below the line
-                  False ->
-                    element.element(
-                      components.line_discussion,
-                      [
-                        attribute.class(
-                          "absolute z-[3] w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] "
-                          <> case loc.line_number < 27 {
-                            True -> "top-[1.4rem]"
-                            False -> "bottom-[1.4rem]"
-                          },
-                        ),
-                        attribute.attribute("line-number", loc.line_number_text),
-                        attribute.attribute("line-id", loc.line_id),
-                        attribute.attribute(
-                          "line-discussion",
-                          notes
-                            |> computed_note.encode_computed_notes
-                            |> json.to_string,
-                        ),
-                        on_user_submitted_line_note(UserSubmittedNote),
-                        server_component.include(["detail"]),
-                      ],
-                      [],
-                    )
-                },
-              ]),
-            ])
-          preprocessor_sol.PreprocessedContractDefinition(
-            contract_name,
-            contract_inheritances,
-            process_line,
-          ) ->
-            element.fragment([
-              process_line(
-                html.div([attribute.class(contract_name)], []),
-                list.map(contract_inheritances, fn(inheritance) {
-                  html.span([attribute.class(inheritance.id <> " contract")], [
-                    html.text(inheritance.name),
-                  ])
-                }),
-              ),
-              html.span([attribute.class("inline-comment relative font-code")], [
-                inline_comment_preview_view(parent_notes),
-                case is_skeleton {
-                  True -> element.fragment([])
-                  // The line discussion component is too close to the edge of the
-                  // screen, so we want to show it below the line
-                  False ->
-                    element.element(
-                      components.line_discussion,
-                      [
-                        attribute.class(
-                          "absolute z-[3] w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] "
-                          <> case loc.line_number < 27 {
-                            True -> "top-[1.4rem]"
-                            False -> "bottom-[1.4rem]"
-                          },
-                        ),
-                        attribute.attribute("line-number", loc.line_number_text),
-                        attribute.attribute("line-id", loc.line_id),
-                        attribute.attribute(
-                          "line-discussion",
-                          notes
-                            |> computed_note.encode_computed_notes
-                            |> json.to_string,
-                        ),
-                        on_user_submitted_line_note(UserSubmittedNote),
-                        server_component.include(["detail"]),
-                      ],
-                      [],
-                    )
-                },
-              ]),
-            ])
-        },
+              )
+          },
+        ]),
       ]),
     ],
   )
 }
 
-fn inline_comment_preview_view(parent_notes: List(computed_note.ComputedNote)) {
-  let note_result =
-    list.reverse(parent_notes)
-    |> list.find(fn(note) { note.significance != computed_note.Informational })
+fn get_notes(
+  discussion: discussion.Discussion,
+  leading_spaces leading_spaces,
+  topic_id topic_id,
+) {
+  let notes =
+    discussion.get_notes(discussion, topic_id)
+    |> result.unwrap([])
 
-  case note_result {
-    Ok(note) ->
-      html.span(
-        [
-          attribute.class("code-extras font-code fade-in"),
-          attribute.class("comment-preview discussion-entry"),
-          attribute.attribute("tabindex", "0"),
-        ],
-        [
-          html.text(case string.length(note.message) > 40 {
-            True -> note.message |> string.slice(0, length: 37) <> "..."
-            False -> note.message |> string.slice(0, length: 40)
-          }),
-        ],
-      )
+  let parent_notes =
+    list.filter_map(notes, fn(note) {
+      case note.parent_id == topic_id {
+        True -> Ok(note)
+        False -> Error(Nil)
+      }
+    })
 
-    Error(Nil) ->
-      html.span(
-        [
-          attribute.class("code-extras"),
-          attribute.class("new-thread-preview discussion-entry"),
-          attribute.attribute("tabindex", "0"),
-        ],
-        [html.text("Start new thread")],
-      )
-  }
+  let info_notes =
+    parent_notes
+    |> list.filter(fn(computed_note) {
+      computed_note.significance == computed_note.Informational
+    })
+    |> list.map(split_info_note(_, leading_spaces))
+    |> list.flatten
+
+  #(notes, parent_notes, info_notes)
 }
 
 fn split_info_note(note: computed_note.ComputedNote, leading_spaces) {
@@ -365,14 +375,14 @@ pub fn on_user_submitted_line_note(msg) {
     |> result.replace_error(empty_error),
   )
 
-  use line_id <- result.try(
+  use topic_id <- result.try(
     decode.run(
       event,
-      decode.subfield(["detail", "line_id"], decode.string, decode.success),
+      decode.subfield(["detail", "topic_id"], decode.string, decode.success),
     )
     |> result.replace_error(empty_error),
   )
 
-  msg(note, line_id)
+  msg(note, topic_id)
   |> Ok
 }

@@ -106,7 +106,7 @@ pub fn note_vote_persist_decoder() {
   |> decode.success
 }
 
-pub fn add_note(discussion: Discussion, note: note.Note, line_id topic: String) {
+pub fn add_note(discussion: Discussion, note: note.Note, topic_id topic: String) {
   pcs_dict.insert(discussion.notes, note.parent_id, note, topic:)
 }
 
