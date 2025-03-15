@@ -50,15 +50,20 @@ pub fn component() {
               use topic_id <- decode.field("topic_id", decode.string)
               use topic_title <- decode.field("topic_title", decode.string)
               use line_number <- decode.field("line_number", decode.int)
-              decode.success(#(topic_id, topic_title, line_number))
+              use reference <- decode.field(
+                "reference",
+                decode.optional(decode.string),
+              )
+              decode.success(#(topic_id, topic_title, line_number, reference))
             }
 
             case json.parse(data, decoder) {
-              Ok(#(topic_id, topic_title, line_number)) ->
+              Ok(#(topic_id, topic_title, line_number, reference)) ->
                 Ok(ServerSetDiscussionData(
                   topic_id:,
                   topic_title:,
                   line_number:,
+                  reference:,
                 ))
               Error(..) ->
                 Error([dynamic.DecodeError("dsc-data", string.inspect(dy), [])])
@@ -69,43 +74,22 @@ pub fn component() {
         }
       }),
       #("dsc", fn(dy) {
-        let res = case computed_note.decode_computed_notes(dy) {
+        case computed_note.decode_computed_notes(dy) {
           Ok(notes) -> Ok(ServerUpdatedNotes(notes))
           Error(..) ->
             Error([
               dynamic.DecodeError("line-discussion", string.inspect(dy), []),
             ])
         }
-
-        res
       }),
     ]),
   )
 }
 
-fn init(_) -> #(Model, effect.Effect(Msg)) {
-  #(
-    Model(
-      user_name: "guest",
-      line_number: 0,
-      topic_id: "",
-      topic_title: "",
-      notes: dict.new(),
-      current_note_draft: "",
-      current_thread_id: "",
-      current_thread_notes: [],
-      active_thread: option.None,
-      show_expanded_message_box: False,
-      current_expanded_message_draft: None,
-      expanded_messages: set.new(),
-      editing_note: None,
-    ),
-    effect.none(),
-  )
-}
-
 pub type Model {
   Model(
+    reference: Option(String),
+    show_reference_discussion: Bool,
     user_name: String,
     line_number: Int,
     topic_id: String,
@@ -131,11 +115,35 @@ pub type ActiveThread {
   )
 }
 
+fn init(_) -> #(Model, effect.Effect(Msg)) {
+  #(
+    Model(
+      reference: None,
+      show_reference_discussion: False,
+      user_name: "guest",
+      line_number: 0,
+      topic_id: "",
+      topic_title: "",
+      notes: dict.new(),
+      current_note_draft: "",
+      current_thread_id: "",
+      current_thread_notes: [],
+      active_thread: option.None,
+      show_expanded_message_box: False,
+      current_expanded_message_draft: None,
+      expanded_messages: set.new(),
+      editing_note: None,
+    ),
+    effect.none(),
+  )
+}
+
 pub type Msg {
   ServerSetDiscussionData(
     topic_id: String,
     topic_title: String,
     line_number: Int,
+    reference: Option(String),
   )
   ServerUpdatedNotes(dict.Dict(String, List(computed_note.ComputedNote)))
   UserWroteNote(String)
@@ -156,13 +164,15 @@ pub type Msg {
   UserEditedNote(computed_note.ComputedNote)
   UserEditedPriorNote
   UserCancelledEdit
+  UserToggledReferenceDiscussion
 }
 
 fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
-    ServerSetDiscussionData(topic_id, topic_title, line_number) -> #(
+    ServerSetDiscussionData(topic_id:, topic_title:, line_number:, reference:) -> #(
       Model(
         ..model,
+        reference:,
         topic_id:,
         topic_title:,
         line_number:,
@@ -403,6 +413,13 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       ),
       effect.none(),
     )
+    UserToggledReferenceDiscussion -> #(
+      Model(
+        ..model,
+        show_reference_discussion: !model.show_reference_discussion,
+      ),
+      effect.none(),
+    )
   }
 }
 
@@ -410,26 +427,80 @@ fn view(model: Model) -> element.Element(Msg) {
   io.println("Rendering line discussion " <> model.topic_title)
 
   html.div([attribute.id("line-discussion-overlay")], [
-    html.div([attribute.class("overlay p-[.5rem]")], [
-      case
-        option.is_some(model.active_thread)
-        || list.length(model.current_thread_notes) > 0
-      {
-        True ->
-          html.div(
-            [
-              attribute.id("comment-list"),
-              attribute.class(
-                "flex flex-col-reverse overflow-auto max-h-[30rem] gap-[.5rem] mb-[.5rem]",
-              ),
-            ],
-            [element.fragment(comments_view(model)), thread_header_view(model)],
-          )
-        False -> element.fragment([])
-      },
-      new_message_input_view(model),
-    ]),
-    expanded_message_view(model),
+    case option.is_some(model.reference) && !model.show_reference_discussion {
+      True ->
+        element.fragment([
+          html.div([attribute.class("overlay p-[.5rem]")], [
+            html.div(
+              [
+                attribute.class(
+                  "flex items-start justify-between width-full mb-[.5rem]",
+                ),
+              ],
+              [
+                html.span([attribute.class("pt-[.1rem] underline")], [
+                  html.text(model.topic_title),
+                ]),
+                html.button(
+                  [
+                    event.on_click(UserToggledReferenceDiscussion),
+                    attribute.class("icon-button p-[.3rem] "),
+                  ],
+                  [lucide.messages_square([])],
+                ),
+              ],
+            ),
+            html.div(
+              [
+                attribute.class(
+                  "flex flex-col overflow-auto max-h-[30rem] gap-[.5rem]",
+                ),
+              ],
+              list.filter_map(model.current_thread_notes, fn(note) {
+                case note.significance == computed_note.Informational {
+                  True ->
+                    Ok(
+                      html.p([], [
+                        html.text(
+                          note.message
+                          <> case option.is_some(note.expanded_message) {
+                            True -> "^"
+                            False -> ""
+                          },
+                        ),
+                      ]),
+                    )
+                  False -> Error(Nil)
+                }
+              }),
+            ),
+          ]),
+        ])
+      False ->
+        element.fragment([
+          html.div([attribute.class("overlay p-[.5rem]")], [
+            thread_header_view(model),
+            case
+              option.is_some(model.active_thread)
+              || list.length(model.current_thread_notes) > 0
+            {
+              True ->
+                html.div(
+                  [
+                    attribute.id("comment-list"),
+                    attribute.class(
+                      "flex flex-col-reverse overflow-auto max-h-[30rem] gap-[.5rem] mb-[.5rem]",
+                    ),
+                  ],
+                  comments_view(model),
+                )
+              False -> element.fragment([])
+            },
+            new_message_input_view(model),
+          ]),
+          expanded_message_view(model),
+        ])
+    },
   ])
 }
 
@@ -461,18 +532,35 @@ fn thread_header_view(model: Model) {
       ])
     None ->
       html.div(
-        [attribute.class("flex items-center justify-between width-full")],
+        [
+          attribute.class(
+            "flex items-start justify-between width-full mb-[.5rem]",
+          ),
+        ],
         [
           html.span([attribute.class("pt-[.1rem] underline")], [
             html.text(model.topic_title),
           ]),
-          html.button(
-            [
-              event.on_click(UserMaximizeThread),
-              attribute.class("icon-button p-[.3rem] "),
-            ],
-            [lucide.maximize_2([])],
-          ),
+          html.div([], [
+            case option.is_some(model.reference) {
+              True ->
+                html.button(
+                  [
+                    event.on_click(UserToggledReferenceDiscussion),
+                    attribute.class("icon-button p-[.3rem] mr-[.5rem]"),
+                  ],
+                  [lucide.x([])],
+                )
+              False -> element.fragment([])
+            },
+            html.button(
+              [
+                event.on_click(UserMaximizeThread),
+                attribute.class("icon-button p-[.3rem] "),
+              ],
+              [lucide.maximize_2([])],
+            ),
+          ]),
         ],
       )
   }

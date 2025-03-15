@@ -148,47 +148,63 @@ fn loc_view(
         line_element: process_line(
           html.div([attribute.class(contract_name)], []),
           list.map(contract_inheritances, fn(inheritance) {
-            html.span([attribute.class(inheritance.id <> " contract")], [
-              html.text(inheritance.name),
+            let reference_notes =
+              discussion.get_notes(model.discussion, inheritance.id)
+              |> result.unwrap([])
+
+            html.div([attribute.class("relative")], [
+              html.span(
+                [
+                  attribute.class("comment-preview contract"),
+                  attribute.attribute("tabindex", "0"),
+                ],
+                [html.text(inheritance.name)],
+              ),
+              case is_skeleton {
+                True -> element.fragment([])
+                False ->
+                  element.element(
+                    components.line_discussion,
+                    [
+                      attribute.class(
+                        "absolute z-[3] w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] "
+                        // The line discussion component is too close to the edge of the
+                        // screen, so we want to show it below the line
+                        <> case loc.line_number < 27 {
+                          True -> "top-[1.4rem]"
+                          False -> "bottom-[1.4rem]"
+                        },
+                      ),
+                      attribute.attribute(
+                        "dsc-data",
+                        json.object([
+                          #("topic_id", json.string(inheritance.id)),
+                          #(
+                            "topic_title",
+                            json.string("Contract " <> inheritance.name),
+                          ),
+                          #("line_number", json.int(0)),
+                          #("reference", json.string(inheritance.id)),
+                        ])
+                          |> json.to_string,
+                      ),
+                      attribute.attribute(
+                        "dsc",
+                        computed_note.encode_computed_notes(reference_notes)
+                          |> json.to_string,
+                      ),
+                      on_user_submitted_line_note(UserSubmittedNote),
+                      server_component.include(["detail"]),
+                    ],
+                    [],
+                  )
+              },
             ])
           }),
         ),
         is_skeleton:,
       )
     }
-  }
-}
-
-fn inline_comment_preview_view(parent_notes: List(computed_note.ComputedNote)) {
-  let note_result =
-    list.reverse(parent_notes)
-    |> list.find(fn(note) { note.significance != computed_note.Informational })
-
-  case note_result {
-    Ok(note) ->
-      html.span(
-        [
-          attribute.class("code-extras font-code fade-in"),
-          attribute.class("comment-preview discussion-entry"),
-          attribute.attribute("tabindex", "0"),
-        ],
-        [
-          html.text(case string.length(note.message) > 40 {
-            True -> note.message |> string.slice(0, length: 37) <> "..."
-            False -> note.message |> string.slice(0, length: 40)
-          }),
-        ],
-      )
-
-    Error(Nil) ->
-      html.span(
-        [
-          attribute.class("code-extras"),
-          attribute.class("new-thread-preview discussion-entry"),
-          attribute.attribute("tabindex", "0"),
-        ],
-        [html.text("Start new thread")],
-      )
   }
 }
 
@@ -264,6 +280,7 @@ fn line_container_view(
                       #("topic_id", json.string(topic_id)),
                       #("topic_title", json.string(topic_title)),
                       #("line_number", json.int(loc.line_number)),
+                      #("reference", json.null()),
                     ])
                       |> json.to_string,
                   ),
@@ -281,6 +298,39 @@ fn line_container_view(
       ]),
     ],
   )
+}
+
+fn inline_comment_preview_view(parent_notes: List(computed_note.ComputedNote)) {
+  let note_result =
+    list.reverse(parent_notes)
+    |> list.find(fn(note) { note.significance != computed_note.Informational })
+
+  case note_result {
+    Ok(note) ->
+      html.span(
+        [
+          attribute.class("code-extras font-code fade-in"),
+          attribute.class("comment-preview discussion-entry"),
+          attribute.attribute("tabindex", "0"),
+        ],
+        [
+          html.text(case string.length(note.message) > 40 {
+            True -> note.message |> string.slice(0, length: 37) <> "..."
+            False -> note.message |> string.slice(0, length: 40)
+          }),
+        ],
+      )
+
+    Error(Nil) ->
+      html.span(
+        [
+          attribute.class("code-extras"),
+          attribute.class("new-thread-preview discussion-entry"),
+          attribute.attribute("tabindex", "0"),
+        ],
+        [html.text("Start new thread")],
+      )
+  }
 }
 
 fn get_notes(
