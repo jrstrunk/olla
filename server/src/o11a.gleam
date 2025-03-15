@@ -57,7 +57,10 @@ pub fn main() {
       page_dashboard_gateway:,
       audit_metadata_gateway:,
     )
-  <- result.map(gateway.start_gateway(skeletons))
+  <- result.map(
+    gateway.start_gateway(skeletons)
+    |> result.map_error(fn(e) { snag.pretty_print(e) |> io.println }),
+  )
 
   let context =
     Context(

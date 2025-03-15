@@ -10,6 +10,7 @@ import o11a/audit_metadata
 import o11a/config
 import o11a/server/audit_metadata as server_audit_metadata
 import o11a/server/discussion
+import o11a/server/preprocessor_sol
 import o11a/ui/audit_dashboard
 import o11a/ui/audit_page_sol
 import o11a/ui/page_dashboard
@@ -83,7 +84,12 @@ pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
       dict.get(page_paths, audit_name)
       |> result.unwrap([])
       |> list.map(fn(page_path) {
-        case audit_page_sol.preprocess_source(for: page_path) {
+        case
+          preprocessor_sol.preprocess_source(
+            for: page_path,
+            with: audit_metadata,
+          )
+        {
           Ok(preprocessed_source) -> {
             use actor <- result.try(
               lustre.start_actor(
@@ -164,6 +170,6 @@ pub fn get_audit_metadata(
     audit_name: audit_name,
     audit_formatted_name: audit_name,
     in_scope_files: [],
-    source_files: dict.new(),
+    source_files_sol: dict.new(),
   ))
 }

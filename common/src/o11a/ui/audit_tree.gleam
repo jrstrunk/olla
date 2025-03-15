@@ -7,21 +7,20 @@ import gleam/string
 import lustre/attribute
 import lustre/element
 import lustre/element/html
-import o11a/audit_metadata
 
 pub fn view(
   file_contents,
   side_panel,
   for audit_name,
   on current_file_path,
-  with metadata,
+  with in_scope_files,
 ) {
   html.div([attribute.id("tree-grid")], [
     html.div([attribute.id("file-tree")], [
       html.h3([attribute.id("audit-tree-header")], [
         html.text(audit_name <> " files"),
       ]),
-      audit_file_tree_view(audit_name, current_file_path, metadata),
+      audit_file_tree_view(audit_name, current_file_path, in_scope_files),
     ]),
     html.div([attribute.id("tree-resizer")], []),
     html.div([attribute.id("file-contents")], [file_contents]),
@@ -36,14 +35,8 @@ pub fn view(
   ])
 }
 
-fn audit_file_tree_view(
-  audit_name,
-  current_file_path,
-  metadata: audit_metadata.AuditMetaData,
-) {
-  let all_audit_files =
-    metadata.in_scope_files
-    |> group_files_by_parent
+fn audit_file_tree_view(audit_name, current_file_path, in_scope_files) {
+  let all_audit_files = group_files_by_parent(in_scope_files)
 
   let #(subdirs, direct_files) =
     dict.get(all_audit_files, audit_name) |> result.unwrap(#([], []))

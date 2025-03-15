@@ -7,9 +7,8 @@ import gleam/int
 import gleam/io
 import gleam/json
 import gleam/list
-import gleam/option.{None, Some}
+import gleam/option.{None}
 import gleam/pair
-import gleam/regexp
 import gleam/result
 import gleam/string
 import lib/elementx
@@ -23,11 +22,10 @@ import lustre/event
 import lustre/server_component
 import o11a/components
 import o11a/computed_note
-import o11a/config
 import o11a/events
 import o11a/note
 import o11a/server/discussion
-import simplifile
+import o11a/server/preprocessor_sol
 
 pub fn app() -> lustre.App(Model, Model, Msg) {
   lustre.component(init, update, cached_view, dict.new())
@@ -41,7 +39,7 @@ pub type Msg {
 pub type Model {
   Model(
     page_path: String,
-    preprocessed_source: List(String),
+    preprocessed_source: List(preprocessor_sol.PreprocessedSourceLine(Msg)),
     discussion: discussion.Discussion,
     skeletons: concurrent_dict.ConcurrentDict(String, String),
   )
@@ -69,6 +67,8 @@ pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 }
 
 fn cached_view(model: Model) -> element.Element(Msg) {
+  io.println("Rendering page " <> model.page_path)
+
   // Update the skeleton so the initial render on the client's request is up to
   // date with server state.
   concurrent_dict.insert(
@@ -90,72 +90,54 @@ pub fn get_skeleton(skeletons, for page_path) {
 }
 
 fn view(model: Model, is_skeleton is_skeleton) -> element.Element(Msg) {
-  io.println("Rendering page " <> model.page_path)
-
   html.div([attribute.class("code-snippet")], [
     case is_skeleton {
       True -> element.fragment([])
       False -> elementx.hide_skeleton()
     },
-    ..list.index_map(model.preprocessed_source, fn(line, index) {
-      loc_view(model, line, index + 1, is_skeleton)
-    })
+    ..list.map(model.preprocessed_source, loc_view(model, _, is_skeleton))
   ])
 }
 
-pub fn preprocess_source(for page_path) {
-  config.get_full_page_path(for: page_path)
-  |> simplifile.read
-  |> result.map(string.split(_, on: "\n"))
-  |> result.map(list.map(_, style_code_tokens))
-}
-
-fn loc_view(model: Model, line_text, line_number, is_skeleton) {
-  let line_number_text = int.to_string(line_number)
-  let line_tag = "L" <> line_number_text
-  let line_id = model.page_path <> "#" <> line_tag
-
-  let trimmed_line_text = line_text |> string.trim
-
-  use <- given.that(
-    trimmed_line_text == "" || trimmed_line_text == "}",
-    return: fn() {
-      html.p([attribute.class("loc"), attribute.id(line_tag)], [
-        html.span([attribute.class("line-number code-extras")], [
-          html.text(line_number_text),
-        ]),
-        html.text(line_text),
-      ])
-    },
-  )
+fn loc_view(
+  model: Model,
+  loc: preprocessor_sol.PreprocessedSourceLine(Msg),
+  is_skeleton,
+) {
+  use <- given.that(loc.sigificance == preprocessor_sol.Empty, return: fn() {
+    html.p([attribute.class("loc"), attribute.id(loc.line_tag)], [
+      html.span([attribute.class("line-number code-extras")], [
+        html.text(loc.line_number_text),
+      ]),
+      html.text(loc.line_text_raw),
+    ])
+  })
 
   let notes =
-    discussion.get_notes(model.discussion, line_id)
+    discussion.get_notes(model.discussion, loc.line_id)
     |> result.unwrap([])
 
   let parent_notes =
     list.filter_map(notes, fn(note) {
-      case note.parent_id == line_id {
+      case note.parent_id == loc.line_id {
         True -> Ok(note)
         False -> Error(Nil)
       }
     })
-
-  let leading_spaces = enumerate.get_leading_spaces(line_text)
 
   let info_notes =
     parent_notes
     |> list.filter(fn(computed_note) {
       computed_note.significance == computed_note.Informational
     })
-    |> list.map(split_info_note(_, leading_spaces))
+    |> list.map(split_info_note(_, loc.leading_spaces))
     |> list.flatten
 
   html.div(
     [
-      attribute.id(line_tag),
+      attribute.id(loc.line_tag),
       attribute.class("line-container"),
-      attribute.data("line-number", line_number_text),
+      attribute.data("line-number", loc.line_number_text),
     ],
     [
       element.keyed(element.fragment, {
@@ -166,7 +148,7 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton) {
             html.span(
               [attribute.class("line-number code-extras relative italic")],
               [
-                html.text(line_number_text),
+                html.text(loc.line_number_text),
                 html.span(
                   [
                     attribute.class(
@@ -178,7 +160,7 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton) {
               ],
             ),
             html.span([attribute.class("comment italic")], [
-              html.text(leading_spaces <> note.1),
+              html.text(loc.leading_spaces <> note.1),
             ]),
           ])
 
@@ -186,44 +168,101 @@ fn loc_view(model: Model, line_text, line_number, is_skeleton) {
       }),
       html.p([attribute.class("loc flex")], [
         html.span([attribute.class("line-number code-extras")], [
-          html.text(line_number_text),
+          html.text(loc.line_number_text),
         ]),
-        html.span(
-          [attribute.attribute("dangerous-unescaped-html", line_text)],
-          [],
-        ),
-        html.span([attribute.class("inline-comment relative font-code")], [
-          inline_comment_preview_view(parent_notes),
-          case is_skeleton {
-            True -> element.fragment([])
-            // The line discussion component is too close to the edge of the
-            // screen, so we want to show it below the line
-            False ->
-              element.element(
-                components.line_discussion,
+        case loc.preprocessed_line {
+          preprocessor_sol.PreprocessedLine(preprocessed_line_text) ->
+            element.fragment([
+              html.span(
                 [
-                  attribute.class(
-                    "absolute z-[3] w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] "
-                    <> case line_number < 27 {
-                      True -> "top-[1.4rem]"
-                      False -> "bottom-[1.4rem]"
-                    },
-                  ),
-                  attribute.attribute("line-number", line_number_text),
-                  attribute.attribute("line-id", line_id),
                   attribute.attribute(
-                    "line-discussion",
-                    notes
-                      |> computed_note.encode_computed_notes
-                      |> json.to_string,
+                    "dangerous-unescaped-html",
+                    preprocessed_line_text,
                   ),
-                  on_user_submitted_line_note(UserSubmittedNote),
-                  server_component.include(["detail"]),
                 ],
                 [],
-              )
-          },
-        ]),
+              ),
+              html.span([attribute.class("inline-comment relative font-code")], [
+                inline_comment_preview_view(parent_notes),
+                case is_skeleton {
+                  True -> element.fragment([])
+                  // The line discussion component is too close to the edge of the
+                  // screen, so we want to show it below the line
+                  False ->
+                    element.element(
+                      components.line_discussion,
+                      [
+                        attribute.class(
+                          "absolute z-[3] w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] "
+                          <> case loc.line_number < 27 {
+                            True -> "top-[1.4rem]"
+                            False -> "bottom-[1.4rem]"
+                          },
+                        ),
+                        attribute.attribute("line-number", loc.line_number_text),
+                        attribute.attribute("line-id", loc.line_id),
+                        attribute.attribute(
+                          "line-discussion",
+                          notes
+                            |> computed_note.encode_computed_notes
+                            |> json.to_string,
+                        ),
+                        on_user_submitted_line_note(UserSubmittedNote),
+                        server_component.include(["detail"]),
+                      ],
+                      [],
+                    )
+                },
+              ]),
+            ])
+          preprocessor_sol.PreprocessedContractDefinition(
+            contract_name,
+            contract_inheritances,
+            process_line,
+          ) ->
+            element.fragment([
+              process_line(
+                html.div([attribute.class(contract_name)], []),
+                list.map(contract_inheritances, fn(inheritance) {
+                  html.span([attribute.class(inheritance.id <> " contract")], [
+                    html.text(inheritance.name),
+                  ])
+                }),
+              ),
+              html.span([attribute.class("inline-comment relative font-code")], [
+                inline_comment_preview_view(parent_notes),
+                case is_skeleton {
+                  True -> element.fragment([])
+                  // The line discussion component is too close to the edge of the
+                  // screen, so we want to show it below the line
+                  False ->
+                    element.element(
+                      components.line_discussion,
+                      [
+                        attribute.class(
+                          "absolute z-[3] w-[30rem] invisible not-italic text-wrap select-text left-[-.3rem] "
+                          <> case loc.line_number < 27 {
+                            True -> "top-[1.4rem]"
+                            False -> "bottom-[1.4rem]"
+                          },
+                        ),
+                        attribute.attribute("line-number", loc.line_number_text),
+                        attribute.attribute("line-id", loc.line_id),
+                        attribute.attribute(
+                          "line-discussion",
+                          notes
+                            |> computed_note.encode_computed_notes
+                            |> json.to_string,
+                        ),
+                        on_user_submitted_line_note(UserSubmittedNote),
+                        server_component.include(["detail"]),
+                      ],
+                      [],
+                    )
+                },
+              ]),
+            ])
+        },
       ]),
     ],
   )
@@ -259,130 +298,6 @@ fn inline_comment_preview_view(parent_notes: List(computed_note.ComputedNote)) {
         ],
         [html.text("Start new thread")],
       )
-  }
-}
-
-pub fn style_code_tokens(line_text) {
-  let styled_line = line_text
-
-  // Strings really conflict with the html source code ahh. Just ignore them
-  // for now, they are not common enough
-  // let assert Ok(string_regex) = regexp.from_string("\".*\"")
-
-  // let styled_line =
-  //   regexp.match_map(string_regex, styled_line, fn(match) {
-  //     html.span([attribute.class("string")], [html.text(match.content)])
-  //     |> element.to_string
-  //   })
-
-  // First cut out the comments so they don't get any formatting
-
-  let assert Ok(comment_regex) =
-    regexp.from_string(
-      "(?:\\/\\/.*|^\\s*\\/\\*\\*.*|^\\s*\\*.*|^\\s*\\*\\/.*|\\/\\*.*?\\*\\/)",
-    )
-
-  let comments = regexp.scan(comment_regex, styled_line)
-
-  let styled_line = regexp.replace(comment_regex, styled_line, "")
-
-  let assert Ok(operator_regex) =
-    regexp.from_string(
-      "\\+|\\-|\\*|(?!/)\\/(?!/)|\\={1,2}|\\<(?!span)|(?!span)\\>|\\&|\\!|\\|",
-    )
-
-  let styled_line =
-    regexp.match_map(operator_regex, styled_line, fn(match) {
-      html.span([attribute.class("operator")], [html.text(match.content)])
-      |> element.to_string
-    })
-
-  let assert Ok(keyword_regex) =
-    regexp.from_string(
-      "\\b(constructor|contract|fallback|override|mapping|immutable|interface|constant|pragma|library|solidity|event|error|require|revert|using|for|emit|function|if|else|returns|return|memory|calldata|public|private|external|view|pure|payable|internal|import|enum|struct|storage|is)\\b",
-    )
-
-  let styled_line =
-    regexp.match_map(keyword_regex, styled_line, fn(match) {
-      html.span([attribute.class("keyword")], [html.text(match.content)])
-      |> element.to_string
-    })
-
-  let assert Ok(global_variable_regex) =
-    regexp.from_string(
-      "\\b(super|this|msg\\.sender|msg\\.value|tx\\.origin|block\\.timestamp|block\\.chainid)\\b",
-    )
-
-  let styled_line =
-    regexp.match_map(global_variable_regex, styled_line, fn(match) {
-      html.span([attribute.class("global-variable")], [html.text(match.content)])
-      |> element.to_string
-    })
-
-  // A word with a capital letter at the beginning
-  let assert Ok(capitalized_word_regex) = regexp.from_string("\\b[A-Z]\\w+\\b")
-
-  let styled_line =
-    regexp.match_map(capitalized_word_regex, styled_line, fn(match) {
-      html.span([attribute.class("contract")], [html.text(match.content)])
-      |> element.to_string
-    })
-
-  let assert Ok(function_regex) = regexp.from_string("\\b(\\w+)\\(")
-
-  let styled_line =
-    regexp.match_map(function_regex, styled_line, fn(match) {
-      case match.submatches {
-        [Some(function_name), ..] ->
-          string.replace(
-            match.content,
-            each: function_name,
-            with: element.to_string(
-              html.span([attribute.class("function")], [
-                html.text(function_name),
-              ]),
-            ),
-          )
-        _ -> line_text
-      }
-    })
-
-  let assert Ok(type_regex) =
-    regexp.from_string(
-      "\\b(address|bool|bytes|string|int|uint|int\\d+|uint\\d+)\\b",
-    )
-
-  let styled_line =
-    regexp.match_map(type_regex, styled_line, fn(match) {
-      html.span([attribute.class("type")], [html.text(match.content)])
-      |> element.to_string
-    })
-
-  let assert Ok(number_regex) =
-    regexp.from_string(
-      "(?<!\\w)\\d+(?:[_ \\.]\\d+)*(?:\\s+(?:days|ether|finney|wei))?(?!\\w)",
-    )
-
-  let styled_line =
-    regexp.match_map(number_regex, styled_line, fn(match) {
-      html.span([attribute.class("number")], [html.text(match.content)])
-      |> element.to_string
-    })
-
-  let assert Ok(literal_regex) = regexp.from_string("\\b(true|false)\\b")
-
-  let styled_line =
-    regexp.match_map(literal_regex, styled_line, fn(match) {
-      html.span([attribute.class("number")], [html.text(match.content)])
-      |> element.to_string
-    })
-
-  styled_line
-  <> case comments {
-    [regexp.Match(match_content, ..), ..] ->
-      html.span([attribute.class("comment")], [html.text(match_content)])
-      |> element.to_string
-    _ -> ""
   }
 }
 
