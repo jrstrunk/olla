@@ -19,7 +19,7 @@ import o11a/config
 import simplifile
 import snag
 
-pub fn process_asts(asts: List(#(String, AST))) {
+pub fn process_asts(asts: List(#(String, AST)), audit_name: String) {
   list.map(asts, fn(ast_data) {
     let #(source_file, ast) = ast_data
 
@@ -28,7 +28,7 @@ pub fn process_asts(asts: List(#(String, AST))) {
       |> list.filter_map(fn(node) {
         case node {
           ImportDirectiveNode(id: _, file:, absolute_path:) -> {
-            Ok(#(file, absolute_path))
+            Ok(#(file, filepath.join(audit_name, absolute_path)))
           }
           _ -> Error(Nil)
         }
@@ -148,7 +148,12 @@ fn node_decoder() -> decode.Decoder(Node) {
       use id <- decode.field("id", decode.int)
       use name <- decode.field("name", decode.string)
       use contract_kind <- decode.field("contractKind", decode.string)
+      use abstract <- decode.field("abstract", decode.bool)
       use nodes <- decode.field("nodes", decode.list(node_decoder()))
+      let contract_kind = case abstract {
+        True -> "abstract contract"
+        False -> contract_kind
+      }
       decode.success(ContractDefinitionNode(id:, name:, contract_kind:, nodes:))
     }
     "FunctionDefinition" -> {
@@ -178,9 +183,10 @@ pub fn find_contract_id(
       import_path |> filepath.base_name,
     ))
 
-    case dict.has_key(file_metadata.contracts, contract_name) {
-      True -> Ok(import_path <> "#" <> contract_name)
-      False -> Error(Nil)
+    case dict.get(file_metadata.contracts, contract_name) {
+      Ok(contract_meta_data) ->
+        Ok(#(import_path <> "#" <> contract_name, contract_meta_data.kind))
+      Error(Nil) -> Error(Nil)
     }
   })
 }
@@ -219,16 +225,17 @@ pub fn preprocess_source(
       PragmaDeclaration -> line_text |> style_pragma_line |> PreprocessedLine
       Import ->
         line_text
-        |> process_import_line(audit_metadata.audit_name, source_file_metadata)
+        |> process_import_line(source_file_metadata)
         |> PreprocessedLine
-      ContractDefinition ->
+      ContractDefinition(contract_kind:) ->
         line_text
         |> process_contract_definition_line(
+          contract_kind:,
           page_path:,
           audit_metadata:,
           source_file_metadata:,
         )
-      LibraryDeclaration -> line_text |> style_code_tokens |> PreprocessedLine
+      LibraryDirective -> line_text |> style_code_tokens |> PreprocessedLine
       ConstructorDefinition ->
         line_text |> style_code_tokens |> PreprocessedLine
       FallbackFunctionDefinition ->
@@ -242,8 +249,6 @@ pub fn preprocess_source(
       ErrorDefinition -> line_text |> style_code_tokens |> PreprocessedLine
       StructDefinition -> line_text |> style_code_tokens |> PreprocessedLine
       EnumDefinition -> line_text |> style_code_tokens |> PreprocessedLine
-      InterfaceDefinition -> line_text |> style_code_tokens |> PreprocessedLine
-      LibraryDefinition -> line_text |> style_code_tokens |> PreprocessedLine
       LocalVariableDefinition ->
         line_text |> style_code_tokens |> PreprocessedLine
     }
@@ -280,14 +285,15 @@ pub type PreprocessedLineElement(msg) {
   PreprocessedContractDefinition(
     contract_id: String,
     contract_name: String,
-    contract_inheritances: List(ExternalReference),
+    contract_kind: audit_metadata.ContractKind,
+    contract_inheritances: List(ExternalContractReference),
     process_line: fn(element.Element(msg), List(element.Element(msg))) ->
       element.Element(msg),
   )
 }
 
-pub type ExternalReference {
-  ExternalReference(name: String, id: String)
+pub type ExternalContractReference {
+  ExternalReference(name: String, id: String, kind: audit_metadata.ContractKind)
 }
 
 pub type LineSigificance {
@@ -296,8 +302,8 @@ pub type LineSigificance {
   License
   PragmaDeclaration
   Import
-  ContractDefinition
-  LibraryDeclaration
+  ContractDefinition(contract_kind: audit_metadata.ContractKind)
+  LibraryDirective
   ConstructorDefinition
   FallbackFunctionDefinition
   ReceiveFunctionDefinition
@@ -307,8 +313,6 @@ pub type LineSigificance {
   ErrorDefinition
   StructDefinition
   EnumDefinition
-  InterfaceDefinition
-  LibraryDefinition
   LocalVariableDefinition
 }
 
@@ -328,11 +332,23 @@ fn classify_line(line_text) {
   use <- bool.guard(trimmed_line_text |> string.starts_with("import"), Import)
   use <- bool.guard(
     trimmed_line_text |> string.starts_with("contract"),
-    ContractDefinition,
+    ContractDefinition(contract_kind: audit_metadata.Contract),
+  )
+  use <- bool.guard(
+    trimmed_line_text |> string.starts_with("abstract contract"),
+    ContractDefinition(contract_kind: audit_metadata.Abstract),
+  )
+  use <- bool.guard(
+    trimmed_line_text |> string.starts_with("interface"),
+    ContractDefinition(contract_kind: audit_metadata.Interface),
+  )
+  use <- bool.guard(
+    trimmed_line_text |> string.starts_with("library"),
+    ContractDefinition(contract_kind: audit_metadata.Library),
   )
   use <- bool.guard(
     trimmed_line_text |> string.starts_with("using"),
-    LibraryDeclaration,
+    LibraryDirective,
   )
   use <- bool.guard(
     trimmed_line_text |> string.starts_with("constructor"),
@@ -357,10 +373,6 @@ fn classify_line(line_text) {
   use <- bool.guard(
     trimmed_line_text |> string.starts_with("enum"),
     EnumDefinition,
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("interface"),
-    InterfaceDefinition,
   )
   use <- bool.guard(
     trimmed_line_text |> string.starts_with("event"),
@@ -397,7 +409,6 @@ pub fn style_pragma_line(line_text) {
 
 pub fn process_import_line(
   line_text,
-  audit_name: String,
   source_file_metadata: audit_metadata.SourceFileMetaData,
 ) {
   let #(import_statement_base, import_path) =
@@ -431,9 +442,7 @@ pub fn process_import_line(
         attribute.class("import-path"),
         attribute.href(
           dict.get(source_file_metadata.imports, import_path)
-          |> result.map(fn(abs_import) {
-            "/" <> audit_name <> "/" <> abs_import
-          })
+          |> result.map(fn(abs_import) { "/" <> abs_import })
           |> result.unwrap(""),
         ),
       ],
@@ -447,16 +456,23 @@ pub fn process_import_line(
 
 pub fn process_contract_definition_line(
   page_path page_path,
+  contract_kind contract_kind: audit_metadata.ContractKind,
   line_text line_text,
   audit_metadata audit_metadata,
   source_file_metadata source_file_metadata: audit_metadata.SourceFileMetaData,
 ) {
   case string.split_once(line_text, " is ") {
-    Ok(#(contract_name, contract_inheritance)) -> {
-      let contract_name =
-        contract_name
+    Ok(#(line_base, contract_inheritance)) -> {
+      let contract_name = case contract_kind {
         // Remove "contract "
-        |> string_drop_start(9)
+        audit_metadata.Contract -> line_base |> string_drop_start(9)
+        // Remove "abstract contract "
+        audit_metadata.Abstract -> line_base |> string_drop_start(18)
+        // Remove "interface "
+        audit_metadata.Interface -> line_base |> string_drop_start(10)
+        // Remove "library "
+        audit_metadata.Library -> line_base |> string_drop_start(8)
+      }
 
       let contract_inheritances =
         contract_inheritance
@@ -464,20 +480,23 @@ pub fn process_contract_definition_line(
         |> string_drop_end(2)
         |> string.split(on: ", ")
         |> list.map(fn(inheritance) {
-          ExternalReference(
-            name: inheritance,
-            id: find_contract_id(
+          let #(id, kind) =
+            find_contract_id(
               audit_metadata,
               named: inheritance,
               in: dict.values(source_file_metadata.imports),
             )
-              |> result.unwrap(""),
-          )
+            |> result.unwrap(#("", audit_metadata.Contract))
+          ExternalReference(name: inheritance, id:, kind:)
         })
 
       let process_line = fn(contract_discussion, inheritances) {
         element.fragment([
-          html.span([attribute.class("keyword")], [html.text("contract ")]),
+          html.span([attribute.class("keyword")], [
+            html.text(
+              audit_metadata.contract_kind_to_string(contract_kind) <> " ",
+            ),
+          ]),
           html.span(
             [
               attribute.id(contract_name),
@@ -494,21 +513,33 @@ pub fn process_contract_definition_line(
       PreprocessedContractDefinition(
         contract_id: page_path <> "#" <> contract_name,
         contract_name:,
+        contract_kind:,
         contract_inheritances:,
         process_line:,
       )
     }
     Error(Nil) -> {
       let contract_name =
-        line_text
-        // Remove "contract "
-        |> string_drop_start(9)
+        case contract_kind {
+          // Remove "contract "
+          audit_metadata.Contract -> line_text |> string_drop_start(9)
+          // Remove "abstract contract "
+          audit_metadata.Abstract -> line_text |> string_drop_start(18)
+          // Remove "interface "
+          audit_metadata.Interface -> line_text |> string_drop_start(10)
+          // Remove "library "
+          audit_metadata.Library -> line_text |> string_drop_start(8)
+        }
         // Remove " {"
         |> string_drop_end(2)
 
       let process_line = fn(contract_discussion, _inheritances) {
         element.fragment([
-          html.span([attribute.class("keyword")], [html.text("contract ")]),
+          html.span([attribute.class("keyword")], [
+            html.text(
+              audit_metadata.contract_kind_to_string(contract_kind) <> " ",
+            ),
+          ]),
           html.span(
             [
               attribute.id(contract_name),
@@ -523,6 +554,7 @@ pub fn process_contract_definition_line(
       PreprocessedContractDefinition(
         contract_id: page_path <> "#" <> contract_name,
         contract_name:,
+        contract_kind:,
         contract_inheritances: [],
         process_line:,
       )

@@ -20,6 +20,7 @@ import lustre/element
 import lustre/element/html
 import lustre/event
 import lustre/server_component
+import o11a/audit_metadata
 import o11a/components
 import o11a/computed_note
 import o11a/events
@@ -137,6 +138,7 @@ fn loc_view(
     preprocessor_sol.PreprocessedContractDefinition(
       contract_id:,
       contract_name:,
+      contract_kind:,
       contract_inheritances:,
       process_line:,
     ) -> {
@@ -144,15 +146,17 @@ fn loc_view(
         model:,
         loc:,
         topic_id: contract_id,
-        topic_title: "Contract " <> contract_name,
+        topic_title: audit_metadata.contract_kind_to_string(contract_kind)
+          <> " "
+          <> contract_name,
         line_element: process_line(
-          html.div([attribute.class(contract_name)], []),
+          html.span([attribute.class("absolute inline-block")], []),
           list.map(contract_inheritances, fn(inheritance) {
             let reference_notes =
               discussion.get_notes(model.discussion, inheritance.id)
               |> result.unwrap([])
 
-            html.div([attribute.class("relative")], [
+            html.span([attribute.class("relative")], [
               html.span(
                 [
                   attribute.class("comment-preview contract"),
@@ -181,7 +185,13 @@ fn loc_view(
                           #("topic_id", json.string(inheritance.id)),
                           #(
                             "topic_title",
-                            json.string("Contract " <> inheritance.name),
+                            json.string(
+                              audit_metadata.contract_kind_to_string(
+                                inheritance.kind,
+                              )
+                              <> " "
+                              <> inheritance.name,
+                            ),
                           ),
                           #("line_number", json.int(0)),
                           #("reference", json.string(inheritance.id)),
