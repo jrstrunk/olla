@@ -439,12 +439,14 @@ fn view(model: Model) -> element.Element(Msg) {
               ],
               [
                 html.span([attribute.class("pt-[.1rem] underline")], [
-                  html.text(model.topic_title),
+                  html.a([attribute.href("/" <> model.topic_id)], [
+                    html.text(model.topic_title),
+                  ]),
                 ]),
                 html.button(
                   [
                     event.on_click(UserToggledReferenceDiscussion),
-                    attribute.class("icon-button p-[.3rem] "),
+                    attribute.class("icon-button p-[.3rem]"),
                   ],
                   [lucide.messages_square([])],
                 ),
@@ -539,7 +541,13 @@ fn thread_header_view(model: Model) {
         ],
         [
           html.span([attribute.class("pt-[.1rem] underline")], [
-            html.text(model.topic_title),
+            case option.is_some(model.reference) {
+              True ->
+                html.a([attribute.href("/" <> model.topic_id)], [
+                  html.text(model.topic_title),
+                ])
+              False -> html.text(model.topic_title)
+            },
           ]),
           html.div([], [
             case option.is_some(model.reference) {
