@@ -11,13 +11,24 @@ import simplifile
 pub fn gather_metadata(for audit_name) {
   let in_scope_files = get_files_in_scope(for: audit_name)
 
-  use asts <- result.map(preprocessor_sol.read_asts(for: audit_name) |> echo)
+  use ast_data <- result.map(preprocessor_sol.read_asts(for: audit_name))
+
+  let asts = list.map(ast_data, fn(ast) { ast.1 })
+
+  let _declarations =
+    dict.new()
+    |> list.fold(asts, _, fn(declarations, ast) {
+      preprocessor_sol.enumerate_declarations(declarations, ast, audit_name)
+    })
+    |> list.fold(asts, _, fn(declarations, ast) {
+      preprocessor_sol.count_references(declarations, ast, audit_name)
+    })
 
   audit_metadata.AuditMetaData(
     audit_name:,
     audit_formatted_name: audit_name,
     in_scope_files:,
-    source_files_sol: preprocessor_sol.process_asts(asts, audit_name),
+    source_files_sol: preprocessor_sol.process_asts(ast_data, audit_name),
   )
 }
 

@@ -4,6 +4,7 @@ import gleam/bool
 import gleam/dict
 import gleam/dynamic/decode
 import gleam/int
+import gleam/io
 import gleam/json
 import gleam/list
 import gleam/option.{Some}
@@ -72,7 +73,7 @@ pub type NodeReference {
   NodeReference(title: String, topic_id: String)
 }
 
-pub fn emunerate_declarations(declarations, in ast: AST, for audit_name) {
+pub fn enumerate_declarations(declarations, in ast: AST, for audit_name) {
   list.fold(ast.nodes, declarations, fn(declarations, node) {
     do_enumerate_node_declarations(
       declarations,
@@ -147,7 +148,7 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
       }
       let function_id =
         parent
-        <> "#"
+        <> ":"
         <> case function_kind {
           audit_metadata.Function -> name
           audit_metadata.Constructor -> "constructor"
@@ -268,6 +269,304 @@ fn do_enumerate_statement_declarations(declarations, statement, parent) {
     }
     _ -> declarations
   }
+}
+
+pub fn count_references(declarations, in ast: AST, for audit_name) {
+  list.fold(ast.nodes, declarations, fn(declarations, node) {
+    do_count_node_references(
+      declarations,
+      node,
+      filepath.join(audit_name, ast.absolute_path),
+    )
+  })
+}
+
+fn do_count_node_references(declarations, node: Node, parent: String) {
+  case node {
+    Node(nodes:, ..)
+    | NamedNode(nodes:, ..)
+    | ParameterListNode(parameters: nodes, ..)
+    | ErrorDefinitionNode(nodes:, ..)
+    | EventDefinitionNode(nodes:, ..) ->
+      list.fold(nodes, declarations, fn(declarations, node) {
+        do_count_node_references(declarations, node, parent)
+      })
+
+    ImportDirectiveNode(..) | VariableDeclarationNode(..) -> declarations
+
+    ContractDefinitionNode(nodes:, base_contracts:, name:, contract_kind:, ..) -> {
+      let title =
+        audit_metadata.contract_kind_to_string(contract_kind) <> " " <> name
+      let contract_id = parent <> "#" <> name
+
+      list.fold(nodes, declarations, fn(declarations, base_contract) {
+        do_count_node_references(declarations, base_contract, contract_id)
+      })
+      |> list.fold(base_contracts, _, fn(declarations, base_contract) {
+        add_reference(
+          declarations,
+          base_contract.reference_id,
+          NodeReference(title:, topic_id: contract_id),
+        )
+      })
+    }
+
+    FunctionDefinitionNode(
+      nodes:,
+      parameters:,
+      modifiers:,
+      return_parameters:,
+      body:,
+      function_kind:,
+      name:,
+      ..,
+    ) -> {
+      let title = case function_kind {
+        audit_metadata.Function -> "function " <> name
+        audit_metadata.Constructor -> "constructor"
+        audit_metadata.Fallback -> "fallback function"
+        audit_metadata.Receive -> "receive function"
+      }
+      let function_id =
+        parent
+        <> ":"
+        <> case function_kind {
+          audit_metadata.Function -> name
+          audit_metadata.Constructor -> "constructor"
+          audit_metadata.Fallback -> "fallback"
+          audit_metadata.Receive -> "receive"
+        }
+
+      let declarations =
+        list.fold(nodes, declarations, fn(declarations, node) {
+          do_count_node_references(declarations, node, function_id)
+        })
+        |> do_count_node_references(parameters, function_id)
+        |> do_count_node_references(return_parameters, function_id)
+        |> list.fold(modifiers, _, fn(declarations, modifier) {
+          add_reference(
+            declarations,
+            modifier.reference_id,
+            NodeReference(title:, topic_id: function_id),
+          )
+        })
+
+      case body {
+        Some(body) ->
+          do_count_block_references(declarations, body, title, function_id)
+        option.None -> declarations
+      }
+    }
+  }
+}
+
+fn do_count_block_references(declarations, block, parent_title, parent_id) {
+  let BlockNode(nodes:, statements:, ..) = block
+
+  list.fold(nodes, declarations, fn(declarations, node) {
+    do_count_node_references(declarations, node, parent_id)
+  })
+  |> list.fold(statements, _, fn(declarations, statement) {
+    do_count_statement_references(
+      declarations,
+      statement,
+      parent_title,
+      parent_id,
+    )
+  })
+}
+
+fn do_count_statement_references(
+  declarations,
+  statement,
+  parent_title,
+  parent_id,
+) {
+  case statement {
+    ExpressionStatementNode(expression:, ..) ->
+      case expression {
+        Some(expression) ->
+          do_count_expression_references(
+            declarations,
+            expression,
+            parent_title,
+            parent_id,
+          )
+        option.None -> declarations
+      }
+    EmitStatementNode(expression:, ..) ->
+      case expression {
+        Some(expression) ->
+          do_count_expression_references(
+            declarations,
+            expression,
+            parent_title,
+            parent_id,
+          )
+        option.None -> declarations
+      }
+    VariableDeclarationStatementNode(declarations: declaration_nodes, ..) ->
+      list.fold(declaration_nodes, declarations, fn(declarations, declaration) {
+        case declaration {
+          Some(declaration) ->
+            do_count_node_references(declarations, declaration, parent_id)
+          option.None -> declarations
+        }
+      })
+    IfStatementNode(condition:, true_body:, false_body:, ..) -> {
+      let declarations =
+        do_count_expression_references(
+          declarations,
+          condition,
+          parent_title,
+          parent_id,
+        )
+        |> do_count_block_references(true_body, parent_title, parent_id)
+
+      case false_body {
+        Some(false_body) ->
+          do_count_block_references(
+            declarations,
+            false_body,
+            parent_title,
+            parent_id,
+          )
+        option.None -> declarations
+      }
+    }
+    RevertStatementNode(expression:, ..) ->
+      case expression {
+        Some(expression) ->
+          do_count_expression_references(
+            declarations,
+            expression,
+            parent_title,
+            parent_id,
+          )
+        option.None -> declarations
+      }
+  }
+}
+
+fn do_count_expression_references(
+  declarations,
+  expression,
+  parent_title,
+  parent_id,
+) {
+  case expression {
+    Expression(expression:, ..) ->
+      case expression {
+        Some(expression) ->
+          do_count_expression_references(
+            declarations,
+            expression,
+            parent_title,
+            parent_id,
+          )
+        option.None -> declarations
+      }
+
+    Identifier(reference_id:, expression:, ..) ->
+      case expression {
+        Some(expression) ->
+          do_count_expression_references(
+            declarations,
+            expression,
+            parent_title,
+            parent_id,
+          )
+        option.None -> declarations
+      }
+      |> add_reference(
+        reference_id,
+        NodeReference(title: parent_title, topic_id: parent_id),
+      )
+
+    FunctionCall(arguments:, expression:, ..) ->
+      case expression {
+        Some(expression) ->
+          do_count_expression_references(
+            declarations,
+            expression,
+            parent_title,
+            parent_id,
+          )
+        option.None -> declarations
+      }
+      |> list.fold(arguments, _, fn(declarations, argument) {
+        do_count_expression_references(
+          declarations,
+          argument,
+          parent_title,
+          parent_id,
+        )
+      })
+
+    Assignment(left_hand_side:, right_hand_side:, ..) ->
+      do_count_expression_references(
+        declarations,
+        left_hand_side,
+        parent_title,
+        parent_id,
+      )
+      |> do_count_expression_references(
+        right_hand_side,
+        parent_title,
+        parent_id,
+      )
+
+    BinaryOperation(left_expression:, right_expression:, ..) ->
+      do_count_expression_references(
+        declarations,
+        left_expression,
+        parent_title,
+        parent_id,
+      )
+      |> do_count_expression_references(
+        right_expression,
+        parent_title,
+        parent_id,
+      )
+
+    UnaryOperation(expression:, ..) ->
+      do_count_expression_references(
+        declarations,
+        expression,
+        parent_title,
+        parent_id,
+      )
+
+    IndexAccess(base:, index:, ..) ->
+      do_count_expression_references(
+        declarations,
+        base,
+        parent_title,
+        parent_id,
+      )
+      |> do_count_expression_references(index, parent_title, parent_id)
+  }
+}
+
+fn add_reference(declarations, declaration_id: Int, reference: NodeReference) {
+  dict.upsert(declarations, declaration_id, with: fn(dec) {
+    case dec {
+      Some(node_declaration) ->
+        NodeDeclaration(..node_declaration, references: [
+          reference,
+          ..node_declaration.references
+        ])
+
+      option.None -> {
+        io.println(
+          "No declaration for "
+          <> int.to_string(declaration_id)
+          <> " found, there is an issue with finding all declarations",
+        )
+        NodeDeclaration(title: "", topic_id: "", references: [reference])
+      }
+    }
+  })
 }
 
 pub fn read_asts(for audit_name: String) {
