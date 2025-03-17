@@ -215,6 +215,13 @@ fn loc_view(
         is_skeleton:,
       )
     }
+    preprocessor_sol.PreprocessedFunctionDefinition(
+      function_id:,
+      function_name:,
+      process_line:,
+    ) -> {
+      html.div([], [html.text("Function Definition")])
+    }
   }
 }
 

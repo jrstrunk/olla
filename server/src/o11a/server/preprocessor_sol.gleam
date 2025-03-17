@@ -27,7 +27,7 @@ pub fn process_asts(asts: List(#(String, AST)), audit_name: String) {
       ast.nodes
       |> list.filter_map(fn(node) {
         case node {
-          ImportDirectiveNode(id: _, file:, absolute_path:) -> {
+          ImportDirectiveNode(file:, absolute_path:, ..) -> {
             Ok(#(file, filepath.join(audit_name, absolute_path)))
           }
           _ -> Error(Nil)
@@ -39,12 +39,12 @@ pub fn process_asts(asts: List(#(String, AST)), audit_name: String) {
       ast.nodes
       |> list.filter_map(fn(node) {
         case node {
-          ContractDefinitionNode(id: _, name:, contract_kind:, nodes: _) -> {
+          ContractDefinitionNode(name:, contract_kind:, ..) -> {
             Ok(#(
               name,
               audit_metadata.ContractMetaData(
                 name:,
-                kind: audit_metadata.contract_kind_from_string(contract_kind),
+                kind: contract_kind,
                 functions: dict.new(),
                 storage_vars: dict.new(),
               ),
@@ -102,13 +102,18 @@ pub fn read_asts(for audit_name: String) {
     )
 
     use ast <- result.try(
-      json.parse(source_file_contents, decode.at(["ast"], ast_decoder()))
+      json.parse(
+        source_file_contents,
+        decode.at(["ast"], ast_decoder(audit_name)),
+      )
       |> snag.map_error(string.inspect)
       |> snag.context("Failed to parse build file for " <> file_name),
     )
 
     #(file_name, ast) |> Ok
   }
+
+  echo "Finished reading asts"
 
   result.all(res)
 }
@@ -117,59 +122,736 @@ pub type AST {
   AST(absolute_path: String, nodes: List(Node))
 }
 
-fn ast_decoder() -> decode.Decoder(AST) {
+fn ast_decoder(for audit_name) -> decode.Decoder(AST) {
   use absolute_path <- decode.field("absolutePath", decode.string)
   use nodes <- decode.field("nodes", decode.list(node_decoder()))
-  decode.success(AST(absolute_path:, nodes:))
+  decode.success(AST(
+    absolute_path: filepath.join(audit_name, absolute_path),
+    nodes:,
+  ))
 }
 
 pub type Node {
-  Node(id: Int, node_type: String, nodes: List(Node))
-  ImportDirectiveNode(id: Int, file: String, absolute_path: String)
-  ContractDefinitionNode(
+  Node(id: Int, node_type: String, source_map: SourceMap, nodes: List(Node))
+  NamedNode(
     id: Int,
+    source_map: SourceMap,
     name: String,
-    contract_kind: String,
+    name_source_map: SourceMap,
     nodes: List(Node),
   )
-  FunctionDefinitionNode(id: Int, name: String, kind: String, nodes: List(Node))
+  ImportDirectiveNode(
+    id: Int,
+    source_map: SourceMap,
+    file: String,
+    absolute_path: String,
+  )
+  ContractDefinitionNode(
+    id: Int,
+    source_map: SourceMap,
+    name: String,
+    name_source_map: SourceMap,
+    contract_kind: audit_metadata.ContractKind,
+    base_contracts: List(BaseContract),
+    nodes: List(Node),
+  )
+  VariableDeclarationNode(
+    id: Int,
+    source_map: SourceMap,
+    name: String,
+    name_source_map: SourceMap,
+    constant: Bool,
+    mutability: String,
+    visibility: String,
+    type_string: String,
+  )
+  ErrorDefinitionNode(
+    id: Int,
+    source_map: SourceMap,
+    name: String,
+    name_source_map: SourceMap,
+    nodes: List(Node),
+  )
+  EventDefinitionNode(
+    id: Int,
+    source_map: SourceMap,
+    name: String,
+    name_source_map: SourceMap,
+    parameters: Node,
+    nodes: List(Node),
+  )
+  FunctionDefinitionNode(
+    id: Int,
+    source_map: SourceMap,
+    name: String,
+    name_source_map: SourceMap,
+    function_kind: audit_metadata.FunctionKind,
+    parameters: Node,
+    modifiers: List(Modifier),
+    return_parameters: Node,
+    nodes: List(Node),
+    body: option.Option(BlockNode),
+    documentation: option.Option(FunctionDocumentation),
+  )
+  ParameterListNode(id: Int, source_map: SourceMap, parameters: List(Node))
+}
+
+pub type SourceMap {
+  SourceMap(start: Int, length: Int)
+}
+
+fn source_map_from_string(source_map_string) {
+  case string.split(source_map_string, on: ":") {
+    [start_string, length_string, _] -> {
+      let start = int.parse(start_string)
+      let length = int.parse(length_string)
+
+      case start, length {
+        Ok(start), Ok(length) -> SourceMap(start, length)
+        Error(..), _ -> panic as "Failed to parse source map start"
+        _, Error(..) -> panic as "Failed to parse source map length"
+      }
+    }
+    _ -> SourceMap(-1, -1)
+    // panic as { "Failed to split source map string" <> source_map_string }
+  }
+}
+
+pub type BlockNode {
+  BlockNode(
+    id: Int,
+    source_map: SourceMap,
+    nodes: List(Node),
+    statements: List(StatementNode),
+    expression: option.Option(Expression),
+  )
+}
+
+fn block_node_decoder() -> decode.Decoder(BlockNode) {
+  use id <- decode.field("id", decode.int)
+  echo id
+  use src <- decode.field("src", decode.string)
+  use nodes <- decode.optional_field("nodes", [], decode.list(node_decoder()))
+
+  use statements <- decode.optional_field(
+    "statements",
+    [],
+    decode.list(statement_node_decoder()),
+  )
+  use expression <- decode.optional_field(
+    "expression",
+    option.None,
+    decode.optional(expression_decoder()),
+  )
+  decode.success(BlockNode(
+    id:,
+    source_map: source_map_from_string(src),
+    nodes:,
+    statements:,
+    expression:,
+  ))
+}
+
+pub type FunctionDocumentation {
+  FunctionDocumentation(id: Int, source_map: SourceMap, text: String)
+}
+
+fn function_documentation_decoder() -> decode.Decoder(FunctionDocumentation) {
+  use id <- decode.field("id", decode.int)
+  echo id
+  use src <- decode.field("src", decode.string)
+
+  use text <- decode.field("text", decode.string)
+  decode.success(FunctionDocumentation(
+    id:,
+    source_map: source_map_from_string(src),
+    text:,
+  ))
 }
 
 fn node_decoder() -> decode.Decoder(Node) {
+  use <- decode.recursive
   use variant <- decode.field("nodeType", decode.string)
   case variant {
     "ImportDirective" -> {
       use id <- decode.field("id", decode.int)
+      echo id
+      use src <- decode.field("src", decode.string)
       use file <- decode.field("file", decode.string)
       use absolute_path <- decode.field("absolutePath", decode.string)
-      decode.success(ImportDirectiveNode(id:, file:, absolute_path:))
+      decode.success(ImportDirectiveNode(
+        id:,
+        source_map: source_map_from_string(src),
+        file:,
+        absolute_path: absolute_path,
+      ))
     }
     "ContractDefinition" -> {
       use id <- decode.field("id", decode.int)
+      echo id
+      use src <- decode.field("src", decode.string)
       use name <- decode.field("name", decode.string)
+      use name_location <- decode.field("nameLocation", decode.string)
       use contract_kind <- decode.field("contractKind", decode.string)
       use abstract <- decode.field("abstract", decode.bool)
-      use nodes <- decode.field("nodes", decode.list(node_decoder()))
+      use base_contracts <- decode.field(
+        "baseContracts",
+        decode.list(base_contract_decoder()),
+      )
+      use nodes <- decode.optional_field(
+        "nodes",
+        [],
+        decode.list(node_decoder()),
+      )
       let contract_kind = case abstract {
         True -> "abstract contract"
         False -> contract_kind
       }
-      decode.success(ContractDefinitionNode(id:, name:, contract_kind:, nodes:))
+      decode.success(ContractDefinitionNode(
+        id:,
+        source_map: source_map_from_string(src),
+        name:,
+        name_source_map: source_map_from_string(name_location),
+        contract_kind: audit_metadata.contract_kind_from_string(contract_kind),
+        base_contracts:,
+        nodes:,
+      ))
+    }
+    "VariableDeclaration" -> {
+      use id <- decode.field("id", decode.int)
+      echo id
+      use src <- decode.field("src", decode.string)
+      use name <- decode.field("name", decode.string)
+      use name_location <- decode.field("nameLocation", decode.string)
+      use constant <- decode.field("constant", decode.bool)
+      use mutability <- decode.field("mutability", decode.string)
+      use visibility <- decode.field("visibility", decode.string)
+      use type_string <- decode.subfield(
+        ["typeDescriptions", "typeString"],
+        decode.string,
+      )
+      decode.success(VariableDeclarationNode(
+        id:,
+        source_map: source_map_from_string(src),
+        name:,
+        name_source_map: source_map_from_string(name_location),
+        constant:,
+        mutability: mutability,
+        visibility: visibility,
+        type_string:,
+      ))
+    }
+    "ErrorDefinition" -> {
+      use id <- decode.field("id", decode.int)
+      echo id
+      use src <- decode.field("src", decode.string)
+      use name <- decode.field("name", decode.string)
+      use name_location <- decode.field("nameLocation", decode.string)
+      use nodes <- decode.optional_field(
+        "nodes",
+        [],
+        decode.list(node_decoder()),
+      )
+
+      decode.success(ErrorDefinitionNode(
+        id:,
+        source_map: source_map_from_string(src),
+        name:,
+        name_source_map: source_map_from_string(name_location),
+        nodes:,
+      ))
+    }
+    "EventDefinition" -> {
+      use id <- decode.field("id", decode.int)
+      echo id
+      use src <- decode.field("src", decode.string)
+      use name <- decode.field("name", decode.string)
+      use name_location <- decode.field("nameLocation", decode.string)
+      use parameters <- decode.field("parameters", node_decoder())
+      use nodes <- decode.optional_field(
+        "nodes",
+        [],
+        decode.list(node_decoder()),
+      )
+
+      decode.success(EventDefinitionNode(
+        id:,
+        source_map: source_map_from_string(src),
+        name:,
+        name_source_map: source_map_from_string(name_location),
+        parameters:,
+        nodes:,
+      ))
     }
     "FunctionDefinition" -> {
       use id <- decode.field("id", decode.int)
+      echo id
+      use src <- decode.field("src", decode.string)
       use name <- decode.field("name", decode.string)
+      use name_location <- decode.field("nameLocation", decode.string)
       use kind <- decode.field("kind", decode.string)
-      use nodes <- decode.field("nodes", decode.list(node_decoder()))
-      decode.success(FunctionDefinitionNode(id:, name:, kind:, nodes:))
+      use parameters <- decode.field("parameters", node_decoder())
+      use modifiers <- decode.field(
+        "modifiers",
+        decode.list(modifier_decoder()),
+      )
+      use return_parameters <- decode.field("returnParameters", node_decoder())
+      use nodes <- decode.optional_field(
+        "nodes",
+        [],
+        decode.list(node_decoder()),
+      )
+      use body <- decode.optional_field(
+        "body",
+        option.None,
+        decode.optional(block_node_decoder()),
+      )
+      use documentation <- decode.optional_field(
+        "documentation",
+        option.None,
+        decode.optional(function_documentation_decoder()),
+      )
+      decode.success(FunctionDefinitionNode(
+        id:,
+        source_map: source_map_from_string(src),
+        name:,
+        name_source_map: source_map_from_string(name_location),
+        function_kind: audit_metadata.function_kind_from_string(kind),
+        parameters:,
+        modifiers:,
+        return_parameters:,
+        nodes:,
+        body:,
+        documentation:,
+      ))
+    }
+    "ParameterList" -> {
+      use id <- decode.field("id", decode.int)
+      echo id
+      use src <- decode.field("src", decode.string)
+      use parameters <- decode.field("parameters", decode.list(node_decoder()))
+      decode.success(ParameterListNode(
+        id:,
+        source_map: source_map_from_string(src),
+        parameters:,
+      ))
     }
     _ -> {
       use id <- decode.field("id", decode.int)
+      echo id
+      use src <- decode.field("src", decode.string)
       use node_type <- decode.field("nodeType", decode.string)
-      use nodes <- decode.field("nodes", decode.list(node_decoder()))
-      decode.success(Node(id:, node_type:, nodes:))
+      use nodes <- decode.optional_field(
+        "nodes",
+        [],
+        decode.list(node_decoder()),
+      )
+      use name <- decode.optional_field(
+        "name",
+        option.None,
+        decode.optional(decode.string),
+      )
+      use name_location <- decode.optional_field(
+        "nameLocation",
+        option.None,
+        decode.optional(decode.string),
+      )
+      case name, name_location {
+        option.Some(name), option.Some(name_location) ->
+          decode.success(NamedNode(
+            id:,
+            source_map: source_map_from_string(src),
+            name:,
+            name_source_map: source_map_from_string(name_location),
+            nodes:,
+          ))
+        _, _ ->
+          decode.success(Node(
+            id:,
+            source_map: source_map_from_string(src),
+            node_type:,
+            nodes:,
+          ))
+      }
     }
   }
+}
+
+pub type StatementNode {
+  ExpressionStatementNode(
+    id: Int,
+    source_map: SourceMap,
+    expression: option.Option(Expression),
+  )
+  EmitStatementNode(
+    id: Int,
+    source_map: SourceMap,
+    expression: option.Option(Expression),
+  )
+  VariableDeclarationStatementNode(
+    id: Int,
+    source_map: SourceMap,
+    declarations: List(option.Option(Node)),
+  )
+  IfStatementNode(
+    id: Int,
+    source_map: SourceMap,
+    condition: Expression,
+    true_body: BlockNode,
+    false_body: option.Option(BlockNode),
+  )
+  RevertStatementNode(
+    id: Int,
+    source_map: SourceMap,
+    expression: option.Option(Expression),
+  )
+}
+
+fn statement_node_decoder() -> decode.Decoder(StatementNode) {
+  use variant <- decode.field("nodeType", decode.string)
+  case variant {
+    "EmitStatement" -> {
+      use id <- decode.field("id", decode.int)
+      echo id
+      use src <- decode.field("src", decode.string)
+      use expression <- decode.optional_field(
+        "expression",
+        option.None,
+        decode.optional(expression_decoder()),
+      )
+      decode.success(EmitStatementNode(
+        id:,
+        source_map: source_map_from_string(src),
+        expression:,
+      ))
+    }
+    "VariableDeclarationStatement" -> {
+      use id <- decode.field("id", decode.int)
+      echo id
+      use src <- decode.field("src", decode.string)
+      use declarations <- decode.field(
+        "declarations",
+        decode.list(decode.optional(node_decoder())),
+      )
+      decode.success(VariableDeclarationStatementNode(
+        id:,
+        source_map: source_map_from_string(src),
+        declarations:,
+      ))
+    }
+    "IfStatement" -> {
+      use id <- decode.field("id", decode.int)
+      echo id
+      use src <- decode.field("src", decode.string)
+      use condition <- decode.field("condition", expression_decoder())
+      use true_body <- decode.field("trueBody", block_node_decoder())
+      use false_body <- decode.optional_field(
+        "falseBody",
+        option.None,
+        decode.optional(block_node_decoder()),
+      )
+      decode.success(IfStatementNode(
+        id:,
+        source_map: source_map_from_string(src),
+        condition:,
+        true_body:,
+        false_body:,
+      ))
+    }
+    "RevertStatement" -> {
+      use id <- decode.field("id", decode.int)
+      echo id
+      use src <- decode.field("src", decode.string)
+      use expression <- decode.optional_field(
+        "errorCall",
+        option.None,
+        decode.optional(expression_decoder()),
+      )
+      decode.success(RevertStatementNode(
+        id:,
+        source_map: source_map_from_string(src),
+        expression:,
+      ))
+    }
+    _ -> {
+      use id <- decode.field("id", decode.int)
+      echo id
+      use src <- decode.field("src", decode.string)
+      use expression <- decode.optional_field(
+        "expression",
+        option.None,
+        decode.optional(expression_decoder()),
+      )
+      decode.success(ExpressionStatementNode(
+        id:,
+        source_map: source_map_from_string(src),
+        expression:,
+      ))
+    }
+  }
+}
+
+pub type Expression {
+  Expression(
+    id: Int,
+    source_map: SourceMap,
+    expression: option.Option(Expression),
+  )
+  Identifier(
+    id: Int,
+    source_map: SourceMap,
+    name: String,
+    reference_id: Int,
+    expression: option.Option(Expression),
+  )
+  FunctionCall(
+    id: Int,
+    source_map: SourceMap,
+    arguments: List(Expression),
+    expression: option.Option(Expression),
+  )
+  Assignment(
+    id: Int,
+    source_map: SourceMap,
+    left_hand_side: Expression,
+    right_hand_side: Expression,
+  )
+  BinaryOperation(
+    id: Int,
+    source_map: SourceMap,
+    left_expression: Expression,
+    right_expression: Expression,
+    operator: String,
+  )
+  UnaryOperation(
+    id: Int,
+    source_map: SourceMap,
+    expression: Expression,
+    operator: String,
+  )
+  IndexAccess(
+    id: Int,
+    source_map: SourceMap,
+    base: Expression,
+    index: Expression,
+  )
+}
+
+fn expression_decoder() -> decode.Decoder(Expression) {
+  use <- decode.recursive
+  use variant <- decode.field("nodeType", decode.string)
+  case variant {
+    "FunctionCall" -> {
+      use id <- decode.field("id", decode.int)
+      echo id
+      use src <- decode.field("src", decode.string)
+      use arguments <- decode.field(
+        "arguments",
+        decode.list(expression_decoder()),
+      )
+      use expression <- decode.optional_field(
+        "expression",
+        option.None,
+        decode.optional(expression_decoder()),
+      )
+      decode.success(FunctionCall(
+        id:,
+        source_map: source_map_from_string(src),
+        arguments:,
+        expression:,
+      ))
+    }
+    "Assignment" -> {
+      use id <- decode.field("id", decode.int)
+      echo id
+      use src <- decode.field("src", decode.string)
+      use left_hand_side <- decode.field("leftHandSide", expression_decoder())
+      use right_hand_side <- decode.field("rightHandSide", expression_decoder())
+      decode.success(Assignment(
+        id:,
+        source_map: source_map_from_string(src),
+        left_hand_side:,
+        right_hand_side:,
+      ))
+    }
+    "BinaryOperation" -> {
+      use id <- decode.field("id", decode.int)
+      echo id
+      use src <- decode.field("src", decode.string)
+      use left_expression <- decode.field(
+        "leftExpression",
+        expression_decoder(),
+      )
+      use right_expression <- decode.field(
+        "rightExpression",
+        expression_decoder(),
+      )
+      use operator <- decode.field("operator", decode.string)
+      decode.success(BinaryOperation(
+        id:,
+        source_map: source_map_from_string(src),
+        left_expression:,
+        right_expression:,
+        operator:,
+      ))
+    }
+    "UnaryOperation" -> {
+      use id <- decode.field("id", decode.int)
+      echo id
+      use src <- decode.field("src", decode.string)
+      use expression <- decode.field("subExpression", expression_decoder())
+      use operator <- decode.field("operator", decode.string)
+      decode.success(UnaryOperation(
+        id:,
+        source_map: source_map_from_string(src),
+        expression:,
+        operator:,
+      ))
+    }
+    "IndexAccess" -> {
+      use id <- decode.field("id", decode.int)
+      echo id
+      use src <- decode.field("src", decode.string)
+      use base <- decode.field("baseExpression", expression_decoder())
+      use index <- decode.field("indexExpression", expression_decoder())
+      decode.success(IndexAccess(
+        id:,
+        source_map: source_map_from_string(src),
+        base:,
+        index:,
+      ))
+    }
+    "Identifier" -> {
+      use id <- decode.field("id", decode.int)
+      echo id
+      use src <- decode.field("src", decode.string)
+      use name <- decode.field("name", decode.string)
+      use reference_id <- decode.field("referencedDeclaration", decode.int)
+      decode.success(Identifier(
+        id:,
+        source_map: source_map_from_string(src),
+        name:,
+        reference_id:,
+        expression: option.None,
+      ))
+    }
+    _ -> {
+      use id <- decode.field("id", decode.int)
+      echo id
+      use src <- decode.field("src", decode.string)
+      use expression <- decode.optional_field(
+        "expression",
+        option.None,
+        decode.optional(expression_decoder()),
+      )
+      decode.success(Expression(
+        id:,
+        source_map: source_map_from_string(src),
+        expression:,
+      ))
+    }
+  }
+}
+
+pub type Modifier {
+  BaseContructorSpecifier(
+    id: Int,
+    source_map: SourceMap,
+    name: String,
+    name_source_map: SourceMap,
+    reference_id: Int,
+    arguments: option.Option(List(Expression)),
+  )
+  ModifierInvocation(
+    id: Int,
+    source_map: SourceMap,
+    name: String,
+    name_source_map: SourceMap,
+    reference_id: Int,
+    arguments: option.Option(List(Expression)),
+  )
+}
+
+fn modifier_decoder() -> decode.Decoder(Modifier) {
+  use variant <- decode.field("kind", decode.string)
+  case variant {
+    "baseConstructorSpecifier" -> {
+      use id <- decode.field("id", decode.int)
+      echo id
+      use src <- decode.field("src", decode.string)
+      use name <- decode.subfield(["modifierName", "name"], decode.string)
+      use name_location <- decode.subfield(
+        ["modifierName", "src"],
+        decode.string,
+      )
+      use reference_id <- decode.subfield(
+        ["modifierName", "referencedDeclaration"],
+        decode.int,
+      )
+      use arguments <- decode.optional_field(
+        "arguments",
+        option.None,
+        decode.optional(decode.list(expression_decoder())),
+      )
+      decode.success(BaseContructorSpecifier(
+        id:,
+        source_map: source_map_from_string(src),
+        name:,
+        name_source_map: source_map_from_string(name_location),
+        reference_id:,
+        arguments:,
+      ))
+    }
+    "modifierInvocation" -> {
+      use id <- decode.field("id", decode.int)
+      echo id
+      use src <- decode.field("src", decode.string)
+      use name <- decode.subfield(["modifierName", "name"], decode.string)
+      use name_location <- decode.subfield(
+        ["modifierName", "src"],
+        decode.string,
+      )
+      use reference_id <- decode.subfield(
+        ["modifierName", "referencedDeclaration"],
+        decode.int,
+      )
+      use arguments <- decode.optional_field(
+        "arguments",
+        option.None,
+        decode.optional(decode.list(expression_decoder())),
+      )
+      decode.success(ModifierInvocation(
+        id:,
+        source_map: source_map_from_string(src),
+        name:,
+        name_source_map: source_map_from_string(name_location),
+        reference_id:,
+        arguments:,
+      ))
+    }
+    _ -> panic as "Invalid modifier type"
+  }
+}
+
+pub type BaseContract {
+  BaseContract(id: Int, source_map: SourceMap, name: String, reference_id: Int)
+}
+
+fn base_contract_decoder() -> decode.Decoder(BaseContract) {
+  use id <- decode.field("id", decode.int)
+  echo id
+  use src <- decode.field("src", decode.string)
+  use name <- decode.subfield(["baseName", "name"], decode.string)
+  use reference_id <- decode.subfield(
+    ["baseName", "referencedDeclaration"],
+    decode.int,
+  )
+  decode.success(BaseContract(
+    id:,
+    source_map: source_map_from_string(src),
+    name:,
+    reference_id:,
+  ))
 }
 
 pub fn find_contract_id(
@@ -242,7 +924,7 @@ pub fn preprocess_source(
         line_text |> style_code_tokens |> PreprocessedLine
       ReceiveFunctionDefinition ->
         line_text |> style_code_tokens |> PreprocessedLine
-      FunctionDefinition -> line_text |> style_code_tokens |> PreprocessedLine
+      FunctionDefinition -> line_text |> process_function_definition_line
       StorageVariableDefinition ->
         line_text |> style_code_tokens |> PreprocessedLine
       EventDefinition -> line_text |> style_code_tokens |> PreprocessedLine
@@ -289,6 +971,11 @@ pub type PreprocessedLineElement(msg) {
     contract_inheritances: List(ExternalContractReference),
     process_line: fn(element.Element(msg), List(element.Element(msg))) ->
       element.Element(msg),
+  )
+  PreprocessedFunctionDefinition(
+    function_id: String,
+    function_name: String,
+    process_line: fn(element.Element(msg)) -> element.Element(msg),
   )
 }
 
@@ -493,10 +1180,9 @@ pub fn process_contract_definition_line(
       let process_line = fn(contract_discussion, inheritances) {
         element.fragment([
           html.span([attribute.class("keyword")], [
-            html.text(
-              audit_metadata.contract_kind_to_string(contract_kind) <> " ",
-            ),
+            html.text(audit_metadata.contract_kind_to_string(contract_kind)),
           ]),
+          html.text("\u{a0}"),
           html.span(
             [
               attribute.id(contract_name),
@@ -504,7 +1190,9 @@ pub fn process_contract_definition_line(
             ],
             [html.text(contract_name), contract_discussion],
           ),
-          html.span([attribute.class("keyword")], [html.text(" is ")]),
+          html.text("\u{a0}"),
+          html.span([attribute.class("keyword")], [html.text("is")]),
+          html.text("\u{a0}"),
           element.fragment(list.intersperse(inheritances, html.text(", "))),
           html.text(" {"),
         ])
@@ -560,6 +1248,138 @@ pub fn process_contract_definition_line(
       )
     }
   }
+}
+
+pub fn process_function_definition_line(line_text) {
+  let #(function_name, rest) =
+    string.split_once(line_text, "(")
+    |> result.unwrap(#(line_text, ""))
+
+  // Remove "function "
+  let function_name = string_drop_start(function_name, 9)
+
+  let #(args, attributes) =
+    string.split_once(rest, ")")
+    |> result.unwrap(#(rest, ""))
+
+  // Remove " " and trailing " {"
+  let attributes =
+    string_drop_start(attributes, 1)
+    |> string_drop_end(2)
+
+  let process_line = fn(function_discussion) {
+    element.fragment([
+      html.span([attribute.class("keyword")], [html.text("function ")]),
+      html.span(
+        [
+          attribute.id(function_name),
+          attribute.class("function function-definition"),
+        ],
+        [html.text(function_name), function_discussion],
+      ),
+      html.text("("),
+      style_arguments(args),
+      html.text(")"),
+      style_fuction_attributes(attributes),
+      html.text(" {"),
+    ])
+  }
+
+  PreprocessedFunctionDefinition(
+    function_id: line_text,
+    function_name:,
+    process_line:,
+  )
+}
+
+fn style_arguments(args_text) {
+  string.split(args_text, on: ", ")
+  |> list.map(fn(arg) {
+    let #(arg_type, arg_name) =
+      string.split_once(arg, on: " ")
+      |> result.unwrap(#("", arg))
+
+    [
+      html.span([attribute.class("type")], [html.text(arg_type)]),
+      html.text(" " <> arg_name),
+    ]
+  })
+  |> list.intersperse([html.text(", ")])
+  |> list.flatten
+  |> element.fragment
+}
+
+fn style_fuction_attributes(attributes_text) {
+  string.split(attributes_text, on: " ")
+  |> list.map(fn(attribute) {
+    case attribute {
+      "public"
+      | "private"
+      | "internal"
+      | "external"
+      | "view"
+      | "pure"
+      | "payable"
+      | "virtual"
+      | "override"
+      | "abstract"
+      | "returns" -> [
+        html.span([attribute.class("keyword")], [html.text(" " <> attribute)]),
+      ]
+      _ ->
+        case string.starts_with(attribute, "(") {
+          // Return variables
+          True ->
+            attribute
+            |> string_drop_start(1)
+            |> string_drop_end(1)
+            |> style_return_variables
+            |> fn(return_variables) {
+              [html.text(" ("), return_variables, html.text(")")]
+            }
+          // Modifiers
+          False -> [style_function_modifier(attribute)]
+        }
+    }
+  })
+  // |> list.intersperse([html.text(" ")])
+  |> list.flatten
+  |> element.fragment
+}
+
+fn style_return_variables(return_variables_text) {
+  string.split(return_variables_text, on: ", ")
+  |> list.map(fn(arg) {
+    let #(arg_type, arg_name) =
+      string.split_once(arg, on: " ")
+      |> result.unwrap(#(arg, ""))
+
+    [
+      html.span([attribute.class("type")], [html.text(arg_type)]),
+      case arg_name != "" {
+        True -> html.text(" " <> arg_name)
+        False -> element.fragment([])
+      },
+    ]
+  })
+  |> list.intersperse([html.text(", ")])
+  |> list.flatten
+  |> element.fragment
+}
+
+fn style_function_modifier(modifiers_text) {
+  let #(modifier, args) =
+    string.split_once(modifiers_text, on: "(")
+    |> result.unwrap(#(modifiers_text, ""))
+
+  let args = string_drop_end(args, 1)
+
+  element.fragment([
+    html.span([attribute.class("function")], [html.text(" " <> modifier)]),
+    html.text("("),
+    style_arguments(args),
+    html.text(")"),
+  ])
 }
 
 pub fn style_code_tokens(line_text) {

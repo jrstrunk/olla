@@ -60,6 +60,23 @@ pub fn contract_kind_to_string(kind) {
   }
 }
 
+pub type FunctionKind {
+  Function
+  Constructor
+  Fallback
+  Receive
+}
+
+pub fn function_kind_from_string(kind) {
+  case kind {
+    "function" -> Function
+    "constructor" -> Constructor
+    "fallback" -> Fallback
+    "receive" -> Receive
+    _ -> panic as { "Invalid function kind given " <> kind }
+  }
+}
+
 pub type ContractStorageVarMetaData {
   ContractStorageVarMetaData(name: String, kind: String, value: String)
 }

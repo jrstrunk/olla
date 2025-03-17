@@ -11,7 +11,7 @@ import simplifile
 pub fn gather_metadata(for audit_name) {
   let in_scope_files = get_files_in_scope(for: audit_name)
 
-  use asts <- result.map(preprocessor_sol.read_asts(for: audit_name))
+  use asts <- result.map(preprocessor_sol.read_asts(for: audit_name) |> echo)
 
   audit_metadata.AuditMetaData(
     audit_name:,
