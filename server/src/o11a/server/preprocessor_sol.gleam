@@ -60,6 +60,216 @@ pub fn process_asts(asts: List(#(String, AST)), audit_name: String) {
   |> dict.from_list
 }
 
+pub type NodeDeclaration {
+  NodeDeclaration(
+    title: String,
+    topic_id: String,
+    references: List(NodeReference),
+  )
+}
+
+pub type NodeReference {
+  NodeReference(title: String, topic_id: String)
+}
+
+pub fn emunerate_declarations(declarations, in ast: AST, for audit_name) {
+  list.fold(ast.nodes, declarations, fn(declarations, node) {
+    do_enumerate_node_declarations(
+      declarations,
+      node,
+      filepath.join(audit_name, ast.absolute_path),
+    )
+  })
+}
+
+fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
+  case node {
+    Node(id:, nodes:, ..) -> {
+      let title = "n" <> int.to_string(id)
+      dict.insert(
+        declarations,
+        id,
+        NodeDeclaration(
+          title:,
+          topic_id: parent <> ":" <> title,
+          references: [],
+        ),
+      )
+      |> list.fold(nodes, _, fn(declarations, node) {
+        do_enumerate_node_declarations(declarations, node, parent)
+      })
+    }
+    NamedNode(id:, nodes:, ..) -> {
+      let title = "n" <> int.to_string(id)
+      dict.insert(
+        declarations,
+        id,
+        NodeDeclaration(
+          title:,
+          topic_id: parent <> ":" <> title,
+          references: [],
+        ),
+      )
+      |> list.fold(nodes, _, fn(declarations, node) {
+        do_enumerate_node_declarations(declarations, node, parent)
+      })
+    }
+    ImportDirectiveNode(..) -> declarations
+    ContractDefinitionNode(id:, name:, nodes:, contract_kind:, ..) -> {
+      let title =
+        audit_metadata.contract_kind_to_string(contract_kind) <> " " <> name
+      let contract_id = parent <> "#" <> name
+
+      dict.insert(
+        declarations,
+        id,
+        NodeDeclaration(title:, topic_id: contract_id, references: []),
+      )
+      |> list.fold(nodes, _, fn(declarations, node) {
+        do_enumerate_node_declarations(declarations, node, contract_id)
+      })
+    }
+    FunctionDefinitionNode(
+      id:,
+      name:,
+      nodes:,
+      function_kind:,
+      parameters:,
+      return_parameters:,
+      body:,
+      ..,
+    ) -> {
+      let title = case function_kind {
+        audit_metadata.Function -> "function " <> name
+        audit_metadata.Constructor -> "constructor"
+        audit_metadata.Fallback -> "fallback function"
+        audit_metadata.Receive -> "receive function"
+      }
+      let function_id =
+        parent
+        <> "#"
+        <> case function_kind {
+          audit_metadata.Function -> name
+          audit_metadata.Constructor -> "constructor"
+          audit_metadata.Fallback -> "fallback"
+          audit_metadata.Receive -> "receive"
+        }
+
+      let declarations =
+        dict.insert(
+          declarations,
+          id,
+          NodeDeclaration(title:, topic_id: function_id, references: []),
+        )
+        |> list.fold(nodes, _, fn(declarations, node) {
+          do_enumerate_node_declarations(declarations, node, function_id)
+        })
+        |> do_enumerate_node_declarations(parameters, function_id)
+        |> do_enumerate_node_declarations(return_parameters, function_id)
+
+      case body {
+        Some(body) ->
+          do_enumerate_block_declarations(declarations, body, function_id)
+        option.None -> declarations
+      }
+    }
+    ParameterListNode(parameters:, ..) -> {
+      list.fold(parameters, declarations, fn(declarations, parameter) {
+        do_enumerate_node_declarations(declarations, parameter, parent)
+      })
+    }
+    ErrorDefinitionNode(id:, name:, nodes:, ..) -> {
+      let title = "error " <> name
+
+      list.fold(
+        nodes,
+        dict.insert(
+          declarations,
+          id,
+          NodeDeclaration(
+            title:,
+            topic_id: parent <> ":" <> name,
+            references: [],
+          ),
+        ),
+        fn(declarations, node) {
+          do_enumerate_node_declarations(declarations, node, parent)
+        },
+      )
+    }
+    EventDefinitionNode(id:, name:, nodes:, ..) -> {
+      let title = "event " <> name
+
+      list.fold(
+        nodes,
+        dict.insert(
+          declarations,
+          id,
+          NodeDeclaration(
+            title:,
+            topic_id: parent <> ":" <> name,
+            references: [],
+          ),
+        ),
+        fn(declarations, node) {
+          do_enumerate_node_declarations(declarations, node, parent)
+        },
+      )
+    }
+    VariableDeclarationNode(id:, name:, constant:, type_string:, ..) -> {
+      let title =
+        case constant {
+          True -> "constant "
+          False -> ""
+        }
+        <> type_string
+        <> " "
+        <> name
+
+      dict.insert(
+        declarations,
+        id,
+        NodeDeclaration(title:, topic_id: parent <> ":" <> name, references: []),
+      )
+    }
+  }
+}
+
+fn do_enumerate_block_declarations(declarations, block, parent) {
+  let BlockNode(nodes:, statements:, ..) = block
+
+  list.fold(nodes, declarations, fn(declarations, node) {
+    do_enumerate_node_declarations(declarations, node, parent)
+  })
+  |> list.fold(statements, _, fn(declarations, statement) {
+    do_enumerate_statement_declarations(declarations, statement, parent)
+  })
+}
+
+fn do_enumerate_statement_declarations(declarations, statement, parent) {
+  case statement {
+    VariableDeclarationStatementNode(declarations: declaration_nodes, ..) ->
+      list.fold(declaration_nodes, declarations, fn(declarations, declaration) {
+        case declaration {
+          Some(declaration) ->
+            do_enumerate_node_declarations(declarations, declaration, parent)
+          option.None -> declarations
+        }
+      })
+    IfStatementNode(true_body:, false_body:, ..) -> {
+      let declarations =
+        do_enumerate_block_declarations(declarations, true_body, parent)
+
+      case false_body {
+        Some(false_body) ->
+          do_enumerate_block_declarations(declarations, false_body, parent)
+        option.None -> declarations
+      }
+    }
+    _ -> declarations
+  }
+}
+
 pub fn read_asts(for audit_name: String) {
   // The AST is stored in a file called "out/<FileName>.sol/<ContractName>.json, ..."
   let out_dir = config.get_audit_path(for: audit_name) |> filepath.join("out")
