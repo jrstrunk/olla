@@ -1,5 +1,11 @@
+import gleam/dict
+import gleam/dynamic/decode
+import gleam/io
+import gleam/json
+import gleam/list
 import gleeunit/should
 import o11a/server/preprocessor_sol
+import simplifile
 
 pub fn style_code_tokens_operator_test() {
   preprocessor_sol.style_code_tokens("if (hi < hello == world) {")
@@ -38,7 +44,7 @@ pub fn style_code_tokens_number_test() {
 
 pub fn consume_line_over_test() {
   preprocessor_sol.consume_line("hello world", for: 12)
-  |> should.equal(#("hello world", 12, "", False))
+  |> should.equal(#("hello world", 11, "", False))
 }
 
 pub fn consume_line_under_test() {
@@ -54,6 +60,21 @@ pub fn consume_line_newline_test() {
 pub fn consume_only_newline_test() {
   preprocessor_sol.consume_line("\n", for: 1)
   |> should.equal(#("", 1, "", True))
+}
+
+pub fn preprocess_source_test() {
+  let assert Ok(src_ast) =
+    simplifile.read("priv/audits/thorwallet/out/Titn.sol/Titn.json")
+  let assert Ok(ast) =
+    json.parse(
+      src_ast,
+      decode.at(["ast"], preprocessor_sol.ast_decoder("thorwallet")),
+    )
+
+  let nodes = preprocessor_sol.linearize_nodes(ast)
+
+  preprocessor_sol.preprocess_source2(src, nodes, dict.new())
+  |> list.map(io.debug)
 }
 
 const src = "// SPDX-License-Identifier: MIT
@@ -170,8 +191,7 @@ contract Titn is OFT {
     }
 }"
 
-const ast = "
-{
+const ast = "{
 \"ast\": {
   \"absolutePath\": \"contracts/Titn.sol\",
   \"id\": 884,

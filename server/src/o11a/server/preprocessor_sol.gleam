@@ -13,6 +13,7 @@ import gleam/regexp
 import gleam/result
 import gleam/string
 import lib/enumerate
+import lib/snagx
 import lustre/attribute
 import lustre/element
 import lustre/element/html
@@ -22,53 +23,133 @@ import simplifile
 import snag
 
 pub fn preprocess_source2(
-  source source,
-  ast ast: AST,
-  declarations declarations: dict.Dict(Int, NodeDeclaration),
+  source source: String,
+  nodes nodes: List(Node),
+  declarations _declarations: dict.Dict(Int, NodeDeclaration),
 ) {
-  list.scan(ast.nodes, #(0, source, "", []), fn(source_data, node) {
-    let #(total_consumed_count, rest, current_line, processed) = source_data
+  let #(_, current_line, processed, rest) =
+    list.fold(nodes, #(0, "", [], source), fn(source_data, node) {
+      let #(total_consumed_count, current_line, processed, rest) = source_data
 
-    case node {
-      _ -> {
-        let gap_to_consume = node.source_map.start - total_consumed_count
+      case node {
+        VariableDeclarationNode(..)
+        | EventDefinitionNode(..)
+        | ErrorDefinitionNode(..) ->
+          consume_part(
+            node:,
+            total_consumed_count:,
+            current_line:,
+            rest:,
+            processed:,
+            style_node_tokens: fn(node) { "<START>" <> node <> "<END>" },
+          )
 
-        case gap_to_consume > 0 {
-          True -> {
-            let #(gap_tokens, consumed_count, rest, reached_newline) =
-              consume_line(rest, for: gap_to_consume)
+        _ ->
+          consume_part(
+            node:,
+            total_consumed_count:,
+            current_line:,
+            rest:,
+            processed:,
+            style_node_tokens: fn(node) { "<START>" <> node <> "<END>" },
+          )
+      }
+    })
 
-            let total_consumed_count = total_consumed_count + consumed_count
+  // Flush the rest of the file into the processed list
+  case current_line == "", rest == "" {
+    _, False -> {
+      let #(consumed, _, rest, _) = consume_line(rest, 10_000)
+      let processed = [string.append(consumed, current_line), ..processed]
 
-            case reached_newline {
-              True -> {
-                #(total_consumed_count, rest, "", [
-                  string.append(current_line, gap_tokens),
-                  ..processed
-                ])
-              }
-              False -> {
-                let #(node_tokens, left_to_consume, rest, reached_newline) =
-                  consume_line(rest, for: node.source_map.length)
+      string.split(rest, on: "\n")
+      |> list.fold(processed, fn(processed, line) { [line, ..processed] })
+    }
+    False, True -> [current_line, ..processed]
+    True, True -> processed
+  }
+  |> list.reverse
+}
 
-                todo
-              }
-            }
-          }
-          False -> {
-            let #(node_tokens, left_to_consume, rest, reached_newline) =
-              consume_line(
-                rest,
-                for: get_source_map_end(node.source_map) - total_consumed_count,
-              )
+pub fn consume_part(
+  node node: Node,
+  total_consumed_count total_consumed_count,
+  current_line current_line,
+  processed processed,
+  rest rest,
+  style_node_tokens style_node_tokens,
+) {
+  use <- given.that(node.source_map == SourceMap(-1, -1), return: fn() {
+    #(total_consumed_count, current_line, processed, rest)
+  })
 
-            todo
-          }
-        }
+  let gap_to_consume = node.source_map.start - total_consumed_count
+  let node_to_consume =
+    get_source_map_end(node.source_map) - total_consumed_count
+
+  case gap_to_consume > 0, node_to_consume > 0 {
+    True, _ -> {
+      let #(gap_tokens, consumed_count, rest, reached_newline) =
+        consume_line(rest, for: gap_to_consume)
+
+      let total_consumed_count = total_consumed_count + consumed_count
+      let current_line = string.append(current_line, gap_tokens)
+
+      case reached_newline {
+        // If we reached the newline, it means we may still have some gap to go
+        True ->
+          consume_part(
+            node:,
+            total_consumed_count:,
+            current_line: "",
+            processed: [current_line, ..processed],
+            rest:,
+            style_node_tokens:,
+          )
+        // If we didn't reach the newline, we are at the beginning of the
+        // node code
+        False ->
+          consume_part(
+            node:,
+            total_consumed_count:,
+            current_line:,
+            processed:,
+            rest:,
+            style_node_tokens:,
+          )
       }
     }
-  })
-  |> Ok
+    False, True -> {
+      let node_end = get_source_map_end(node.source_map)
+      let #(node_tokens, consumed_count, rest, reached_newline) =
+        consume_line(rest, for: node_end - total_consumed_count)
+
+      let total_consumed_count = total_consumed_count + consumed_count
+      let current_line =
+        string.append(current_line, style_node_tokens(node_tokens))
+
+      case reached_newline {
+        // If we reached the newline, but not the end of the node, it means we 
+        // may still have some of the current node to go
+        True ->
+          consume_part(
+            node:,
+            total_consumed_count:,
+            current_line: "",
+            processed: [current_line, ..processed],
+            rest:,
+            style_node_tokens:,
+          )
+        // We reached the end of the node, so we are done in the middle of the 
+        // line
+        False -> #(total_consumed_count, current_line, processed, rest)
+      }
+    }
+    // We ended right at a line boundry last time
+    False, False -> {
+      #(total_consumed_count, current_line, processed, rest)
+    }
+  }
 }
 
 /// Consumes a line of text until a newline character, at which point
@@ -152,7 +233,7 @@ pub fn process_asts(asts: List(#(String, AST)), audit_name: String) {
 /// for styling and other targeted purposes. The nodes are sorted by their
 /// source map start position.
 pub fn linearize_nodes(ast: AST) {
-  list.fold(ast.nodes, [], fn(nodes, node) { do_linearize_nodes(nodes, node) })
+  list.fold(ast.nodes, [], do_linearize_nodes)
   |> list.sort(by: fn(a, b) {
     int.compare(a.source_map.start, b.source_map.start)
   })
@@ -162,9 +243,7 @@ fn do_linearize_nodes(linearized_nodes: List(Node), node: Node) {
   case node {
     Node(nodes:, ..) -> do_linearize_nodes_multi(linearized_nodes, nodes)
     NamedNode(nodes:, ..) -> do_linearize_nodes_multi(linearized_nodes, nodes)
-    ImportDirectiveNode(..) -> {
-      [node, ..linearized_nodes]
-    }
+    ImportDirectiveNode(..) -> [node, ..linearized_nodes]
     Assignment(left_hand_side:, right_hand_side:, ..) ->
       do_linearize_nodes(linearized_nodes, left_hand_side)
       |> do_linearize_nodes(right_hand_side)
@@ -174,8 +253,8 @@ fn do_linearize_nodes(linearized_nodes: List(Node), node: Node) {
       |> do_linearize_nodes(right_expression)
     BlockNode(nodes:, statements:, expression:, ..) ->
       case expression {
-        option.Some(node) -> do_linearize_nodes(nodes, node)
-        option.None -> nodes
+        option.Some(node) -> do_linearize_nodes(linearized_nodes, node)
+        option.None -> linearized_nodes
       }
       |> do_linearize_nodes_multi(nodes)
       |> do_linearize_nodes_multi(statements)
@@ -183,11 +262,9 @@ fn do_linearize_nodes(linearized_nodes: List(Node), node: Node) {
       [node, ..linearized_nodes]
       |> do_linearize_nodes_multi(nodes)
       |> do_linearize_nodes_multi(base_contracts)
-    EmitStatementNode(expression:, ..) ->
-      case expression {
-        option.Some(node) -> do_linearize_nodes(linearized_nodes, node)
-        option.None -> linearized_nodes
-      }
+    EmitStatementNode(event_call:, ..) ->
+      do_linearize_nodes(linearized_nodes, event_call)
+
     ErrorDefinitionNode(nodes:, ..) ->
       [node, ..linearized_nodes] |> do_linearize_nodes_multi(nodes)
     EventDefinitionNode(parameters:, nodes:, ..) ->
@@ -281,6 +358,10 @@ fn do_linearize_nodes(linearized_nodes: List(Node), node: Node) {
           }
         },
       )
+    TupleExpression(nodes:, ..) ->
+      list.fold(nodes, linearized_nodes, fn(linearized_nodes, node) {
+        do_linearize_nodes(linearized_nodes, node)
+      })
   }
 }
 
@@ -512,6 +593,7 @@ fn do_count_node_references(
     | NamedNode(nodes:, ..)
     | ParameterListNode(parameters: nodes, ..)
     | ErrorDefinitionNode(nodes:, ..)
+    | TupleExpression(nodes:, ..)
     | EventDefinitionNode(nodes:, ..) ->
       list.fold(nodes, declarations, fn(declarations, node) {
         do_count_node_references(declarations, node, parent_title, parent_id)
@@ -610,17 +692,14 @@ fn do_count_node_references(
           )
         option.None -> declarations
       }
-    EmitStatementNode(expression:, ..) ->
-      case expression {
-        Some(expression) ->
-          do_count_node_references(
-            declarations,
-            expression,
-            parent_title,
-            parent_id,
-          )
-        option.None -> declarations
-      }
+    EmitStatementNode(event_call:, ..) ->
+      do_count_node_references(
+        declarations,
+        event_call,
+        parent_title,
+        parent_id,
+      )
+
     VariableDeclarationStatementNode(declarations: declaration_nodes, ..) ->
       list.fold(declaration_nodes, declarations, fn(declarations, declaration) {
         case declaration {
@@ -850,14 +929,14 @@ pub fn read_asts(for audit_name: String) {
 
   echo "Finished reading asts"
 
-  result.all(res)
+  snagx.collect_errors(res)
 }
 
 pub type AST {
   AST(absolute_path: String, nodes: List(Node))
 }
 
-fn ast_decoder(for audit_name) -> decode.Decoder(AST) {
+pub fn ast_decoder(for audit_name) -> decode.Decoder(AST) {
   use absolute_path <- decode.field("absolutePath", decode.string)
   use nodes <- decode.field("nodes", decode.list(node_decoder()))
   decode.success(AST(
@@ -868,13 +947,7 @@ fn ast_decoder(for audit_name) -> decode.Decoder(AST) {
 
 pub type Node {
   Node(id: Int, source_map: SourceMap, node_type: String, nodes: List(Node))
-  NamedNode(
-    id: Int,
-    source_map: SourceMap,
-    name: String,
-    name_source_map: SourceMap,
-    nodes: List(Node),
-  )
+  NamedNode(id: Int, source_map: SourceMap, name: String, nodes: List(Node))
   ImportDirectiveNode(
     id: Int,
     source_map: SourceMap,
@@ -885,7 +958,6 @@ pub type Node {
     id: Int,
     source_map: SourceMap,
     name: String,
-    name_source_map: SourceMap,
     contract_kind: audit_metadata.ContractKind,
     base_contracts: List(Node),
     nodes: List(Node),
@@ -894,7 +966,6 @@ pub type Node {
     id: Int,
     source_map: SourceMap,
     name: String,
-    name_source_map: SourceMap,
     constant: Bool,
     mutability: String,
     visibility: String,
@@ -904,14 +975,12 @@ pub type Node {
     id: Int,
     source_map: SourceMap,
     name: String,
-    name_source_map: SourceMap,
     nodes: List(Node),
   )
   EventDefinitionNode(
     id: Int,
     source_map: SourceMap,
     name: String,
-    name_source_map: SourceMap,
     parameters: Node,
     nodes: List(Node),
   )
@@ -919,7 +988,6 @@ pub type Node {
     id: Int,
     source_map: SourceMap,
     name: String,
-    name_source_map: SourceMap,
     function_kind: audit_metadata.FunctionKind,
     parameters: Node,
     modifiers: List(Node),
@@ -942,11 +1010,7 @@ pub type Node {
     source_map: SourceMap,
     expression: option.Option(Node),
   )
-  EmitStatementNode(
-    id: Int,
-    source_map: SourceMap,
-    expression: option.Option(Node),
-  )
+  EmitStatementNode(id: Int, source_map: SourceMap, event_call: Node)
   VariableDeclarationStatementNode(
     id: Int,
     source_map: SourceMap,
@@ -1012,6 +1076,7 @@ pub type Node {
     reference_id: Int,
   )
   BaseContract(id: Int, source_map: SourceMap, name: String, reference_id: Int)
+  TupleExpression(id: Int, source_map: SourceMap, nodes: List(Node))
 }
 
 pub type SourceMap {
@@ -1045,7 +1110,6 @@ fn node_decoder() -> decode.Decoder(Node) {
   case variant {
     "ImportDirective" -> {
       use id <- decode.field("id", decode.int)
-      echo id
       use src <- decode.field("src", decode.string)
       use file <- decode.field("file", decode.string)
       use absolute_path <- decode.field("absolutePath", decode.string)
@@ -1058,8 +1122,6 @@ fn node_decoder() -> decode.Decoder(Node) {
     }
     "ContractDefinition" -> {
       use id <- decode.field("id", decode.int)
-      echo id
-      use src <- decode.field("src", decode.string)
       use name <- decode.field("name", decode.string)
       use name_location <- decode.field("nameLocation", decode.string)
       use contract_kind <- decode.field("contractKind", decode.string)
@@ -1079,9 +1141,8 @@ fn node_decoder() -> decode.Decoder(Node) {
       }
       decode.success(ContractDefinitionNode(
         id:,
-        source_map: source_map_from_string(src),
+        source_map: source_map_from_string(name_location),
         name:,
-        name_source_map: source_map_from_string(name_location),
         contract_kind: audit_metadata.contract_kind_from_string(contract_kind),
         base_contracts:,
         nodes:,
@@ -1089,8 +1150,6 @@ fn node_decoder() -> decode.Decoder(Node) {
     }
     "VariableDeclaration" -> {
       use id <- decode.field("id", decode.int)
-      echo id
-      use src <- decode.field("src", decode.string)
       use name <- decode.field("name", decode.string)
       use name_location <- decode.field("nameLocation", decode.string)
       use constant <- decode.field("constant", decode.bool)
@@ -1102,9 +1161,8 @@ fn node_decoder() -> decode.Decoder(Node) {
       )
       decode.success(VariableDeclarationNode(
         id:,
-        source_map: source_map_from_string(src),
+        source_map: source_map_from_string(name_location),
         name:,
-        name_source_map: source_map_from_string(name_location),
         constant:,
         mutability: mutability,
         visibility: visibility,
@@ -1113,8 +1171,6 @@ fn node_decoder() -> decode.Decoder(Node) {
     }
     "ErrorDefinition" -> {
       use id <- decode.field("id", decode.int)
-      echo id
-      use src <- decode.field("src", decode.string)
       use name <- decode.field("name", decode.string)
       use name_location <- decode.field("nameLocation", decode.string)
       use nodes <- decode.optional_field(
@@ -1125,16 +1181,13 @@ fn node_decoder() -> decode.Decoder(Node) {
 
       decode.success(ErrorDefinitionNode(
         id:,
-        source_map: source_map_from_string(src),
+        source_map: source_map_from_string(name_location),
         name:,
-        name_source_map: source_map_from_string(name_location),
         nodes:,
       ))
     }
     "EventDefinition" -> {
       use id <- decode.field("id", decode.int)
-      echo id
-      use src <- decode.field("src", decode.string)
       use name <- decode.field("name", decode.string)
       use name_location <- decode.field("nameLocation", decode.string)
       use parameters <- decode.field("parameters", node_decoder())
@@ -1146,19 +1199,17 @@ fn node_decoder() -> decode.Decoder(Node) {
 
       decode.success(EventDefinitionNode(
         id:,
-        source_map: source_map_from_string(src),
+        source_map: source_map_from_string(name_location),
         name:,
-        name_source_map: source_map_from_string(name_location),
         parameters:,
         nodes:,
       ))
     }
     "FunctionDefinition" -> {
       use id <- decode.field("id", decode.int)
-      echo id
       use src <- decode.field("src", decode.string)
-      use name <- decode.field("name", decode.string)
       use name_location <- decode.field("nameLocation", decode.string)
+      use name <- decode.field("name", decode.string)
       use kind <- decode.field("kind", decode.string)
       use parameters <- decode.field("parameters", node_decoder())
       use modifiers <- decode.field("modifiers", decode.list(node_decoder()))
@@ -1178,12 +1229,26 @@ fn node_decoder() -> decode.Decoder(Node) {
         option.None,
         decode.optional(node_decoder()),
       )
+      let function_kind = audit_metadata.function_kind_from_string(kind)
+
+      let location = source_map_from_string(src)
+      let name_location = source_map_from_string(name_location)
+
+      let #(name, source_map) = case function_kind {
+        audit_metadata.Constructor -> #(
+          "constructor",
+          SourceMap(location.start, 11),
+        )
+        audit_metadata.Function -> #(name, name_location)
+        audit_metadata.Fallback -> #("fallback", SourceMap(location.start, 8))
+        audit_metadata.Receive -> #("receive", SourceMap(location.start, 7))
+      }
+
       decode.success(FunctionDefinitionNode(
         id:,
-        source_map: source_map_from_string(src),
+        source_map:,
         name:,
-        name_source_map: source_map_from_string(name_location),
-        function_kind: audit_metadata.function_kind_from_string(kind),
+        function_kind:,
         parameters:,
         modifiers:,
         return_parameters:,
@@ -1194,7 +1259,6 @@ fn node_decoder() -> decode.Decoder(Node) {
     }
     "ParameterList" -> {
       use id <- decode.field("id", decode.int)
-      echo id
       use src <- decode.field("src", decode.string)
       use parameters <- decode.field("parameters", decode.list(node_decoder()))
       decode.success(ParameterListNode(
@@ -1232,7 +1296,6 @@ fn node_decoder() -> decode.Decoder(Node) {
     }
     "StructuredDocumentation" -> {
       use id <- decode.field("id", decode.int)
-      echo id
       use src <- decode.field("src", decode.string)
 
       use text <- decode.field("text", decode.string)
@@ -1244,22 +1307,16 @@ fn node_decoder() -> decode.Decoder(Node) {
     }
     "EmitStatement" -> {
       use id <- decode.field("id", decode.int)
-      echo id
       use src <- decode.field("src", decode.string)
-      use expression <- decode.optional_field(
-        "expression",
-        option.None,
-        decode.optional(node_decoder()),
-      )
+      use event_call <- decode.field("eventCall", node_decoder())
       decode.success(EmitStatementNode(
         id:,
         source_map: source_map_from_string(src),
-        expression:,
+        event_call:,
       ))
     }
     "VariableDeclarationStatement" -> {
       use id <- decode.field("id", decode.int)
-      echo id
       use src <- decode.field("src", decode.string)
       use declarations <- decode.field(
         "declarations",
@@ -1273,7 +1330,6 @@ fn node_decoder() -> decode.Decoder(Node) {
     }
     "IfStatement" -> {
       use id <- decode.field("id", decode.int)
-      echo id
       use src <- decode.field("src", decode.string)
       use condition <- decode.field("condition", node_decoder())
       use true_body <- decode.field("trueBody", node_decoder())
@@ -1292,7 +1348,6 @@ fn node_decoder() -> decode.Decoder(Node) {
     }
     "RevertStatement" -> {
       use id <- decode.field("id", decode.int)
-      echo id
       use src <- decode.field("src", decode.string)
       use expression <- decode.optional_field(
         "errorCall",
@@ -1307,7 +1362,6 @@ fn node_decoder() -> decode.Decoder(Node) {
     }
     "ExpressionStatement" -> {
       use id <- decode.field("id", decode.int)
-      echo id
       use src <- decode.field("src", decode.string)
       use expression <- decode.optional_field(
         "expression",
@@ -1322,7 +1376,6 @@ fn node_decoder() -> decode.Decoder(Node) {
     }
     "FunctionCall" -> {
       use id <- decode.field("id", decode.int)
-      echo id
       use src <- decode.field("src", decode.string)
       use arguments <- decode.field("arguments", decode.list(node_decoder()))
       use expression <- decode.optional_field(
@@ -1339,7 +1392,6 @@ fn node_decoder() -> decode.Decoder(Node) {
     }
     "Assignment" -> {
       use id <- decode.field("id", decode.int)
-      echo id
       use src <- decode.field("src", decode.string)
       use left_hand_side <- decode.field("leftHandSide", node_decoder())
       use right_hand_side <- decode.field("rightHandSide", node_decoder())
@@ -1352,7 +1404,6 @@ fn node_decoder() -> decode.Decoder(Node) {
     }
     "BinaryOperation" -> {
       use id <- decode.field("id", decode.int)
-      echo id
       use src <- decode.field("src", decode.string)
       use left_expression <- decode.field("leftExpression", node_decoder())
       use right_expression <- decode.field("rightExpression", node_decoder())
@@ -1367,7 +1418,6 @@ fn node_decoder() -> decode.Decoder(Node) {
     }
     "UnaryOperation" -> {
       use id <- decode.field("id", decode.int)
-      echo id
       use src <- decode.field("src", decode.string)
       use expression <- decode.field("subExpression", node_decoder())
       use operator <- decode.field("operator", decode.string)
@@ -1380,7 +1430,6 @@ fn node_decoder() -> decode.Decoder(Node) {
     }
     "IndexAccess" -> {
       use id <- decode.field("id", decode.int)
-      echo id
       use src <- decode.field("src", decode.string)
       use base <- decode.field("baseExpression", node_decoder())
       use index <- decode.field("indexExpression", node_decoder())
@@ -1391,7 +1440,7 @@ fn node_decoder() -> decode.Decoder(Node) {
         index:,
       ))
     }
-    "Identifier" -> {
+    "Identifier" | "IdentifierPath" -> {
       use id <- decode.field("id", decode.int)
       use src <- decode.field("src", decode.string)
       use name <- decode.field("name", decode.string)
@@ -1424,7 +1473,6 @@ fn node_decoder() -> decode.Decoder(Node) {
     }
     "InheritanceSpecifier" -> {
       use id <- decode.field("id", decode.int)
-      echo id
       use src <- decode.field("src", decode.string)
       use name <- decode.subfield(["baseName", "name"], decode.string)
       use reference_id <- decode.subfield(
@@ -1436,6 +1484,16 @@ fn node_decoder() -> decode.Decoder(Node) {
         source_map: source_map_from_string(src),
         name:,
         reference_id:,
+      ))
+    }
+    "TupleExpression" -> {
+      use id <- decode.field("id", decode.int)
+      use src <- decode.field("src", decode.string)
+      use nodes <- decode.field("components", decode.list(node_decoder()))
+      decode.success(TupleExpression(
+        id:,
+        source_map: source_map_from_string(src),
+        nodes:,
       ))
     }
     _ -> {
@@ -1475,9 +1533,8 @@ fn node_decoder() -> decode.Decoder(Node) {
             option.Some(name), option.Some(name_location) ->
               decode.success(NamedNode(
                 id:,
-                source_map: source_map_from_string(src),
+                source_map: source_map_from_string(name_location),
                 name:,
-                name_source_map: source_map_from_string(name_location),
                 nodes:,
               ))
             _, _ ->
