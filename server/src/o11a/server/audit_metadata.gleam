@@ -18,17 +18,17 @@ pub fn gather_metadata(for audit_name) {
   let _declarations =
     dict.new()
     |> list.fold(asts, _, fn(declarations, ast) {
-      preprocessor_sol.enumerate_declarations(declarations, ast, audit_name)
+      preprocessor_sol.enumerate_declarations(declarations, ast)
     })
     |> list.fold(asts, _, fn(declarations, ast) {
-      preprocessor_sol.count_references(declarations, ast, audit_name)
+      preprocessor_sol.count_references(declarations, ast)
     })
 
   audit_metadata.AuditMetaData(
     audit_name:,
     audit_formatted_name: audit_name,
     in_scope_files:,
-    source_files_sol: preprocessor_sol.process_asts(ast_data, audit_name),
+    source_files_sol: dict.new(),
   )
 }
 

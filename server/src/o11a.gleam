@@ -59,6 +59,7 @@ pub fn main() {
     )
   <- result.map(
     gateway.start_gateway(skeletons)
+    |> echo
     |> result.map_error(fn(e) { snag.pretty_print(e) |> io.println }),
   )
 

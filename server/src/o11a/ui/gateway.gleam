@@ -1,4 +1,5 @@
 import concurrent_dict
+import filepath
 import gleam/dict
 import gleam/erlang/process
 import gleam/list
@@ -81,16 +82,49 @@ pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
         audit_dashboard_actor,
       )
 
+      use asts <- result.try(
+        preprocessor_sol.read_asts(audit_name)
+        |> snag.context("Unable to read asts for " <> audit_name),
+      )
+
+      let file_to_ast = dict.from_list(asts)
+
+      let declarations =
+        dict.new()
+        |> list.fold(asts, _, fn(declarations, ast) {
+          preprocessor_sol.enumerate_declarations(declarations, ast.1)
+        })
+        |> list.fold(asts, _, fn(declarations, ast) {
+          preprocessor_sol.count_references(declarations, ast.1)
+        })
+
       dict.get(page_paths, audit_name)
       |> result.unwrap([])
       |> list.map(fn(page_path) {
+        echo "Reading page " <> page_path
         case
-          preprocessor_sol.preprocess_source(
-            for: page_path,
-            with: audit_metadata,
-          )
+          config.get_full_page_path(for: page_path)
+          |> simplifile.read,
+          dict.get(file_to_ast, page_path)
         {
-          Ok(preprocessed_source) -> {
+          Ok(source), Ok(nodes) -> {
+            echo "Linearizing nodes for " <> page_path
+
+            let nodes = preprocessor_sol.linearize_nodes(nodes)
+
+            echo "Preprocessing source for " <> page_path
+
+            let preprocessed_source =
+              preprocessor_sol.preprocess_source(
+                source:,
+                nodes:,
+                declarations:,
+                page_path:,
+                audit_name:,
+              )
+
+            echo "Starting page actor"
+
             use actor <- result.try(
               lustre.start_actor(
                 audit_page_sol.app(),
@@ -104,6 +138,8 @@ pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
               |> snag.map_error(string.inspect),
             )
 
+            echo "Started page actor"
+
             concurrent_dict.insert(page_gateway, page_path, actor)
 
             use dashboard_actor <- result.map(
@@ -114,6 +150,8 @@ pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
               |> snag.map_error(string.inspect),
             )
 
+            echo "Started dashboard actor"
+
             concurrent_dict.insert(
               page_dashboard_gateway,
               page_path,
@@ -121,11 +159,16 @@ pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
             )
           }
 
+          Ok(_source), Error(Nil) -> {
+            echo "Failed to read ast for " <> page_path <> ", skipping"
+            Ok(Nil)
+          }
+
           // If we get a non-text file, just ignore it. Eventually we could 
           // handle image files
-          Error(simplifile.NotUtf8) -> Ok(Nil)
+          Error(simplifile.NotUtf8), _ -> Ok(Nil)
 
-          Error(msg) ->
+          Error(msg), _ ->
             snag.error(msg |> simplifile.describe_error)
             |> snag.context(
               "Failed to preprocess page source for " <> page_path,

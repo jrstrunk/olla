@@ -48,3 +48,10 @@ pub fn get_leading_spaces(string: String) -> String {
   |> list.take_while(fn(char) { char == " " })
   |> string.join(with: "")
 }
+
+pub fn leading_spaces(string: String) -> Int {
+  string
+  |> string.to_graphemes
+  |> list.take_while(fn(char) { char == " " })
+  |> list.length
+}

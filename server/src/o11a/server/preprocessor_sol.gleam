@@ -22,48 +22,189 @@ import o11a/config
 import simplifile
 import snag
 
-pub fn preprocess_source2(
+pub type PreProcessedLine(msg) {
+  PreProcessedLine(
+    significance: PreProcessedLineSignificance,
+    line_number: Int,
+    line_number_text: String,
+    line_tag: String,
+    line_id: String,
+    leading_spaces: Int,
+    nodes: List(PreProcessedNode(msg)),
+  )
+}
+
+pub type PreProcessedLineSignificance {
+  SingleDeclarationLine(topic_id: String, title: String)
+  NonEmptyLine
+  EmptyLine
+}
+
+pub fn preprocess_source(
   source source: String,
   nodes nodes: List(Node),
-  declarations _declarations: dict.Dict(Int, NodeDeclaration),
+  declarations declarations: dict.Dict(Int, NodeDeclaration),
+  page_path page_path: String,
+  audit_name audit_name: String,
 ) {
-  let #(_, current_line, processed, rest) =
-    list.fold(nodes, #(0, "", [], source), fn(source_data, node) {
-      let #(total_consumed_count, current_line, processed, rest) = source_data
+  use line, index <- list.index_map(consume_source(
+    source:,
+    nodes:,
+    declarations:,
+    audit_name:,
+  ))
 
-      case node {
-        VariableDeclarationNode(..)
-        | EventDefinitionNode(..)
-        | ErrorDefinitionNode(..) ->
-          consume_part(
-            node:,
-            total_consumed_count:,
-            current_line:,
-            rest:,
-            processed:,
-            style_node_tokens: fn(node) { "<START>" <> node <> "<END>" },
-          )
+  let line_number = index + 1
+  let line_number_text = int.to_string(line_number)
+  let line_tag = "L" <> line_number_text
+  let line_id = page_path <> "#" <> line_tag
+  let leading_spaces = case line {
+    [PreProcessedGapNode(leading_spaces:, ..), ..] -> leading_spaces
+    _ -> 0
+  }
 
-        _ ->
-          consume_part(
-            node:,
-            total_consumed_count:,
-            current_line:,
-            rest:,
-            processed:,
-            style_node_tokens: fn(node) { "<START>" <> node <> "<END>" },
-          )
+  let declaration_count =
+    list.count(line, fn(decl) {
+      case decl {
+        PreProcessedDeclaration(..) -> True
+        _ -> False
       }
     })
 
+  let reference_count =
+    list.count(line, fn(ref) {
+      case ref {
+        PreProcessedReference(..) -> True
+        _ -> False
+      }
+    })
+
+  let significance = case declaration_count, reference_count {
+    1, _ -> {
+      let assert Ok(PreProcessedDeclaration(node_declaration:, ..)) =
+        list.find(line, fn(decl) {
+          case decl {
+            PreProcessedDeclaration(..) -> True
+            _ -> False
+          }
+        })
+
+      SingleDeclarationLine(
+        topic_id: node_declaration.topic_id,
+        title: node_declaration.title,
+      )
+    }
+    0, 0 -> EmptyLine
+    _, _ -> NonEmptyLine
+  }
+
+  PreProcessedLine(
+    significance:,
+    nodes: line,
+    line_id:,
+    line_number:,
+    line_number_text:,
+    line_tag:,
+    leading_spaces:,
+  )
+}
+
+pub type PreProcessedNode(msg) {
+  PreProcessedDeclaration(
+    build_element: fn(element.Element(msg)) -> element.Element(msg),
+    node_declaration: NodeDeclaration,
+  )
+  PreProcessedReference(
+    build_element: fn(element.Element(msg)) -> element.Element(msg),
+    referenced_node_declaration: NodeDeclaration,
+  )
+  PreProcessedNode(element: element.Element(msg))
+  PreProcessedGapNode(element: element.Element(msg), leading_spaces: Int)
+}
+
+pub fn consume_source(
+  source source: String,
+  nodes nodes: List(Node),
+  declarations declarations: dict.Dict(Int, NodeDeclaration),
+  audit_name audit_name: String,
+) {
+  let #(_, current_line, processed, rest) =
+    list.fold(nodes, #(0, [], [], source), fn(source_data, node) {
+      let #(total_consumed_count, current_line, processed, rest) = source_data
+
+      let style_node_tokens = case node {
+        ImportDirectiveNode(absolute_path:, ..) -> style_import_node(
+          absolute_path,
+          _,
+          // Add source units to the declarations dict and store import data
+          // there too maybe? idk we just need the full path somethow
+          dict.new(),
+          audit_name,
+        )
+
+        EventDefinitionNode(id:, ..)
+        | ErrorDefinitionNode(id:, ..)
+        | ContractDefinitionNode(id:, ..) -> style_declaration_node(
+          node_declaration: dict.get(declarations, id)
+            |> result.unwrap(NodeDeclaration("", "", [])),
+          class: "contract",
+          tokens: _,
+        )
+
+        BaseContract(reference_id:, ..) -> style_reference_node(
+          node_declaration: dict.get(declarations, reference_id)
+            |> result.unwrap(NodeDeclaration("", "", [])),
+          class: "contract",
+          tokens: _,
+        )
+
+        VariableDeclarationNode(id:, ..) -> style_declaration_node(
+          node_declaration: dict.get(declarations, id)
+            |> result.unwrap(NodeDeclaration("", "", [])),
+          class: "variable",
+          tokens: _,
+        )
+
+        FunctionDefinitionNode(id:, ..) -> style_declaration_node(
+          node_declaration: dict.get(declarations, id)
+            |> result.unwrap(NodeDeclaration("", "", [])),
+          class: "function",
+          tokens: _,
+        )
+
+        Identifier(reference_id:, ..) | IdentifierPath(reference_id:, ..) -> style_reference_node(
+          node_declaration: dict.get(declarations, reference_id)
+            |> result.unwrap(NodeDeclaration("", "", [])),
+          class: "variable",
+          tokens: _,
+        )
+
+        _ -> style_gap_tokens
+      }
+
+      consume_part(
+        node:,
+        total_consumed_count:,
+        current_line:,
+        rest:,
+        processed:,
+        style_node_tokens:,
+      )
+    })
+
   // Flush the rest of the file into the processed list
-  case current_line == "", rest == "" {
+  case current_line == [], rest == "" {
     _, False -> {
       let #(consumed, _, rest, _) = consume_line(rest, 10_000)
-      let processed = [string.append(consumed, current_line), ..processed]
+      let processed = [
+        [style_gap_tokens(consumed), ..current_line] |> list.reverse,
+        ..processed
+      ]
 
       string.split(rest, on: "\n")
-      |> list.fold(processed, fn(processed, line) { [line, ..processed] })
+      |> list.fold(processed, fn(processed, line) {
+        [[style_gap_tokens(line)], ..processed]
+      })
     }
     False, True -> [current_line, ..processed]
     True, True -> processed
@@ -74,8 +215,8 @@ pub fn preprocess_source2(
 pub fn consume_part(
   node node: Node,
   total_consumed_count total_consumed_count,
-  current_line current_line,
-  processed processed,
+  current_line current_line: List(PreProcessedNode(msg)),
+  processed processed: List(List(PreProcessedNode(msg))),
   rest rest,
   style_node_tokens style_node_tokens,
 ) {
@@ -83,9 +224,14 @@ pub fn consume_part(
     #(total_consumed_count, current_line, processed, rest)
   })
 
-  let gap_to_consume = node.source_map.start - total_consumed_count
+  let gap_to_consume =
+    int.min(node.source_map.start - total_consumed_count, string.length(rest))
+
   let node_to_consume =
-    get_source_map_end(node.source_map) - total_consumed_count
+    int.min(
+      get_source_map_end(node.source_map) - total_consumed_count,
+      string.length(rest),
+    )
 
   case gap_to_consume > 0, node_to_consume > 0 {
     True, _ -> {
@@ -93,7 +239,7 @@ pub fn consume_part(
         consume_line(rest, for: gap_to_consume)
 
       let total_consumed_count = total_consumed_count + consumed_count
-      let current_line = string.append(current_line, gap_tokens)
+      let current_line = [style_gap_tokens(gap_tokens), ..current_line]
 
       case reached_newline {
         // If we reached the newline, it means we may still have some gap to go
@@ -101,8 +247,8 @@ pub fn consume_part(
           consume_part(
             node:,
             total_consumed_count:,
-            current_line: "",
-            processed: [current_line, ..processed],
+            current_line: [],
+            processed: [current_line |> list.reverse, ..processed],
             rest:,
             style_node_tokens:,
           )
@@ -125,8 +271,7 @@ pub fn consume_part(
         consume_line(rest, for: node_end - total_consumed_count)
 
       let total_consumed_count = total_consumed_count + consumed_count
-      let current_line =
-        string.append(current_line, style_node_tokens(node_tokens))
+      let current_line = [style_node_tokens(node_tokens), ..current_line]
 
       case reached_newline {
         // If we reached the newline, but not the end of the node, it means we 
@@ -135,8 +280,8 @@ pub fn consume_part(
           consume_part(
             node:,
             total_consumed_count:,
-            current_line: "",
-            processed: [current_line, ..processed],
+            current_line: [],
+            processed: [current_line |> list.reverse, ..processed],
             rest:,
             style_node_tokens:,
           )
@@ -150,6 +295,147 @@ pub fn consume_part(
       #(total_consumed_count, current_line, processed, rest)
     }
   }
+}
+
+fn style_declaration_node(
+  node_declaration node_declaration: NodeDeclaration,
+  class class: String,
+  tokens tokens: String,
+) {
+  let build_element = fn(child_element) {
+    html.span([attribute.class("relative")], [
+      html.span(
+        [
+          attribute.class(class),
+          attribute.id(node_declaration.topic_id),
+          attribute.class("declaration-preview"),
+          attribute.attribute("tabindex", "0"),
+        ],
+        [html.text(tokens)],
+      ),
+      child_element,
+    ])
+  }
+
+  PreProcessedDeclaration(node_declaration:, build_element:)
+}
+
+fn style_reference_node(
+  node_declaration referenced_node_declaration: NodeDeclaration,
+  class class: String,
+  tokens tokens: String,
+) {
+  let build_element = fn(child_element) {
+    html.span([attribute.class("relative")], [
+      html.span(
+        [
+          attribute.class(class),
+          attribute.class("reference-preview"),
+          attribute.attribute("tabindex", "0"),
+        ],
+        [html.text(tokens)],
+      ),
+      child_element,
+    ])
+  }
+
+  PreProcessedReference(referenced_node_declaration:, build_element:)
+}
+
+fn style_import_node(
+  abs_path: String,
+  tokens: String,
+  _import_declarations: dict.Dict(String, Int),
+  audit_name,
+) {
+  let #(import_statement_base, import_path) =
+    tokens
+    |> string.split_once("\"")
+    |> result.unwrap(#(tokens, ""))
+
+  // Remove the "import " that is always present
+  let import_statement_base = import_statement_base |> string_drop_start(7)
+  // Remove the trailing "";"
+  let import_path = import_path |> string_drop_end(2)
+
+  let assert Ok(capitalized_word_regex) = regexp.from_string("\\b[A-Z]\\w+\\b")
+
+  let styled_line =
+    html.span([attribute.class("keyword")], [html.text("import")])
+    |> element.to_string
+    <> " "
+    <> regexp.match_map(
+      capitalized_word_regex,
+      import_statement_base,
+      fn(match) {
+        html.span([attribute.class("contract")], [html.text(match.content)])
+        |> element.to_string
+      },
+    )
+    |> string.replace(
+      "from",
+      html.span([attribute.class("keyword")], [html.text("from")])
+        |> element.to_string,
+    )
+    <> html.span([attribute.class("string")], [
+      html.text("\""),
+      html.a(
+        [
+          attribute.class("import-path"),
+          attribute.href("/" <> filepath.join(audit_name, abs_path)),
+        ],
+        [html.text(import_path)],
+      ),
+      html.text("\""),
+    ])
+    |> element.to_string
+    <> ";"
+
+  html.span([attribute.attribute("dangerous-unescaped-html", styled_line)], [])
+  |> PreProcessedNode
+}
+
+/// Gap tokens are everything left out of the AST: brackets, comments, etc.
+fn style_gap_tokens(gap_tokens) {
+  let styled_gap_tokens = case
+    gap_tokens |> string.trim_start |> string.starts_with("//")
+  {
+    True -> style_comment_line(gap_tokens)
+    False ->
+      case gap_tokens |> string.starts_with("pragma") {
+        True -> style_pragma_line(gap_tokens)
+        False -> style_code_tokens(gap_tokens)
+      }
+  }
+
+  let leading_spaces = enumerate.leading_spaces(gap_tokens)
+
+  html.span(
+    [attribute.attribute("dangerous-unescaped-html", styled_gap_tokens)],
+    [],
+  )
+  |> PreProcessedGapNode(leading_spaces:)
+}
+
+pub fn style_comment_line(line_text) {
+  html.span([attribute.class("comment")], [html.text(line_text)])
+  |> element.to_string
+}
+
+pub fn style_pragma_line(line_text) {
+  let solidity_version =
+    line_text
+    // Remove "pragma solidity "
+    |> string_drop_start(16)
+    // Remove ";"
+    |> string_drop_end(1)
+
+  html.span([attribute.class("keyword")], [html.text("pragma solidity")])
+  |> element.to_string
+  <> " "
+  <> html.span([attribute.class("number")], [html.text(solidity_version)])
+  |> element.to_string
+  <> ";"
 }
 
 /// Consumes a line of text until a newline character, at which point
@@ -381,13 +667,9 @@ pub type NodeReference {
   NodeReference(title: String, topic_id: String)
 }
 
-pub fn enumerate_declarations(declarations, in ast: AST, for audit_name) {
+pub fn enumerate_declarations(declarations, in ast: AST) {
   list.fold(ast.nodes, declarations, fn(declarations, node) {
-    do_enumerate_node_declarations(
-      declarations,
-      node,
-      filepath.join(audit_name, ast.absolute_path),
-    )
+    do_enumerate_node_declarations(declarations, node, ast.absolute_path)
   })
 }
 
@@ -571,14 +853,9 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
   }
 }
 
-pub fn count_references(declarations, in ast: AST, for audit_name) {
+pub fn count_references(declarations, in ast: AST) {
   list.fold(ast.nodes, declarations, fn(declarations, node) {
-    do_count_node_references(
-      declarations,
-      node,
-      "",
-      filepath.join(audit_name, ast.absolute_path),
-    )
+    do_count_node_references(declarations, node, "", ast.absolute_path)
   })
 }
 
@@ -924,7 +1201,7 @@ pub fn read_asts(for audit_name: String) {
       |> snag.context("Failed to parse build file for " <> file_name),
     )
 
-    #(file_name, ast) |> Ok
+    #(ast.absolute_path, ast) |> Ok
   }
 
   echo "Finished reading asts"
@@ -933,17 +1210,21 @@ pub fn read_asts(for audit_name: String) {
 }
 
 pub type AST {
-  AST(absolute_path: String, nodes: List(Node))
+  AST(id: Int, absolute_path: String, nodes: List(Node))
 }
 
 pub fn ast_decoder(for audit_name) -> decode.Decoder(AST) {
+  use id <- decode.field("id", decode.int)
   use absolute_path <- decode.field("absolutePath", decode.string)
   use nodes <- decode.field("nodes", decode.list(node_decoder()))
   decode.success(AST(
+    id:,
     absolute_path: filepath.join(audit_name, absolute_path),
     nodes:,
   ))
 }
+
+pub const empty_ast = AST(id: -1, absolute_path: "", nodes: [])
 
 pub type Node {
   Node(id: Int, source_map: SourceMap, node_type: String, nodes: List(Node))
@@ -1569,7 +1850,7 @@ pub fn find_contract_id(
   })
 }
 
-pub fn preprocess_source(
+pub fn preprocess_source_old(
   for page_path,
   with audit_metadata: audit_metadata.AuditMetaData,
 ) {
@@ -1772,22 +2053,6 @@ fn classify_line(line_text) {
 pub fn style_license_line(line_text) {
   html.span([attribute.class("comment")], [html.text(line_text)])
   |> element.to_string
-}
-
-pub fn style_pragma_line(line_text) {
-  let solidity_version =
-    line_text
-    // Remove "pragma solidity "
-    |> string_drop_start(16)
-    // Remove ";"
-    |> string_drop_end(1)
-
-  html.span([attribute.class("keyword")], [html.text("pragma solidity")])
-  |> element.to_string
-  <> " "
-  <> html.span([attribute.class("number")], [html.text(solidity_version)])
-  |> element.to_string
-  <> ";"
 }
 
 pub fn process_import_line(
@@ -2115,7 +2380,7 @@ pub fn style_code_tokens(line_text) {
 
   let assert Ok(keyword_regex) =
     regexp.from_string(
-      "\\b(constructor|contract|fallback|override|mapping|immutable|interface|constant|library|abstract|event|error|require|revert|using|for|emit|function|if|else|returns|return|memory|calldata|public|private|external|view|pure|payable|internal|import|enum|struct|storage|is)\\b",
+      "\\b(constructor|contract|fallback|indexed|override|mapping|immutable|interface|constant|library|abstract|event|error|require|revert|using|for|emit|function|if|else|returns|return|memory|calldata|public|private|external|view|pure|payable|internal|import|enum|struct|storage|is)\\b",
     )
 
   let styled_line =

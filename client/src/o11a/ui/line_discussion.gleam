@@ -50,20 +50,17 @@ pub fn component() {
               use topic_id <- decode.field("topic_id", decode.string)
               use topic_title <- decode.field("topic_title", decode.string)
               use line_number <- decode.field("line_number", decode.int)
-              use reference <- decode.field(
-                "reference",
-                decode.optional(decode.string),
-              )
-              decode.success(#(topic_id, topic_title, line_number, reference))
+              use is_reference <- decode.field("is_reference", decode.bool)
+              decode.success(#(topic_id, topic_title, line_number, is_reference))
             }
 
             case json.parse(data, decoder) {
-              Ok(#(topic_id, topic_title, line_number, reference)) ->
+              Ok(#(topic_id, topic_title, line_number, is_reference)) ->
                 Ok(ServerSetDiscussionData(
                   topic_id:,
                   topic_title:,
                   line_number:,
-                  reference:,
+                  is_reference:,
                 ))
               Error(..) ->
                 Error([dynamic.DecodeError("dsc-data", string.inspect(dy), [])])
@@ -88,7 +85,7 @@ pub fn component() {
 
 pub type Model {
   Model(
-    reference: Option(String),
+    is_reference: Bool,
     show_reference_discussion: Bool,
     user_name: String,
     line_number: Int,
@@ -118,7 +115,7 @@ pub type ActiveThread {
 fn init(_) -> #(Model, effect.Effect(Msg)) {
   #(
     Model(
-      reference: None,
+      is_reference: False,
       show_reference_discussion: False,
       user_name: "guest",
       line_number: 0,
@@ -143,7 +140,7 @@ pub type Msg {
     topic_id: String,
     topic_title: String,
     line_number: Int,
-    reference: Option(String),
+    is_reference: Bool,
   )
   ServerUpdatedNotes(dict.Dict(String, List(computed_note.ComputedNote)))
   UserWroteNote(String)
@@ -169,10 +166,15 @@ pub type Msg {
 
 fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
-    ServerSetDiscussionData(topic_id:, topic_title:, line_number:, reference:) -> #(
+    ServerSetDiscussionData(
+      topic_id:,
+      topic_title:,
+      line_number:,
+      is_reference:,
+    ) -> #(
       Model(
         ..model,
-        reference:,
+        is_reference:,
         topic_id:,
         topic_title:,
         line_number:,
@@ -427,7 +429,7 @@ fn view(model: Model) -> element.Element(Msg) {
   io.println("Rendering line discussion " <> model.topic_title)
 
   html.div([attribute.id("line-discussion-overlay")], [
-    case option.is_some(model.reference) && !model.show_reference_discussion {
+    case model.is_reference && !model.show_reference_discussion {
       True ->
         element.fragment([
           html.div([attribute.class("overlay p-[.5rem]")], [
@@ -541,7 +543,7 @@ fn thread_header_view(model: Model) {
         ],
         [
           html.span([attribute.class("pt-[.1rem] underline")], [
-            case option.is_some(model.reference) {
+            case model.is_reference {
               True ->
                 html.a([attribute.href("/" <> model.topic_id)], [
                   html.text(model.topic_title),
@@ -550,7 +552,7 @@ fn thread_header_view(model: Model) {
             },
           ]),
           html.div([], [
-            case option.is_some(model.reference) {
+            case model.is_reference {
               True ->
                 html.button(
                   [
