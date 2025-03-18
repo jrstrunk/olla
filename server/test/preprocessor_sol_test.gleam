@@ -36,6 +36,26 @@ pub fn style_code_tokens_number_test() {
   )
 }
 
+pub fn consume_line_over_test() {
+  preprocessor_sol.consume_line("hello world", for: 12)
+  |> should.equal(#("hello world", 12, "", False))
+}
+
+pub fn consume_line_under_test() {
+  preprocessor_sol.consume_line("hello world", for: 5)
+  |> should.equal(#("hello", 5, " world", False))
+}
+
+pub fn consume_line_newline_test() {
+  preprocessor_sol.consume_line("hello\nworld\nagain", for: 20)
+  |> should.equal(#("hello", 6, "world\nagain", True))
+}
+
+pub fn consume_only_newline_test() {
+  preprocessor_sol.consume_line("\n", for: 1)
+  |> should.equal(#("", 1, "", True))
+}
+
 const src = "// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 

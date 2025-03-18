@@ -1,5 +1,6 @@
 import filepath
 import given
+import gleam/bit_array
 import gleam/bool
 import gleam/dict
 import gleam/dynamic/decode
@@ -19,6 +20,92 @@ import o11a/audit_metadata
 import o11a/config
 import simplifile
 import snag
+
+pub fn preprocess_source2(
+  source source,
+  ast ast: AST,
+  declarations declarations: dict.Dict(Int, NodeDeclaration),
+) {
+  list.scan(ast.nodes, #(0, source, "", []), fn(source_data, node) {
+    let #(total_consumed_count, rest, current_line, processed) = source_data
+
+    case node {
+      _ -> {
+        let gap_to_consume = node.source_map.start - total_consumed_count
+
+        case gap_to_consume > 0 {
+          True -> {
+            let #(gap_tokens, consumed_count, rest, reached_newline) =
+              consume_line(rest, for: gap_to_consume)
+
+            let total_consumed_count = total_consumed_count + consumed_count
+
+            case reached_newline {
+              True -> {
+                #(total_consumed_count, rest, "", [
+                  string.append(current_line, gap_tokens),
+                  ..processed
+                ])
+              }
+              False -> {
+                let #(node_tokens, left_to_consume, rest, reached_newline) =
+                  consume_line(rest, for: node.source_map.length)
+
+                todo
+              }
+            }
+          }
+          False -> {
+            let #(node_tokens, left_to_consume, rest, reached_newline) =
+              consume_line(
+                rest,
+                for: get_source_map_end(node.source_map) - total_consumed_count,
+              )
+
+            todo
+          }
+        }
+      }
+    }
+  })
+  |> Ok
+}
+
+/// Consumes a line of text until a newline character, at which point
+/// it destroys the newline, and returns the consumed line, the number
+/// of characters consumed, and the remaining source
+pub fn consume_line(line, for length) {
+  let #(consumed, consumed_count, rest, reached_newline) =
+    do_consume_line(line |> bit_array.from_string, length, <<>>, 0)
+
+  let assert Ok(consumed) = bit_array.to_string(consumed)
+  let assert Ok(rest) = bit_array.to_string(rest)
+
+  #(consumed, consumed_count, rest, reached_newline)
+}
+
+fn do_consume_line(
+  line: BitArray,
+  length: Int,
+  consumed: BitArray,
+  consumed_count: Int,
+) {
+  case consumed_count >= length {
+    True -> #(consumed, consumed_count, line, False)
+    False ->
+      case line {
+        <<"\n":utf8, rest:bits>> -> #(consumed, consumed_count + 1, rest, True)
+        <<ch:8, rest:bits>> ->
+          do_consume_line(
+            rest,
+            length,
+            bit_array.append(consumed, <<ch>>),
+            consumed_count + 1,
+          )
+        _ -> #(consumed, consumed_count, line, False)
+      }
+  }
+}
 
 pub fn process_asts(asts: List(#(String, AST)), audit_name: String) {
   list.map(asts, fn(ast_data) {
@@ -59,6 +146,23 @@ pub fn process_asts(asts: List(#(String, AST)), audit_name: String) {
     #(source_file, audit_metadata.SourceFileMetaData(imports:, contracts:))
   })
   |> dict.from_list
+}
+
+pub fn linearize_nodes(ast: AST) {
+  list.fold(ast.nodes, [], fn(nodes, node) { do_linearize_nodes(nodes, node) })
+}
+
+pub type LinearNode {
+  LinearNode(id: Int, source_map: SourceMap, node_type: String, name: String)
+}
+
+fn do_linearize_nodes(nodes: List(Node), node: Node) {
+  case node {
+    Node(nodes:, ..) -> do_linearize_nodes(nodes, node)
+    NamedNode(nodes:, ..) -> do_linearize_nodes(nodes, node)
+    ImportDirectiveNode(..) -> todo
+    _ -> todo
+  }
 }
 
 pub type NodeDeclaration {
@@ -115,7 +219,7 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
         do_enumerate_node_declarations(declarations, node, parent)
       })
     }
-    ImportDirectiveNode(..) -> declarations
+    ImportDirectiveNode(..) | StructuredDocumentationNode(..) -> declarations
     ContractDefinitionNode(id:, name:, nodes:, contract_kind:, ..) -> {
       let title =
         audit_metadata.contract_kind_to_string(contract_kind) <> " " <> name
@@ -170,7 +274,7 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
 
       case body {
         Some(body) ->
-          do_enumerate_block_declarations(declarations, body, function_id)
+          do_enumerate_node_declarations(declarations, body, function_id)
         option.None -> declarations
       }
     }
@@ -233,22 +337,14 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
         NodeDeclaration(title:, topic_id: parent <> ":" <> name, references: []),
       )
     }
-  }
-}
-
-fn do_enumerate_block_declarations(declarations, block, parent) {
-  let BlockNode(nodes:, statements:, ..) = block
-
-  list.fold(nodes, declarations, fn(declarations, node) {
-    do_enumerate_node_declarations(declarations, node, parent)
-  })
-  |> list.fold(statements, _, fn(declarations, statement) {
-    do_enumerate_statement_declarations(declarations, statement, parent)
-  })
-}
-
-fn do_enumerate_statement_declarations(declarations, statement, parent) {
-  case statement {
+    BlockNode(nodes:, statements:, ..) -> {
+      list.fold(nodes, declarations, fn(declarations, node) {
+        do_enumerate_node_declarations(declarations, node, parent)
+      })
+      |> list.fold(statements, _, fn(declarations, statement) {
+        do_enumerate_node_declarations(declarations, statement, parent)
+      })
+    }
     VariableDeclarationStatementNode(declarations: declaration_nodes, ..) ->
       list.fold(declaration_nodes, declarations, fn(declarations, declaration) {
         case declaration {
@@ -259,11 +355,11 @@ fn do_enumerate_statement_declarations(declarations, statement, parent) {
       })
     IfStatementNode(true_body:, false_body:, ..) -> {
       let declarations =
-        do_enumerate_block_declarations(declarations, true_body, parent)
+        do_enumerate_node_declarations(declarations, true_body, parent)
 
       case false_body {
         Some(false_body) ->
-          do_enumerate_block_declarations(declarations, false_body, parent)
+          do_enumerate_node_declarations(declarations, false_body, parent)
         option.None -> declarations
       }
     }
@@ -276,12 +372,18 @@ pub fn count_references(declarations, in ast: AST, for audit_name) {
     do_count_node_references(
       declarations,
       node,
+      "",
       filepath.join(audit_name, ast.absolute_path),
     )
   })
 }
 
-fn do_count_node_references(declarations, node: Node, parent: String) {
+fn do_count_node_references(
+  declarations,
+  node: Node,
+  parent_title: String,
+  parent_id: String,
+) {
   case node {
     Node(nodes:, ..)
     | NamedNode(nodes:, ..)
@@ -289,24 +391,32 @@ fn do_count_node_references(declarations, node: Node, parent: String) {
     | ErrorDefinitionNode(nodes:, ..)
     | EventDefinitionNode(nodes:, ..) ->
       list.fold(nodes, declarations, fn(declarations, node) {
-        do_count_node_references(declarations, node, parent)
+        do_count_node_references(declarations, node, parent_title, parent_id)
       })
 
-    ImportDirectiveNode(..) | VariableDeclarationNode(..) -> declarations
+    ImportDirectiveNode(..)
+    | VariableDeclarationNode(..)
+    | StructuredDocumentationNode(..) -> declarations
 
     ContractDefinitionNode(nodes:, base_contracts:, name:, contract_kind:, ..) -> {
       let title =
         audit_metadata.contract_kind_to_string(contract_kind) <> " " <> name
-      let contract_id = parent <> "#" <> name
+      let contract_id = parent_id <> "#" <> name
 
       list.fold(nodes, declarations, fn(declarations, base_contract) {
-        do_count_node_references(declarations, base_contract, contract_id)
+        do_count_node_references(
+          declarations,
+          base_contract,
+          title,
+          contract_id,
+        )
       })
       |> list.fold(base_contracts, _, fn(declarations, base_contract) {
-        add_reference(
+        do_count_node_references(
           declarations,
-          base_contract.reference_id,
-          NodeReference(title:, topic_id: contract_id),
+          base_contract,
+          title,
+          contract_id,
         )
       })
     }
@@ -328,7 +438,7 @@ fn do_count_node_references(declarations, node: Node, parent: String) {
         audit_metadata.Receive -> "receive function"
       }
       let function_id =
-        parent
+        parent_id
         <> ":"
         <> case function_kind {
           audit_metadata.Function -> name
@@ -339,54 +449,37 @@ fn do_count_node_references(declarations, node: Node, parent: String) {
 
       let declarations =
         list.fold(nodes, declarations, fn(declarations, node) {
-          do_count_node_references(declarations, node, function_id)
+          do_count_node_references(declarations, node, title, function_id)
         })
-        |> do_count_node_references(parameters, function_id)
-        |> do_count_node_references(return_parameters, function_id)
+        |> do_count_node_references(parameters, title, function_id)
+        |> do_count_node_references(return_parameters, title, function_id)
         |> list.fold(modifiers, _, fn(declarations, modifier) {
-          add_reference(
-            declarations,
-            modifier.reference_id,
-            NodeReference(title:, topic_id: function_id),
-          )
+          do_count_node_references(declarations, modifier, title, function_id)
         })
 
       case body {
         Some(body) ->
-          do_count_block_references(declarations, body, title, function_id)
+          do_count_node_references(declarations, body, title, function_id)
         option.None -> declarations
       }
     }
-  }
-}
-
-fn do_count_block_references(declarations, block, parent_title, parent_id) {
-  let BlockNode(nodes:, statements:, ..) = block
-
-  list.fold(nodes, declarations, fn(declarations, node) {
-    do_count_node_references(declarations, node, parent_id)
-  })
-  |> list.fold(statements, _, fn(declarations, statement) {
-    do_count_statement_references(
-      declarations,
-      statement,
-      parent_title,
-      parent_id,
-    )
-  })
-}
-
-fn do_count_statement_references(
-  declarations,
-  statement,
-  parent_title,
-  parent_id,
-) {
-  case statement {
-    ExpressionStatementNode(expression:, ..) ->
+    BlockNode(nodes:, statements:, ..) -> {
+      list.fold(nodes, declarations, fn(declarations, node) {
+        do_count_node_references(declarations, node, parent_title, parent_id)
+      })
+      |> list.fold(statements, _, fn(declarations, statement) {
+        do_count_node_references(
+          declarations,
+          statement,
+          parent_title,
+          parent_id,
+        )
+      })
+    }
+    NodeStatementNode(expression:, ..) ->
       case expression {
         Some(expression) ->
-          do_count_expression_references(
+          do_count_node_references(
             declarations,
             expression,
             parent_title,
@@ -397,7 +490,7 @@ fn do_count_statement_references(
     EmitStatementNode(expression:, ..) ->
       case expression {
         Some(expression) ->
-          do_count_expression_references(
+          do_count_node_references(
             declarations,
             expression,
             parent_title,
@@ -409,23 +502,28 @@ fn do_count_statement_references(
       list.fold(declaration_nodes, declarations, fn(declarations, declaration) {
         case declaration {
           Some(declaration) ->
-            do_count_node_references(declarations, declaration, parent_id)
+            do_count_node_references(
+              declarations,
+              declaration,
+              parent_title,
+              parent_id,
+            )
           option.None -> declarations
         }
       })
     IfStatementNode(condition:, true_body:, false_body:, ..) -> {
       let declarations =
-        do_count_expression_references(
+        do_count_node_references(
           declarations,
           condition,
           parent_title,
           parent_id,
         )
-        |> do_count_block_references(true_body, parent_title, parent_id)
+        |> do_count_node_references(true_body, parent_title, parent_id)
 
       case false_body {
         Some(false_body) ->
-          do_count_block_references(
+          do_count_node_references(
             declarations,
             false_body,
             parent_title,
@@ -437,7 +535,7 @@ fn do_count_statement_references(
     RevertStatementNode(expression:, ..) ->
       case expression {
         Some(expression) ->
-          do_count_expression_references(
+          do_count_node_references(
             declarations,
             expression,
             parent_title,
@@ -445,20 +543,11 @@ fn do_count_statement_references(
           )
         option.None -> declarations
       }
-  }
-}
 
-fn do_count_expression_references(
-  declarations,
-  expression,
-  parent_title,
-  parent_id,
-) {
-  case expression {
     Expression(expression:, ..) ->
       case expression {
         Some(expression) ->
-          do_count_expression_references(
+          do_count_node_references(
             declarations,
             expression,
             parent_title,
@@ -470,7 +559,7 @@ fn do_count_expression_references(
     Identifier(reference_id:, expression:, ..) ->
       case expression {
         Some(expression) ->
-          do_count_expression_references(
+          do_count_node_references(
             declarations,
             expression,
             parent_title,
@@ -486,7 +575,7 @@ fn do_count_expression_references(
     FunctionCall(arguments:, expression:, ..) ->
       case expression {
         Some(expression) ->
-          do_count_expression_references(
+          do_count_node_references(
             declarations,
             expression,
             parent_title,
@@ -495,7 +584,7 @@ fn do_count_expression_references(
         option.None -> declarations
       }
       |> list.fold(arguments, _, fn(declarations, argument) {
-        do_count_expression_references(
+        do_count_node_references(
           declarations,
           argument,
           parent_title,
@@ -504,33 +593,25 @@ fn do_count_expression_references(
       })
 
     Assignment(left_hand_side:, right_hand_side:, ..) ->
-      do_count_expression_references(
+      do_count_node_references(
         declarations,
         left_hand_side,
         parent_title,
         parent_id,
       )
-      |> do_count_expression_references(
-        right_hand_side,
-        parent_title,
-        parent_id,
-      )
+      |> do_count_node_references(right_hand_side, parent_title, parent_id)
 
     BinaryOperation(left_expression:, right_expression:, ..) ->
-      do_count_expression_references(
+      do_count_node_references(
         declarations,
         left_expression,
         parent_title,
         parent_id,
       )
-      |> do_count_expression_references(
-        right_expression,
-        parent_title,
-        parent_id,
-      )
+      |> do_count_node_references(right_expression, parent_title, parent_id)
 
     UnaryOperation(expression:, ..) ->
-      do_count_expression_references(
+      do_count_node_references(
         declarations,
         expression,
         parent_title,
@@ -538,13 +619,35 @@ fn do_count_expression_references(
       )
 
     IndexAccess(base:, index:, ..) ->
-      do_count_expression_references(
+      do_count_node_references(declarations, base, parent_title, parent_id)
+      |> do_count_node_references(index, parent_title, parent_id)
+
+    Modifier(arguments:, modifier_name:, ..) ->
+      case arguments {
+        Some(arguments) ->
+          list.fold(arguments, declarations, fn(declarations, argument) {
+            do_count_node_references(
+              declarations,
+              argument,
+              parent_title,
+              parent_id,
+            )
+          })
+        option.None -> declarations
+      }
+      |> do_count_node_references(modifier_name, parent_title, parent_id)
+    IdentifierPath(reference_id:, ..) ->
+      add_reference(
         declarations,
-        base,
-        parent_title,
-        parent_id,
+        reference_id,
+        NodeReference(title: parent_title, topic_id: parent_id),
       )
-      |> do_count_expression_references(index, parent_title, parent_id)
+    BaseContract(reference_id:, ..) ->
+      add_reference(
+        declarations,
+        reference_id,
+        NodeReference(title: parent_title, topic_id: parent_id),
+      )
   }
 }
 
@@ -641,7 +744,7 @@ fn ast_decoder(for audit_name) -> decode.Decoder(AST) {
 }
 
 pub type Node {
-  Node(id: Int, node_type: String, source_map: SourceMap, nodes: List(Node))
+  Node(id: Int, source_map: SourceMap, node_type: String, nodes: List(Node))
   NamedNode(
     id: Int,
     source_map: SourceMap,
@@ -661,7 +764,7 @@ pub type Node {
     name: String,
     name_source_map: SourceMap,
     contract_kind: audit_metadata.ContractKind,
-    base_contracts: List(BaseContract),
+    base_contracts: List(Node),
     nodes: List(Node),
   )
   VariableDeclarationNode(
@@ -696,17 +799,104 @@ pub type Node {
     name_source_map: SourceMap,
     function_kind: audit_metadata.FunctionKind,
     parameters: Node,
-    modifiers: List(Modifier),
+    modifiers: List(Node),
     return_parameters: Node,
     nodes: List(Node),
-    body: option.Option(BlockNode),
-    documentation: option.Option(FunctionDocumentation),
+    body: option.Option(Node),
+    documentation: option.Option(Node),
   )
   ParameterListNode(id: Int, source_map: SourceMap, parameters: List(Node))
+  BlockNode(
+    id: Int,
+    source_map: SourceMap,
+    nodes: List(Node),
+    statements: List(Node),
+    expression: option.Option(Node),
+  )
+  StructuredDocumentationNode(id: Int, source_map: SourceMap, text: String)
+  NodeStatementNode(
+    id: Int,
+    source_map: SourceMap,
+    expression: option.Option(Node),
+  )
+  EmitStatementNode(
+    id: Int,
+    source_map: SourceMap,
+    expression: option.Option(Node),
+  )
+  VariableDeclarationStatementNode(
+    id: Int,
+    source_map: SourceMap,
+    declarations: List(option.Option(Node)),
+  )
+  IfStatementNode(
+    id: Int,
+    source_map: SourceMap,
+    condition: Node,
+    true_body: Node,
+    false_body: option.Option(Node),
+  )
+  RevertStatementNode(
+    id: Int,
+    source_map: SourceMap,
+    expression: option.Option(Node),
+  )
+  Expression(id: Int, source_map: SourceMap, expression: option.Option(Node))
+  Identifier(
+    id: Int,
+    source_map: SourceMap,
+    name: String,
+    reference_id: Int,
+    expression: option.Option(Node),
+  )
+  FunctionCall(
+    id: Int,
+    source_map: SourceMap,
+    arguments: List(Node),
+    expression: option.Option(Node),
+  )
+  Assignment(
+    id: Int,
+    source_map: SourceMap,
+    left_hand_side: Node,
+    right_hand_side: Node,
+  )
+  BinaryOperation(
+    id: Int,
+    source_map: SourceMap,
+    left_expression: Node,
+    right_expression: Node,
+    operator: String,
+  )
+  UnaryOperation(
+    id: Int,
+    source_map: SourceMap,
+    expression: Node,
+    operator: String,
+  )
+  IndexAccess(id: Int, source_map: SourceMap, base: Node, index: Node)
+  Modifier(
+    id: Int,
+    source_map: SourceMap,
+    kind: String,
+    modifier_name: Node,
+    arguments: option.Option(List(Node)),
+  )
+  IdentifierPath(
+    id: Int,
+    source_map: SourceMap,
+    name: String,
+    reference_id: Int,
+  )
+  BaseContract(id: Int, source_map: SourceMap, name: String, reference_id: Int)
 }
 
 pub type SourceMap {
   SourceMap(start: Int, length: Int)
+}
+
+fn get_source_map_end(source_map: SourceMap) {
+  source_map.start + source_map.length
 }
 
 fn source_map_from_string(source_map_string) {
@@ -724,58 +914,6 @@ fn source_map_from_string(source_map_string) {
     _ -> SourceMap(-1, -1)
     // panic as { "Failed to split source map string" <> source_map_string }
   }
-}
-
-pub type BlockNode {
-  BlockNode(
-    id: Int,
-    source_map: SourceMap,
-    nodes: List(Node),
-    statements: List(StatementNode),
-    expression: option.Option(Expression),
-  )
-}
-
-fn block_node_decoder() -> decode.Decoder(BlockNode) {
-  use id <- decode.field("id", decode.int)
-  echo id
-  use src <- decode.field("src", decode.string)
-  use nodes <- decode.optional_field("nodes", [], decode.list(node_decoder()))
-
-  use statements <- decode.optional_field(
-    "statements",
-    [],
-    decode.list(statement_node_decoder()),
-  )
-  use expression <- decode.optional_field(
-    "expression",
-    option.None,
-    decode.optional(expression_decoder()),
-  )
-  decode.success(BlockNode(
-    id:,
-    source_map: source_map_from_string(src),
-    nodes:,
-    statements:,
-    expression:,
-  ))
-}
-
-pub type FunctionDocumentation {
-  FunctionDocumentation(id: Int, source_map: SourceMap, text: String)
-}
-
-fn function_documentation_decoder() -> decode.Decoder(FunctionDocumentation) {
-  use id <- decode.field("id", decode.int)
-  echo id
-  use src <- decode.field("src", decode.string)
-
-  use text <- decode.field("text", decode.string)
-  decode.success(FunctionDocumentation(
-    id:,
-    source_map: source_map_from_string(src),
-    text:,
-  ))
 }
 
 fn node_decoder() -> decode.Decoder(Node) {
@@ -805,7 +943,7 @@ fn node_decoder() -> decode.Decoder(Node) {
       use abstract <- decode.field("abstract", decode.bool)
       use base_contracts <- decode.field(
         "baseContracts",
-        decode.list(base_contract_decoder()),
+        decode.list(node_decoder()),
       )
       use nodes <- decode.optional_field(
         "nodes",
@@ -900,10 +1038,7 @@ fn node_decoder() -> decode.Decoder(Node) {
       use name_location <- decode.field("nameLocation", decode.string)
       use kind <- decode.field("kind", decode.string)
       use parameters <- decode.field("parameters", node_decoder())
-      use modifiers <- decode.field(
-        "modifiers",
-        decode.list(modifier_decoder()),
-      )
+      use modifiers <- decode.field("modifiers", decode.list(node_decoder()))
       use return_parameters <- decode.field("returnParameters", node_decoder())
       use nodes <- decode.optional_field(
         "nodes",
@@ -913,12 +1048,12 @@ fn node_decoder() -> decode.Decoder(Node) {
       use body <- decode.optional_field(
         "body",
         option.None,
-        decode.optional(block_node_decoder()),
+        decode.optional(node_decoder()),
       )
       use documentation <- decode.optional_field(
         "documentation",
         option.None,
-        decode.optional(function_documentation_decoder()),
+        decode.optional(node_decoder()),
       )
       decode.success(FunctionDefinitionNode(
         id:,
@@ -945,80 +1080,45 @@ fn node_decoder() -> decode.Decoder(Node) {
         parameters:,
       ))
     }
-    _ -> {
+    "Block" -> {
       use id <- decode.field("id", decode.int)
-      echo id
       use src <- decode.field("src", decode.string)
-      use node_type <- decode.field("nodeType", decode.string)
       use nodes <- decode.optional_field(
         "nodes",
         [],
         decode.list(node_decoder()),
       )
-      use name <- decode.optional_field(
-        "name",
-        option.None,
-        decode.optional(decode.string),
+
+      use statements <- decode.optional_field(
+        "statements",
+        [],
+        decode.list(node_decoder()),
       )
-      use name_location <- decode.optional_field(
-        "nameLocation",
+      use expression <- decode.optional_field(
+        "expression",
         option.None,
-        decode.optional(decode.string),
+        decode.optional(node_decoder()),
       )
-      case name, name_location {
-        option.Some(name), option.Some(name_location) ->
-          decode.success(NamedNode(
-            id:,
-            source_map: source_map_from_string(src),
-            name:,
-            name_source_map: source_map_from_string(name_location),
-            nodes:,
-          ))
-        _, _ ->
-          decode.success(Node(
-            id:,
-            source_map: source_map_from_string(src),
-            node_type:,
-            nodes:,
-          ))
-      }
+      decode.success(BlockNode(
+        id:,
+        source_map: source_map_from_string(src),
+        nodes:,
+        statements:,
+        expression:,
+      ))
     }
-  }
-}
+    "StructuredDocumentation" -> {
+      use id <- decode.field("id", decode.int)
+      echo id
+      use src <- decode.field("src", decode.string)
 
-pub type StatementNode {
-  ExpressionStatementNode(
-    id: Int,
-    source_map: SourceMap,
-    expression: option.Option(Expression),
-  )
-  EmitStatementNode(
-    id: Int,
-    source_map: SourceMap,
-    expression: option.Option(Expression),
-  )
-  VariableDeclarationStatementNode(
-    id: Int,
-    source_map: SourceMap,
-    declarations: List(option.Option(Node)),
-  )
-  IfStatementNode(
-    id: Int,
-    source_map: SourceMap,
-    condition: Expression,
-    true_body: BlockNode,
-    false_body: option.Option(BlockNode),
-  )
-  RevertStatementNode(
-    id: Int,
-    source_map: SourceMap,
-    expression: option.Option(Expression),
-  )
-}
-
-fn statement_node_decoder() -> decode.Decoder(StatementNode) {
-  use variant <- decode.field("nodeType", decode.string)
-  case variant {
+      use text <- decode.field("text", decode.string)
+      decode.success(StructuredDocumentationNode(
+        id:,
+        source_map: source_map_from_string(src),
+        text:,
+      ))
+    }
     "EmitStatement" -> {
       use id <- decode.field("id", decode.int)
       echo id
@@ -1026,7 +1126,7 @@ fn statement_node_decoder() -> decode.Decoder(StatementNode) {
       use expression <- decode.optional_field(
         "expression",
         option.None,
-        decode.optional(expression_decoder()),
+        decode.optional(node_decoder()),
       )
       decode.success(EmitStatementNode(
         id:,
@@ -1052,12 +1152,12 @@ fn statement_node_decoder() -> decode.Decoder(StatementNode) {
       use id <- decode.field("id", decode.int)
       echo id
       use src <- decode.field("src", decode.string)
-      use condition <- decode.field("condition", expression_decoder())
-      use true_body <- decode.field("trueBody", block_node_decoder())
+      use condition <- decode.field("condition", node_decoder())
+      use true_body <- decode.field("trueBody", node_decoder())
       use false_body <- decode.optional_field(
         "falseBody",
         option.None,
-        decode.optional(block_node_decoder()),
+        decode.optional(node_decoder()),
       )
       decode.success(IfStatementNode(
         id:,
@@ -1074,7 +1174,7 @@ fn statement_node_decoder() -> decode.Decoder(StatementNode) {
       use expression <- decode.optional_field(
         "errorCall",
         option.None,
-        decode.optional(expression_decoder()),
+        decode.optional(node_decoder()),
       )
       decode.success(RevertStatementNode(
         id:,
@@ -1082,86 +1182,30 @@ fn statement_node_decoder() -> decode.Decoder(StatementNode) {
         expression:,
       ))
     }
-    _ -> {
+    "ExpressionStatement" -> {
       use id <- decode.field("id", decode.int)
       echo id
       use src <- decode.field("src", decode.string)
       use expression <- decode.optional_field(
         "expression",
         option.None,
-        decode.optional(expression_decoder()),
+        decode.optional(node_decoder()),
       )
-      decode.success(ExpressionStatementNode(
+      decode.success(NodeStatementNode(
         id:,
         source_map: source_map_from_string(src),
         expression:,
       ))
     }
-  }
-}
-
-pub type Expression {
-  Expression(
-    id: Int,
-    source_map: SourceMap,
-    expression: option.Option(Expression),
-  )
-  Identifier(
-    id: Int,
-    source_map: SourceMap,
-    name: String,
-    reference_id: Int,
-    expression: option.Option(Expression),
-  )
-  FunctionCall(
-    id: Int,
-    source_map: SourceMap,
-    arguments: List(Expression),
-    expression: option.Option(Expression),
-  )
-  Assignment(
-    id: Int,
-    source_map: SourceMap,
-    left_hand_side: Expression,
-    right_hand_side: Expression,
-  )
-  BinaryOperation(
-    id: Int,
-    source_map: SourceMap,
-    left_expression: Expression,
-    right_expression: Expression,
-    operator: String,
-  )
-  UnaryOperation(
-    id: Int,
-    source_map: SourceMap,
-    expression: Expression,
-    operator: String,
-  )
-  IndexAccess(
-    id: Int,
-    source_map: SourceMap,
-    base: Expression,
-    index: Expression,
-  )
-}
-
-fn expression_decoder() -> decode.Decoder(Expression) {
-  use <- decode.recursive
-  use variant <- decode.field("nodeType", decode.string)
-  case variant {
     "FunctionCall" -> {
       use id <- decode.field("id", decode.int)
       echo id
       use src <- decode.field("src", decode.string)
-      use arguments <- decode.field(
-        "arguments",
-        decode.list(expression_decoder()),
-      )
+      use arguments <- decode.field("arguments", decode.list(node_decoder()))
       use expression <- decode.optional_field(
         "expression",
         option.None,
-        decode.optional(expression_decoder()),
+        decode.optional(node_decoder()),
       )
       decode.success(FunctionCall(
         id:,
@@ -1174,8 +1218,8 @@ fn expression_decoder() -> decode.Decoder(Expression) {
       use id <- decode.field("id", decode.int)
       echo id
       use src <- decode.field("src", decode.string)
-      use left_hand_side <- decode.field("leftHandSide", expression_decoder())
-      use right_hand_side <- decode.field("rightHandSide", expression_decoder())
+      use left_hand_side <- decode.field("leftHandSide", node_decoder())
+      use right_hand_side <- decode.field("rightHandSide", node_decoder())
       decode.success(Assignment(
         id:,
         source_map: source_map_from_string(src),
@@ -1187,14 +1231,8 @@ fn expression_decoder() -> decode.Decoder(Expression) {
       use id <- decode.field("id", decode.int)
       echo id
       use src <- decode.field("src", decode.string)
-      use left_expression <- decode.field(
-        "leftExpression",
-        expression_decoder(),
-      )
-      use right_expression <- decode.field(
-        "rightExpression",
-        expression_decoder(),
-      )
+      use left_expression <- decode.field("leftExpression", node_decoder())
+      use right_expression <- decode.field("rightExpression", node_decoder())
       use operator <- decode.field("operator", decode.string)
       decode.success(BinaryOperation(
         id:,
@@ -1208,7 +1246,7 @@ fn expression_decoder() -> decode.Decoder(Expression) {
       use id <- decode.field("id", decode.int)
       echo id
       use src <- decode.field("src", decode.string)
-      use expression <- decode.field("subExpression", expression_decoder())
+      use expression <- decode.field("subExpression", node_decoder())
       use operator <- decode.field("operator", decode.string)
       decode.success(UnaryOperation(
         id:,
@@ -1221,8 +1259,8 @@ fn expression_decoder() -> decode.Decoder(Expression) {
       use id <- decode.field("id", decode.int)
       echo id
       use src <- decode.field("src", decode.string)
-      use base <- decode.field("baseExpression", expression_decoder())
-      use index <- decode.field("indexExpression", expression_decoder())
+      use base <- decode.field("baseExpression", node_decoder())
+      use index <- decode.field("indexExpression", node_decoder())
       decode.success(IndexAccess(
         id:,
         source_map: source_map_from_string(src),
@@ -1232,7 +1270,6 @@ fn expression_decoder() -> decode.Decoder(Expression) {
     }
     "Identifier" -> {
       use id <- decode.field("id", decode.int)
-      echo id
       use src <- decode.field("src", decode.string)
       use name <- decode.field("name", decode.string)
       use reference_id <- decode.field("referencedDeclaration", decode.int)
@@ -1244,123 +1281,93 @@ fn expression_decoder() -> decode.Decoder(Expression) {
         expression: option.None,
       ))
     }
-    _ -> {
+    "ModifierInvocation" -> {
+      use id <- decode.field("id", decode.int)
+      use src <- decode.field("src", decode.string)
+      use kind <- decode.field("kind", decode.string)
+      use modifier_name <- decode.field("modifierName", node_decoder())
+      use arguments <- decode.optional_field(
+        "arguments",
+        option.None,
+        decode.optional(decode.list(node_decoder())),
+      )
+      decode.success(Modifier(
+        id:,
+        source_map: source_map_from_string(src),
+        modifier_name:,
+        kind:,
+        arguments:,
+      ))
+    }
+    "InheritanceSpecifier" -> {
       use id <- decode.field("id", decode.int)
       echo id
       use src <- decode.field("src", decode.string)
+      use name <- decode.subfield(["baseName", "name"], decode.string)
+      use reference_id <- decode.subfield(
+        ["baseName", "referencedDeclaration"],
+        decode.int,
+      )
+      decode.success(BaseContract(
+        id:,
+        source_map: source_map_from_string(src),
+        name:,
+        reference_id:,
+      ))
+    }
+    _ -> {
+      use id <- decode.field("id", decode.int)
+      use src <- decode.field("src", decode.string)
+      use node_type <- decode.field("nodeType", decode.string)
+      use nodes <- decode.optional_field(
+        "nodes",
+        [],
+        decode.list(node_decoder()),
+      )
+      use name <- decode.optional_field(
+        "name",
+        option.None,
+        decode.optional(decode.string),
+      )
+      use name_location <- decode.optional_field(
+        "nameLocation",
+        option.None,
+        decode.optional(decode.string),
+      )
       use expression <- decode.optional_field(
         "expression",
         option.None,
-        decode.optional(expression_decoder()),
+        decode.optional(node_decoder()),
       )
-      decode.success(Expression(
-        id:,
-        source_map: source_map_from_string(src),
-        expression:,
-      ))
+
+      case expression {
+        Some(expression) ->
+          decode.success(Expression(
+            id:,
+            source_map: source_map_from_string(src),
+            expression: Some(expression),
+          ))
+        option.None ->
+          case name, name_location {
+            option.Some(name), option.Some(name_location) ->
+              decode.success(NamedNode(
+                id:,
+                source_map: source_map_from_string(src),
+                name:,
+                name_source_map: source_map_from_string(name_location),
+                nodes:,
+              ))
+            _, _ ->
+              decode.success(Node(
+                id:,
+                source_map: source_map_from_string(src),
+                node_type:,
+                nodes:,
+              ))
+          }
+      }
     }
   }
-}
-
-pub type Modifier {
-  BaseContructorSpecifier(
-    id: Int,
-    source_map: SourceMap,
-    name: String,
-    name_source_map: SourceMap,
-    reference_id: Int,
-    arguments: option.Option(List(Expression)),
-  )
-  ModifierInvocation(
-    id: Int,
-    source_map: SourceMap,
-    name: String,
-    name_source_map: SourceMap,
-    reference_id: Int,
-    arguments: option.Option(List(Expression)),
-  )
-}
-
-fn modifier_decoder() -> decode.Decoder(Modifier) {
-  use variant <- decode.field("kind", decode.string)
-  case variant {
-    "baseConstructorSpecifier" -> {
-      use id <- decode.field("id", decode.int)
-      echo id
-      use src <- decode.field("src", decode.string)
-      use name <- decode.subfield(["modifierName", "name"], decode.string)
-      use name_location <- decode.subfield(
-        ["modifierName", "src"],
-        decode.string,
-      )
-      use reference_id <- decode.subfield(
-        ["modifierName", "referencedDeclaration"],
-        decode.int,
-      )
-      use arguments <- decode.optional_field(
-        "arguments",
-        option.None,
-        decode.optional(decode.list(expression_decoder())),
-      )
-      decode.success(BaseContructorSpecifier(
-        id:,
-        source_map: source_map_from_string(src),
-        name:,
-        name_source_map: source_map_from_string(name_location),
-        reference_id:,
-        arguments:,
-      ))
-    }
-    "modifierInvocation" -> {
-      use id <- decode.field("id", decode.int)
-      echo id
-      use src <- decode.field("src", decode.string)
-      use name <- decode.subfield(["modifierName", "name"], decode.string)
-      use name_location <- decode.subfield(
-        ["modifierName", "src"],
-        decode.string,
-      )
-      use reference_id <- decode.subfield(
-        ["modifierName", "referencedDeclaration"],
-        decode.int,
-      )
-      use arguments <- decode.optional_field(
-        "arguments",
-        option.None,
-        decode.optional(decode.list(expression_decoder())),
-      )
-      decode.success(ModifierInvocation(
-        id:,
-        source_map: source_map_from_string(src),
-        name:,
-        name_source_map: source_map_from_string(name_location),
-        reference_id:,
-        arguments:,
-      ))
-    }
-    _ -> panic as "Invalid modifier type"
-  }
-}
-
-pub type BaseContract {
-  BaseContract(id: Int, source_map: SourceMap, name: String, reference_id: Int)
-}
-
-fn base_contract_decoder() -> decode.Decoder(BaseContract) {
-  use id <- decode.field("id", decode.int)
-  echo id
-  use src <- decode.field("src", decode.string)
-  use name <- decode.subfield(["baseName", "name"], decode.string)
-  use reference_id <- decode.subfield(
-    ["baseName", "referencedDeclaration"],
-    decode.int,
-  )
-  decode.success(BaseContract(
-    id:,
-    source_map: source_map_from_string(src),
-    name:,
-    reference_id:,
-  ))
 }
 
 pub fn find_contract_id(
