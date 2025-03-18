@@ -148,21 +148,144 @@ pub fn process_asts(asts: List(#(String, AST)), audit_name: String) {
   |> dict.from_list
 }
 
+/// Flattens all nodes into a list of leaf nodes that we are interested in
+/// for styling and other targeted purposes. The nodes are sorted by their
+/// source map start position.
 pub fn linearize_nodes(ast: AST) {
   list.fold(ast.nodes, [], fn(nodes, node) { do_linearize_nodes(nodes, node) })
+  |> list.sort(by: fn(a, b) {
+    int.compare(a.source_map.start, b.source_map.start)
+  })
 }
 
-pub type LinearNode {
-  LinearNode(id: Int, source_map: SourceMap, node_type: String, name: String)
-}
-
-fn do_linearize_nodes(nodes: List(Node), node: Node) {
+fn do_linearize_nodes(linearized_nodes: List(Node), node: Node) {
   case node {
-    Node(nodes:, ..) -> do_linearize_nodes(nodes, node)
-    NamedNode(nodes:, ..) -> do_linearize_nodes(nodes, node)
-    ImportDirectiveNode(..) -> todo
-    _ -> todo
+    Node(nodes:, ..) -> do_linearize_nodes_multi(linearized_nodes, nodes)
+    NamedNode(nodes:, ..) -> do_linearize_nodes_multi(linearized_nodes, nodes)
+    ImportDirectiveNode(..) -> {
+      [node, ..linearized_nodes]
+    }
+    Assignment(left_hand_side:, right_hand_side:, ..) ->
+      do_linearize_nodes(linearized_nodes, left_hand_side)
+      |> do_linearize_nodes(right_hand_side)
+    BaseContract(..) -> [node, ..linearized_nodes]
+    BinaryOperation(left_expression:, right_expression:, ..) ->
+      do_linearize_nodes(linearized_nodes, left_expression)
+      |> do_linearize_nodes(right_expression)
+    BlockNode(nodes:, statements:, expression:, ..) ->
+      case expression {
+        option.Some(node) -> do_linearize_nodes(nodes, node)
+        option.None -> nodes
+      }
+      |> do_linearize_nodes_multi(nodes)
+      |> do_linearize_nodes_multi(statements)
+    ContractDefinitionNode(base_contracts:, nodes:, ..) ->
+      [node, ..linearized_nodes]
+      |> do_linearize_nodes_multi(nodes)
+      |> do_linearize_nodes_multi(base_contracts)
+    EmitStatementNode(expression:, ..) ->
+      case expression {
+        option.Some(node) -> do_linearize_nodes(linearized_nodes, node)
+        option.None -> linearized_nodes
+      }
+    ErrorDefinitionNode(nodes:, ..) ->
+      [node, ..linearized_nodes] |> do_linearize_nodes_multi(nodes)
+    EventDefinitionNode(parameters:, nodes:, ..) ->
+      [node, ..linearized_nodes]
+      |> do_linearize_nodes_multi(nodes)
+      |> do_linearize_nodes(parameters)
+    Expression(expression:, ..) ->
+      case expression {
+        option.Some(node) -> do_linearize_nodes(linearized_nodes, node)
+        option.None -> linearized_nodes
+      }
+    FunctionCall(arguments:, expression:, ..) ->
+      case expression {
+        option.Some(node) -> do_linearize_nodes(linearized_nodes, node)
+        option.None -> linearized_nodes
+      }
+      |> do_linearize_nodes_multi(arguments)
+    FunctionDefinitionNode(
+      parameters:,
+      modifiers:,
+      return_parameters:,
+      nodes:,
+      body:,
+      ..,
+    ) ->
+      [node, ..linearized_nodes]
+      |> fn(linearized_nodes) {
+        case body {
+          option.Some(body) -> do_linearize_nodes(linearized_nodes, body)
+          option.None -> linearized_nodes
+        }
+      }
+      |> do_linearize_nodes_multi(nodes)
+      |> do_linearize_nodes(parameters)
+      |> do_linearize_nodes(return_parameters)
+      |> do_linearize_nodes_multi(modifiers)
+    Identifier(expression:, ..) ->
+      [node, ..linearized_nodes]
+      |> fn(linearized_nodes) {
+        case expression {
+          option.Some(exprssion) ->
+            do_linearize_nodes(linearized_nodes, exprssion)
+          option.None -> linearized_nodes
+        }
+      }
+    IdentifierPath(..) -> [node, ..linearized_nodes]
+    IfStatementNode(condition:, true_body:, false_body:, ..) ->
+      case false_body {
+        option.Some(false_body) ->
+          do_linearize_nodes(linearized_nodes, false_body)
+        option.None -> linearized_nodes
+      }
+      |> do_linearize_nodes(true_body)
+      |> do_linearize_nodes(condition)
+    IndexAccess(base:, index:, ..) ->
+      do_linearize_nodes(linearized_nodes, base) |> do_linearize_nodes(index)
+    Modifier(modifier_name:, arguments:, ..) ->
+      case arguments {
+        option.Some(arguments) ->
+          do_linearize_nodes_multi(linearized_nodes, arguments)
+        option.None -> linearized_nodes
+      }
+      |> do_linearize_nodes(modifier_name)
+    ExpressionStatementNode(expression:, ..) ->
+      case expression {
+        option.Some(expression) ->
+          do_linearize_nodes(linearized_nodes, expression)
+        option.None -> linearized_nodes
+      }
+    ParameterListNode(parameters:, ..) ->
+      do_linearize_nodes_multi(linearized_nodes, parameters)
+    RevertStatementNode(expression:, ..) ->
+      case expression {
+        option.Some(expression) ->
+          do_linearize_nodes(linearized_nodes, expression)
+        option.None -> linearized_nodes
+      }
+    StructuredDocumentationNode(..) -> linearized_nodes
+    UnaryOperation(expression:, ..) ->
+      do_linearize_nodes(linearized_nodes, expression)
+    VariableDeclarationNode(..) -> [node, ..linearized_nodes]
+    VariableDeclarationStatementNode(declarations:, ..) ->
+      list.fold(
+        declarations,
+        linearized_nodes,
+        fn(linearized_nodes, declaration) {
+          case declaration {
+            Some(declaration) ->
+              do_linearize_nodes(linearized_nodes, declaration)
+            option.None -> linearized_nodes
+          }
+        },
+      )
   }
+}
+
+fn do_linearize_nodes_multi(linearized_nodes: List(Node), nodes: List(Node)) {
+  list.fold(nodes, linearized_nodes, do_linearize_nodes)
 }
 
 pub type NodeDeclaration {
@@ -476,7 +599,7 @@ fn do_count_node_references(
         )
       })
     }
-    NodeStatementNode(expression:, ..) ->
+    ExpressionStatementNode(expression:, ..) ->
       case expression {
         Some(expression) ->
           do_count_node_references(
@@ -814,7 +937,7 @@ pub type Node {
     expression: option.Option(Node),
   )
   StructuredDocumentationNode(id: Int, source_map: SourceMap, text: String)
-  NodeStatementNode(
+  ExpressionStatementNode(
     id: Int,
     source_map: SourceMap,
     expression: option.Option(Node),
@@ -1191,7 +1314,7 @@ fn node_decoder() -> decode.Decoder(Node) {
         option.None,
         decode.optional(node_decoder()),
       )
-      decode.success(NodeStatementNode(
+      decode.success(ExpressionStatementNode(
         id:,
         source_map: source_map_from_string(src),
         expression:,
