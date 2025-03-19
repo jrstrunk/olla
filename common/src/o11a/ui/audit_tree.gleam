@@ -158,33 +158,30 @@ pub fn group_files_by_parent(files) {
   parents
   |> list.map(fn(parent) {
     let parent_prefix = parent <> "/"
+
+    // Get all items that start with this parent's prefix
     let items =
       files
       |> list.filter(fn(path) { string.starts_with(path, parent_prefix) })
 
-    // Split into directories and files under this parent
+    // Get next level of directories and direct files
     let #(dirs, direct_files) =
       items
-      |> list.filter(fn(path) {
-        // Only include immediate children
-        let relative = string.replace(path, parent_prefix, "")
-        !string.contains(relative, "/")
-        || string.split(relative, "/") |> list.length == 2
-      })
       |> list.partition(fn(path) {
         let relative = string.replace(path, parent_prefix, "")
         string.contains(relative, "/")
       })
 
-    // For dirs, we just want the immediate subdirectory names
+    // For dirs, extract just the next directory level but keep full path
     let subdirs =
       dirs
       |> list.map(fn(dir) {
-        string.replace(dir, parent_prefix, "")
-        |> string.split("/")
-        |> list.first
-        |> result.unwrap("")
-        |> fn(d) { parent_prefix <> d }
+        let relative = string.replace(dir, parent_prefix, "")
+        let first_dir =
+          string.split(relative, "/")
+          |> list.first
+          |> result.unwrap("")
+        parent_prefix <> first_dir
       })
       |> list.unique
 

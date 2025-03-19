@@ -51,7 +51,11 @@ fn get_files_in_scope(for audit_name) {
     config.get_all_audit_page_paths()
     |> dict.get(audit_name)
     |> result.unwrap([])
-    |> list.filter(fn(path) { filepath.extension(path) == Ok("md") })
+    |> list.filter(fn(path) {
+      filepath.extension(path) == Ok("md")
+      && !string.starts_with(path, filepath.join(audit_name, "lib"))
+      && !string.starts_with(path, filepath.join(audit_name, "dependencies"))
+    })
 
   list.append(in_scope_sol_files, doc_files)
 }
