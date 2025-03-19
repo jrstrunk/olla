@@ -13,8 +13,10 @@
   --function-color: #5fafef;
   --type-color: #4acad3;
   --contract-color: #e5c07b;
-  --variable-color: #abb2bf;
-  --global-variable-color: #dd8087;
+  /* --variable-color: #abb2bf; */
+  --variable-color: #f06d73;
+  /* --global-variable-color: #e06a74; */
+  --global-variable-color: #d19a66;
 }
 
 html,
@@ -137,6 +139,8 @@ p.loc {
   transition-delay: 1ms;
 }
 
+.declaration-preview:focus,
+.reference-preview:focus,
 .comment-preview:focus,
 .new-thread-preview:focus {
   outline: none;
@@ -157,6 +161,8 @@ line-discussion {
 }
 
 line-discussion.show-dis,
+.declaration-preview:hover + line-discussion,
+.reference-preview:hover + line-discussion,
 .comment-preview:hover + line-discussion {
   visibility: visible;
   opacity: 1;
@@ -173,6 +179,8 @@ line-discussion.show-dis,
 
 .new-thread-preview:focus + line-discussion,
 .comment-preview:focus + line-discussion,
+.declaration-preview:focus + line-discussion,
+.reference-preview:focus + line-discussion,
 line-discussion:hover,
 line-discussion:focus-within {
   visibility: visible;

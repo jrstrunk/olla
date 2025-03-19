@@ -145,29 +145,29 @@ pub fn consume_source(
         EventDefinitionNode(id:, ..)
         | ErrorDefinitionNode(id:, ..)
         | ContractDefinitionNode(id:, ..) -> style_declaration_node(
-          node_declaration: dict.get(declarations, id)
-            |> result.unwrap(NodeDeclaration("", "", [])),
+          declarations:,
+          id:,
           class: "contract",
           tokens: _,
         )
 
         BaseContract(reference_id:, ..) -> style_reference_node(
-          node_declaration: dict.get(declarations, reference_id)
-            |> result.unwrap(NodeDeclaration("", "", [])),
+          declarations:,
+          reference_id:,
           class: "contract",
           tokens: _,
         )
 
         VariableDeclarationNode(id:, ..) -> style_declaration_node(
-          node_declaration: dict.get(declarations, id)
-            |> result.unwrap(NodeDeclaration("", "", [])),
+          declarations:,
+          id:,
           class: "variable",
           tokens: _,
         )
 
         FunctionDefinitionNode(id:, function_kind:, ..) -> style_declaration_node(
-          node_declaration: dict.get(declarations, id)
-            |> result.unwrap(NodeDeclaration("", "", [])),
+          declarations:,
+          id:,
           class: case function_kind {
             audit_metadata.Function -> "function"
             audit_metadata.Constructor
@@ -178,8 +178,8 @@ pub fn consume_source(
         )
 
         Modifier(kind:, reference_id:, ..) -> style_reference_node(
-          node_declaration: dict.get(declarations, reference_id)
-            |> result.unwrap(NodeDeclaration("", "", [])),
+          declarations:,
+          reference_id:,
           class: case kind {
             BaseConstructorSpecifier -> "contract"
             ModifierInvocation -> "function"
@@ -187,12 +187,47 @@ pub fn consume_source(
           tokens: _,
         )
 
-        Identifier(reference_id:, ..) | IdentifierPath(reference_id:, ..) -> style_reference_node(
-          node_declaration: dict.get(declarations, reference_id)
-            |> result.unwrap(NodeDeclaration("", "", [])),
-          class: "variable",
-          tokens: _,
-        )
+        FunctionCall(reference_id:, name:, ..) ->
+          case name, reference_id < 0 {
+            "", True -> style_gap_token(_, class: "global-variable")
+            _, True -> style_gap_token(_, class: "type")
+            _, False -> style_reference_node(
+              declarations:,
+              reference_id:,
+              class: "function",
+              tokens: _,
+            )
+          }
+
+        Identifier(reference_id:, ..) | IdentifierPath(reference_id:, ..) ->
+          case reference_id < 0 {
+            True -> style_gap_token(_, class: "global-variable")
+            False -> style_reference_node(
+              declarations:,
+              reference_id:,
+              class: "variable",
+              tokens: _,
+            )
+          }
+
+        MemberAccess(reference_id:, ..) ->
+          case reference_id {
+            option.Some(reference_id) -> style_reference_node(
+              declarations:,
+              reference_id:,
+              class: "variable",
+              tokens: _,
+            )
+            option.None -> style_gap_token(_, class: "global-variable")
+          }
+
+        ElementaryTypeNameExpression(..) -> style_gap_token(_, class: "type")
+
+        Literal(kind:, ..) ->
+          case kind {
+            StringLiteral -> style_gap_token(_, class: "string")
+            NumberLiteral | BoolLiteral -> style_gap_token(_, class: "number")
+          }
 
         _ -> style_gap_tokens
       }
@@ -313,17 +348,24 @@ pub fn consume_part(
 }
 
 fn style_declaration_node(
-  node_declaration node_declaration: NodeDeclaration,
+  declarations declarations,
+  id id,
   class class: String,
   tokens tokens: String,
 ) {
+  let node_declaration =
+    dict.get(declarations, id)
+    |> result.unwrap(NodeDeclaration("", "", []))
+
   let build_element = fn(child_element) {
     html.span([attribute.class("relative")], [
       html.span(
         [
-          attribute.class(class),
           attribute.id(node_declaration.topic_id),
-          attribute.class("declaration-preview"),
+          attribute.class(class),
+          attribute.class(
+            "declaration-preview discussion-entry n" <> int.to_string(id),
+          ),
           attribute.attribute("tabindex", "0"),
         ],
         [html.text(tokens)],
@@ -336,16 +378,24 @@ fn style_declaration_node(
 }
 
 fn style_reference_node(
-  node_declaration referenced_node_declaration: NodeDeclaration,
+  declarations declarations,
+  reference_id reference_id,
   class class: String,
   tokens tokens: String,
 ) {
+  let referenced_node_declaration =
+    dict.get(declarations, reference_id)
+    |> result.unwrap(NodeDeclaration("", "", []))
+
   let build_element = fn(child_element) {
     html.span([attribute.class("relative")], [
       html.span(
         [
           attribute.class(class),
-          attribute.class("reference-preview"),
+          attribute.class(
+            "reference-preview discussion-entry n"
+            <> int.to_string(reference_id),
+          ),
           attribute.attribute("tabindex", "0"),
         ],
         [html.text(tokens)],
@@ -410,17 +460,30 @@ fn style_import_node(
   |> PreProcessedNode
 }
 
+fn style_gap_token(gap_token, class class) {
+  html.span([attribute.class(class)], [html.text(gap_token)])
+  |> PreProcessedNode
+}
+
 /// Gap tokens are everything left out of the AST: brackets, comments, etc.
 fn style_gap_tokens(gap_tokens) {
-  let styled_gap_tokens = case
-    gap_tokens |> string.trim_start |> string.starts_with("//")
-  {
-    True -> style_comment_line(gap_tokens)
-    False ->
-      case gap_tokens |> string.starts_with("pragma") {
-        True -> style_pragma_line(gap_tokens)
-        False -> style_code_tokens(gap_tokens)
-      }
+  let styled_gap_tokens = {
+    use <- given.that(
+      gap_tokens |> string.trim_start |> string.starts_with("//"),
+      return: fn() { style_comment_line(gap_tokens) },
+    )
+    use <- given.that(gap_tokens |> string.starts_with("pragma"), return: fn() {
+      style_pragma_line(gap_tokens)
+    })
+    use <- given.that(
+      case gap_tokens |> string.trim {
+        "*" | "-" | "+" | "**" | "==" | "=" | "!=" | "<" | ">" | "<=" | ">=" ->
+          True
+        _ -> False
+      },
+      return: fn() { style_operator_token(gap_tokens) },
+    )
+    style_code_tokens(gap_tokens)
   }
 
   let leading_spaces = enumerate.leading_spaces(gap_tokens)
@@ -451,6 +514,11 @@ pub fn style_pragma_line(line_text) {
   <> html.span([attribute.class("number")], [html.text(solidity_version)])
   |> element.to_string
   <> ";"
+}
+
+pub fn style_operator_token(tokens) {
+  html.span([attribute.class("operator")], [html.text(tokens)])
+  |> element.to_string
 }
 
 /// Consumes a line of text until a newline character, at which point
@@ -542,13 +610,16 @@ pub fn linearize_nodes(ast: AST) {
 
 fn do_linearize_nodes(linearized_nodes: List(Node), node: Node) {
   case node {
+    ElementaryTypeNameExpression(..)
+    | Literal(..)
+    | BaseContract(..)
+    | ImportDirectiveNode(..) -> [node, ..linearized_nodes]
+
     Node(nodes:, ..) -> do_linearize_nodes_multi(linearized_nodes, nodes)
     NamedNode(nodes:, ..) -> do_linearize_nodes_multi(linearized_nodes, nodes)
-    ImportDirectiveNode(..) -> [node, ..linearized_nodes]
     Assignment(left_hand_side:, right_hand_side:, ..) ->
       do_linearize_nodes(linearized_nodes, left_hand_side)
       |> do_linearize_nodes(right_hand_side)
-    BaseContract(..) -> [node, ..linearized_nodes]
     BinaryOperation(left_expression:, right_expression:, ..) ->
       do_linearize_nodes(linearized_nodes, left_expression)
       |> do_linearize_nodes(right_expression)
@@ -578,9 +649,12 @@ fn do_linearize_nodes(linearized_nodes: List(Node), node: Node) {
         option.None -> linearized_nodes
       }
     FunctionCall(arguments:, expression:, ..) ->
-      case expression {
-        option.Some(node) -> do_linearize_nodes(linearized_nodes, node)
-        option.None -> linearized_nodes
+      [node, ..linearized_nodes]
+      |> fn(linearized_nodes) {
+        case expression {
+          option.Some(node) -> do_linearize_nodes(linearized_nodes, node)
+          option.None -> linearized_nodes
+        }
       }
       |> do_linearize_nodes_multi(arguments)
     FunctionDefinitionNode(
@@ -602,7 +676,7 @@ fn do_linearize_nodes(linearized_nodes: List(Node), node: Node) {
       |> do_linearize_nodes(parameters)
       |> do_linearize_nodes(return_parameters)
       |> do_linearize_nodes_multi(modifiers)
-    Identifier(expression:, ..) ->
+    Identifier(expression:, ..) | MemberAccess(expression:, ..) ->
       [node, ..linearized_nodes]
       |> fn(linearized_nodes) {
         case expression {
@@ -649,22 +723,20 @@ fn do_linearize_nodes(linearized_nodes: List(Node), node: Node) {
     UnaryOperation(expression:, ..) ->
       do_linearize_nodes(linearized_nodes, expression)
     VariableDeclarationNode(..) -> [node, ..linearized_nodes]
-    VariableDeclarationStatementNode(declarations:, ..) ->
-      list.fold(
-        declarations,
-        linearized_nodes,
-        fn(linearized_nodes, declaration) {
-          case declaration {
-            Some(declaration) ->
-              do_linearize_nodes(linearized_nodes, declaration)
-            option.None -> linearized_nodes
-          }
-        },
-      )
-    TupleExpression(nodes:, ..) ->
-      list.fold(nodes, linearized_nodes, fn(linearized_nodes, node) {
-        do_linearize_nodes(linearized_nodes, node)
+    VariableDeclarationStatementNode(declarations:, initial_value:, ..) ->
+      case initial_value {
+        option.Some(initial_value) ->
+          do_linearize_nodes(linearized_nodes, initial_value)
+        option.None -> linearized_nodes
+      }
+      |> list.fold(declarations, _, fn(linearized_nodes, declaration) {
+        case declaration {
+          Some(declaration) -> do_linearize_nodes(linearized_nodes, declaration)
+          option.None -> linearized_nodes
+        }
       })
+    TupleExpression(nodes:, ..) ->
+      do_linearize_nodes_multi(linearized_nodes, nodes)
   }
 }
 
@@ -866,6 +938,7 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
         option.None -> declarations
       }
     }
+
     _ -> declarations
   }
 }
@@ -895,7 +968,9 @@ fn do_count_node_references(
 
     ImportDirectiveNode(..)
     | VariableDeclarationNode(..)
-    | StructuredDocumentationNode(..) -> declarations
+    | StructuredDocumentationNode(..)
+    | ElementaryTypeNameExpression(..)
+    | Literal(..) -> declarations
 
     ContractDefinitionNode(nodes:, base_contracts:, name:, contract_kind:, ..) -> {
       let title =
@@ -994,19 +1069,17 @@ fn do_count_node_references(
         parent_id,
       )
 
-    VariableDeclarationStatementNode(declarations: declaration_nodes, ..) ->
-      list.fold(declaration_nodes, declarations, fn(declarations, declaration) {
-        case declaration {
-          Some(declaration) ->
-            do_count_node_references(
-              declarations,
-              declaration,
-              parent_title,
-              parent_id,
-            )
-          option.None -> declarations
-        }
-      })
+    VariableDeclarationStatementNode(initial_value:, ..) ->
+      case initial_value {
+        option.Some(initial_value) ->
+          do_count_node_references(
+            declarations,
+            initial_value,
+            parent_title,
+            parent_id,
+          )
+        option.None -> declarations
+      }
     IfStatementNode(condition:, true_body:, false_body:, ..) -> {
       let declarations =
         do_count_node_references(
@@ -1068,7 +1141,30 @@ fn do_count_node_references(
         NodeReference(title: parent_title, topic_id: parent_id),
       )
 
-    FunctionCall(arguments:, expression:, ..) ->
+    MemberAccess(reference_id:, expression:, ..) ->
+      case reference_id {
+        option.Some(reference_id) ->
+          add_reference(
+            declarations,
+            reference_id,
+            NodeReference(title: parent_title, topic_id: parent_id),
+          )
+        option.None -> declarations
+      }
+      |> fn(declarations) {
+        case expression {
+          Some(expression) ->
+            do_count_node_references(
+              declarations,
+              expression,
+              parent_title,
+              parent_id,
+            )
+          option.None -> declarations
+        }
+      }
+
+    FunctionCall(reference_id:, arguments:, expression:, ..) ->
       case expression {
         Some(expression) ->
           do_count_node_references(
@@ -1087,6 +1183,10 @@ fn do_count_node_references(
           parent_id,
         )
       })
+      |> add_reference(
+        reference_id,
+        NodeReference(title: parent_title, topic_id: parent_id),
+      )
 
     Assignment(left_hand_side:, right_hand_side:, ..) ->
       do_count_node_references(
@@ -1274,6 +1374,7 @@ pub type Node {
     mutability: String,
     visibility: String,
     type_string: String,
+    value: option.Option(Node),
   )
   ErrorDefinitionNode(
     id: Int,
@@ -1319,6 +1420,7 @@ pub type Node {
     id: Int,
     source_map: SourceMap,
     declarations: List(option.Option(Node)),
+    initial_value: option.Option(Node),
   )
   IfStatementNode(
     id: Int,
@@ -1343,6 +1445,8 @@ pub type Node {
   FunctionCall(
     id: Int,
     source_map: SourceMap,
+    name: String,
+    reference_id: Int,
     arguments: List(Node),
     expression: option.Option(Node),
   )
@@ -1382,6 +1486,15 @@ pub type Node {
   )
   BaseContract(id: Int, source_map: SourceMap, name: String, reference_id: Int)
   TupleExpression(id: Int, source_map: SourceMap, nodes: List(Node))
+  ElementaryTypeNameExpression(id: Int, source_map: SourceMap, name: String)
+  Literal(id: Int, source_map: SourceMap, kind: LiteralKind, value: String)
+  MemberAccess(
+    id: Int,
+    source_map: SourceMap,
+    name: String,
+    reference_id: option.Option(Int),
+    expression: option.Option(Node),
+  )
 }
 
 pub type SourceMap {
@@ -1414,11 +1527,26 @@ pub type ModifierKind {
   ModifierInvocation
 }
 
-pub fn modifier_kind_from_string(kind) {
+fn modifier_kind_from_string(kind) {
   case kind {
     "baseConstructorSpecifier" -> BaseConstructorSpecifier
     "modifierInvocation" -> ModifierInvocation
     _ -> panic as "Invalid modifier kind given"
+  }
+}
+
+pub type LiteralKind {
+  NumberLiteral
+  StringLiteral
+  BoolLiteral
+}
+
+fn literal_kind_from_string(kind) {
+  case kind {
+    "number" -> NumberLiteral
+    "string" -> StringLiteral
+    "bool" -> BoolLiteral
+    _ -> panic as "Invalid literal kind given"
   }
 }
 
@@ -1477,14 +1605,20 @@ fn node_decoder() -> decode.Decoder(Node) {
         ["typeDescriptions", "typeString"],
         decode.string,
       )
+      use value <- decode.optional_field(
+        "value",
+        option.None,
+        decode.optional(node_decoder()),
+      )
       decode.success(VariableDeclarationNode(
         id:,
         source_map: source_map_from_string(name_location),
         name:,
         constant:,
-        mutability: mutability,
-        visibility: visibility,
+        mutability:,
+        visibility:,
         type_string:,
+        value:,
       ))
     }
     "ErrorDefinition" -> {
@@ -1640,10 +1774,16 @@ fn node_decoder() -> decode.Decoder(Node) {
         "declarations",
         decode.list(decode.optional(node_decoder())),
       )
+      use initial_value <- decode.optional_field(
+        "initialValue",
+        option.None,
+        decode.optional(node_decoder()),
+      )
       decode.success(VariableDeclarationStatementNode(
         id:,
         source_map: source_map_from_string(src),
         declarations:,
+        initial_value:,
       ))
     }
     "IfStatement" -> {
@@ -1701,9 +1841,37 @@ fn node_decoder() -> decode.Decoder(Node) {
         option.None,
         decode.optional(node_decoder()),
       )
+      // We want to tie the name of the function being called to the function
+      // call node, but it is stored in an optional expression field. So, try
+      // and pull the values out of the expression field if it exists and add
+      // them directly to the function call node.
+      let #(source_map, name, reference_id, expression) = case expression {
+        Some(Identifier(source_map:, name:, reference_id:, expression:, ..)) -> #(
+          source_map,
+          name,
+          reference_id,
+          expression,
+        )
+        Some(ElementaryTypeNameExpression(source_map:, name:, ..)) -> #(
+          source_map,
+          name,
+          -1,
+          option.None,
+        )
+        Some(MemberAccess(
+          source_map:,
+          name:,
+          reference_id: option.Some(reference_id),
+          expression:,
+          ..,
+        )) -> #(source_map, name, reference_id, expression)
+        _ -> #(source_map_from_string(src), "", -1, option.None)
+      }
       decode.success(FunctionCall(
         id:,
-        source_map: source_map_from_string(src),
+        source_map:,
+        name:,
+        reference_id:,
         arguments:,
         expression:,
       ))
@@ -1817,6 +1985,50 @@ fn node_decoder() -> decode.Decoder(Node) {
         id:,
         source_map: source_map_from_string(src),
         nodes:,
+      ))
+    }
+    "ElementaryTypeNameExpression" -> {
+      use id <- decode.field("id", decode.int)
+      use src <- decode.subfield(["typeName", "src"], decode.string)
+      use name <- decode.subfield(["typeName", "name"], decode.string)
+      decode.success(ElementaryTypeNameExpression(
+        id:,
+        source_map: source_map_from_string(src),
+        name:,
+      ))
+    }
+    "Literal" -> {
+      use id <- decode.field("id", decode.int)
+      use src <- decode.field("src", decode.string)
+      use kind <- decode.field("kind", decode.string)
+      use value <- decode.field("value", decode.string)
+      decode.success(Literal(
+        id:,
+        source_map: source_map_from_string(src),
+        kind: literal_kind_from_string(kind),
+        value:,
+      ))
+    }
+    "MemberAccess" -> {
+      use id <- decode.field("id", decode.int)
+      use src <- decode.field("memberLocation", decode.string)
+      use name <- decode.field("memberName", decode.string)
+      use reference_id <- decode.optional_field(
+        "referencedDeclaration",
+        option.None,
+        decode.optional(decode.int),
+      )
+      use expression <- decode.optional_field(
+        "expression",
+        option.None,
+        decode.optional(node_decoder()),
+      )
+      decode.success(MemberAccess(
+        id:,
+        source_map: source_map_from_string(src),
+        name:,
+        reference_id:,
+        expression:,
       ))
     }
     _ -> {
