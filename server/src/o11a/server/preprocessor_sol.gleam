@@ -165,10 +165,25 @@ pub fn consume_source(
           tokens: _,
         )
 
-        FunctionDefinitionNode(id:, ..) -> style_declaration_node(
+        FunctionDefinitionNode(id:, function_kind:, ..) -> style_declaration_node(
           node_declaration: dict.get(declarations, id)
             |> result.unwrap(NodeDeclaration("", "", [])),
-          class: "function",
+          class: case function_kind {
+            audit_metadata.Function -> "function"
+            audit_metadata.Constructor
+            | audit_metadata.Fallback
+            | audit_metadata.Receive -> "keyword"
+          },
+          tokens: _,
+        )
+
+        Modifier(kind:, reference_id:, ..) -> style_reference_node(
+          node_declaration: dict.get(declarations, reference_id)
+            |> result.unwrap(NodeDeclaration("", "", [])),
+          class: case kind {
+            BaseConstructorSpecifier -> "contract"
+            ModifierInvocation -> "function"
+          },
           tokens: _,
         )
 
@@ -607,13 +622,15 @@ fn do_linearize_nodes(linearized_nodes: List(Node), node: Node) {
       |> do_linearize_nodes(condition)
     IndexAccess(base:, index:, ..) ->
       do_linearize_nodes(linearized_nodes, base) |> do_linearize_nodes(index)
-    Modifier(modifier_name:, arguments:, ..) ->
-      case arguments {
-        option.Some(arguments) ->
-          do_linearize_nodes_multi(linearized_nodes, arguments)
-        option.None -> linearized_nodes
+    Modifier(arguments:, ..) ->
+      [node, ..linearized_nodes]
+      |> fn(linearized_nodes) {
+        case arguments {
+          option.Some(arguments) ->
+            do_linearize_nodes_multi(linearized_nodes, arguments)
+          option.None -> linearized_nodes
+        }
       }
-      |> do_linearize_nodes(modifier_name)
     ExpressionStatementNode(expression:, ..) ->
       case expression {
         option.Some(expression) ->
@@ -1101,20 +1118,26 @@ fn do_count_node_references(
       do_count_node_references(declarations, base, parent_title, parent_id)
       |> do_count_node_references(index, parent_title, parent_id)
 
-    Modifier(arguments:, modifier_name:, ..) ->
-      case arguments {
-        Some(arguments) ->
-          list.fold(arguments, declarations, fn(declarations, argument) {
-            do_count_node_references(
-              declarations,
-              argument,
-              parent_title,
-              parent_id,
-            )
-          })
-        option.None -> declarations
+    Modifier(reference_id:, arguments:, ..) ->
+      add_reference(
+        declarations,
+        reference_id,
+        NodeReference(title: parent_title, topic_id: parent_id),
+      )
+      |> fn(declarations) {
+        case arguments {
+          Some(arguments) ->
+            list.fold(arguments, declarations, fn(declarations, argument) {
+              do_count_node_references(
+                declarations,
+                argument,
+                parent_title,
+                parent_id,
+              )
+            })
+          option.None -> declarations
+        }
       }
-      |> do_count_node_references(modifier_name, parent_title, parent_id)
     IdentifierPath(reference_id:, ..) ->
       add_reference(
         declarations,
@@ -1346,8 +1369,9 @@ pub type Node {
   Modifier(
     id: Int,
     source_map: SourceMap,
-    kind: String,
-    modifier_name: Node,
+    name: String,
+    kind: ModifierKind,
+    reference_id: Int,
     arguments: option.Option(List(Node)),
   )
   IdentifierPath(
@@ -1382,6 +1406,19 @@ fn source_map_from_string(source_map_string) {
     }
     _ -> SourceMap(-1, -1)
     // panic as { "Failed to split source map string" <> source_map_string }
+  }
+}
+
+pub type ModifierKind {
+  BaseConstructorSpecifier
+  ModifierInvocation
+}
+
+pub fn modifier_kind_from_string(kind) {
+  case kind {
+    "baseConstructorSpecifier" -> BaseConstructorSpecifier
+    "modifierInvocation" -> ModifierInvocation
+    _ -> panic as "Invalid modifier kind given"
   }
 }
 
@@ -1736,9 +1773,13 @@ fn node_decoder() -> decode.Decoder(Node) {
     }
     "ModifierInvocation" -> {
       use id <- decode.field("id", decode.int)
-      use src <- decode.field("src", decode.string)
+      use src <- decode.subfield(["modifierName", "src"], decode.string)
+      use name <- decode.subfield(["modifierName", "name"], decode.string)
+      use reference_id <- decode.subfield(
+        ["modifierName", "referencedDeclaration"],
+        decode.int,
+      )
       use kind <- decode.field("kind", decode.string)
-      use modifier_name <- decode.field("modifierName", node_decoder())
       use arguments <- decode.optional_field(
         "arguments",
         option.None,
@@ -1747,8 +1788,9 @@ fn node_decoder() -> decode.Decoder(Node) {
       decode.success(Modifier(
         id:,
         source_map: source_map_from_string(src),
-        modifier_name:,
-        kind:,
+        name:,
+        reference_id:,
+        kind: modifier_kind_from_string(kind),
         arguments:,
       ))
     }
@@ -2380,7 +2422,7 @@ pub fn style_code_tokens(line_text) {
 
   let assert Ok(keyword_regex) =
     regexp.from_string(
-      "\\b(constructor|contract|fallback|indexed|override|mapping|immutable|interface|constant|library|abstract|event|error|require|revert|using|for|emit|function|if|else|returns|return|memory|calldata|public|private|external|view|pure|payable|internal|import|enum|struct|storage|is)\\b",
+      "\\b(constructor|contract|fallback|indexed|override|mapping|immutable|interface|virtual|constant|library|abstract|event|error|require|revert|using|for|emit|function|if|else|returns|return|memory|calldata|public|private|external|view|pure|payable|internal|import|enum|struct|storage|is)\\b",
     )
 
   let styled_line =
