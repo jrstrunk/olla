@@ -727,8 +727,14 @@ fn do_linearize_nodes(linearized_nodes: List(Node), node: Node) {
     StructuredDocumentationNode(..) -> linearized_nodes
     UnaryOperation(expression:, ..) ->
       do_linearize_nodes(linearized_nodes, expression)
-    VariableDeclarationNode(type_name:, ..) ->
+    VariableDeclarationNode(type_name:, value:, ..) ->
       [node, ..linearized_nodes]
+      |> fn(linearized_nodes) {
+        case value {
+          option.Some(value) -> do_linearize_nodes(linearized_nodes, value)
+          option.None -> linearized_nodes
+        }
+      }
       |> do_linearize_nodes(type_name)
     VariableDeclarationStatementNode(declarations:, initial_value:, ..) ->
       case initial_value {
@@ -768,6 +774,19 @@ fn do_linearize_nodes(linearized_nodes: List(Node), node: Node) {
       |> do_linearize_nodes(type_name)
     ArrayTypeName(base_type:, ..) ->
       do_linearize_nodes(linearized_nodes, base_type)
+    FunctionCallOptions(options:, expression:, ..) ->
+      case expression {
+        option.Some(expression) ->
+          do_linearize_nodes(linearized_nodes, expression)
+        option.None -> linearized_nodes
+      }
+      |> do_linearize_nodes_multi(options)
+    Mapping(key_type:, value_type:, ..) ->
+      do_linearize_nodes(linearized_nodes, key_type)
+      |> do_linearize_nodes(value_type)
+    UsingForDirective(library_name:, type_name:, ..) ->
+      do_linearize_nodes(linearized_nodes, library_name)
+      |> do_linearize_nodes(type_name)
   }
 }
 
@@ -1478,6 +1497,28 @@ fn do_count_node_references(
       }
     ArrayTypeName(base_type:, ..) ->
       do_count_node_references(declarations, base_type, parent_title, parent_id)
+    FunctionCallOptions(options:, expression:, ..) ->
+      case expression {
+        option.Some(expression) ->
+          do_count_node_references(
+            declarations,
+            expression,
+            parent_title,
+            parent_id,
+          )
+        option.None -> declarations
+      }
+      |> do_count_node_references_multi(options, parent_title, parent_id)
+    Mapping(key_type:, value_type:, ..) ->
+      do_count_node_references(declarations, key_type, parent_title, parent_id)
+      |> do_count_node_references(value_type, parent_title, parent_id)
+    UsingForDirective(library_name:, ..) ->
+      do_count_node_references(
+        declarations,
+        library_name,
+        parent_title,
+        parent_id,
+      )
   }
 }
 
@@ -1790,6 +1831,19 @@ pub type Node {
     source_map: SourceMap,
     type_name: Node,
     arguments: option.Option(List(Node)),
+  )
+  FunctionCallOptions(
+    id: Int,
+    source_map: SourceMap,
+    expression: option.Option(Node),
+    options: List(Node),
+  )
+  Mapping(id: Int, source_map: SourceMap, key_type: Node, value_type: Node)
+  UsingForDirective(
+    id: Int,
+    source_map: SourceMap,
+    library_name: Node,
+    type_name: Node,
   )
 }
 
@@ -2477,6 +2531,46 @@ fn node_decoder() -> decode.Decoder(Node) {
         arguments:,
       ))
     }
+    "FunctionCallOptions" -> {
+      use id <- decode.field("id", decode.int)
+      use src <- decode.field("src", decode.string)
+      use expression <- decode.optional_field(
+        "expression",
+        option.None,
+        decode.optional(node_decoder()),
+      )
+      use options <- decode.field("options", decode.list(node_decoder()))
+      decode.success(FunctionCallOptions(
+        id:,
+        source_map: source_map_from_string(src),
+        expression:,
+        options:,
+      ))
+    }
+    "Mapping" -> {
+      use id <- decode.field("id", decode.int)
+      use src <- decode.field("src", decode.string)
+      use key_type <- decode.field("keyType", node_decoder())
+      use value_type <- decode.field("valueType", node_decoder())
+      decode.success(Mapping(
+        id:,
+        source_map: source_map_from_string(src),
+        key_type:,
+        value_type:,
+      ))
+    }
+    "UsingForDirective" -> {
+      use id <- decode.field("id", decode.int)
+      use src <- decode.field("src", decode.string)
+      use library_name <- decode.field("libraryName", node_decoder())
+      use type_name <- decode.field("typeName", node_decoder())
+      decode.success(UsingForDirective(
+        id:,
+        source_map: source_map_from_string(src),
+        library_name:,
+        type_name:,
+      ))
+    }
     _ -> {
       use id <- decode.field("id", decode.int)
       use src <- decode.field("src", decode.string)
@@ -3077,44 +3171,44 @@ pub fn style_code_tokens(line_text) {
       |> element.to_string
     })
 
-  let assert Ok(global_variable_regex) =
-    regexp.from_string(
-      "\\b(super|this|msg\\.sender|msg\\.value|tx\\.origin|block\\.timestamp|block\\.chainid)\\b",
-    )
+  // let assert Ok(global_variable_regex) =
+  //   regexp.from_string(
+  //     "\\b(super|this|msg\\.sender|msg\\.value|tx\\.origin|block\\.timestamp|block\\.chainid)\\b",
+  //   )
 
-  let styled_line =
-    regexp.match_map(global_variable_regex, styled_line, fn(match) {
-      html.span([attribute.class("global-variable")], [html.text(match.content)])
-      |> element.to_string
-    })
+  // let styled_line =
+  //   regexp.match_map(global_variable_regex, styled_line, fn(match) {
+  //     html.span([attribute.class("global-variable")], [html.text(match.content)])
+  //     |> element.to_string
+  //   })
 
   // A word with a capital letter at the beginning
-  let assert Ok(capitalized_word_regex) = regexp.from_string("\\b[A-Z]\\w+\\b")
+  // let assert Ok(capitalized_word_regex) = regexp.from_string("\\b[A-Z]\\w+\\b")
 
-  let styled_line =
-    regexp.match_map(capitalized_word_regex, styled_line, fn(match) {
-      html.span([attribute.class("contract")], [html.text(match.content)])
-      |> element.to_string
-    })
+  // let styled_line =
+  //   regexp.match_map(capitalized_word_regex, styled_line, fn(match) {
+  //     html.span([attribute.class("contract")], [html.text(match.content)])
+  //     |> element.to_string
+  //   })
 
-  let assert Ok(function_regex) = regexp.from_string("\\b(\\w+)\\(")
+  // let assert Ok(function_regex) = regexp.from_string("\\b(\\w+)\\(")
 
-  let styled_line =
-    regexp.match_map(function_regex, styled_line, fn(match) {
-      case match.submatches {
-        [Some(function_name), ..] ->
-          string.replace(
-            match.content,
-            each: function_name,
-            with: element.to_string(
-              html.span([attribute.class("function")], [
-                html.text(function_name),
-              ]),
-            ),
-          )
-        _ -> line_text
-      }
-    })
+  // let styled_line =
+  //   regexp.match_map(function_regex, styled_line, fn(match) {
+  //     case match.submatches {
+  //       [Some(function_name), ..] ->
+  //         string.replace(
+  //           match.content,
+  //           each: function_name,
+  //           with: element.to_string(
+  //             html.span([attribute.class("function")], [
+  //               html.text(function_name),
+  //             ]),
+  //           ),
+  //         )
+  //       _ -> line_text
+  //     }
+  //   })
 
   let assert Ok(type_regex) =
     regexp.from_string(
