@@ -144,6 +144,9 @@ pub fn consume_source(
 
         EventDefinitionNode(id:, ..)
         | ErrorDefinitionNode(id:, ..)
+        | EnumDefinition(id:, ..)
+        | StructDefinition(id:, ..)
+        | EnumValue(id:, ..)
         | ContractDefinitionNode(id:, ..) -> style_declaration_node(
           declarations:,
           id:,
@@ -174,6 +177,13 @@ pub fn consume_source(
             | audit_metadata.Fallback
             | audit_metadata.Receive -> "keyword"
           },
+          tokens: _,
+        )
+
+        ModifierDefinitionNode(id:, ..) -> style_declaration_node(
+          declarations:,
+          id:,
+          class: "function",
           tokens: _,
         )
 
@@ -210,15 +220,16 @@ pub fn consume_source(
             )
           }
 
-        MemberAccess(reference_id:, ..) ->
-          case reference_id {
-            option.Some(reference_id) -> style_reference_node(
+        MemberAccess(reference_id:, is_global_access:, ..) ->
+          case reference_id, is_global_access {
+            option.Some(reference_id), _ -> style_reference_node(
               declarations:,
               reference_id:,
               class: "variable",
               tokens: _,
             )
-            option.None -> style_gap_token(_, class: "global-variable")
+            option.None, True -> style_gap_token(_, class: "global-variable")
+            option.None, False -> style_gap_token(_, class: "text")
           }
 
         ElementaryTypeNameExpression(..) -> style_gap_token(_, class: "type")
@@ -226,7 +237,10 @@ pub fn consume_source(
         Literal(kind:, ..) ->
           case kind {
             StringLiteral -> style_gap_token(_, class: "string")
-            NumberLiteral | BoolLiteral -> style_gap_token(_, class: "number")
+            NumberLiteral | BoolLiteral | HexStringLiteral -> style_gap_token(
+              _,
+              class: "number",
+            )
           }
 
         _ -> style_gap_tokens
@@ -637,8 +651,10 @@ fn do_linearize_nodes(linearized_nodes: List(Node), node: Node) {
     EmitStatementNode(event_call:, ..) ->
       do_linearize_nodes(linearized_nodes, event_call)
 
-    ErrorDefinitionNode(nodes:, ..) ->
-      [node, ..linearized_nodes] |> do_linearize_nodes_multi(nodes)
+    ErrorDefinitionNode(parameters:, nodes:, ..) ->
+      [node, ..linearized_nodes]
+      |> do_linearize_nodes_multi(nodes)
+      |> do_linearize_nodes(parameters)
     EventDefinitionNode(parameters:, nodes:, ..) ->
       [node, ..linearized_nodes]
       |> do_linearize_nodes_multi(nodes)
@@ -676,6 +692,17 @@ fn do_linearize_nodes(linearized_nodes: List(Node), node: Node) {
       |> do_linearize_nodes(parameters)
       |> do_linearize_nodes(return_parameters)
       |> do_linearize_nodes_multi(modifiers)
+    ModifierDefinitionNode(parameters:, nodes:, body:, ..) -> {
+      [node, ..linearized_nodes]
+      |> fn(linearized_nodes) {
+        case body {
+          option.Some(body) -> do_linearize_nodes(linearized_nodes, body)
+          option.None -> linearized_nodes
+        }
+      }
+      |> do_linearize_nodes_multi(nodes)
+      |> do_linearize_nodes(parameters)
+    }
     Identifier(expression:, ..) | MemberAccess(expression:, ..) ->
       [node, ..linearized_nodes]
       |> fn(linearized_nodes) {
@@ -694,8 +721,37 @@ fn do_linearize_nodes(linearized_nodes: List(Node), node: Node) {
       }
       |> do_linearize_nodes(true_body)
       |> do_linearize_nodes(condition)
+    ForStatementNode(
+      initialization_expression:,
+      condition:,
+      loop_expression:,
+      body:,
+      ..,
+    ) ->
+      case initialization_expression {
+        option.Some(init) -> do_linearize_nodes(linearized_nodes, init)
+        option.None -> linearized_nodes
+      }
+      |> fn(linearized_nodes) {
+        case condition {
+          option.Some(condition) ->
+            do_linearize_nodes(linearized_nodes, condition)
+          option.None -> linearized_nodes
+        }
+      }
+      |> fn(linearized_nodes) {
+        case loop_expression {
+          option.Some(loop) -> do_linearize_nodes(linearized_nodes, loop)
+          option.None -> linearized_nodes
+        }
+      }
+      |> do_linearize_nodes(body)
     IndexAccess(base:, index:, ..) ->
-      do_linearize_nodes(linearized_nodes, base) |> do_linearize_nodes(index)
+      case index {
+        option.Some(index) -> do_linearize_nodes(linearized_nodes, index)
+        option.None -> linearized_nodes
+      }
+      |> do_linearize_nodes(base)
     Modifier(arguments:, ..) ->
       [node, ..linearized_nodes]
       |> fn(linearized_nodes) {
@@ -737,6 +793,21 @@ fn do_linearize_nodes(linearized_nodes: List(Node), node: Node) {
       })
     TupleExpression(nodes:, ..) ->
       do_linearize_nodes_multi(linearized_nodes, nodes)
+    Conditional(condition:, true_expression:, false_expression:, ..) ->
+      do_linearize_nodes(linearized_nodes, condition)
+      |> do_linearize_nodes(true_expression)
+      |> do_linearize_nodes(false_expression)
+    EnumDefinition(members:, nodes:, ..) ->
+      [node, ..linearized_nodes]
+      |> do_linearize_nodes_multi(nodes)
+      |> do_linearize_nodes_multi(members)
+    EnumValue(..) -> [node, ..linearized_nodes]
+    StructDefinition(members:, nodes:, ..) ->
+      [node, ..linearized_nodes]
+      |> do_linearize_nodes_multi(nodes)
+      |> do_linearize_nodes_multi(members)
+    UserDefinedTypeName(path_node:, ..) ->
+      do_linearize_nodes(linearized_nodes, path_node)
   }
 }
 
@@ -853,48 +924,56 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
         option.None -> declarations
       }
     }
+    ModifierDefinitionNode(id:, parameters:, nodes:, body:, name:, ..) -> {
+      let title = "modifier " <> name
+      let modifier_id = parent <> ":" <> name
+
+      let declarations =
+        dict.insert(
+          declarations,
+          id,
+          NodeDeclaration(title:, topic_id: modifier_id, references: []),
+        )
+      list.fold(nodes, declarations, fn(declarations, node) {
+        do_enumerate_node_declarations(declarations, node, title)
+      })
+      |> do_enumerate_node_declarations(parameters, title)
+
+      case body {
+        Some(body) -> do_enumerate_node_declarations(declarations, body, title)
+        option.None -> declarations
+      }
+    }
     ParameterListNode(parameters:, ..) -> {
       list.fold(parameters, declarations, fn(declarations, parameter) {
         do_enumerate_node_declarations(declarations, parameter, parent)
       })
     }
-    ErrorDefinitionNode(id:, name:, nodes:, ..) -> {
+    ErrorDefinitionNode(id:, name:, nodes:, parameters:, ..) -> {
       let title = "error " <> name
 
-      list.fold(
-        nodes,
-        dict.insert(
-          declarations,
-          id,
-          NodeDeclaration(
-            title:,
-            topic_id: parent <> ":" <> name,
-            references: [],
-          ),
-        ),
-        fn(declarations, node) {
-          do_enumerate_node_declarations(declarations, node, parent)
-        },
+      declarations
+      |> dict.insert(
+        id,
+        NodeDeclaration(title:, topic_id: parent <> ":" <> name, references: []),
       )
+      |> list.fold(nodes, _, fn(declarations, node) {
+        do_enumerate_node_declarations(declarations, node, parent)
+      })
+      |> do_enumerate_node_declarations(parameters, parent)
     }
-    EventDefinitionNode(id:, name:, nodes:, ..) -> {
+    EventDefinitionNode(id:, name:, nodes:, parameters:, ..) -> {
       let title = "event " <> name
 
-      list.fold(
-        nodes,
-        dict.insert(
-          declarations,
-          id,
-          NodeDeclaration(
-            title:,
-            topic_id: parent <> ":" <> name,
-            references: [],
-          ),
-        ),
-        fn(declarations, node) {
-          do_enumerate_node_declarations(declarations, node, parent)
-        },
+      declarations
+      |> dict.insert(
+        id,
+        NodeDeclaration(title:, topic_id: parent <> ":" <> name, references: []),
       )
+      |> list.fold(nodes, _, fn(declarations, node) {
+        do_enumerate_node_declarations(declarations, node, parent)
+      })
+      |> do_enumerate_node_declarations(parameters, parent)
     }
     VariableDeclarationNode(id:, name:, constant:, type_string:, ..) -> {
       let title =
@@ -938,6 +1017,54 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
         option.None -> declarations
       }
     }
+    ForStatementNode(initialization_expression:, body:, ..) -> {
+      let declarations = case initialization_expression {
+        option.Some(init) ->
+          do_enumerate_node_declarations(declarations, init, parent)
+        option.None -> declarations
+      }
+
+      do_enumerate_node_declarations(declarations, body, parent)
+    }
+    EnumDefinition(id:, name:, members:, nodes:, ..) -> {
+      let title = "enum " <> name
+      let enum_id = parent <> ":" <> name
+      dict.insert(
+        declarations,
+        id,
+        NodeDeclaration(title:, topic_id: enum_id, references: []),
+      )
+      |> list.fold(nodes, _, fn(declarations, statement) {
+        do_enumerate_node_declarations(declarations, statement, enum_id)
+      })
+      |> list.fold(members, _, fn(declarations, statement) {
+        do_enumerate_node_declarations(declarations, statement, enum_id)
+      })
+    }
+    EnumValue(id:, name:, ..) -> {
+      let title = "enum value " <> name
+
+      dict.insert(
+        declarations,
+        id,
+        NodeDeclaration(title:, topic_id: parent <> ":" <> name, references: []),
+      )
+    }
+    StructDefinition(id:, name:, members:, nodes:, ..) -> {
+      let title = "struct " <> name
+      let struct_id = parent <> ":" <> name
+      dict.insert(
+        declarations,
+        id,
+        NodeDeclaration(title:, topic_id: struct_id, references: []),
+      )
+      |> list.fold(nodes, _, fn(declarations, statement) {
+        do_enumerate_node_declarations(declarations, statement, struct_id)
+      })
+      |> list.fold(members, _, fn(declarations, statement) {
+        do_enumerate_node_declarations(declarations, statement, struct_id)
+      })
+    }
 
     _ -> declarations
   }
@@ -961,6 +1088,8 @@ fn do_count_node_references(
     | ParameterListNode(parameters: nodes, ..)
     | ErrorDefinitionNode(nodes:, ..)
     | TupleExpression(nodes:, ..)
+    | EnumDefinition(nodes:, ..)
+    | StructDefinition(nodes:, ..)
     | EventDefinitionNode(nodes:, ..) ->
       list.fold(nodes, declarations, fn(declarations, node) {
         do_count_node_references(declarations, node, parent_title, parent_id)
@@ -970,6 +1099,7 @@ fn do_count_node_references(
     | VariableDeclarationNode(..)
     | StructuredDocumentationNode(..)
     | ElementaryTypeNameExpression(..)
+    | EnumValue(..)
     | Literal(..) -> declarations
 
     ContractDefinitionNode(nodes:, base_contracts:, name:, contract_kind:, ..) -> {
@@ -1037,6 +1167,22 @@ fn do_count_node_references(
         option.None -> declarations
       }
     }
+    ModifierDefinitionNode(nodes:, parameters:, body:, name:, ..) -> {
+      let title = "modifier " <> name
+      let modifier_id = parent_id <> ":" <> name
+
+      let declarations =
+        list.fold(nodes, declarations, fn(declarations, node) {
+          do_count_node_references(declarations, node, title, modifier_id)
+        })
+        |> do_count_node_references(parameters, title, modifier_id)
+
+      case body {
+        Some(body) ->
+          do_count_node_references(declarations, body, title, modifier_id)
+        option.None -> declarations
+      }
+    }
     BlockNode(nodes:, statements:, ..) -> {
       list.fold(nodes, declarations, fn(declarations, node) {
         do_count_node_references(declarations, node, parent_title, parent_id)
@@ -1101,6 +1247,43 @@ fn do_count_node_references(
         option.None -> declarations
       }
     }
+    ForStatementNode(
+      initialization_expression:,
+      condition:,
+      loop_expression:,
+      body:,
+      ..,
+    ) ->
+      case initialization_expression {
+        option.Some(init) ->
+          do_count_node_references(declarations, init, parent_title, parent_id)
+        option.None -> declarations
+      }
+      |> fn(declarations) {
+        case condition {
+          option.Some(condition) ->
+            do_count_node_references(
+              declarations,
+              condition,
+              parent_title,
+              parent_id,
+            )
+          option.None -> declarations
+        }
+      }
+      |> fn(declarations) {
+        case loop_expression {
+          option.Some(loop) ->
+            do_count_node_references(
+              declarations,
+              loop,
+              parent_title,
+              parent_id,
+            )
+          option.None -> declarations
+        }
+      }
+      |> do_count_node_references(body, parent_title, parent_id)
     RevertStatementNode(expression:, ..) ->
       case expression {
         Some(expression) ->
@@ -1215,8 +1398,12 @@ fn do_count_node_references(
       )
 
     IndexAccess(base:, index:, ..) ->
-      do_count_node_references(declarations, base, parent_title, parent_id)
-      |> do_count_node_references(index, parent_title, parent_id)
+      case index {
+        option.Some(index) ->
+          do_count_node_references(declarations, index, parent_title, parent_id)
+        option.None -> declarations
+      }
+      |> do_count_node_references(base, parent_title, parent_id)
 
     Modifier(reference_id:, arguments:, ..) ->
       add_reference(
@@ -1250,6 +1437,12 @@ fn do_count_node_references(
         reference_id,
         NodeReference(title: parent_title, topic_id: parent_id),
       )
+    Conditional(condition:, true_expression:, false_expression:, ..) ->
+      do_count_node_references(declarations, condition, parent_title, parent_id)
+      |> do_count_node_references(true_expression, parent_title, parent_id)
+      |> do_count_node_references(false_expression, parent_title, parent_id)
+    UserDefinedTypeName(path_node:, ..) ->
+      do_count_node_references(declarations, path_node, parent_title, parent_id)
   }
 }
 
@@ -1296,19 +1489,16 @@ pub fn read_asts(for audit_name: String) {
     use file_name <- list.map(build_dirs)
     let build_dir = out_dir |> filepath.join(file_name)
 
-    use build_file <- result.try(
+    let build_files =
       build_dir
       |> simplifile.read_directory
       |> result.unwrap([])
-      |> list.first
-      |> result.replace_error(snag.new(
-        "Failed to find build file for " <> file_name <> " in " <> out_dir,
-      ))
-      |> result.map(filepath.join(build_dir, _)),
-    )
+
+    use build_file <- list.map(build_files)
 
     use source_file_contents <- result.try(
-      simplifile.read(build_file)
+      filepath.join(build_dir, build_file)
+      |> simplifile.read
       |> snag.map_error(simplifile.describe_error)
       |> snag.context(
         "Failed to read build file " <> build_file <> " for " <> file_name,
@@ -1327,9 +1517,9 @@ pub fn read_asts(for audit_name: String) {
     #(ast.absolute_path, ast) |> Ok
   }
 
-  echo "Finished reading asts"
-
-  snagx.collect_errors(res)
+  res
+  |> list.flatten
+  |> snagx.collect_errors
 }
 
 pub type AST {
@@ -1338,6 +1528,7 @@ pub type AST {
 
 pub fn ast_decoder(for audit_name) -> decode.Decoder(AST) {
   use id <- decode.field("id", decode.int)
+  echo id
   use absolute_path <- decode.field("absolutePath", decode.string)
   use nodes <- decode.field("nodes", decode.list(node_decoder()))
   decode.success(AST(
@@ -1374,6 +1565,7 @@ pub type Node {
     mutability: String,
     visibility: String,
     type_string: String,
+    type_name: option.Option(Node),
     value: option.Option(Node),
   )
   ErrorDefinitionNode(
@@ -1381,6 +1573,7 @@ pub type Node {
     source_map: SourceMap,
     name: String,
     nodes: List(Node),
+    parameters: Node,
   )
   EventDefinitionNode(
     id: Int,
@@ -1397,6 +1590,15 @@ pub type Node {
     parameters: Node,
     modifiers: List(Node),
     return_parameters: Node,
+    nodes: List(Node),
+    body: option.Option(Node),
+    documentation: option.Option(Node),
+  )
+  ModifierDefinitionNode(
+    id: Int,
+    source_map: SourceMap,
+    name: String,
+    parameters: Node,
     nodes: List(Node),
     body: option.Option(Node),
     documentation: option.Option(Node),
@@ -1428,6 +1630,14 @@ pub type Node {
     condition: Node,
     true_body: Node,
     false_body: option.Option(Node),
+  )
+  ForStatementNode(
+    id: Int,
+    source_map: SourceMap,
+    initialization_expression: option.Option(Node),
+    condition: option.Option(Node),
+    loop_expression: option.Option(Node),
+    body: Node,
   )
   RevertStatementNode(
     id: Int,
@@ -1469,7 +1679,12 @@ pub type Node {
     expression: Node,
     operator: String,
   )
-  IndexAccess(id: Int, source_map: SourceMap, base: Node, index: Node)
+  IndexAccess(
+    id: Int,
+    source_map: SourceMap,
+    base: Node,
+    index: option.Option(Node),
+  )
   Modifier(
     id: Int,
     source_map: SourceMap,
@@ -1492,9 +1707,33 @@ pub type Node {
     id: Int,
     source_map: SourceMap,
     name: String,
+    is_global_access: Bool,
     reference_id: option.Option(Int),
     expression: option.Option(Node),
   )
+  Conditional(
+    id: Int,
+    source_map: SourceMap,
+    condition: Node,
+    false_expression: Node,
+    true_expression: Node,
+  )
+  EnumDefinition(
+    id: Int,
+    source_map: SourceMap,
+    name: String,
+    nodes: List(Node),
+    members: List(Node),
+  )
+  EnumValue(id: Int, source_map: SourceMap, name: String)
+  StructDefinition(
+    id: Int,
+    source_map: SourceMap,
+    name: String,
+    nodes: List(Node),
+    members: List(Node),
+  )
+  UserDefinedTypeName(id: Int, source_map: SourceMap, path_node: Node)
 }
 
 pub type SourceMap {
@@ -1538,6 +1777,7 @@ fn modifier_kind_from_string(kind) {
 pub type LiteralKind {
   NumberLiteral
   StringLiteral
+  HexStringLiteral
   BoolLiteral
 }
 
@@ -1545,6 +1785,7 @@ fn literal_kind_from_string(kind) {
   case kind {
     "number" -> NumberLiteral
     "string" -> StringLiteral
+    "hexString" -> HexStringLiteral
     "bool" -> BoolLiteral
     _ -> panic as "Invalid literal kind given"
   }
@@ -1605,6 +1846,11 @@ fn node_decoder() -> decode.Decoder(Node) {
         ["typeDescriptions", "typeString"],
         decode.string,
       )
+      // use type_name <- decode.optional_field(
+      //   "typeName",
+      //   option.None,
+      //   decode.optional(node_decoder()),
+      // )
       use value <- decode.optional_field(
         "value",
         option.None,
@@ -1618,6 +1864,7 @@ fn node_decoder() -> decode.Decoder(Node) {
         mutability:,
         visibility:,
         type_string:,
+        type_name: option.None,
         value:,
       ))
     }
@@ -1630,12 +1877,14 @@ fn node_decoder() -> decode.Decoder(Node) {
         [],
         decode.list(node_decoder()),
       )
+      use parameters <- decode.field("parameters", node_decoder())
 
       decode.success(ErrorDefinitionNode(
         id:,
         source_map: source_map_from_string(name_location),
         name:,
         nodes:,
+        parameters:,
       ))
     }
     "EventDefinition" -> {
@@ -1704,6 +1953,36 @@ fn node_decoder() -> decode.Decoder(Node) {
         parameters:,
         modifiers:,
         return_parameters:,
+        nodes:,
+        body:,
+        documentation:,
+      ))
+    }
+    "ModifierDefinition" -> {
+      use id <- decode.field("id", decode.int)
+      use src <- decode.field("nameLocation", decode.string)
+      use name <- decode.field("name", decode.string)
+      use parameters <- decode.field("parameters", node_decoder())
+      use nodes <- decode.optional_field(
+        "nodes",
+        [],
+        decode.list(node_decoder()),
+      )
+      use body <- decode.optional_field(
+        "body",
+        option.None,
+        decode.optional(node_decoder()),
+      )
+      use documentation <- decode.optional_field(
+        "documentation",
+        option.None,
+        decode.optional(node_decoder()),
+      )
+      decode.success(ModifierDefinitionNode(
+        id:,
+        source_map: source_map_from_string(src),
+        name:,
+        parameters:,
         nodes:,
         body:,
         documentation:,
@@ -1802,6 +2081,34 @@ fn node_decoder() -> decode.Decoder(Node) {
         condition:,
         true_body:,
         false_body:,
+      ))
+    }
+    "ForStatement" -> {
+      use id <- decode.field("id", decode.int)
+      use src <- decode.field("src", decode.string)
+      use initialization_expression <- decode.optional_field(
+        "initializationExpression",
+        option.None,
+        decode.optional(node_decoder()),
+      )
+      use condition <- decode.optional_field(
+        "condition",
+        option.None,
+        decode.optional(node_decoder()),
+      )
+      use loop_expression <- decode.optional_field(
+        "loopExpression",
+        option.None,
+        decode.optional(node_decoder()),
+      )
+      use body <- decode.field("body", node_decoder())
+      decode.success(ForStatementNode(
+        id:,
+        source_map: source_map_from_string(src),
+        initialization_expression:,
+        condition:,
+        loop_expression:,
+        body:,
       ))
     }
     "RevertStatement" -> {
@@ -1918,7 +2225,11 @@ fn node_decoder() -> decode.Decoder(Node) {
       use id <- decode.field("id", decode.int)
       use src <- decode.field("src", decode.string)
       use base <- decode.field("baseExpression", node_decoder())
-      use index <- decode.field("indexExpression", node_decoder())
+      use index <- decode.optional_field(
+        "indexExpression",
+        option.None,
+        decode.optional(node_decoder()),
+      )
       decode.success(IndexAccess(
         id:,
         source_map: source_map_from_string(src),
@@ -2023,12 +2334,79 @@ fn node_decoder() -> decode.Decoder(Node) {
         option.None,
         decode.optional(node_decoder()),
       )
+      let is_global_access = case expression {
+        option.Some(Identifier(reference_id:, ..)) if reference_id < 0 -> True
+        _ -> False
+      }
       decode.success(MemberAccess(
         id:,
         source_map: source_map_from_string(src),
         name:,
         reference_id:,
+        is_global_access:,
         expression:,
+      ))
+    }
+    "Conditional" -> {
+      use id <- decode.field("id", decode.int)
+      use src <- decode.field("src", decode.string)
+      use condition <- decode.field("condition", node_decoder())
+      use true_expression <- decode.field("trueExpression", node_decoder())
+      use false_expression <- decode.field("falseExpression", node_decoder())
+      decode.success(Conditional(
+        id:,
+        source_map: source_map_from_string(src),
+        condition:,
+        true_expression:,
+        false_expression:,
+      ))
+    }
+    "EnumDefinition" -> {
+      use id <- decode.field("id", decode.int)
+      use src <- decode.field("nameLocation", decode.string)
+      use name <- decode.field("name", decode.string)
+      use nodes <- decode.field("nodes", decode.list(node_decoder()))
+      use members <- decode.field("members", decode.list(node_decoder()))
+      decode.success(EnumDefinition(
+        id:,
+        source_map: source_map_from_string(src),
+        name:,
+        nodes:,
+        members:,
+      ))
+    }
+    "EnumValue" -> {
+      use id <- decode.field("id", decode.int)
+      use src <- decode.field("nameLocation", decode.string)
+      use name <- decode.field("name", decode.string)
+      decode.success(EnumValue(
+        id:,
+        source_map: source_map_from_string(src),
+        name:,
+      ))
+    }
+    "StructDefinition" -> {
+      use id <- decode.field("id", decode.int)
+      use src <- decode.field("nameLocation", decode.string)
+      use name <- decode.field("name", decode.string)
+      use nodes <- decode.field("nodes", decode.list(node_decoder()))
+      use members <- decode.field("members", decode.list(node_decoder()))
+      decode.success(StructDefinition(
+        id:,
+        source_map: source_map_from_string(src),
+        name:,
+        nodes:,
+        members:,
+      ))
+    }
+    "UserDefinedTypeName" -> {
+      use id <- decode.field("id", decode.int)
+      use src <- decode.field("nameLocation", decode.string)
+      use path_node <- decode.field("path", node_decoder())
+      decode.success(UserDefinedTypeName(
+        id:,
+        source_map: source_map_from_string(src),
+        path_node:,
       ))
     }
     _ -> {
@@ -2160,8 +2538,6 @@ pub fn preprocess_source_old(
         line_text |> style_code_tokens |> PreprocessedLine
       EventDefinition -> line_text |> style_code_tokens |> PreprocessedLine
       ErrorDefinition -> line_text |> style_code_tokens |> PreprocessedLine
-      StructDefinition -> line_text |> style_code_tokens |> PreprocessedLine
-      EnumDefinition -> line_text |> style_code_tokens |> PreprocessedLine
       LocalVariableDefinition ->
         line_text |> style_code_tokens |> PreprocessedLine
     }
@@ -2229,8 +2605,6 @@ pub type LineSigificance {
   StorageVariableDefinition
   EventDefinition
   ErrorDefinition
-  StructDefinition
-  EnumDefinition
   LocalVariableDefinition
 }
 
@@ -2283,14 +2657,6 @@ fn classify_line(line_text) {
   use <- bool.guard(
     trimmed_line_text |> string.starts_with("function"),
     FunctionDefinition,
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("struct"),
-    StructDefinition,
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("enum"),
-    EnumDefinition,
   )
   use <- bool.guard(
     trimmed_line_text |> string.starts_with("event"),
@@ -2614,7 +2980,7 @@ pub fn style_code_tokens(line_text) {
 
   let assert Ok(comment_regex) =
     regexp.from_string(
-      "(?:\\/\\/.*|^\\s*\\/\\*\\*.*|^\\s*\\*.*|^\\s*\\*\\/.*|\\/\\*.*?\\*\\/)",
+      "(?:\\/\\/.*|^\\s{2,}\\*\\*.*|^\\s{2,}\\*.*|^\\s{2,}\\*\\/.*|\\/\\*.*?\\*\\/)",
     )
 
   let comments = regexp.scan(comment_regex, styled_line)
@@ -2634,7 +3000,7 @@ pub fn style_code_tokens(line_text) {
 
   let assert Ok(keyword_regex) =
     regexp.from_string(
-      "\\b(constructor|contract|fallback|indexed|override|mapping|immutable|interface|virtual|constant|library|abstract|event|error|require|revert|using|for|emit|function|if|else|returns|return|memory|calldata|public|private|external|view|pure|payable|internal|import|enum|struct|storage|is)\\b",
+      "\\b(constructor|contract|continue|break|modifier|fallback|indexed|override|mapping|immutable|interface|virtual|constant|library|abstract|event|error|require|revert|using|for|emit|function|if|else|returns|return|memory|calldata|public|private|external|view|pure|payable|internal|import|enum|struct|storage|is)\\b",
     )
 
   let styled_line =
@@ -2684,7 +3050,7 @@ pub fn style_code_tokens(line_text) {
 
   let assert Ok(type_regex) =
     regexp.from_string(
-      "\\b(address|bool|bytes|string|int|uint|int\\d+|uint\\d+)\\b",
+      "\\b(address|bool|bytes|bytes\\d+|string|int|uint|int\\d+|uint\\d+)\\b",
     )
 
   let styled_line =
@@ -2695,7 +3061,7 @@ pub fn style_code_tokens(line_text) {
 
   let assert Ok(number_regex) =
     regexp.from_string(
-      "(?<!\\w)\\d+(?:[_ \\.]\\d+)*(?:\\s+(?:days|ether|finney|wei))?(?!\\w)",
+      "(?<!\\w)(?:\\d+(?:[_ \\.]\\d+)*(?:\\s+(?:days|ether|finney|wei))?|0x[0-9a-fA-F]+|\\d+[eE][+-]?\\d+)(?!\\w)",
     )
 
   let styled_line =
