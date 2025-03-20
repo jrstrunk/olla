@@ -21,6 +21,10 @@ clean-skeleton:
 count-lines:
 	@(cd server/priv/audits && find . -type f -exec wc -l {} \; | sort -n)
 
+.PHONY: clear-git-submodules
+clear-git-submodules:
+	@(cd server/priv/audits && find . -name ".git" -type d -exec rm -rf {} +)
+
 .PHONY: test
 test:
 	@for dir in $(SUBDIRS); do \

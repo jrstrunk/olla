@@ -142,69 +142,33 @@ pub fn consume_source(
           audit_name,
         )
 
-        EventDefinitionNode(id:, ..)
+        ContractDefinitionNode(id:, ..)
+        | VariableDeclarationNode(id:, ..)
+        | FunctionDefinitionNode(id:, ..)
+        | ModifierDefinitionNode(id:, ..)
+        | EventDefinitionNode(id:, ..)
         | ErrorDefinitionNode(id:, ..)
         | EnumDefinition(id:, ..)
         | StructDefinition(id:, ..)
-        | EnumValue(id:, ..)
-        | ContractDefinitionNode(id:, ..) -> style_declaration_node(
+        | EnumValue(id:, ..) -> style_declaration_node(
           declarations:,
           id:,
-          class: "contract",
           tokens: _,
         )
 
-        BaseContract(reference_id:, ..) -> style_reference_node(
+        BaseContract(reference_id:, ..) | Modifier(reference_id:, ..) -> style_reference_node(
           declarations:,
           reference_id:,
-          class: "contract",
           tokens: _,
         )
 
-        VariableDeclarationNode(id:, ..) -> style_declaration_node(
-          declarations:,
-          id:,
-          class: "variable",
-          tokens: _,
-        )
-
-        FunctionDefinitionNode(id:, function_kind:, ..) -> style_declaration_node(
-          declarations:,
-          id:,
-          class: case function_kind {
-            audit_metadata.Function -> "function"
-            audit_metadata.Constructor
-            | audit_metadata.Fallback
-            | audit_metadata.Receive -> "keyword"
-          },
-          tokens: _,
-        )
-
-        ModifierDefinitionNode(id:, ..) -> style_declaration_node(
-          declarations:,
-          id:,
-          class: "function",
-          tokens: _,
-        )
-
-        Modifier(kind:, reference_id:, ..) -> style_reference_node(
-          declarations:,
-          reference_id:,
-          class: case kind {
-            BaseConstructorSpecifier -> "contract"
-            ModifierInvocation -> "function"
-          },
-          tokens: _,
-        )
-
-        FunctionCall(reference_id:, name:, ..) ->
-          case name, reference_id < 0 {
-            "", True -> style_gap_token(_, class: "global-variable")
-            _, True -> style_gap_token(_, class: "type")
-            _, False -> style_reference_node(
+        FunctionCall(reference_id:, kind:, ..) ->
+          case reference_id < 0, kind {
+            _, TypeConversion -> style_gap_token(_, class: "type")
+            True, _ -> style_gap_token(_, class: "global-variable")
+            False, _ -> style_reference_node(
               declarations:,
               reference_id:,
-              class: "function",
               tokens: _,
             )
           }
@@ -215,7 +179,6 @@ pub fn consume_source(
             False -> style_reference_node(
               declarations:,
               reference_id:,
-              class: "variable",
               tokens: _,
             )
           }
@@ -225,7 +188,6 @@ pub fn consume_source(
             option.Some(reference_id), _ -> style_reference_node(
               declarations:,
               reference_id:,
-              class: "variable",
               tokens: _,
             )
             option.None, True -> style_gap_token(_, class: "global-variable")
@@ -364,19 +326,18 @@ pub fn consume_part(
 fn style_declaration_node(
   declarations declarations,
   id id,
-  class class: String,
   tokens tokens: String,
 ) {
   let node_declaration =
     dict.get(declarations, id)
-    |> result.unwrap(NodeDeclaration("", "", []))
+    |> result.unwrap(NodeDeclaration("", "", UnknownDeclaration, []))
 
   let build_element = fn(child_element) {
     html.span([attribute.class("relative")], [
       html.span(
         [
           attribute.id(node_declaration.topic_id),
-          attribute.class(class),
+          attribute.class(node_declaration_kind_to_string(node_declaration.kind)),
           attribute.class(
             "declaration-preview discussion-entry n" <> int.to_string(id),
           ),
@@ -394,18 +355,19 @@ fn style_declaration_node(
 fn style_reference_node(
   declarations declarations,
   reference_id reference_id,
-  class class: String,
   tokens tokens: String,
 ) {
   let referenced_node_declaration =
     dict.get(declarations, reference_id)
-    |> result.unwrap(NodeDeclaration("", "", []))
+    |> result.unwrap(NodeDeclaration("", "", UnknownDeclaration, []))
 
   let build_element = fn(child_element) {
     html.span([attribute.class("relative")], [
       html.span(
         [
-          attribute.class(class),
+          attribute.class(node_declaration_kind_to_string(
+            referenced_node_declaration.kind,
+          )),
           attribute.class(
             "reference-preview discussion-entry n"
             <> int.to_string(reference_id),
@@ -819,8 +781,45 @@ pub type NodeDeclaration {
   NodeDeclaration(
     title: String,
     topic_id: String,
+    kind: NodeDeclarationKind,
     references: List(NodeReference),
   )
+}
+
+pub type NodeDeclarationKind {
+  ContractDeclaration
+  ConstructorDeclaration
+  FunctionDeclaration
+  FallbackDeclaration
+  ReceiveDeclaration
+  ModifierDeclaration
+  VariableDeclaration
+  ConstantDeclaration
+  EnumDeclaration
+  EnumValueDeclaration
+  StructDeclaration
+  ErrorDeclaration
+  EventDeclaration
+  UnknownDeclaration
+}
+
+fn node_declaration_kind_to_string(kind) {
+  case kind {
+    ContractDeclaration -> "contract"
+    ConstructorDeclaration -> "constructor"
+    FunctionDeclaration -> "function"
+    FallbackDeclaration -> "fallback"
+    ReceiveDeclaration -> "receive"
+    ModifierDeclaration -> "modifier"
+    VariableDeclaration -> "variable"
+    ConstantDeclaration -> "constant"
+    EnumDeclaration -> "enum"
+    EnumValueDeclaration -> "enum-value"
+    StructDeclaration -> "struct"
+    ErrorDeclaration -> "error"
+    EventDeclaration -> "event"
+    UnknownDeclaration -> "unknown"
+  }
 }
 
 pub type NodeReference {
@@ -843,6 +842,7 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
         NodeDeclaration(
           title:,
           topic_id: parent <> ":" <> title,
+          kind: UnknownDeclaration,
           references: [],
         ),
       )
@@ -858,6 +858,7 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
         NodeDeclaration(
           title:,
           topic_id: parent <> ":" <> title,
+          kind: UnknownDeclaration,
           references: [],
         ),
       )
@@ -874,7 +875,12 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
       dict.insert(
         declarations,
         id,
-        NodeDeclaration(title:, topic_id: contract_id, references: []),
+        NodeDeclaration(
+          title:,
+          topic_id: contract_id,
+          kind: ContractDeclaration,
+          references: [],
+        ),
       )
       |> list.fold(nodes, _, fn(declarations, node) {
         do_enumerate_node_declarations(declarations, node, contract_id)
@@ -910,7 +916,17 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
         dict.insert(
           declarations,
           id,
-          NodeDeclaration(title:, topic_id: function_id, references: []),
+          NodeDeclaration(
+            title:,
+            topic_id: function_id,
+            kind: case function_kind {
+              audit_metadata.Function -> FunctionDeclaration
+              audit_metadata.Constructor -> ConstructorDeclaration
+              audit_metadata.Fallback -> FallbackDeclaration
+              audit_metadata.Receive -> ReceiveDeclaration
+            },
+            references: [],
+          ),
         )
         |> list.fold(nodes, _, fn(declarations, node) {
           do_enumerate_node_declarations(declarations, node, function_id)
@@ -932,12 +948,17 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
         dict.insert(
           declarations,
           id,
-          NodeDeclaration(title:, topic_id: modifier_id, references: []),
+          NodeDeclaration(
+            title:,
+            topic_id: modifier_id,
+            kind: ModifierDeclaration,
+            references: [],
+          ),
         )
-      list.fold(nodes, declarations, fn(declarations, node) {
-        do_enumerate_node_declarations(declarations, node, title)
-      })
-      |> do_enumerate_node_declarations(parameters, title)
+        |> list.fold(nodes, _, fn(declarations, node) {
+          do_enumerate_node_declarations(declarations, node, title)
+        })
+        |> do_enumerate_node_declarations(parameters, title)
 
       case body {
         Some(body) -> do_enumerate_node_declarations(declarations, body, title)
@@ -955,7 +976,12 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
       declarations
       |> dict.insert(
         id,
-        NodeDeclaration(title:, topic_id: parent <> ":" <> name, references: []),
+        NodeDeclaration(
+          title:,
+          topic_id: parent <> ":" <> name,
+          kind: ErrorDeclaration,
+          references: [],
+        ),
       )
       |> list.fold(nodes, _, fn(declarations, node) {
         do_enumerate_node_declarations(declarations, node, parent)
@@ -968,7 +994,12 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
       declarations
       |> dict.insert(
         id,
-        NodeDeclaration(title:, topic_id: parent <> ":" <> name, references: []),
+        NodeDeclaration(
+          title:,
+          topic_id: parent <> ":" <> name,
+          kind: EventDeclaration,
+          references: [],
+        ),
       )
       |> list.fold(nodes, _, fn(declarations, node) {
         do_enumerate_node_declarations(declarations, node, parent)
@@ -988,7 +1019,15 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
       dict.insert(
         declarations,
         id,
-        NodeDeclaration(title:, topic_id: parent <> ":" <> name, references: []),
+        NodeDeclaration(
+          title:,
+          topic_id: parent <> ":" <> name,
+          kind: case constant {
+            True -> ConstantDeclaration
+            False -> VariableDeclaration
+          },
+          references: [],
+        ),
       )
     }
     BlockNode(nodes:, statements:, ..) -> {
@@ -1032,7 +1071,12 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
       dict.insert(
         declarations,
         id,
-        NodeDeclaration(title:, topic_id: enum_id, references: []),
+        NodeDeclaration(
+          title:,
+          topic_id: enum_id,
+          kind: EnumDeclaration,
+          references: [],
+        ),
       )
       |> list.fold(nodes, _, fn(declarations, statement) {
         do_enumerate_node_declarations(declarations, statement, enum_id)
@@ -1047,7 +1091,12 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
       dict.insert(
         declarations,
         id,
-        NodeDeclaration(title:, topic_id: parent <> ":" <> name, references: []),
+        NodeDeclaration(
+          title:,
+          topic_id: parent <> ":" <> name,
+          kind: EnumValueDeclaration,
+          references: [],
+        ),
       )
     }
     StructDefinition(id:, name:, members:, nodes:, ..) -> {
@@ -1056,7 +1105,12 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
       dict.insert(
         declarations,
         id,
-        NodeDeclaration(title:, topic_id: struct_id, references: []),
+        NodeDeclaration(
+          title:,
+          topic_id: struct_id,
+          kind: StructDeclaration,
+          references: [],
+        ),
       )
       |> list.fold(nodes, _, fn(declarations, statement) {
         do_enumerate_node_declarations(declarations, statement, struct_id)
@@ -1461,7 +1515,12 @@ fn add_reference(declarations, declaration_id: Int, reference: NodeReference) {
           <> int.to_string(declaration_id)
           <> " found, there is an issue with finding all declarations",
         )
-        NodeDeclaration(title: "", topic_id: "", references: [reference])
+        NodeDeclaration(
+          title: "unknown",
+          topic_id: "",
+          kind: UnknownDeclaration,
+          references: [reference],
+        )
       }
     }
   })
@@ -1658,6 +1717,7 @@ pub type Node {
     name: String,
     reference_id: Int,
     arguments: List(Node),
+    kind: FunctionCallKind,
     expression: option.Option(Node),
   )
   Assignment(
@@ -1788,6 +1848,21 @@ fn literal_kind_from_string(kind) {
     "hexString" -> HexStringLiteral
     "bool" -> BoolLiteral
     _ -> panic as "Invalid literal kind given"
+  }
+}
+
+pub type FunctionCallKind {
+  Call
+  TypeConversion
+  StructConstructorCall
+}
+
+fn function_call_kind_from_string(kind) {
+  case kind {
+    "functionCall" -> Call
+    "typeConversion" -> TypeConversion
+    "structConstructorCall" -> StructConstructorCall
+    _ -> panic as "Invalid function call kind given"
   }
 }
 
@@ -2143,6 +2218,7 @@ fn node_decoder() -> decode.Decoder(Node) {
       use id <- decode.field("id", decode.int)
       use src <- decode.field("src", decode.string)
       use arguments <- decode.field("arguments", decode.list(node_decoder()))
+      use kind <- decode.field("kind", decode.string)
       use expression <- decode.optional_field(
         "expression",
         option.None,
@@ -2159,12 +2235,6 @@ fn node_decoder() -> decode.Decoder(Node) {
           reference_id,
           expression,
         )
-        Some(ElementaryTypeNameExpression(source_map:, name:, ..)) -> #(
-          source_map,
-          name,
-          -1,
-          option.None,
-        )
         Some(MemberAccess(
           source_map:,
           name:,
@@ -2180,6 +2250,7 @@ fn node_decoder() -> decode.Decoder(Node) {
         name:,
         reference_id:,
         arguments:,
+        kind: function_call_kind_from_string(kind),
         expression:,
       ))
     }

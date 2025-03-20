@@ -12,9 +12,11 @@
   --operator-color: #c678dd;
   --function-color: #5fafef;
   --type-color: #4acad3;
+  --custom-type-color: #e5c07b;
   --contract-color: #e5c07b;
   /* --variable-color: #abb2bf; */
   --variable-color: #f06d73;
+  --constant-color: #d19a66;
   /* --global-variable-color: #e06a74; */
   --global-variable-color: #d19a66;
 }
@@ -40,6 +42,9 @@ body {
   color: var(--comment-color);
 }
 
+.constructor,
+.fallback,
+.receive,
 .keyword {
   color: var(--keyword-color);
 }
@@ -56,7 +61,8 @@ body {
   color: var(--operator-color);
 }
 
-.function {
+.function,
+.modifier {
   color: var(--function-color);
 }
 
@@ -64,8 +70,20 @@ body {
   color: var(--type-color);
 }
 
+.struct,
+.enum,
+.enum-value,
+.error,
+.event {
+  color: var(--custom-type-color);
+}
+
 .variable {
   color: var(--variable-color);
+}
+
+.constant {
+  color: var(--constant-color);
 }
 
 .contract {
