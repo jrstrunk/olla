@@ -36,7 +36,10 @@ pub fn view(
 }
 
 fn audit_file_tree_view(audit_name, current_file_path, in_scope_files) {
-  let all_audit_files = group_files_by_parent(in_scope_files)
+  let all_audit_files = case list.contains(in_scope_files, current_file_path) {
+    True -> group_files_by_parent(in_scope_files)
+    False -> group_files_by_parent([current_file_path, ..in_scope_files])
+  }
 
   let #(subdirs, direct_files) =
     dict.get(all_audit_files, audit_name) |> result.unwrap(#([], []))
