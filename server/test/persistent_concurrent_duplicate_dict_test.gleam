@@ -12,6 +12,7 @@ pub fn pcdd_test() {
       "priv/persist/test_pcdd",
       function.identity,
       function.identity,
+      fn(val, _) { val },
       #("hello", option.None),
       fn(val: #(String, Option(String))) {
         [pcdd.text(val.0), pcdd.text_nullable(val.1)]
@@ -37,6 +38,7 @@ pub fn pcdd_test() {
       "priv/persist/test_pcdd",
       function.identity,
       function.identity,
+      fn(val, _) { val },
       #("hello", option.None),
       fn(val: #(String, Option(String))) {
         [pcdd.text(val.0), pcdd.text_nullable(val.1)]
@@ -61,6 +63,7 @@ pub fn topic_test() {
       "priv/persist/test_pcdd",
       function.identity,
       function.identity,
+      fn(val, _) { val },
       #("hello", option.None),
       fn(val: #(String, Option(String))) {
         [pcdd.text(val.0), pcdd.text_nullable(val.1)]
@@ -86,6 +89,7 @@ pub fn topic_test() {
       "priv/persist/test_pcdd",
       function.identity,
       function.identity,
+      fn(val, _) { val },
       #("hello", option.None),
       fn(val: #(String, Option(String))) {
         [pcdd.text(val.0), pcdd.text_nullable(val.1)]

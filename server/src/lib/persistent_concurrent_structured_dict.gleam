@@ -7,14 +7,22 @@ import lib/persistent_concurrent_duplicate_dict as pcd_dict
 
 pub opaque type PersistentConcurrentStructuredDict(
   key,
+  submission,
   raw_val,
   topic,
   structured_val,
 ) {
   PersistentConcurrentStructuredDict(
-    raw_data: pcd_dict.PersistentConcurrentDuplicateDict(key, raw_val),
+    raw_data: pcd_dict.PersistentConcurrentDuplicateDict(
+      key,
+      submission,
+      raw_val,
+    ),
     structured_data: concurrent_dict.ConcurrentDict(topic, structured_val),
-    builder: fn(pcd_dict.PersistentConcurrentDuplicateDict(key, raw_val), topic) ->
+    builder: fn(
+      pcd_dict.PersistentConcurrentDuplicateDict(key, submission, raw_val),
+      topic,
+    ) ->
       structured_val,
     topic_encoder: fn(topic) -> String,
     topic_subscribers: concurrent_duplicate_dict.ConcurrentDuplicateDict(
@@ -32,13 +40,14 @@ pub fn build(
   path path: String,
   key_encoder key_encoder: fn(key) -> String,
   key_decoder key_decoder: fn(String) -> key,
+  val_builder val_builder: fn(submission, Int) -> raw_val,
   example_val example_val: raw_val,
   val_encoder val_encoder: fn(raw_val) -> List(pcd_dict.Value),
   val_decoder val_decoder: decode.Decoder(raw_val),
   topic_encoder topic_encoder: fn(topic) -> String,
   topic_decoder topic_decoder: fn(String) -> topic,
   builder builder: fn(
-    pcd_dict.PersistentConcurrentDuplicateDict(key, raw_val),
+    pcd_dict.PersistentConcurrentDuplicateDict(key, submission, raw_val),
     topic,
   ) ->
     structured_val,
@@ -47,6 +56,7 @@ pub fn build(
     path,
     key_encoder,
     key_decoder,
+    val_builder,
     example_val,
     val_encoder,
     val_decoder,
@@ -77,6 +87,7 @@ pub fn build(
 pub fn subscribe_to_topic(
   psc_dict: PersistentConcurrentStructuredDict(
     key,
+    submission,
     raw_val,
     topic,
     structured_val,
@@ -94,6 +105,7 @@ pub fn subscribe_to_topic(
 pub fn subscribe(
   psc_dict: PersistentConcurrentStructuredDict(
     key,
+    submission,
     raw_val,
     topic,
     structured_val,
@@ -106,6 +118,7 @@ pub fn subscribe(
 pub fn insert(
   psc_dict: PersistentConcurrentStructuredDict(
     key,
+    submission,
     raw_val,
     topic,
     structured_val,
@@ -136,6 +149,7 @@ pub fn insert(
 pub fn get(
   psc_dict: PersistentConcurrentStructuredDict(
     key,
+    submission,
     raw_val,
     topic,
     structured_val,
@@ -148,6 +162,7 @@ pub fn get(
 pub fn to_list(
   psc_dict: PersistentConcurrentStructuredDict(
     key,
+    submission,
     raw_val,
     topic,
     structured_val,

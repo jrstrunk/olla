@@ -14,39 +14,56 @@ import simplifile
 import snag
 import sqlight
 
-pub type ConnectionActorState(key, val) {
+pub type ConnectionActorState(key, submission, val) {
   ConnectionActorState(
     conn: sqlight.Connection,
     insert_query: String,
+    record_count: Int,
+    build_val: fn(submission, Int) -> val,
     key_encoder: fn(key) -> String,
     val_encoder: fn(val) -> List(Value),
   )
 }
 
-pub type ConnectionActorMsg(key, val) {
-  PersistData(key, val, reply: process.Subject(Result(Nil, snag.Snag)))
+pub type ConnectionActorMsg(key, submission, val) {
+  PersistData(key, submission, reply: process.Subject(Result(val, snag.Snag)))
   PersistTopic(String, reply: process.Subject(Result(Nil, snag.Snag)))
 }
 
-pub fn handle_persist_data(msg, state: ConnectionActorState(key, val)) {
-  case msg {
-    PersistData(key, val, reply) -> {
+pub fn handle_persist_data(
+  msg,
+  state: ConnectionActorState(key, submission, val),
+) {
+  let state = case msg {
+    PersistData(key, submission, reply) -> {
       let encoded_key = state.key_encoder(key)
+
+      let new_record_count = state.record_count + 1
+
+      let val = state.build_val(submission, new_record_count)
+
       let encoded_vals = state.val_encoder(val)
 
-      sqlight.query(
-        state.insert_query,
-        on: state.conn,
-        with: [
-          sqlight.text(encoded_key),
-          ..list.map(encoded_vals, translate_persist_type)
-        ],
-        expecting: decode.success(Nil),
-      )
-      |> snag.map_error(string.inspect)
-      |> snag.context("Unable to insert data")
-      |> result.replace(Nil)
-      |> process.send(reply, _)
+      let res =
+        sqlight.query(
+          state.insert_query,
+          on: state.conn,
+          with: [
+            sqlight.text(encoded_key),
+            ..list.map(encoded_vals, translate_persist_type)
+          ],
+          expecting: decode.success(Nil),
+        )
+        |> snag.map_error(string.inspect)
+        |> snag.context("Unable to insert data")
+        |> result.replace(val)
+
+      process.send(reply, res)
+
+      case res {
+        Ok(..) -> ConnectionActorState(..state, record_count: new_record_count)
+        Error(..) -> state
+      }
     }
     PersistTopic(topic, reply) -> {
       sqlight.exec(
@@ -57,15 +74,17 @@ pub fn handle_persist_data(msg, state: ConnectionActorState(key, val)) {
       |> snag.context("Unable to add topic to topics table")
       |> result.replace(Nil)
       |> process.send(reply, _)
+
+      state
     }
   }
 
   actor.continue(state)
 }
 
-pub opaque type PersistentConcurrentDuplicateDict(key, val) {
+pub opaque type PersistentConcurrentDuplicateDict(key, submission, val) {
   PersistentConcurrentDuplicateDict(
-    connection_actor: process.Subject(ConnectionActorMsg(key, val)),
+    connection_actor: process.Subject(ConnectionActorMsg(key, submission, val)),
     data: concurrent_duplicate_dict.ConcurrentDuplicateDict(key, val),
     topics: concurrent_duplicate_dict.ConcurrentDuplicateDict(String, Nil),
     subscribers: concurrent_duplicate_dict.ConcurrentDuplicateDict(
@@ -85,6 +104,7 @@ pub fn build(
   path path: String,
   key_encoder key_encoder: fn(key) -> String,
   key_decoder key_decoder: fn(String) -> key,
+  build_val build_val: fn(submission, Int) -> val,
   example example: val,
   val_encoder val_encoder: fn(val) -> List(Value),
   val_decoder val_decoder: decode.Decoder(val),
@@ -149,7 +169,7 @@ pub fn build(
   let select_data_query =
     "SELECT " <> column_names <> " FROM persist WHERE pcdd_key = ?"
 
-  use data_list <- result.try(
+  use data_nested <- result.try(
     list.map(keys, fn(key) {
       use key_data <- result.map(
         sqlight.query(
@@ -167,7 +187,15 @@ pub fn build(
     |> snagx.collect_errors,
   )
 
-  let data = concurrent_duplicate_dict.from_nested_list(data_list)
+  let data_flattened =
+    list.map(data_nested, fn(record) {
+      list.map(record.1, fn(val) { #(record.0, val) })
+    })
+    |> list.flatten
+
+  let data = concurrent_duplicate_dict.from_list(data_flattened)
+
+  let record_count = list.length(data_flattened)
 
   let insert_query =
     "INSERT INTO persist (pcdd_key, "
@@ -188,7 +216,14 @@ pub fn build(
   )
 
   use connection_actor <- result.try(
-    ConnectionActorState(conn:, insert_query:, key_encoder:, val_encoder:)
+    ConnectionActorState(
+      conn:,
+      insert_query:,
+      key_encoder:,
+      record_count:,
+      build_val:,
+      val_encoder:,
+    )
     |> actor.start(handle_persist_data)
     |> snag.map_error(string.inspect),
   )
@@ -203,14 +238,22 @@ pub fn build(
   |> Ok
 }
 
-pub fn get(pcd: PersistentConcurrentDuplicateDict(key, val), key) {
+pub fn get(pcd: PersistentConcurrentDuplicateDict(key, submission, val), key) {
   concurrent_duplicate_dict.get(pcd.data, key)
 }
 
-pub fn insert(pcdd: PersistentConcurrentDuplicateDict(key, val), key, val) {
+pub fn insert(
+  pcdd: PersistentConcurrentDuplicateDict(key, submission, val),
+  key: key,
+  submission: submission,
+) {
   // First persist the data in the disk database
-  use Nil <- result.map(
-    process.try_call(pcdd.connection_actor, PersistData(key, val, _), 100_000)
+  use val <- result.map(
+    process.try_call(
+      pcdd.connection_actor,
+      PersistData(key, submission, _),
+      100_000,
+    )
     |> snag.map_error(string.inspect)
     |> result.flatten,
   )
@@ -223,23 +266,29 @@ pub fn insert(pcdd: PersistentConcurrentDuplicateDict(key, val), key, val) {
   |> list.each(fn(effect) { effect() })
 }
 
-pub fn subscribe(pcdd: PersistentConcurrentDuplicateDict(key, val), subscriber) {
+pub fn subscribe(
+  pcdd: PersistentConcurrentDuplicateDict(key, submission, val),
+  subscriber,
+) {
   concurrent_duplicate_dict.insert(pcdd.subscribers, Nil, subscriber)
 }
 
-pub fn keys(pcd: PersistentConcurrentDuplicateDict(key, val)) {
+pub fn keys(pcd: PersistentConcurrentDuplicateDict(key, submission, val)) {
   concurrent_duplicate_dict.keys(pcd.data)
 }
 
-pub fn to_list(pcd: PersistentConcurrentDuplicateDict(key, val)) {
+pub fn to_list(pcd: PersistentConcurrentDuplicateDict(key, submission, val)) {
   concurrent_duplicate_dict.to_list(pcd.data)
 }
 
-pub fn topics(pcd: PersistentConcurrentDuplicateDict(key, val)) {
+pub fn topics(pcd: PersistentConcurrentDuplicateDict(key, submission, val)) {
   concurrent_duplicate_dict.keys(pcd.topics)
 }
 
-pub fn add_topic(pcd: PersistentConcurrentDuplicateDict(key, val), topic) {
+pub fn add_topic(
+  pcd: PersistentConcurrentDuplicateDict(key, submission, val),
+  topic,
+) {
   case concurrent_duplicate_dict.get(pcd.topics, topic) {
     [] -> {
       use Nil <- result.map(

@@ -22,8 +22,6 @@ import o11a/components
 import o11a/computed_note
 import o11a/events
 import o11a/note
-import tempo/datetime
-import tempo/instant
 
 pub const name = components.line_discussion
 
@@ -210,18 +208,6 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         #(model, effect.none())
       })
 
-      let now = instant.now()
-      let now_dt = now |> instant.as_utc_datetime
-
-      let note_id =
-        model.user_name
-        <> now
-        |> instant.to_unique_int
-        |> int.to_string
-        <> now_dt
-        |> datetime.to_unix_milli
-        |> int.to_string
-
       let #(modifier, parent_id) = case model.editing_note {
         Some(note) -> #(note.Edit, note.note_id)
         None -> #(note.None, model.current_thread_id)
@@ -235,14 +221,12 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       }
 
       let note =
-        note.Note(
-          note_id:,
+        note.NoteSubmission(
           parent_id:,
           significance:,
-          user_name: "user" <> int.random(100) |> int.to_string,
+          user_id: "user" <> int.random(100) |> int.to_string,
           message:,
           expanded_message:,
-          time: now_dt,
           modifier:,
         )
 
@@ -257,7 +241,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         event.emit(
           events.user_submitted_note,
           json.object([
-            #("note", note.encode_note(note)),
+            #("note", note.encode_note_submission(note)),
             #("topic_id", json.string(model.topic_id)),
           ]),
         ),

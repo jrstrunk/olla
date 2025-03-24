@@ -32,7 +32,7 @@ pub fn app() -> lustre.App(Model, Model, Msg) {
 }
 
 pub type Msg {
-  UserSubmittedNote(note: note.Note, topic_id: String)
+  UserSubmittedNote(note_submission: note.NoteSubmission, topic_id: String)
   ServerUpdatedDiscussion
 }
 
@@ -58,9 +58,9 @@ pub fn init(init_model: Model) -> #(Model, effect.Effect(Msg)) {
 
 pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
-    UserSubmittedNote(note:, topic_id:) -> {
+    UserSubmittedNote(note_submission:, topic_id:) -> {
       let assert Ok(Nil) =
-        discussion.add_note(model.discussion, note, topic_id:)
+        discussion.add_note(model.discussion, note_submission, topic_id:)
       #(model, effect.none())
     }
     ServerUpdatedDiscussion -> #(model, effect.none())
@@ -427,7 +427,11 @@ pub fn on_user_submitted_line_note(msg) {
   use note <- result.try(
     decode.run(
       event,
-      decode.subfield(["detail", "note"], note.note_decoder(), decode.success),
+      decode.subfield(
+        ["detail", "note"],
+        note.note_submission_decoder(),
+        decode.success,
+      ),
     )
     |> result.replace_error(empty_error),
   )

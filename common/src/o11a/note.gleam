@@ -1,12 +1,38 @@
 import gleam/dict
 import gleam/dynamic/decode
+import gleam/int
 import gleam/json
 import gleam/option.{type Option}
 import tempo
 import tempo/datetime
+import tempo/instant
 
-/// Represents the way data is stored in the database and how clients should
-/// send data to the server.
+// Represents the way clients should submit data to the server
+pub type NoteSubmission {
+  NoteSubmission(
+    parent_id: String,
+    significance: NoteSignificance,
+    user_id: String,
+    message: String,
+    expanded_message: Option(String),
+    modifier: NoteModifier,
+  )
+}
+
+pub fn build_note(from submission: NoteSubmission, with id: Int) {
+  Note(
+    note_id: "C" <> int.to_string(id),
+    parent_id: submission.parent_id,
+    significance: submission.significance,
+    user_name: submission.user_id,
+    message: submission.message,
+    expanded_message: submission.expanded_message,
+    time: instant.now() |> instant.as_utc_datetime,
+    modifier: submission.modifier,
+  )
+}
+
+/// Represents the way data is stored in the database
 pub type Note {
   Note(
     note_id: String,
@@ -126,37 +152,31 @@ pub type NoteVote {
 pub type NoteVoteCollection =
   dict.Dict(String, List(NoteVote))
 
-pub fn encode_note(note: Note) {
+pub fn encode_note_submission(note: NoteSubmission) {
   json.object([
-    #("n", json.string(note.note_id)),
     #("p", json.string(note.parent_id)),
     #("s", json.int(note.significance |> note_significance_to_int)),
-    #("u", json.string(note.user_name)),
+    #("u", json.string(note.user_id)),
     #("m", json.string(note.message)),
     #("x", json.nullable(note.expanded_message, json.string)),
-    #("t", json.int(note.time |> datetime.to_unix_milli)),
     #("d", json.int(note.modifier |> note_modifier_to_int)),
   ])
 }
 
-pub fn note_decoder() {
-  use note_id <- decode.field("n", decode.string)
+pub fn note_submission_decoder() {
   use parent_id <- decode.field("p", decode.string)
   use significance <- decode.field("s", decode.int)
-  use user_name <- decode.field("u", decode.string)
+  use user_id <- decode.field("u", decode.string)
   use message <- decode.field("m", decode.string)
   use expanded_message <- decode.field("x", decode.optional(decode.string))
-  use time <- decode.field("t", decode.int)
   use modifier <- decode.field("d", decode.int)
 
-  Note(
-    note_id:,
+  NoteSubmission(
     parent_id:,
     significance: note_significance_from_int(significance),
-    user_name:,
+    user_id:,
     message:,
     expanded_message:,
-    time: datetime.from_unix_milli(time),
     modifier: note_modifier_from_int(modifier),
   )
   |> decode.success
@@ -175,57 +195,15 @@ pub fn example_note() {
   )
 }
 
-pub fn example_note_thread() {
-  [
-    #("L1", [
-      Note(
-        note_id: "L2",
-        parent_id: "L1",
-        significance: Comment,
-        user_name: "system",
-        message: "world",
-        expanded_message: option.None,
-        time: example_note().time,
-        modifier: None,
-      ),
-      Note(
-        note_id: "L3",
-        parent_id: "L1",
-        significance: Comment,
-        user_name: "system",
-        message: "hello2",
-        expanded_message: option.None,
-        time: example_note().time,
-        modifier: None,
-      ),
-    ]),
-    #("L50", [
-      Note(
-        note_id: "L1",
-        parent_id: "L50",
-        significance: Comment,
-        user_name: "system",
-        message: "hello",
-        expanded_message: option.None,
-        time: example_note().time,
-        modifier: None,
-      ),
-    ]),
-    #("L3", [
-      Note(
-        note_id: "L4",
-        parent_id: "L3",
-        significance: Comment,
-        user_name: "system",
-        message: "world2",
-        expanded_message: option.None,
-        time: example_note().time,
-        modifier: None,
-      ),
-    ]),
-  ]
-}
-
 pub fn example_note_vote() {
   NoteVote(note_id: "Example", user_name: "system", sigficance: UpVote)
 }
+
+pub const example_note_submission = NoteSubmission(
+  parent_id: "Example",
+  significance: Comment,
+  user_id: "system",
+  message: "Wow bro great finding that is really cool",
+  expanded_message: option.None,
+  modifier: None,
+)
