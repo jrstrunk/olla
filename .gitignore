@@ -6,3 +6,4 @@ client/build
 erl_crash.dump
 server/priv/audits
 server/priv/persist
+client/node_modules

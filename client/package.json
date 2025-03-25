@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "vite": "^6.2.3",
+    "vite-gleam": "^0.4.3"
+  }
+}

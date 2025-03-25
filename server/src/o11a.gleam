@@ -96,6 +96,7 @@ fn handler(req, context: Context) {
     ["line_discussion.min.mjs" as script]
     | ["page_navigation.mjs" as script]
     | ["panel_resizer.mjs" as script]
+    | ["client.mjs" as script]
     | ["page_panel.mjs" as script] -> serve_js(script, context.config)
 
     ["component-page", ..component_path_segments] -> {
@@ -241,6 +242,7 @@ fn as_document(body: element.Element(msg)) {
         [attribute.type_("module"), attribute.src("/page_navigation.mjs")],
         "",
       ),
+      html.script([attribute.type_("module"), attribute.src("/client.mjs")], ""),
       html.script(
         [attribute.type_("module"), attribute.src("/panel_resizer.mjs")],
         "",
