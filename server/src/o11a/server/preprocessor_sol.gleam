@@ -9,6 +9,7 @@ import gleam/io
 import gleam/json
 import gleam/list
 import gleam/option.{Some}
+import gleam/pair
 import gleam/regexp
 import gleam/result
 import gleam/string
@@ -17,7 +18,9 @@ import lib/snagx
 import lustre/attribute
 import lustre/element
 import lustre/element/html
+import o11a/attributes
 import o11a/audit_metadata
+import o11a/classes
 import o11a/config
 import simplifile
 import snag
@@ -30,7 +33,7 @@ pub type PreProcessedLine(msg) {
     line_tag: String,
     line_id: String,
     leading_spaces: Int,
-    nodes: List(PreProcessedNode(msg)),
+    elements: String,
   )
 }
 
@@ -98,9 +101,32 @@ pub fn preprocess_source(
     _, _ -> NonEmptyLine
   }
 
+  let elements =
+    list.fold(line, #(0, ""), fn(acc, node) {
+      case node {
+        PreProcessedDeclaration(build_element:, ..)
+        | PreProcessedReference(build_element:, ..) -> {
+          let col_number = acc.0 + 1
+
+          #(
+            col_number,
+            acc.1
+              <> build_element(col_number |> int.to_string, line_number_text)
+            |> element.to_string,
+          )
+        }
+
+        PreProcessedNode(element:) | PreProcessedGapNode(element:, ..) -> #(
+          acc.0,
+          acc.1 <> element |> element.to_string,
+        )
+      }
+    })
+    |> pair.second
+
   PreProcessedLine(
     significance:,
-    nodes: line,
+    elements:,
     line_id:,
     line_number:,
     line_number_text:,
@@ -111,11 +137,11 @@ pub fn preprocess_source(
 
 pub type PreProcessedNode(msg) {
   PreProcessedDeclaration(
-    build_element: fn(element.Element(msg)) -> element.Element(msg),
+    build_element: fn(String, String) -> element.Element(msg),
     node_declaration: NodeDeclaration,
   )
   PreProcessedReference(
-    build_element: fn(element.Element(msg)) -> element.Element(msg),
+    build_element: fn(String, String) -> element.Element(msg),
     referenced_node_declaration: NodeDeclaration,
   )
   PreProcessedNode(element: element.Element(msg))
@@ -321,21 +347,25 @@ fn style_declaration_node(
     dict.get(declarations, id)
     |> result.unwrap(NodeDeclaration("", "", UnknownDeclaration, []))
 
-  let build_element = fn(child_element) {
-    html.span([attribute.class("relative")], [
-      html.span(
-        [
-          attribute.id(node_declaration.topic_id),
-          attribute.class(node_declaration_kind_to_string(node_declaration.kind)),
-          attribute.class(
-            "declaration-preview discussion-entry n" <> int.to_string(id),
-          ),
-          attribute.attribute("tabindex", "0"),
-        ],
-        [html.text(tokens)],
-      ),
-      child_element,
-    ])
+  let build_element = fn(line_number, column_number) {
+    html.span(
+      [
+        attribute.id(node_declaration.topic_id),
+        attribute.class(node_declaration_kind_to_string(node_declaration.kind)),
+        attribute.class("declaration-preview N" <> int.to_string(id)),
+        attribute.class(classes.discussion_entry),
+        attribute.class(classes.discussion_entry_hover),
+        attribute.class("L" <> line_number),
+        attribute.class("C" <> column_number),
+        attribute.attribute("tabindex", "0"),
+        attributes.encode_line_number_data(line_number),
+        attributes.encode_column_number_data(column_number),
+        attributes.encode_topic_id_data(node_declaration.topic_id),
+        attributes.encode_topic_title_data(node_declaration.title),
+        attributes.encode_is_reference_data(False),
+      ],
+      [html.text(tokens)],
+    )
   }
 
   PreProcessedDeclaration(node_declaration:, build_element:)
@@ -350,23 +380,26 @@ fn style_reference_node(
     dict.get(declarations, reference_id)
     |> result.unwrap(NodeDeclaration("", "", UnknownDeclaration, []))
 
-  let build_element = fn(child_element) {
-    html.span([attribute.class("relative")], [
-      html.span(
-        [
-          attribute.class(node_declaration_kind_to_string(
-            referenced_node_declaration.kind,
-          )),
-          attribute.class(
-            "reference-preview discussion-entry n"
-            <> int.to_string(reference_id),
-          ),
-          attribute.attribute("tabindex", "0"),
-        ],
-        [html.text(tokens)],
-      ),
-      child_element,
-    ])
+  let build_element = fn(line_number, column_number) {
+    html.span(
+      [
+        attribute.class(node_declaration_kind_to_string(
+          referenced_node_declaration.kind,
+        )),
+        attribute.class("reference-preview N" <> int.to_string(reference_id)),
+        attribute.class(classes.discussion_entry),
+        attribute.class(classes.discussion_entry_hover),
+        attribute.class("L" <> line_number),
+        attribute.class("C" <> column_number),
+        attribute.attribute("tabindex", "0"),
+        attributes.encode_line_number_data(line_number),
+        attributes.encode_column_number_data(column_number),
+        attributes.encode_topic_id_data(referenced_node_declaration.topic_id),
+        attributes.encode_topic_title_data(referenced_node_declaration.title),
+        attributes.encode_is_reference_data(True),
+      ],
+      [html.text(tokens)],
+    )
   }
 
   PreProcessedReference(referenced_node_declaration:, build_element:)

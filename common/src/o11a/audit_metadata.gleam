@@ -47,7 +47,7 @@ pub fn contract_kind_from_string(kind) {
     "abstract" -> Abstract
     "abstract contract" -> Abstract
     "abstractcontract" -> Abstract
-    _ -> panic as { "Invalid contract kind given " <> kind }
+    _ -> panic as "Invalid contract kind given"
   }
 }
 

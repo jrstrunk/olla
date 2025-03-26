@@ -1,6 +1,8 @@
 import gleam/dynamic/decode
 import gleam/function
+import gleam/json
 import gleam/list
+import gleam/pair
 import gleam/result
 import lib/persistent_concurrent_duplicate_dict as pcd_dict
 import lib/persistent_concurrent_structured_dict as pcs_dict
@@ -175,4 +177,13 @@ fn build_structured_notes(
       |> list.flatten
       |> list.append(computed_notes)
   }
+}
+
+pub fn dump_computed_notes(discussion: Discussion) {
+  let notes =
+    pcs_dict.to_list(discussion.notes)
+    |> list.map(pair.second)
+    |> list.flatten
+
+  json.array(notes, computed_note.encode_computed_note)
 }
