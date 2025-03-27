@@ -36,33 +36,22 @@ pub fn view(
 }
 
 fn audit_file_tree_view(audit_name, current_file_path, in_scope_files) {
+  let dashboard_path = audit_name <> "/dashboard"
+
   let all_audit_files = case list.contains(in_scope_files, current_file_path) {
-    True -> group_files_by_parent(in_scope_files)
+    // These two arms will always show the dashboard file, as it is never in the
+    // in_scope_files list
+    True -> group_files_by_parent([dashboard_path, ..in_scope_files])
     False -> group_files_by_parent([current_file_path, ..in_scope_files])
   }
 
   let #(subdirs, direct_files) =
     dict.get(all_audit_files, audit_name) |> result.unwrap(#([], []))
 
-  let dashboard_path = audit_name <> "/dashboard"
-
   html.div([attribute.id("audit-files")], [
-    html.div([attribute.id(audit_name <> "-files")], [
-      html.a(
-        [
-          attribute.class(
-            "tree-item tree-link"
-            <> case current_file_path == dashboard_path {
-              True -> " underline"
-              False -> ""
-            },
-          ),
-          attribute.href("/" <> dashboard_path),
-          attribute.rel("prefetch"),
-        ],
-        [html.text("dashboard")],
-      ),
-      ..list.map(direct_files, fn(file) {
+    html.div(
+      [attribute.id(audit_name <> "-files")],
+      list.map(direct_files, fn(file) {
         html.a(
           [
             attribute.class(
@@ -77,8 +66,8 @@ fn audit_file_tree_view(audit_name, current_file_path, in_scope_files) {
           ],
           [html.text(file |> filepath.base_name)],
         )
-      })
-    ]),
+      }),
+    ),
     html.div(
       [attribute.id(audit_name <> "-dirs")],
       list.map(subdirs, sub_file_tree_view(
