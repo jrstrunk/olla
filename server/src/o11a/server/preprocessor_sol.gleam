@@ -1,7 +1,6 @@
 import filepath
 import given
 import gleam/bit_array
-import gleam/bool
 import gleam/dict
 import gleam/dynamic/decode
 import gleam/int
@@ -9,7 +8,6 @@ import gleam/io
 import gleam/json
 import gleam/list
 import gleam/option.{Some}
-import gleam/pair
 import gleam/regexp
 import gleam/result
 import gleam/string
@@ -22,26 +20,9 @@ import o11a/attributes
 import o11a/audit_metadata
 import o11a/classes
 import o11a/config
+import o11a/preprocessor
 import simplifile
 import snag
-
-pub type PreProcessedLine(msg) {
-  PreProcessedLine(
-    significance: PreProcessedLineSignificance,
-    line_number: Int,
-    line_number_text: String,
-    line_tag: String,
-    line_id: String,
-    leading_spaces: Int,
-    elements: String,
-  )
-}
-
-pub type PreProcessedLineSignificance {
-  SingleDeclarationLine(topic_id: String, title: String)
-  NonEmptyLine
-  EmptyLine
-}
 
 pub fn preprocess_source(
   source source: String,
@@ -92,16 +73,13 @@ pub fn preprocess_source(
           }
         })
 
-      SingleDeclarationLine(
-        topic_id: node_declaration.topic_id,
-        title: node_declaration.title,
-      )
+      preprocessor.SingleDeclarationLine(topic_id: node_declaration.topic_id)
     }
-    0, 0 -> EmptyLine
-    _, _ -> NonEmptyLine
+    0, 0 -> preprocessor.EmptyLine
+    _, _ -> preprocessor.NonEmptyLine
   }
 
-  let elements =
+  let #(_cols, elements) =
     list.fold(line, #(0, ""), fn(acc, node) {
       case node {
         PreProcessedDeclaration(build_element:, ..)
@@ -122,9 +100,8 @@ pub fn preprocess_source(
         )
       }
     })
-    |> pair.second
 
-  PreProcessedLine(
+  preprocessor.PreProcessedLine(
     significance:,
     elements:,
     line_id:,
@@ -1653,7 +1630,6 @@ pub type AST {
 
 pub fn ast_decoder(for audit_name) -> decode.Decoder(AST) {
   use id <- decode.field("id", decode.int)
-  echo id
   use absolute_path <- decode.field("absolutePath", decode.string)
   use nodes <- decode.field("nodes", decode.list(node_decoder()))
   decode.success(AST(
@@ -2656,506 +2632,6 @@ fn node_decoder() -> decode.Decoder(Node) {
       }
     }
   }
-}
-
-pub fn find_contract_id(
-  audit_metadata: audit_metadata.AuditMetaData,
-  named contract_name,
-  in imports,
-) {
-  list.find_map(imports, fn(import_path) {
-    use file_metadata <- result.try(dict.get(
-      audit_metadata.source_files_sol,
-      import_path |> filepath.base_name,
-    ))
-
-    case dict.get(file_metadata.contracts, contract_name) {
-      Ok(contract_meta_data) ->
-        Ok(#(import_path <> "#" <> contract_name, contract_meta_data.kind))
-      Error(Nil) -> Error(Nil)
-    }
-  })
-}
-
-pub fn preprocess_source_old(
-  for page_path,
-  with audit_metadata: audit_metadata.AuditMetaData,
-) {
-  use source <- result.try(
-    config.get_full_page_path(for: page_path)
-    |> simplifile.read,
-  )
-
-  use source_file_metadata <- given.ok(
-    dict.get(audit_metadata.source_files_sol, page_path |> filepath.base_name),
-    else_return: fn(_) { Ok([]) },
-  )
-
-  let vals = {
-    use line_text, line_number <- list.index_map(
-      source |> string.split(on: "\n"),
-    )
-
-    let line_number = line_number + 1
-    let line_number_text = int.to_string(line_number)
-    let line_tag = "L" <> line_number_text
-    let line_id = page_path <> "#" <> line_tag
-    let leading_spaces = enumerate.get_leading_spaces(line_text)
-
-    let sigificance = classify_line(line_text)
-
-    let preprocessed_line = case sigificance {
-      Empty -> line_text |> PreprocessedLine
-      Regular -> line_text |> style_code_tokens |> PreprocessedLine
-      License -> line_text |> style_license_line |> PreprocessedLine
-      PragmaDeclaration -> line_text |> style_pragma_line |> PreprocessedLine
-      Import ->
-        line_text
-        |> process_import_line(source_file_metadata)
-        |> PreprocessedLine
-      ContractDefinition(contract_kind:) ->
-        line_text
-        |> process_contract_definition_line(
-          contract_kind:,
-          page_path:,
-          audit_metadata:,
-          source_file_metadata:,
-        )
-      LibraryDirective -> line_text |> style_code_tokens |> PreprocessedLine
-      ConstructorDefinition ->
-        line_text |> style_code_tokens |> PreprocessedLine
-      FallbackFunctionDefinition ->
-        line_text |> style_code_tokens |> PreprocessedLine
-      ReceiveFunctionDefinition ->
-        line_text |> style_code_tokens |> PreprocessedLine
-      FunctionDefinition -> line_text |> process_function_definition_line
-      StorageVariableDefinition ->
-        line_text |> style_code_tokens |> PreprocessedLine
-      EventDefinition -> line_text |> style_code_tokens |> PreprocessedLine
-      ErrorDefinition -> line_text |> style_code_tokens |> PreprocessedLine
-      LocalVariableDefinition ->
-        line_text |> style_code_tokens |> PreprocessedLine
-    }
-
-    PreprocessedSourceLine(
-      line_number:,
-      line_number_text:,
-      line_tag:,
-      line_id:,
-      line_text_raw: line_text,
-      leading_spaces:,
-      preprocessed_line:,
-      sigificance:,
-    )
-  }
-  Ok(vals)
-}
-
-pub type PreprocessedSourceLine(msg) {
-  PreprocessedSourceLine(
-    line_number: Int,
-    line_number_text: String,
-    line_tag: String,
-    line_id: String,
-    line_text_raw: String,
-    leading_spaces: String,
-    preprocessed_line: PreprocessedLineElement(msg),
-    sigificance: LineSigificance,
-  )
-}
-
-pub type PreprocessedLineElement(msg) {
-  PreprocessedLine(preprocessed_line_text: String)
-  PreprocessedContractDefinition(
-    contract_id: String,
-    contract_name: String,
-    contract_kind: audit_metadata.ContractKind,
-    contract_inheritances: List(ExternalContractReference),
-    process_line: fn(element.Element(msg), List(element.Element(msg))) ->
-      element.Element(msg),
-  )
-  PreprocessedFunctionDefinition(
-    function_id: String,
-    function_name: String,
-    process_line: fn(element.Element(msg)) -> element.Element(msg),
-  )
-}
-
-pub type ExternalContractReference {
-  ExternalReference(name: String, id: String, kind: audit_metadata.ContractKind)
-}
-
-pub type LineSigificance {
-  Empty
-  Regular
-  License
-  PragmaDeclaration
-  Import
-  ContractDefinition(contract_kind: audit_metadata.ContractKind)
-  LibraryDirective
-  ConstructorDefinition
-  FallbackFunctionDefinition
-  ReceiveFunctionDefinition
-  FunctionDefinition
-  StorageVariableDefinition
-  EventDefinition
-  ErrorDefinition
-  LocalVariableDefinition
-}
-
-fn classify_line(line_text) {
-  let trimmed_line_text = line_text |> string.trim
-
-  use <- bool.guard(trimmed_line_text == "", Empty)
-  use <- bool.guard(trimmed_line_text == "}", Empty)
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("// SPDX-License-Identifier"),
-    License,
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("pragma"),
-    PragmaDeclaration,
-  )
-  use <- bool.guard(trimmed_line_text |> string.starts_with("import"), Import)
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("contract"),
-    ContractDefinition(contract_kind: audit_metadata.Contract),
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("abstract contract"),
-    ContractDefinition(contract_kind: audit_metadata.Abstract),
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("interface"),
-    ContractDefinition(contract_kind: audit_metadata.Interface),
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("library"),
-    ContractDefinition(contract_kind: audit_metadata.Library),
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("using"),
-    LibraryDirective,
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("constructor"),
-    ConstructorDefinition,
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("fallback"),
-    FallbackFunctionDefinition,
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("receive"),
-    ReceiveFunctionDefinition,
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("function"),
-    FunctionDefinition,
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("event"),
-    EventDefinition,
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("error"),
-    ErrorDefinition,
-  )
-  // todo classify storage variables
-  Regular
-}
-
-pub fn style_license_line(line_text) {
-  html.span([attribute.class("comment")], [html.text(line_text)])
-  |> element.to_string
-}
-
-pub fn process_import_line(
-  line_text,
-  source_file_metadata: audit_metadata.SourceFileMetaData,
-) {
-  let #(import_statement_base, import_path) =
-    line_text
-    |> string.split_once("\"")
-    |> result.unwrap(#(line_text, ""))
-
-  // Remove the "import " that is always present
-  let import_statement_base = import_statement_base |> string_drop_start(7)
-  // Remove the trailing "";"
-  let import_path = import_path |> string_drop_end(2)
-
-  let assert Ok(capitalized_word_regex) = regexp.from_string("\\b[A-Z]\\w+\\b")
-
-  html.span([attribute.class("keyword")], [html.text("import")])
-  |> element.to_string
-  <> " "
-  <> regexp.match_map(capitalized_word_regex, import_statement_base, fn(match) {
-    html.span([attribute.class("contract")], [html.text(match.content)])
-    |> element.to_string
-  })
-  |> string.replace(
-    "from",
-    html.span([attribute.class("keyword")], [html.text("from")])
-      |> element.to_string,
-  )
-  <> html.span([attribute.class("string")], [
-    html.text("\""),
-    html.a(
-      [
-        attribute.class("import-path"),
-        attribute.href(
-          dict.get(source_file_metadata.imports, import_path)
-          |> result.map(fn(abs_import) { "/" <> abs_import })
-          |> result.unwrap(""),
-        ),
-      ],
-      [html.text(import_path)],
-    ),
-    html.text("\""),
-  ])
-  |> element.to_string
-  <> ";"
-}
-
-pub fn process_contract_definition_line(
-  page_path page_path,
-  contract_kind contract_kind: audit_metadata.ContractKind,
-  line_text line_text,
-  audit_metadata audit_metadata,
-  source_file_metadata source_file_metadata: audit_metadata.SourceFileMetaData,
-) {
-  case string.split_once(line_text, " is ") {
-    Ok(#(line_base, contract_inheritance)) -> {
-      let contract_name = case contract_kind {
-        // Remove "contract "
-        audit_metadata.Contract -> line_base |> string_drop_start(9)
-        // Remove "abstract contract "
-        audit_metadata.Abstract -> line_base |> string_drop_start(18)
-        // Remove "interface "
-        audit_metadata.Interface -> line_base |> string_drop_start(10)
-        // Remove "library "
-        audit_metadata.Library -> line_base |> string_drop_start(8)
-      }
-
-      let contract_inheritances =
-        contract_inheritance
-        // Remove " {" 
-        |> string_drop_end(2)
-        |> string.split(on: ", ")
-        |> list.map(fn(inheritance) {
-          let #(id, kind) =
-            find_contract_id(
-              audit_metadata,
-              named: inheritance,
-              in: dict.values(source_file_metadata.imports),
-            )
-            |> result.unwrap(#("", audit_metadata.Contract))
-          ExternalReference(name: inheritance, id:, kind:)
-        })
-
-      let process_line = fn(contract_discussion, inheritances) {
-        element.fragment([
-          html.span([attribute.class("keyword")], [
-            html.text(audit_metadata.contract_kind_to_string(contract_kind)),
-          ]),
-          html.text("\u{a0}"),
-          html.span(
-            [
-              attribute.id(contract_name),
-              attribute.class("contract contract-definition"),
-            ],
-            [html.text(contract_name), contract_discussion],
-          ),
-          html.text("\u{a0}"),
-          html.span([attribute.class("keyword")], [html.text("is")]),
-          html.text("\u{a0}"),
-          element.fragment(list.intersperse(inheritances, html.text(", "))),
-          html.text(" {"),
-        ])
-      }
-
-      PreprocessedContractDefinition(
-        contract_id: page_path <> "#" <> contract_name,
-        contract_name:,
-        contract_kind:,
-        contract_inheritances:,
-        process_line:,
-      )
-    }
-    Error(Nil) -> {
-      let contract_name =
-        case contract_kind {
-          // Remove "contract "
-          audit_metadata.Contract -> line_text |> string_drop_start(9)
-          // Remove "abstract contract "
-          audit_metadata.Abstract -> line_text |> string_drop_start(18)
-          // Remove "interface "
-          audit_metadata.Interface -> line_text |> string_drop_start(10)
-          // Remove "library "
-          audit_metadata.Library -> line_text |> string_drop_start(8)
-        }
-        // Remove " {"
-        |> string_drop_end(2)
-
-      let process_line = fn(contract_discussion, _inheritances) {
-        element.fragment([
-          html.span([attribute.class("keyword")], [
-            html.text(
-              audit_metadata.contract_kind_to_string(contract_kind) <> " ",
-            ),
-          ]),
-          html.span(
-            [
-              attribute.id(contract_name),
-              attribute.class("contract contract-definition"),
-            ],
-            [html.text(contract_name), contract_discussion],
-          ),
-          html.text(" {"),
-        ])
-      }
-
-      PreprocessedContractDefinition(
-        contract_id: page_path <> "#" <> contract_name,
-        contract_name:,
-        contract_kind:,
-        contract_inheritances: [],
-        process_line:,
-      )
-    }
-  }
-}
-
-pub fn process_function_definition_line(line_text) {
-  let #(function_name, rest) =
-    string.split_once(line_text, "(")
-    |> result.unwrap(#(line_text, ""))
-
-  // Remove "function "
-  let function_name = string_drop_start(function_name, 9)
-
-  let #(args, attributes) =
-    string.split_once(rest, ")")
-    |> result.unwrap(#(rest, ""))
-
-  // Remove " " and trailing " {"
-  let attributes =
-    string_drop_start(attributes, 1)
-    |> string_drop_end(2)
-
-  let process_line = fn(function_discussion) {
-    element.fragment([
-      html.span([attribute.class("keyword")], [html.text("function ")]),
-      html.span(
-        [
-          attribute.id(function_name),
-          attribute.class("function function-definition"),
-        ],
-        [html.text(function_name), function_discussion],
-      ),
-      html.text("("),
-      style_arguments(args),
-      html.text(")"),
-      style_fuction_attributes(attributes),
-      html.text(" {"),
-    ])
-  }
-
-  PreprocessedFunctionDefinition(
-    function_id: line_text,
-    function_name:,
-    process_line:,
-  )
-}
-
-fn style_arguments(args_text) {
-  string.split(args_text, on: ", ")
-  |> list.map(fn(arg) {
-    let #(arg_type, arg_name) =
-      string.split_once(arg, on: " ")
-      |> result.unwrap(#("", arg))
-
-    [
-      html.span([attribute.class("type")], [html.text(arg_type)]),
-      html.text(" " <> arg_name),
-    ]
-  })
-  |> list.intersperse([html.text(", ")])
-  |> list.flatten
-  |> element.fragment
-}
-
-fn style_fuction_attributes(attributes_text) {
-  string.split(attributes_text, on: " ")
-  |> list.map(fn(attribute) {
-    case attribute {
-      "public"
-      | "private"
-      | "internal"
-      | "external"
-      | "view"
-      | "pure"
-      | "payable"
-      | "virtual"
-      | "override"
-      | "abstract"
-      | "returns" -> [
-        html.span([attribute.class("keyword")], [html.text(" " <> attribute)]),
-      ]
-      _ ->
-        case string.starts_with(attribute, "(") {
-          // Return variables
-          True ->
-            attribute
-            |> string_drop_start(1)
-            |> string_drop_end(1)
-            |> style_return_variables
-            |> fn(return_variables) {
-              [html.text(" ("), return_variables, html.text(")")]
-            }
-          // Modifiers
-          False -> [style_function_modifier(attribute)]
-        }
-    }
-  })
-  // |> list.intersperse([html.text(" ")])
-  |> list.flatten
-  |> element.fragment
-}
-
-fn style_return_variables(return_variables_text) {
-  string.split(return_variables_text, on: ", ")
-  |> list.map(fn(arg) {
-    let #(arg_type, arg_name) =
-      string.split_once(arg, on: " ")
-      |> result.unwrap(#(arg, ""))
-
-    [
-      html.span([attribute.class("type")], [html.text(arg_type)]),
-      case arg_name != "" {
-        True -> html.text(" " <> arg_name)
-        False -> element.fragment([])
-      },
-    ]
-  })
-  |> list.intersperse([html.text(", ")])
-  |> list.flatten
-  |> element.fragment
-}
-
-fn style_function_modifier(modifiers_text) {
-  let #(modifier, args) =
-    string.split_once(modifiers_text, on: "(")
-    |> result.unwrap(#(modifiers_text, ""))
-
-  let args = string_drop_end(args, 1)
-
-  element.fragment([
-    html.span([attribute.class("function")], [html.text(" " <> modifier)]),
-    html.text("("),
-    style_arguments(args),
-    html.text(")"),
-  ])
 }
 
 pub fn style_code_tokens(line_text) {

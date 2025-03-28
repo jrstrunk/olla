@@ -23,35 +23,35 @@ pub fn get_dev_config() {
 
 // Gets the full path to the priv, plus the provided local path
 pub fn get_priv_path(for local_path) {
-  let assert Ok(priv) = erlang.priv_directory("o11a")
+  let assert Ok(priv) = erlang.priv_directory("o11a_server")
   [priv, local_path]
   |> list.fold("/", filepath.join)
 }
 
 // Gets the full path to the persist directory, plus the provided local path
 pub fn get_persist_path(for local_path) {
-  let assert Ok(priv) = erlang.priv_directory("o11a")
+  let assert Ok(priv) = erlang.priv_directory("o11a_server")
   [priv, "persist", local_path]
   |> list.fold("/", filepath.join)
 }
 
 // Gets the full path to for the given page path (local path)
 pub fn get_full_page_path(for page_path) {
-  let assert Ok(priv) = erlang.priv_directory("o11a")
+  let assert Ok(priv) = erlang.priv_directory("o11a_server")
   [priv, "audits", page_path]
   |> list.fold("/", filepath.join)
 }
 
 /// Gets the full path to a page skeleton
 pub fn get_full_page_skeleton_path(for page_path) {
-  let assert Ok(priv) = erlang.priv_directory("o11a")
+  let assert Ok(priv) = erlang.priv_directory("o11a_server")
   [priv, "audits", page_path <> ".skeleton.html"]
   |> list.fold("/", filepath.join)
 }
 
 /// Gets the full path to the audit root directory
 pub fn get_audit_path(for audit_name) {
-  let assert Ok(priv) = erlang.priv_directory("o11a")
+  let assert Ok(priv) = erlang.priv_directory("o11a_server")
   [priv, "audits", audit_name]
   |> list.fold("/", filepath.join)
 }
@@ -66,7 +66,7 @@ pub fn get_audit_name_from_page_path(for page_path) {
 
 /// Gets all audit page paths (local paths)
 pub fn get_all_audit_page_paths() {
-  let assert Ok(priv) = erlang.priv_directory("o11a")
+  let assert Ok(priv) = erlang.priv_directory("o11a_server")
   let assert Ok(files) =
     [priv, "audits"]
     |> list.fold("/", filepath.join)

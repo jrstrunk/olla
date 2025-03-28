@@ -1,4 +1,3 @@
-import concurrent_dict
 import gleam/dict
 import gleam/dynamic
 import gleam/dynamic/decode
@@ -10,7 +9,6 @@ import gleam/option.{None}
 import gleam/pair
 import gleam/result
 import gleam/string
-import lib/elementx
 import lib/enumerate
 import lustre
 import lustre/attribute
@@ -23,122 +21,85 @@ import o11a/computed_note
 import o11a/events
 import o11a/note
 import o11a/preprocessor
-import o11a/server/discussion
+import plinth/browser/event as browser_event
+import plinth/browser/window
+import snag
 
 pub fn app() -> lustre.App(Model, Model, Msg) {
-  lustre.component(
-    init,
-    update,
-    cached_view,
-    dict.from_list([
-      #("note-submission", fn(dy) {
-        use note_data <- result.try(
-          decode.run(dy, decode.string)
-          |> result.replace_error([
-            dynamic.DecodeError(
-              "json-encoded computed note",
-              string.inspect(dy),
-              [],
-            ),
-          ]),
-        )
-
-        use #(note, topic_id) <- result.map(
-          json.parse(note_data, {
-            use topic_id <- decode.field("topic_id", decode.string)
-            use note_submission <- decode.field(
-              "note_submission",
-              note.note_submission_decoder(),
-            )
-
-            decode.success(#(note_submission, topic_id))
-          })
-          |> result.replace_error([
-            dynamic.DecodeError(
-              "json-encoded note submission",
-              string.inspect(note_data),
-              [],
-            ),
-          ]),
-        )
-
-        UserSubmittedNote(note, topic_id)
-      }),
-    ]),
-  )
+  lustre.component(init, update, view, dict.new())
 }
 
 pub type Msg {
-  UserSubmittedNote(note_submission: note.NoteSubmission, topic_id: String)
-  ServerUpdatedDiscussion
+  ServerUpdatedDiscussion(
+    discussion: dict.Dict(String, List(computed_note.ComputedNote)),
+  )
 }
 
 pub type Model {
   Model(
     page_path: String,
     preprocessed_source: List(preprocessor.PreProcessedLine),
-    discussion: discussion.Discussion,
-    skeletons: concurrent_dict.ConcurrentDict(String, String),
+    discussion: dict.Dict(String, List(computed_note.ComputedNote)),
   )
 }
 
 pub fn init(init_model: Model) -> #(Model, effect.Effect(Msg)) {
-  let subscribe_to_note_updates_effect =
+  let subscribe_to_discussion_updates_effect =
     effect.from(fn(dispatch) {
-      discussion.subscribe_to_note_updates(init_model.discussion, fn() {
-        dispatch(ServerUpdatedDiscussion)
+      window.add_event_listener(events.server_updated_discussion, fn(event) {
+        let res = {
+          use detail <- result.try(
+            browser_event.detail(event)
+            |> result.replace_error(snag.new("Failed to get detail")),
+          )
+
+          use detail <- result.try(
+            decode.run(detail, decode.string)
+            |> snag.map_error(string.inspect)
+            |> snag.context("Failed to decode detail"),
+          )
+
+          use discussion <- result.try(
+            json.parse(
+              detail,
+              decode.list(computed_note.computed_note_decoder()),
+            )
+            |> snag.map_error(string.inspect)
+            |> snag.context("Failed to parse discussion"),
+          )
+
+          let discussion =
+            list.group(discussion, by: fn(note) { note.parent_id })
+
+          dispatch(ServerUpdatedDiscussion(discussion:))
+
+          Ok(Nil)
+        }
+
+        case res {
+          Ok(Nil) -> Nil
+          Error(e) -> io.println(snag.line_print(e))
+        }
       })
     })
 
-  #(init_model, subscribe_to_note_updates_effect)
+  #(init_model, subscribe_to_discussion_updates_effect)
 }
 
 pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
-    UserSubmittedNote(note_submission:, topic_id:) -> {
-      let assert Ok(Nil) =
-        discussion.add_note(model.discussion, note_submission, topic_id:)
-      #(model, effect.none())
-    }
-    ServerUpdatedDiscussion -> #(model, effect.none())
+    ServerUpdatedDiscussion(discussion:) -> #(
+      Model(..model, discussion:),
+      effect.none(),
+    )
   }
 }
 
-fn cached_view(model: Model) -> element.Element(Msg) {
-  io.println("Rendering page " <> model.page_path)
-
-  // Update the skeleton so the initial render on the client's request is up to
-  // date with server state.
-  concurrent_dict.insert(
-    model.skeletons,
-    get_skeleton_key(model.page_path),
-    view(model, is_skeleton: True) |> element.to_string,
+pub fn view(model: Model) -> element.Element(msg) {
+  html.div(
+    [attribute.class("code-snippet")],
+    list.map(model.preprocessed_source, loc_view(model, _)),
   )
-
-  view(model, is_skeleton: False)
-}
-
-fn get_skeleton_key(for page_path) {
-  "adpg" <> page_path
-}
-
-pub fn get_skeleton(skeletons, for page_path) {
-  concurrent_dict.get(skeletons, get_skeleton_key(page_path))
-  |> result.unwrap("")
-}
-
-fn view(model: Model, is_skeleton is_skeleton) -> element.Element(Msg) {
-  html.div([attribute.class("code-snippet")], [
-    case is_skeleton {
-      True -> element.fragment([])
-      False -> elementx.hide_skeleton()
-    },
-    html.script(
-      [attribute.type_("application/json"), attribute.id("discussion-data")],
-      discussion.dump_computed_notes(model.discussion) |> json.to_string,
-    ),
-    ..list.map(model.preprocessed_source, loc_view(model, _))
-  ])
 }
 
 fn loc_view(model: Model, loc: preprocessor.PreProcessedLine) {
@@ -260,12 +221,12 @@ fn inline_comment_preview_view(parent_notes: List(computed_note.ComputedNote)) {
 }
 
 fn get_notes(
-  discussion: discussion.Discussion,
+  discussion: dict.Dict(String, List(computed_note.ComputedNote)),
   leading_spaces leading_spaces,
   topic_id topic_id,
 ) {
   let parent_notes =
-    discussion.get_notes(discussion, topic_id)
+    dict.get(discussion, topic_id)
     |> result.unwrap([])
     |> list.filter_map(fn(note) {
       case note.parent_id == topic_id {
@@ -293,7 +254,7 @@ fn split_info_note(note: computed_note.ComputedNote, leading_spaces) {
   })
 }
 
-pub fn split_info_comment(
+fn split_info_comment(
   comment: String,
   contains_expanded_message: Bool,
   leading_spaces,

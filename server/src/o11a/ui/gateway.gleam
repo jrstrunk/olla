@@ -1,18 +1,22 @@
 import concurrent_dict
 import gleam/dict
 import gleam/erlang/process
+import gleam/json
 import gleam/list
 import gleam/result
 import gleam/string
+import gleam/string_tree
 import lib/snagx
 import lustre
 import o11a/audit_metadata
 import o11a/config
+import o11a/preprocessor
 import o11a/server/audit_metadata as server_audit_metadata
 import o11a/server/discussion
 import o11a/server/preprocessor_sol
 import o11a/ui/audit_dashboard
 import o11a/ui/audit_page_sol
+import o11a/ui/discussion_component
 import o11a/ui/page_dashboard
 import simplifile
 import snag
@@ -23,6 +27,12 @@ pub type Gateway {
     page_dashboard_gateway: PageDashboardGateway,
     dashboard_gateway: DashboardGateway,
     audit_metadata_gateway: AuditMetaDataGateway,
+    discussion_component_gateway: DiscussionComponentGateway,
+    source_files: concurrent_dict.ConcurrentDict(String, string_tree.StringTree),
+    audit_metadata: concurrent_dict.ConcurrentDict(
+      String,
+      string_tree.StringTree,
+    ),
   )
 }
 
@@ -44,6 +54,14 @@ pub type DashboardGateway =
     process.Subject(lustre.Action(audit_dashboard.Msg, lustre.ServerComponent)),
   )
 
+pub type DiscussionComponentGateway =
+  concurrent_dict.ConcurrentDict(
+    String,
+    process.Subject(
+      lustre.Action(discussion_component.Msg, lustre.ServerComponent),
+    ),
+  )
+
 pub type AuditMetaDataGateway =
   concurrent_dict.ConcurrentDict(String, audit_metadata.AuditMetaData)
 
@@ -52,6 +70,10 @@ pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
   let page_gateway = concurrent_dict.new()
   let page_dashboard_gateway = concurrent_dict.new()
   let audit_metadata_gateway = concurrent_dict.new()
+
+  let discussion_component_gateway = concurrent_dict.new()
+  let source_files = concurrent_dict.new()
+  let audit_metadatas = concurrent_dict.new()
 
   let page_paths = config.get_all_audit_page_paths()
 
@@ -64,6 +86,11 @@ pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
       )
 
       concurrent_dict.insert(audit_metadata_gateway, audit_name, audit_metadata)
+
+      audit_metadata
+      |> audit_metadata.encode_audit_metadata
+      |> json.to_string_tree
+      |> concurrent_dict.insert(audit_metadatas, audit_name, _)
 
       use discussion <- result.try(discussion.build_audit_discussion(audit_name))
 
@@ -79,6 +106,20 @@ pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
         dashboard_gateway,
         audit_name,
         audit_dashboard_actor,
+      )
+
+      use discussion_component_actor <- result.try(
+        lustre.start_actor(
+          discussion_component.app(),
+          discussion_component.Model(discussion:, skeletons:),
+        )
+        |> snag.map_error(string.inspect),
+      )
+
+      concurrent_dict.insert(
+        discussion_component_gateway,
+        audit_name,
+        discussion_component_actor,
       )
 
       use asts <- result.try(
@@ -100,20 +141,15 @@ pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
       dict.get(page_paths, audit_name)
       |> result.unwrap([])
       |> list.map(fn(page_path) {
-        echo "Reading page " <> page_path
         case
           config.get_full_page_path(for: page_path)
           |> simplifile.read,
           dict.get(file_to_ast, page_path)
         {
           Ok(source), Ok(nodes) -> {
-            echo "Linearizing nodes for " <> page_path
-
             let nodes = preprocessor_sol.linearize_nodes(nodes)
 
-            echo "Preprocessing source for " <> page_path
-
-            let preprocessed_source =
+            let preprocessed_source_json =
               preprocessor_sol.preprocess_source(
                 source:,
                 nodes:,
@@ -121,47 +157,19 @@ pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
                 page_path:,
                 audit_name:,
               )
-
-            echo "Starting page actor"
-
-            use actor <- result.try(
-              lustre.start_actor(
-                audit_page_sol.app(),
-                audit_page_sol.Model(
-                  page_path:,
-                  preprocessed_source:,
-                  discussion:,
-                  skeletons:,
-                ),
-              )
-              |> snag.map_error(string.inspect),
-            )
-
-            echo "Started page actor"
-
-            concurrent_dict.insert(page_gateway, page_path, actor)
-
-            use dashboard_actor <- result.map(
-              lustre.start_actor(
-                page_dashboard.app(),
-                page_dashboard.Model(discussion:, page_path:, skeletons:),
-              )
-              |> snag.map_error(string.inspect),
-            )
-
-            echo "Started dashboard actor"
+              |> json.array(preprocessor.encode_pre_processed_line)
+              |> json.to_string_tree
 
             concurrent_dict.insert(
-              page_dashboard_gateway,
+              source_files,
               page_path,
-              dashboard_actor,
+              preprocessed_source_json,
             )
-          }
 
-          Ok(_source), Error(Nil) -> {
-            echo "Failed to read ast for " <> page_path <> ", skipping"
             Ok(Nil)
           }
+
+          Ok(_source), Error(Nil) -> Ok(Nil)
 
           // If we get a non-text file, just ignore it. Eventually we could 
           // handle image files
@@ -185,6 +193,9 @@ pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
     page_gateway:,
     page_dashboard_gateway:,
     audit_metadata_gateway:,
+    discussion_component_gateway:,
+    source_files:,
+    audit_metadata: audit_metadatas,
   )
 }
 
@@ -203,15 +214,31 @@ pub fn get_dashboard_actor(discussion_gateway: DashboardGateway, for audit_name)
   concurrent_dict.get(discussion_gateway, audit_name)
 }
 
-pub fn get_audit_metadata(
+pub fn get_audit_metadata_gateway(
   audit_metadata_gateway: AuditMetaDataGateway,
   for audit_name,
 ) {
   concurrent_dict.get(audit_metadata_gateway, audit_name)
-  |> result.unwrap(audit_metadata.AuditMetaData(
-    audit_name: audit_name,
-    audit_formatted_name: audit_name,
-    in_scope_files: [],
-    source_files_sol: dict.new(),
-  ))
+  |> result.unwrap(
+    audit_metadata.AuditMetaData(
+      audit_name: audit_name,
+      audit_formatted_name: audit_name,
+      in_scope_files: [],
+    ),
+  )
+}
+
+pub fn get_discussion_component_actor(
+  discussion_component_gateway: DiscussionComponentGateway,
+  for audit_name,
+) {
+  concurrent_dict.get(discussion_component_gateway, audit_name)
+}
+
+pub fn get_source_file(source_files, for page_path) {
+  concurrent_dict.get(source_files, page_path)
+}
+
+pub fn get_audit_metadata(audit_metadata, for audit_name) {
+  concurrent_dict.get(audit_metadata, audit_name)
 }

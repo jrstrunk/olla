@@ -28,7 +28,6 @@ pub fn gather_metadata(for audit_name) {
     audit_name:,
     audit_formatted_name: audit_name,
     in_scope_files:,
-    source_files_sol: dict.new(),
   )
 }
 

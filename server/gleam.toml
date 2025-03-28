@@ -1,4 +1,4 @@
-name = "o11a"
+name = "o11a_server"
 version = "1.0.0"
 target = "erlang"
 

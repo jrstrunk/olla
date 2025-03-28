@@ -35,6 +35,7 @@ type Context {
     page_gateway: gateway.PageGateway,
     page_dashboard_gateway: gateway.PageDashboardGateway,
     audit_metadata_gateway: gateway.AuditMetaDataGateway,
+    discussion_component_gateway: gateway.DiscussionComponentGateway,
     skeletons: concurrent_dict.ConcurrentDict(String, String),
   )
 }
@@ -56,6 +57,9 @@ pub fn main() {
       page_gateway:,
       page_dashboard_gateway:,
       audit_metadata_gateway:,
+      discussion_component_gateway:,
+      source_files: _,
+      audit_metadata: _,
     )
   <- result.map(
     gateway.start_gateway(skeletons)
@@ -70,6 +74,7 @@ pub fn main() {
       page_gateway:,
       page_dashboard_gateway:,
       audit_metadata_gateway:,
+      discussion_component_gateway:,
       skeletons:,
     )
 
@@ -95,6 +100,7 @@ fn handler(req, context: Context) {
 
     ["line_discussion.min.mjs" as script]
     | ["page_navigation.mjs" as script]
+    | ["o11a_client.min.mjs" as script]
     | ["panel_resizer.mjs" as script]
     | ["client.mjs" as script]
     | ["page_panel.mjs" as script] -> serve_js(script, context.config)
@@ -155,7 +161,7 @@ fn handle_wisp_request(req, context: Context) {
         None,
         audit_name,
         on: audit_name <> "/dashboard",
-        with: gateway.get_audit_metadata(
+        with: gateway.get_audit_metadata_gateway(
           context.audit_metadata_gateway,
           audit_name,
         ).in_scope_files,
@@ -177,7 +183,7 @@ fn handle_wisp_request(req, context: Context) {
             None,
             audit_name,
             on: audit_name <> "/" <> readme,
-            with: gateway.get_audit_metadata(
+            with: gateway.get_audit_metadata_gateway(
               context.audit_metadata_gateway,
               audit_name,
             ).in_scope_files,
@@ -208,7 +214,7 @@ fn handle_wisp_request(req, context: Context) {
         )),
         audit_name,
         on: file_path,
-        with: gateway.get_audit_metadata(
+        with: gateway.get_audit_metadata_gateway(
           context.audit_metadata_gateway,
           audit_name,
         ).in_scope_files,

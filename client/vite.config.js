@@ -4,10 +4,10 @@ export default {
   plugins: [gleam()],
   build: {
     rollupOptions: {
-      input: "src/client.js",
+      input: "src/client_script.js",
       output: {
         dir: "../server/priv/static",
-        entryFileNames: "client.mjs",
+        entryFileNames: "client_script.mjs",
       }
     }
   }

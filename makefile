@@ -10,6 +10,7 @@ run:
 	@(cd client \
   && gleam run -m lustre/dev build component o11a/ui/line_discussion --minify --outdir="../server/priv/static" \
 	&& gleam run -m lustre/dev build component o11a/ui/discussion_preview --minify --outdir="../server/priv/static" \
+	&& gleam run -m lustre/dev build app --outdir="../server/priv/static" \
 	&& npx vite build \
 	&& cd ../server \
 	add && gleam run dev)
