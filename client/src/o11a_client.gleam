@@ -27,6 +27,7 @@ pub fn main() {
 pub type Model {
   Model(
     route: Route,
+    file_tree: dict.Dict(String, #(List(String), List(String))),
     audit_metadata: dict.Dict(
       String,
       Result(audit_metadata.AuditMetaData, lustre_http.HttpError),
@@ -49,12 +50,15 @@ pub type Route {
 }
 
 fn init(_) -> #(Model, Effect(Msg)) {
+  let route = case modem.initial_uri() {
+    Ok(uri) -> parse_route(uri)
+    Error(Nil) -> O11aHomeRoute
+  }
+
   let init_model =
     Model(
-      route: case modem.initial_uri() {
-        Ok(uri) -> parse_route(uri)
-        Error(Nil) -> O11aHomeRoute
-      },
+      route:,
+      file_tree: dict.new(),
       audit_metadata: dict.new(),
       source_files: dict.new(),
       discussions: dict.new(),
@@ -88,6 +92,54 @@ fn parse_route(uri: Uri) -> Route {
   }
 }
 
+fn file_tree_from_route(
+  route: Route,
+  audit_metadata: dict.Dict(
+    String,
+    Result(audit_metadata.AuditMetaData, lustre_http.HttpError),
+  ),
+) {
+  case route {
+    O11aHomeRoute -> dict.new()
+
+    AuditDashboardRoute(audit_name:) -> {
+      let in_scope_files =
+        dict.get(audit_metadata, audit_name)
+        |> result.map(fn(audit_metadata) {
+          case audit_metadata {
+            Ok(audit_metadata) -> audit_metadata.in_scope_files
+            Error(..) -> []
+          }
+        })
+        |> result.unwrap([])
+
+      audit_tree.group_files_by_parent(
+        in_scope_files:,
+        current_file_path: audit_tree.dashboard_path(for: audit_name),
+        audit_name:,
+      )
+    }
+
+    AuditPageRoute(audit_name:, page_path: current_file_path) -> {
+      let in_scope_files =
+        dict.get(audit_metadata, audit_name)
+        |> result.map(fn(audit_metadata) {
+          case audit_metadata {
+            Ok(audit_metadata) -> audit_metadata.in_scope_files
+            Error(..) -> []
+          }
+        })
+        |> result.unwrap([])
+
+      audit_tree.group_files_by_parent(
+        in_scope_files:,
+        current_file_path:,
+        audit_name:,
+      )
+    }
+  }
+}
+
 pub type Msg {
   OnRouteChange(route: Route)
   ClientFetchedAuditMetadata(
@@ -106,17 +158,26 @@ pub type Msg {
 fn update(model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
     OnRouteChange(route:) -> #(
-      Model(..model, route:),
+      Model(
+        ..model,
+        route:,
+        file_tree: file_tree_from_route(route, model.audit_metadata),
+      ),
       route_change_effect(model, new_route: route),
     )
 
-    ClientFetchedAuditMetadata(audit_name, metadata) -> #(
-      Model(
-        ..model,
-        audit_metadata: dict.insert(model.audit_metadata, audit_name, metadata),
-      ),
-      effect.none(),
-    )
+    ClientFetchedAuditMetadata(audit_name, metadata) -> {
+      let updated_audit_metadata =
+        dict.insert(model.audit_metadata, audit_name, metadata)
+      #(
+        Model(
+          ..model,
+          audit_metadata: updated_audit_metadata,
+          file_tree: file_tree_from_route(model.route, updated_audit_metadata),
+        ),
+        effect.none(),
+      )
+    }
 
     ClientFetchedSourceFile(page_path, source_files) -> #(
       Model(
@@ -170,23 +231,16 @@ fn fetch_source_file(model: Model, page_path: String) -> Effect(Msg) {
 
 fn view(model: Model) -> Element(Msg) {
   case model.route {
-    AuditDashboardRoute(audit_name) ->
+    AuditDashboardRoute(audit_name:) ->
       audit_tree.view(
         html.p([], [html.text("Dashboard")]),
         option.None,
-        for: audit_name,
-        on: audit_name <> "/dashboard",
-        with: dict.get(model.audit_metadata, audit_name)
-          |> result.map(fn(audit_metadata) {
-            case audit_metadata {
-              Ok(audit_metadata) -> audit_metadata.in_scope_files
-              Error(..) -> []
-            }
-          })
-          |> result.unwrap([]),
+        model.file_tree,
+        audit_name,
+        audit_tree.dashboard_path(for: audit_name),
       )
 
-    AuditPageRoute(audit_name, page_path) ->
+    AuditPageRoute(audit_name:, page_path:) ->
       audit_tree.view(
         audit_page.view(audit_page.Model(
           page_path:,
@@ -200,17 +254,10 @@ fn view(model: Model) -> Element(Msg) {
             |> result.unwrap([]),
           discussion: dict.new(),
         )),
-        option.None,
-        for: audit_name,
-        on: page_path,
-        with: dict.get(model.audit_metadata, audit_name)
-          |> result.map(fn(audit_metadata) {
-            case audit_metadata {
-              Ok(audit_metadata) -> audit_metadata.in_scope_files
-              Error(..) -> []
-            }
-          })
-          |> result.unwrap([]),
+        option.Some(html.p([], [html.text("Side Panel")])),
+        model.file_tree,
+        audit_name,
+        page_path,
       )
 
     O11aHomeRoute -> html.p([], [html.text("Home")])

@@ -44,6 +44,8 @@ pub type Model {
 }
 
 pub fn init(init_model: Model) -> #(Model, effect.Effect(Msg)) {
+  // todo move this to a lustre event listener on the discussion component in
+  // the client controller app
   let subscribe_to_discussion_updates_effect =
     effect.from(fn(dispatch) {
       window.add_event_listener(events.server_updated_discussion, fn(event) {

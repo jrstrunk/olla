@@ -4786,358 +4786,6 @@ function pre_processed_line_decoder() {
   );
 }
 
-// build/dev/javascript/filepath/filepath_ffi.mjs
-function is_windows() {
-  return globalThis?.process?.platform === "win32" || globalThis?.Deno?.build?.os === "windows";
-}
-
-// build/dev/javascript/filepath/filepath.mjs
-function split_unix(path) {
-  let _pipe = (() => {
-    let $ = split2(path, "/");
-    if ($.hasLength(1) && $.head === "") {
-      return toList([]);
-    } else if ($.atLeastLength(1) && $.head === "") {
-      let rest = $.tail;
-      return prepend("/", rest);
-    } else {
-      let rest = $;
-      return rest;
-    }
-  })();
-  return filter(_pipe, (x) => {
-    return x !== "";
-  });
-}
-function pop_windows_drive_specifier(path) {
-  let start3 = slice(path, 0, 3);
-  let codepoints = to_utf_codepoints(start3);
-  let $ = map(codepoints, utf_codepoint_to_int);
-  if ($.hasLength(3) && (($.tail.tail.head === 47 || $.tail.tail.head === 92) && $.tail.head === 58 && ($.head >= 65 && $.head <= 90 || $.head >= 97 && $.head <= 122))) {
-    let drive = $.head;
-    let colon = $.tail.head;
-    let slash = $.tail.tail.head;
-    let drive_letter = slice(path, 0, 1);
-    let drive$1 = lowercase(drive_letter) + ":/";
-    let path$1 = drop_start(path, 3);
-    return [new Some(drive$1), path$1];
-  } else {
-    return [new None(), path];
-  }
-}
-function split_windows(path) {
-  let $ = pop_windows_drive_specifier(path);
-  let drive = $[0];
-  let path$1 = $[1];
-  let segments = (() => {
-    let _pipe = split2(path$1, "/");
-    return flat_map(
-      _pipe,
-      (_capture) => {
-        return split2(_capture, "\\");
-      }
-    );
-  })();
-  let segments$1 = (() => {
-    if (drive instanceof Some) {
-      let drive$1 = drive[0];
-      return prepend(drive$1, segments);
-    } else {
-      return segments;
-    }
-  })();
-  if (segments$1.hasLength(1) && segments$1.head === "") {
-    return toList([]);
-  } else if (segments$1.atLeastLength(1) && segments$1.head === "") {
-    let rest = segments$1.tail;
-    return prepend("/", rest);
-  } else {
-    let rest = segments$1;
-    return rest;
-  }
-}
-function split4(path) {
-  let $ = is_windows();
-  if ($) {
-    return split_windows(path);
-  } else {
-    return split_unix(path);
-  }
-}
-function base_name(path) {
-  return guard(
-    path === "/",
-    "",
-    () => {
-      let _pipe = path;
-      let _pipe$1 = split4(_pipe);
-      let _pipe$2 = last(_pipe$1);
-      return unwrap2(_pipe$2, "");
-    }
-  );
-}
-
-// build/dev/javascript/o11a_common/o11a/ui/audit_tree.mjs
-function sub_file_tree_view(dir_name, current_file_path, all_audit_files) {
-  let $ = (() => {
-    let _pipe = map_get(all_audit_files, dir_name);
-    return unwrap2(_pipe, [toList([]), toList([])]);
-  })();
-  let subdirs = $[0];
-  let direct_files = $[1];
-  return div(
-    toList([id(dir_name)]),
-    toList([
-      p(
-        toList([class$("tree-item")]),
-        toList([
-          text2(
-            (() => {
-              let _pipe = dir_name;
-              return base_name(_pipe);
-            })()
-          )
-        ])
-      ),
-      div(
-        toList([
-          id(dir_name + "-dirs"),
-          class$("nested-tree-items")
-        ]),
-        map(
-          subdirs,
-          (_capture) => {
-            return sub_file_tree_view(
-              _capture,
-              current_file_path,
-              all_audit_files
-            );
-          }
-        )
-      ),
-      div(
-        toList([
-          id(dir_name + "-files"),
-          class$("nested-tree-items")
-        ]),
-        map(
-          direct_files,
-          (file) => {
-            return a(
-              toList([
-                class$(
-                  "tree-item tree-link" + (() => {
-                    let $1 = file === current_file_path;
-                    if ($1) {
-                      return " underline";
-                    } else {
-                      return "";
-                    }
-                  })()
-                ),
-                href("/" + file),
-                rel("prefetch")
-              ]),
-              toList([
-                text2(
-                  (() => {
-                    let _pipe = file;
-                    return base_name(_pipe);
-                  })()
-                )
-              ])
-            );
-          }
-        )
-      )
-    ])
-  );
-}
-function get_all_parents(path) {
-  let _pipe = path;
-  let _pipe$1 = split2(_pipe, "/");
-  let _pipe$2 = take(_pipe$1, length(split2(path, "/")) - 1);
-  let _pipe$3 = index_fold(
-    _pipe$2,
-    toList([]),
-    (acc, segment, i) => {
-      if (i === 0) {
-        return prepend(segment, acc);
-      } else {
-        let prev = (() => {
-          let _pipe$32 = first(acc);
-          return unwrap2(_pipe$32, "");
-        })();
-        return prepend(prev + "/" + segment, acc);
-      }
-    }
-  );
-  return reverse(_pipe$3);
-}
-function group_files_by_parent(files) {
-  let parents = (() => {
-    let _pipe2 = files;
-    let _pipe$12 = flat_map(_pipe2, get_all_parents);
-    return unique(_pipe$12);
-  })();
-  let _pipe = parents;
-  let _pipe$1 = map(
-    _pipe,
-    (parent) => {
-      let parent_prefix = parent + "/";
-      let items = (() => {
-        let _pipe$12 = files;
-        return filter(
-          _pipe$12,
-          (path) => {
-            return starts_with(path, parent_prefix);
-          }
-        );
-      })();
-      let $ = (() => {
-        let _pipe$12 = items;
-        return partition(
-          _pipe$12,
-          (path) => {
-            let relative = replace(path, parent_prefix, "");
-            return contains_string(relative, "/");
-          }
-        );
-      })();
-      let dirs = $[0];
-      let direct_files = $[1];
-      let subdirs = (() => {
-        let _pipe$12 = dirs;
-        let _pipe$2 = map(
-          _pipe$12,
-          (dir) => {
-            let relative = replace(dir, parent_prefix, "");
-            let first_dir = (() => {
-              let _pipe$22 = split2(relative, "/");
-              let _pipe$3 = first(_pipe$22);
-              return unwrap2(_pipe$3, "");
-            })();
-            return parent_prefix + first_dir;
-          }
-        );
-        return unique(_pipe$2);
-      })();
-      return [parent, [subdirs, direct_files]];
-    }
-  );
-  return from_list(_pipe$1);
-}
-function audit_file_tree_view(audit_name, current_file_path, in_scope_files) {
-  let dashboard_path = audit_name + "/dashboard";
-  let all_audit_files = (() => {
-    let $2 = contains(in_scope_files, current_file_path);
-    if ($2) {
-      return group_files_by_parent(prepend(dashboard_path, in_scope_files));
-    } else {
-      return group_files_by_parent(
-        prepend(current_file_path, in_scope_files)
-      );
-    }
-  })();
-  let $ = (() => {
-    let _pipe = map_get(all_audit_files, audit_name);
-    return unwrap2(_pipe, [toList([]), toList([])]);
-  })();
-  let subdirs = $[0];
-  let direct_files = $[1];
-  return div(
-    toList([id("audit-files")]),
-    toList([
-      div(
-        toList([id(audit_name + "-files")]),
-        map(
-          direct_files,
-          (file) => {
-            return a(
-              toList([
-                class$(
-                  "tree-item tree-link" + (() => {
-                    let $1 = file === current_file_path;
-                    if ($1) {
-                      return " underline";
-                    } else {
-                      return "";
-                    }
-                  })()
-                ),
-                href("/" + file),
-                rel("prefetch")
-              ]),
-              toList([
-                text2(
-                  (() => {
-                    let _pipe = file;
-                    return base_name(_pipe);
-                  })()
-                )
-              ])
-            );
-          }
-        )
-      ),
-      div(
-        toList([id(audit_name + "-dirs")]),
-        map(
-          subdirs,
-          (_capture) => {
-            return sub_file_tree_view(
-              _capture,
-              current_file_path,
-              all_audit_files
-            );
-          }
-        )
-      )
-    ])
-  );
-}
-function view(file_contents, side_panel, audit_name, current_file_path, in_scope_files) {
-  return div(
-    toList([id("tree-grid")]),
-    toList([
-      div(
-        toList([id("file-tree")]),
-        toList([
-          h3(
-            toList([id("audit-tree-header")]),
-            toList([text2(audit_name + " files")])
-          ),
-          audit_file_tree_view(audit_name, current_file_path, in_scope_files)
-        ])
-      ),
-      div(toList([id("tree-resizer")]), toList([])),
-      div(
-        toList([id("file-contents")]),
-        toList([file_contents])
-      ),
-      (() => {
-        let $ = is_some(side_panel);
-        if ($) {
-          return div(toList([id("panel-resizer")]), toList([]));
-        } else {
-          return fragment(toList([]));
-        }
-      })(),
-      (() => {
-        if (side_panel instanceof Some) {
-          let side_panel$1 = side_panel[0];
-          return div(
-            toList([id("side-panel")]),
-            toList([side_panel$1])
-          );
-        } else {
-          return fragment(toList([]));
-        }
-      })()
-    ])
-  );
-}
-
 // build/dev/javascript/o11a_common/lib/enumerate.mjs
 function translate_number_to_letter(loop$number) {
   while (true) {
@@ -5599,7 +5247,7 @@ function loc_view(model, loc) {
     return line_container_view(model, loc, loc.line_id);
   }
 }
-function view2(model) {
+function view(model) {
   return div(
     toList([class$("code-snippet")]),
     map(
@@ -5611,11 +5259,365 @@ function view2(model) {
   );
 }
 
+// build/dev/javascript/filepath/filepath_ffi.mjs
+function is_windows() {
+  return globalThis?.process?.platform === "win32" || globalThis?.Deno?.build?.os === "windows";
+}
+
+// build/dev/javascript/filepath/filepath.mjs
+function split_unix(path) {
+  let _pipe = (() => {
+    let $ = split2(path, "/");
+    if ($.hasLength(1) && $.head === "") {
+      return toList([]);
+    } else if ($.atLeastLength(1) && $.head === "") {
+      let rest = $.tail;
+      return prepend("/", rest);
+    } else {
+      let rest = $;
+      return rest;
+    }
+  })();
+  return filter(_pipe, (x) => {
+    return x !== "";
+  });
+}
+function pop_windows_drive_specifier(path) {
+  let start3 = slice(path, 0, 3);
+  let codepoints = to_utf_codepoints(start3);
+  let $ = map(codepoints, utf_codepoint_to_int);
+  if ($.hasLength(3) && (($.tail.tail.head === 47 || $.tail.tail.head === 92) && $.tail.head === 58 && ($.head >= 65 && $.head <= 90 || $.head >= 97 && $.head <= 122))) {
+    let drive = $.head;
+    let colon = $.tail.head;
+    let slash = $.tail.tail.head;
+    let drive_letter = slice(path, 0, 1);
+    let drive$1 = lowercase(drive_letter) + ":/";
+    let path$1 = drop_start(path, 3);
+    return [new Some(drive$1), path$1];
+  } else {
+    return [new None(), path];
+  }
+}
+function split_windows(path) {
+  let $ = pop_windows_drive_specifier(path);
+  let drive = $[0];
+  let path$1 = $[1];
+  let segments = (() => {
+    let _pipe = split2(path$1, "/");
+    return flat_map(
+      _pipe,
+      (_capture) => {
+        return split2(_capture, "\\");
+      }
+    );
+  })();
+  let segments$1 = (() => {
+    if (drive instanceof Some) {
+      let drive$1 = drive[0];
+      return prepend(drive$1, segments);
+    } else {
+      return segments;
+    }
+  })();
+  if (segments$1.hasLength(1) && segments$1.head === "") {
+    return toList([]);
+  } else if (segments$1.atLeastLength(1) && segments$1.head === "") {
+    let rest = segments$1.tail;
+    return prepend("/", rest);
+  } else {
+    let rest = segments$1;
+    return rest;
+  }
+}
+function split4(path) {
+  let $ = is_windows();
+  if ($) {
+    return split_windows(path);
+  } else {
+    return split_unix(path);
+  }
+}
+function base_name(path) {
+  return guard(
+    path === "/",
+    "",
+    () => {
+      let _pipe = path;
+      let _pipe$1 = split4(_pipe);
+      let _pipe$2 = last(_pipe$1);
+      return unwrap2(_pipe$2, "");
+    }
+  );
+}
+
+// build/dev/javascript/o11a_client/o11a/ui/audit_tree.mjs
+function sub_file_tree_view(dir_name, current_file_path, all_audit_files) {
+  let $ = (() => {
+    let _pipe = map_get(all_audit_files, dir_name);
+    return unwrap2(_pipe, [toList([]), toList([])]);
+  })();
+  let subdirs = $[0];
+  let direct_files = $[1];
+  return div(
+    toList([id(dir_name)]),
+    toList([
+      p(
+        toList([class$("tree-item")]),
+        toList([
+          text2(
+            (() => {
+              let _pipe = dir_name;
+              return base_name(_pipe);
+            })()
+          )
+        ])
+      ),
+      div(
+        toList([
+          id(dir_name + "-dirs"),
+          class$("nested-tree-items")
+        ]),
+        map(
+          subdirs,
+          (_capture) => {
+            return sub_file_tree_view(
+              _capture,
+              current_file_path,
+              all_audit_files
+            );
+          }
+        )
+      ),
+      div(
+        toList([
+          id(dir_name + "-files"),
+          class$("nested-tree-items")
+        ]),
+        map(
+          direct_files,
+          (file) => {
+            return a(
+              toList([
+                class$(
+                  "tree-item tree-link" + (() => {
+                    let $1 = file === current_file_path;
+                    if ($1) {
+                      return " underline";
+                    } else {
+                      return "";
+                    }
+                  })()
+                ),
+                href("/" + file),
+                rel("prefetch")
+              ]),
+              toList([
+                text2(
+                  (() => {
+                    let _pipe = file;
+                    return base_name(_pipe);
+                  })()
+                )
+              ])
+            );
+          }
+        )
+      )
+    ])
+  );
+}
+function audit_file_tree_view(grouped_files, audit_name, current_file_path) {
+  let $ = (() => {
+    let _pipe = map_get(grouped_files, audit_name);
+    return unwrap2(_pipe, [toList([]), toList([])]);
+  })();
+  let subdirs = $[0];
+  let direct_files = $[1];
+  return div(
+    toList([id("audit-files")]),
+    toList([
+      div(
+        toList([id(audit_name + "-files")]),
+        map(
+          direct_files,
+          (file) => {
+            return a(
+              toList([
+                class$(
+                  "tree-item tree-link" + (() => {
+                    let $1 = file === current_file_path;
+                    if ($1) {
+                      return " underline";
+                    } else {
+                      return "";
+                    }
+                  })()
+                ),
+                href("/" + file),
+                rel("prefetch")
+              ]),
+              toList([
+                text2(
+                  (() => {
+                    let _pipe = file;
+                    return base_name(_pipe);
+                  })()
+                )
+              ])
+            );
+          }
+        )
+      ),
+      div(
+        toList([id(audit_name + "-dirs")]),
+        map(
+          subdirs,
+          (_capture) => {
+            return sub_file_tree_view(
+              _capture,
+              current_file_path,
+              grouped_files
+            );
+          }
+        )
+      )
+    ])
+  );
+}
+function view2(file_contents, side_panel, grouped_files, audit_name, current_file_path) {
+  return div(
+    toList([id("tree-grid")]),
+    toList([
+      div(
+        toList([id("file-tree")]),
+        toList([
+          h3(
+            toList([id("audit-tree-header")]),
+            toList([text2(audit_name + " files")])
+          ),
+          audit_file_tree_view(grouped_files, audit_name, current_file_path)
+        ])
+      ),
+      div(toList([id("tree-resizer")]), toList([])),
+      div(
+        toList([id("file-contents")]),
+        toList([file_contents])
+      ),
+      (() => {
+        let $ = is_some(side_panel);
+        if ($) {
+          return div(toList([id("panel-resizer")]), toList([]));
+        } else {
+          return fragment(toList([]));
+        }
+      })(),
+      (() => {
+        if (side_panel instanceof Some) {
+          let side_panel$1 = side_panel[0];
+          return div(
+            toList([id("side-panel")]),
+            toList([side_panel$1])
+          );
+        } else {
+          return fragment(toList([]));
+        }
+      })()
+    ])
+  );
+}
+function get_all_parents(path) {
+  let _pipe = path;
+  let _pipe$1 = split2(_pipe, "/");
+  let _pipe$2 = take(_pipe$1, length(split2(path, "/")) - 1);
+  let _pipe$3 = index_fold(
+    _pipe$2,
+    toList([]),
+    (acc, segment, i) => {
+      if (i === 0) {
+        return prepend(segment, acc);
+      } else {
+        let prev = (() => {
+          let _pipe$32 = first(acc);
+          return unwrap2(_pipe$32, "");
+        })();
+        return prepend(prev + "/" + segment, acc);
+      }
+    }
+  );
+  return reverse(_pipe$3);
+}
+function dashboard_path(audit_name) {
+  return audit_name + "/dashboard";
+}
+function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
+  let dashboard_path$1 = dashboard_path(audit_name);
+  let files = (() => {
+    let $ = contains(in_scope_files, current_file_path);
+    if ($) {
+      return prepend(dashboard_path$1, in_scope_files);
+    } else {
+      return prepend(current_file_path, in_scope_files);
+    }
+  })();
+  let parents = (() => {
+    let _pipe2 = files;
+    let _pipe$12 = flat_map(_pipe2, get_all_parents);
+    return unique(_pipe$12);
+  })();
+  let _pipe = parents;
+  let _pipe$1 = map(
+    _pipe,
+    (parent) => {
+      let parent_prefix = parent + "/";
+      let items = (() => {
+        let _pipe$12 = files;
+        return filter(
+          _pipe$12,
+          (path) => {
+            return starts_with(path, parent_prefix);
+          }
+        );
+      })();
+      let $ = (() => {
+        let _pipe$12 = items;
+        return partition(
+          _pipe$12,
+          (path) => {
+            let relative = replace(path, parent_prefix, "");
+            return contains_string(relative, "/");
+          }
+        );
+      })();
+      let dirs = $[0];
+      let direct_files = $[1];
+      let subdirs = (() => {
+        let _pipe$12 = dirs;
+        let _pipe$2 = map(
+          _pipe$12,
+          (dir) => {
+            let relative = replace(dir, parent_prefix, "");
+            let first_dir = (() => {
+              let _pipe$22 = split2(relative, "/");
+              let _pipe$3 = first(_pipe$22);
+              return unwrap2(_pipe$3, "");
+            })();
+            return parent_prefix + first_dir;
+          }
+        );
+        return unique(_pipe$2);
+      })();
+      return [parent, [subdirs, direct_files]];
+    }
+  );
+  return from_list(_pipe$1);
+}
+
 // build/dev/javascript/o11a_client/o11a_client.mjs
 var Model3 = class extends CustomType {
-  constructor(route, audit_metadata, source_files, discussions) {
+  constructor(route, file_tree, audit_metadata, source_files, discussions) {
     super();
     this.route = route;
+    this.file_tree = file_tree;
     this.audit_metadata = audit_metadata;
     this.source_files = source_files;
     this.discussions = discussions;
@@ -5683,6 +5685,56 @@ function on_url_change(uri) {
   let _pipe = parse_route(uri);
   return new OnRouteChange(_pipe);
 }
+function file_tree_from_route(route, audit_metadata) {
+  if (route instanceof O11aHomeRoute) {
+    return new_map();
+  } else if (route instanceof AuditDashboardRoute) {
+    let audit_name = route.audit_name;
+    let in_scope_files = (() => {
+      let _pipe = map_get(audit_metadata, audit_name);
+      let _pipe$1 = map2(
+        _pipe,
+        (audit_metadata2) => {
+          if (audit_metadata2.isOk()) {
+            let audit_metadata$1 = audit_metadata2[0];
+            return audit_metadata$1.in_scope_files;
+          } else {
+            return toList([]);
+          }
+        }
+      );
+      return unwrap2(_pipe$1, toList([]));
+    })();
+    return group_files_by_parent(
+      in_scope_files,
+      dashboard_path(audit_name),
+      audit_name
+    );
+  } else {
+    let audit_name = route.audit_name;
+    let current_file_path = route.page_path;
+    let in_scope_files = (() => {
+      let _pipe = map_get(audit_metadata, audit_name);
+      let _pipe$1 = map2(
+        _pipe,
+        (audit_metadata2) => {
+          if (audit_metadata2.isOk()) {
+            let audit_metadata$1 = audit_metadata2[0];
+            return audit_metadata$1.in_scope_files;
+          } else {
+            return toList([]);
+          }
+        }
+      );
+      return unwrap2(_pipe$1, toList([]));
+    })();
+    return group_files_by_parent(
+      in_scope_files,
+      current_file_path,
+      audit_name
+    );
+  }
+}
 function fetch_metadata(model, audit_name) {
   let $ = map_get(model.audit_metadata, audit_name);
   if ($.isOk() && $[0].isOk()) {
@@ -5733,16 +5785,18 @@ function route_change_effect(model, route) {
   }
 }
 function init3(_) {
+  let route = (() => {
+    let $ = do_initial_uri();
+    if ($.isOk()) {
+      let uri = $[0];
+      return parse_route(uri);
+    } else {
+      return new O11aHomeRoute();
+    }
+  })();
   let init_model = new Model3(
-    (() => {
-      let $ = do_initial_uri();
-      if ($.isOk()) {
-        let uri = $[0];
-        return parse_route(uri);
-      } else {
-        return new O11aHomeRoute();
-      }
-    })(),
+    route,
+    new_map(),
     new_map(),
     new_map(),
     new_map()
@@ -5765,6 +5819,7 @@ function update(model, msg) {
         let _record = model;
         return new Model3(
           route,
+          file_tree_from_route(route, model.audit_metadata),
           _record.audit_metadata,
           _record.source_files,
           _record.discussions
@@ -5775,12 +5830,18 @@ function update(model, msg) {
   } else if (msg instanceof ClientFetchedAuditMetadata) {
     let audit_name = msg.audit_name;
     let metadata = msg.metadata;
+    let updated_audit_metadata = insert(
+      model.audit_metadata,
+      audit_name,
+      metadata
+    );
     return [
       (() => {
         let _record = model;
         return new Model3(
           _record.route,
-          insert(model.audit_metadata, audit_name, metadata),
+          file_tree_from_route(model.route, updated_audit_metadata),
+          updated_audit_metadata,
           _record.source_files,
           _record.discussions
         );
@@ -5795,6 +5856,7 @@ function update(model, msg) {
         let _record = model;
         return new Model3(
           _record.route,
+          _record.file_tree,
           _record.audit_metadata,
           insert(model.source_files, page_path, source_files),
           _record.discussions
@@ -5808,32 +5870,18 @@ function view3(model) {
   let $ = model.route;
   if ($ instanceof AuditDashboardRoute) {
     let audit_name = $.audit_name;
-    return view(
+    return view2(
       p(toList([]), toList([text2("Dashboard")])),
       new None(),
+      model.file_tree,
       audit_name,
-      audit_name + "/dashboard",
-      (() => {
-        let _pipe = map_get(model.audit_metadata, audit_name);
-        let _pipe$1 = map2(
-          _pipe,
-          (audit_metadata) => {
-            if (audit_metadata.isOk()) {
-              let audit_metadata$1 = audit_metadata[0];
-              return audit_metadata$1.in_scope_files;
-            } else {
-              return toList([]);
-            }
-          }
-        );
-        return unwrap2(_pipe$1, toList([]));
-      })()
+      dashboard_path(audit_name)
     );
   } else if ($ instanceof AuditPageRoute) {
     let audit_name = $.audit_name;
     let page_path = $.page_path;
-    return view(
-      view2(
+    return view2(
+      view(
         new Model2(
           page_path,
           (() => {
@@ -5854,24 +5902,10 @@ function view3(model) {
           new_map()
         )
       ),
-      new None(),
+      new Some(p(toList([]), toList([text2("Side Panel")]))),
+      model.file_tree,
       audit_name,
-      page_path,
-      (() => {
-        let _pipe = map_get(model.audit_metadata, audit_name);
-        let _pipe$1 = map2(
-          _pipe,
-          (audit_metadata) => {
-            if (audit_metadata.isOk()) {
-              let audit_metadata$1 = audit_metadata[0];
-              return audit_metadata$1.in_scope_files;
-            } else {
-              return toList([]);
-            }
-          }
-        );
-        return unwrap2(_pipe$1, toList([]));
-      })()
+      page_path
     );
   } else {
     return p(toList([]), toList([text2("Home")]));

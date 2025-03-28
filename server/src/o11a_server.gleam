@@ -91,12 +91,12 @@ fn handler(req, context: Context) {
   case request.path_segments(req) {
     ["favicon.ico"] -> serve_favicon(context.config)
 
-    ["styles.css" as stylesheet]
-    | ["line_discussion.min.css" as stylesheet]
-    | ["page_panel.css" as stylesheet] -> serve_css(stylesheet, context.config)
+    ["styles.css" as stylesheet] | ["line_discussion.min.css" as stylesheet] ->
+      serve_css(stylesheet, context.config)
 
-    ["lustre_server_component.mjs" as script] | ["o11a_client.mjs" as script] ->
-      serve_js(script, context.config)
+    ["lustre_server_component.mjs" as script]
+    | ["o11a_client.mjs" as script]
+    | ["panel_resizer.mjs" as script] -> serve_js(script, context.config)
 
     ["component-discussion", audit_name] -> {
       let assert Ok(actor) =
@@ -150,6 +150,14 @@ fn handle_wisp_request(req, context: Context) {
             [attribute.type_("module"), attribute.src("/o11a_client.mjs")],
             "",
           ),
+          html.script(
+            [attribute.type_("module"), attribute.src("/panel_resizer.mjs")],
+            "",
+          ),
+          html.link([
+            attribute.rel("stylesheet"),
+            attribute.href("/line_discussion.min.css"),
+          ]),
           html.link([attribute.rel("stylesheet"), attribute.href("/styles.css")]),
         ]),
         html.body([], [html.div([attribute.id("app")], [])]),

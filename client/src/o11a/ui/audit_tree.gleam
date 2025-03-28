@@ -8,19 +8,28 @@ import lustre/attribute
 import lustre/element
 import lustre/element/html
 
+pub type Model {
+  Model(
+    audit_name: String,
+    current_file_path: String,
+    in_scope_files: List(String),
+    grouped_files: dict.Dict(String, #(List(String), List(String))),
+  )
+}
+
 pub fn view(
   file_contents,
   side_panel,
-  for audit_name,
-  on current_file_path,
-  with in_scope_files,
+  grouped_files,
+  audit_name,
+  current_file_path,
 ) {
   html.div([attribute.id("tree-grid")], [
     html.div([attribute.id("file-tree")], [
       html.h3([attribute.id("audit-tree-header")], [
         html.text(audit_name <> " files"),
       ]),
-      audit_file_tree_view(audit_name, current_file_path, in_scope_files),
+      audit_file_tree_view(grouped_files, audit_name, current_file_path),
     ]),
     html.div([attribute.id("tree-resizer")], []),
     html.div([attribute.id("file-contents")], [file_contents]),
@@ -35,18 +44,9 @@ pub fn view(
   ])
 }
 
-fn audit_file_tree_view(audit_name, current_file_path, in_scope_files) {
-  let dashboard_path = audit_name <> "/dashboard"
-
-  let all_audit_files = case list.contains(in_scope_files, current_file_path) {
-    // These two arms will always show the dashboard file, as it is never in the
-    // in_scope_files list
-    True -> group_files_by_parent([dashboard_path, ..in_scope_files])
-    False -> group_files_by_parent([current_file_path, ..in_scope_files])
-  }
-
+fn audit_file_tree_view(grouped_files, audit_name, current_file_path) {
   let #(subdirs, direct_files) =
-    dict.get(all_audit_files, audit_name) |> result.unwrap(#([], []))
+    dict.get(grouped_files, audit_name) |> result.unwrap(#([], []))
 
   html.div([attribute.id("audit-files")], [
     html.div(
@@ -70,11 +70,7 @@ fn audit_file_tree_view(audit_name, current_file_path, in_scope_files) {
     ),
     html.div(
       [attribute.id(audit_name <> "-dirs")],
-      list.map(subdirs, sub_file_tree_view(
-        _,
-        current_file_path,
-        all_audit_files,
-      )),
+      list.map(subdirs, sub_file_tree_view(_, current_file_path, grouped_files)),
     ),
   ])
 }
@@ -139,7 +135,24 @@ fn get_all_parents(path) {
   |> list.reverse
 }
 
-pub fn group_files_by_parent(files) {
+pub fn dashboard_path(for audit_name) {
+  audit_name <> "/dashboard"
+}
+
+pub fn group_files_by_parent(
+  in_scope_files in_scope_files,
+  current_file_path current_file_path,
+  audit_name audit_name,
+) {
+  let dashboard_path = dashboard_path(for: audit_name)
+
+  let files = case list.contains(in_scope_files, current_file_path) {
+    // These two arms will always show the dashboard file, as it is never in the
+    // in_scope_files list
+    True -> [dashboard_path, ..in_scope_files]
+    False -> [current_file_path, ..in_scope_files]
+  }
+
   // Get all unique parents including intermediate ones
   let parents =
     files
