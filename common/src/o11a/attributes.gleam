@@ -1,11 +1,10 @@
 import lustre/attribute
 
-pub fn encode_line_number_data(line_number) {
-  attribute.data("ln", line_number)
-}
-
-pub fn encode_column_number_data(column_number) {
-  attribute.data("cn", column_number)
+pub fn encode_grid_location_data(
+  line_number line_number,
+  column_number column_number,
+) {
+  attribute.data("g", line_number <> ":" <> column_number)
 }
 
 pub fn encode_topic_id_data(topic_id) {

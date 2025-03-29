@@ -4694,7 +4694,7 @@ var Informational2 = class extends CustomType {
 
 // build/dev/javascript/o11a_common/o11a/preprocessor.mjs
 var PreProcessedLine = class extends CustomType {
-  constructor(significance, line_number, line_number_text, line_tag, line_id, leading_spaces, elements2) {
+  constructor(significance, line_number, line_number_text, line_tag, line_id, leading_spaces, elements2, columns) {
     super();
     this.significance = significance;
     this.line_number = line_number;
@@ -4703,6 +4703,7 @@ var PreProcessedLine = class extends CustomType {
     this.line_id = line_id;
     this.leading_spaces = leading_spaces;
     this.elements = elements2;
+    this.columns = columns;
   }
 };
 var SingleDeclarationLine = class extends CustomType {
@@ -4759,20 +4760,27 @@ function pre_processed_line_decoder() {
                     "e",
                     string3,
                     (elements2) => {
-                      let line_number_text = (() => {
-                        let _pipe = line_number;
-                        return to_string(_pipe);
-                      })();
-                      return success(
-                        new PreProcessedLine(
-                          significance,
-                          line_number,
-                          line_number_text,
-                          "L" + line_number_text,
-                          line_id,
-                          leading_spaces,
-                          elements2
-                        )
+                      return field(
+                        "c",
+                        int2,
+                        (columns) => {
+                          let line_number_text = (() => {
+                            let _pipe = line_number;
+                            return to_string(_pipe);
+                          })();
+                          return success(
+                            new PreProcessedLine(
+                              significance,
+                              line_number,
+                              line_number_text,
+                              "L" + line_number_text,
+                              line_id,
+                              leading_spaces,
+                              elements2,
+                              columns
+                            )
+                          );
+                        }
                       );
                     }
                   );
@@ -4854,6 +4862,11 @@ function translate_number_to_letter(loop$number) {
       }
     }
   }
+}
+
+// build/dev/javascript/o11a_common/o11a/attributes.mjs
+function encode_grid_location_data(line_number, column_number) {
+  return data("g", line_number + ":" + column_number);
 }
 
 // build/dev/javascript/o11a_common/o11a/classes.mjs
@@ -5005,7 +5018,7 @@ var Model2 = class extends CustomType {
     this.discussion = discussion;
   }
 };
-function inline_comment_preview_view(parent_notes) {
+function inline_comment_preview_view(parent_notes, line_number, column_number) {
   let note_result = (() => {
     let _pipe = reverse(parent_notes);
     return find(
@@ -5019,10 +5032,13 @@ function inline_comment_preview_view(parent_notes) {
     let note = note_result[0];
     return span(
       toList([
-        class$("code-extras font-code fade-in"),
+        class$(
+          "inline-comment relative font-code code-extras font-code fade-in"
+        ),
         class$("comment-preview"),
         class$(discussion_entry),
-        attribute("tabindex", "0")
+        attribute("tabindex", "0"),
+        encode_grid_location_data(line_number, column_number)
       ]),
       toList([
         text2(
@@ -5044,11 +5060,11 @@ function inline_comment_preview_view(parent_notes) {
   } else {
     return span(
       toList([
-        class$("code-extras"),
+        class$("inline-comment relative font-code code-extras"),
         class$("new-thread-preview"),
         class$(discussion_entry),
-        class$(discussion_entry),
-        attribute("tabindex", "0")
+        attribute("tabindex", "0"),
+        encode_grid_location_data(line_number, column_number)
       ]),
       toList([text2("Start new thread")])
     );
@@ -5213,9 +5229,10 @@ function line_container_view(model, loc, line_topic_id) {
             ]),
             toList([])
           ),
-          span(
-            toList([class$("inline-comment relative font-code")]),
-            toList([inline_comment_preview_view(parent_notes)])
+          inline_comment_preview_view(
+            parent_notes,
+            loc.line_number_text,
+            to_string(loc.columns + 1)
           )
         ])
       )
@@ -5551,16 +5568,32 @@ function dashboard_path(audit_name) {
 }
 function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
   let dashboard_path$1 = dashboard_path(audit_name);
-  let files = (() => {
-    let $ = contains(in_scope_files, current_file_path);
+  let in_scope_files$1 = (() => {
+    let $ = current_file_path === dashboard_path$1;
     if ($) {
-      return prepend(dashboard_path$1, in_scope_files);
-    } else {
       return prepend(current_file_path, in_scope_files);
+    } else {
+      let $1 = contains(in_scope_files, current_file_path);
+      if ($1) {
+        return prepend(dashboard_path$1, in_scope_files);
+      } else {
+        return prepend(
+          current_file_path,
+          prepend(dashboard_path$1, in_scope_files)
+        );
+      }
+    }
+  })();
+  let in_scope_files$2 = (() => {
+    let $ = contains(in_scope_files$1, dashboard_path$1);
+    if ($) {
+      return in_scope_files$1;
+    } else {
+      return prepend(dashboard_path$1, in_scope_files$1);
     }
   })();
   let parents = (() => {
-    let _pipe2 = files;
+    let _pipe2 = in_scope_files$2;
     let _pipe$12 = flat_map(_pipe2, get_all_parents);
     return unique(_pipe$12);
   })();
@@ -5570,7 +5603,7 @@ function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
     (parent) => {
       let parent_prefix = parent + "/";
       let items = (() => {
-        let _pipe$12 = files;
+        let _pipe$12 = in_scope_files$2;
         return filter(
           _pipe$12,
           (path) => {

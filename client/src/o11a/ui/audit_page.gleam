@@ -16,6 +16,7 @@ import lustre/effect
 import lustre/element
 import lustre/element/html
 import lustre/event
+import o11a/attributes
 import o11a/classes
 import o11a/computed_note
 import o11a/events
@@ -178,15 +179,21 @@ fn line_container_view(
           [attribute.attribute("dangerous-unescaped-html", loc.elements)],
           [],
         ),
-        html.span([attribute.class("inline-comment relative font-code")], [
-          inline_comment_preview_view(parent_notes),
-        ]),
+        inline_comment_preview_view(
+          parent_notes,
+          loc.line_number_text,
+          int.to_string(loc.columns + 1),
+        ),
       ]),
     ],
   )
 }
 
-fn inline_comment_preview_view(parent_notes: List(computed_note.ComputedNote)) {
+fn inline_comment_preview_view(
+  parent_notes: List(computed_note.ComputedNote),
+  line_number,
+  column_number,
+) {
   let note_result =
     list.reverse(parent_notes)
     |> list.find(fn(note) { note.significance != computed_note.Informational })
@@ -195,10 +202,13 @@ fn inline_comment_preview_view(parent_notes: List(computed_note.ComputedNote)) {
     Ok(note) ->
       html.span(
         [
-          attribute.class("code-extras font-code fade-in"),
+          attribute.class(
+            "inline-comment relative font-code code-extras font-code fade-in",
+          ),
           attribute.class("comment-preview"),
           attribute.class(classes.discussion_entry),
           attribute.attribute("tabindex", "0"),
+          attributes.encode_grid_location_data(line_number, column_number),
         ],
         [
           html.text(case string.length(note.message) > 40 {
@@ -211,11 +221,11 @@ fn inline_comment_preview_view(parent_notes: List(computed_note.ComputedNote)) {
     Error(Nil) ->
       html.span(
         [
-          attribute.class("code-extras"),
+          attribute.class("inline-comment relative font-code code-extras"),
           attribute.class("new-thread-preview"),
           attribute.class(classes.discussion_entry),
-          attribute.class(classes.discussion_entry),
           attribute.attribute("tabindex", "0"),
+          attributes.encode_grid_location_data(line_number, column_number),
         ],
         [html.text("Start new thread")],
       )

@@ -11,6 +11,7 @@ pub type PreProcessedLine {
     line_id: String,
     leading_spaces: Int,
     elements: String,
+    columns: Int,
   )
 }
 
@@ -26,6 +27,7 @@ pub fn encode_pre_processed_line(
     #("i", json.string(pre_processed_line.line_id)),
     #("l", json.int(pre_processed_line.leading_spaces)),
     #("e", json.string(pre_processed_line.elements)),
+    #("c", json.int(pre_processed_line.columns)),
   ])
 }
 
@@ -38,6 +40,7 @@ pub fn pre_processed_line_decoder() -> decode.Decoder(PreProcessedLine) {
   use line_id <- decode.field("i", decode.string)
   use leading_spaces <- decode.field("l", decode.int)
   use elements <- decode.field("e", decode.string)
+  use columns <- decode.field("c", decode.int)
   let line_number_text = line_number |> int.to_string
   decode.success(PreProcessedLine(
     significance:,
@@ -47,6 +50,7 @@ pub fn pre_processed_line_decoder() -> decode.Decoder(PreProcessedLine) {
     line_id:,
     leading_spaces:,
     elements:,
+    columns:,
   ))
 }
 

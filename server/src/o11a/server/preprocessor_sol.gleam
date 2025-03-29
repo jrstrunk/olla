@@ -79,7 +79,7 @@ pub fn preprocess_source(
     _, _ -> preprocessor.NonEmptyLine
   }
 
-  let #(_cols, elements) =
+  let #(columns, elements) =
     list.fold(line, #(0, ""), fn(acc, node) {
       case node {
         PreProcessedDeclaration(build_element:, ..)
@@ -89,7 +89,7 @@ pub fn preprocess_source(
           #(
             col_number,
             acc.1
-              <> build_element(col_number |> int.to_string, line_number_text)
+              <> build_element(line_number_text, col_number |> int.to_string)
             |> element.to_string,
           )
         }
@@ -103,12 +103,13 @@ pub fn preprocess_source(
 
   preprocessor.PreProcessedLine(
     significance:,
-    elements:,
     line_id:,
     line_number:,
     line_number_text:,
     line_tag:,
     leading_spaces:,
+    elements:,
+    columns:,
   )
 }
 
@@ -332,11 +333,8 @@ fn style_declaration_node(
         attribute.class("declaration-preview N" <> int.to_string(id)),
         attribute.class(classes.discussion_entry),
         attribute.class(classes.discussion_entry_hover),
-        attribute.class("L" <> line_number),
-        attribute.class("C" <> column_number),
         attribute.attribute("tabindex", "0"),
-        attributes.encode_line_number_data(line_number),
-        attributes.encode_column_number_data(column_number),
+        attributes.encode_grid_location_data(line_number, column_number),
         attributes.encode_topic_id_data(node_declaration.topic_id),
         attributes.encode_topic_title_data(node_declaration.title),
         attributes.encode_is_reference_data(False),
@@ -366,11 +364,8 @@ fn style_reference_node(
         attribute.class("reference-preview N" <> int.to_string(reference_id)),
         attribute.class(classes.discussion_entry),
         attribute.class(classes.discussion_entry_hover),
-        attribute.class("L" <> line_number),
-        attribute.class("C" <> column_number),
         attribute.attribute("tabindex", "0"),
-        attributes.encode_line_number_data(line_number),
-        attributes.encode_column_number_data(column_number),
+        attributes.encode_grid_location_data(line_number, column_number),
         attributes.encode_topic_id_data(referenced_node_declaration.topic_id),
         attributes.encode_topic_title_data(referenced_node_declaration.title),
         attributes.encode_is_reference_data(True),
