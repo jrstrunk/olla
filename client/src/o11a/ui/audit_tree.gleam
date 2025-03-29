@@ -144,18 +144,26 @@ pub fn group_files_by_parent(
   current_file_path current_file_path,
   audit_name audit_name,
 ) {
+  // Make sure the file tree always contains the current file path and the
+  // dashboard path
   let dashboard_path = dashboard_path(for: audit_name)
 
-  let files = case list.contains(in_scope_files, current_file_path) {
-    // These two arms will always show the dashboard file, as it is never in the
-    // in_scope_files list
-    True -> [dashboard_path, ..in_scope_files]
-    False -> [current_file_path, ..in_scope_files]
+  let in_scope_files = case current_file_path == dashboard_path {
+    True -> [current_file_path, ..in_scope_files]
+    False ->
+      case list.contains(in_scope_files, current_file_path) {
+        True -> [dashboard_path, ..in_scope_files]
+        False -> [current_file_path, dashboard_path, ..in_scope_files]
+      }
+  }
+  let in_scope_files = case list.contains(in_scope_files, dashboard_path) {
+    True -> in_scope_files
+    False -> [dashboard_path, ..in_scope_files]
   }
 
   // Get all unique parents including intermediate ones
   let parents =
-    files
+    in_scope_files
     |> list.flat_map(get_all_parents)
     |> list.unique
 
@@ -166,7 +174,7 @@ pub fn group_files_by_parent(
 
     // Get all items that start with this parent's prefix
     let items =
-      files
+      in_scope_files
       |> list.filter(fn(path) { string.starts_with(path, parent_prefix) })
 
     // Get next level of directories and direct files
