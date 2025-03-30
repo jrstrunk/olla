@@ -43,7 +43,7 @@ pub fn on_up_arrow(msg: msg) {
   }
 }
 
-pub fn on_input_no_propigation(msg: fn(String) -> msg) {
+pub fn on_input_no_propagation(msg: fn(String) -> msg) {
   use event <- event.on("input")
   event.stop_propagation(event)
 

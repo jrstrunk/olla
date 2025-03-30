@@ -18,6 +18,7 @@ import lustre/element/html
 import lustre/event
 import o11a/attributes
 import o11a/classes
+import o11a/client/attributes as client_attributes
 import o11a/computed_note
 import o11a/events
 import o11a/note
@@ -100,7 +101,14 @@ pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 
 pub fn view(model: Model) -> element.Element(msg) {
   html.div(
-    [attribute.class("code-snippet")],
+    [
+      attribute.id("audit-page"),
+      attribute.class("code-snippet"),
+      attribute.data(
+        "lc",
+        model.preprocessed_source |> list.length |> int.to_string,
+      ),
+    ],
     list.map(model.preprocessed_source, loc_view(model, _)),
   )
 }
@@ -135,11 +143,13 @@ fn line_container_view(
   let #(parent_notes, info_notes) =
     get_notes(model.discussion, loc.leading_spaces, line_topic_id)
 
+  let column_count = loc.columns + 1
+
   html.div(
     [
       attribute.id(loc.line_tag),
-      attribute.class("line-container"),
-      attribute.data("line-number", loc.line_number_text),
+      attribute.class(classes.line_container),
+      client_attributes.encode_column_count_data(column_count),
     ],
     [
       element.keyed(element.fragment, {
@@ -182,7 +192,7 @@ fn line_container_view(
         inline_comment_preview_view(
           parent_notes,
           loc.line_number_text,
-          int.to_string(loc.columns + 1),
+          int.to_string(column_count),
         ),
       ]),
     ],

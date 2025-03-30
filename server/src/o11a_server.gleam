@@ -96,6 +96,7 @@ fn handler(req, context: Context) {
 
     ["lustre_server_component.mjs" as script]
     | ["o11a_client.mjs" as script]
+    | ["o11a_client_script.mjs" as script]
     | ["panel_resizer.mjs" as script] -> serve_js(script, context.config)
 
     ["component-discussion", audit_name] -> {
@@ -148,6 +149,13 @@ fn handle_wisp_request(req, context: Context) {
           ),
           html.script(
             [attribute.type_("module"), attribute.src("/o11a_client.mjs")],
+            "",
+          ),
+          html.script(
+            [
+              attribute.type_("module"),
+              attribute.src("/o11a_client_script.mjs"),
+            ],
             "",
           ),
           html.script(

@@ -174,7 +174,8 @@ line-discussion {
 
 /* When the new thread preview is hovered */
 
-.line-container:hover .new-thread-preview {
+.line-container:hover .new-thread-preview,
+.line-container:focus-within .new-thread-preview {
   opacity: 1;
 }
 

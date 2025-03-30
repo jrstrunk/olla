@@ -1,7 +1,8 @@
 import lustre/effect
-import o11a/selector
 
-pub fn focus_line_discussion_input(line_tag) {
+/// Example effect
+pub fn focus_line_discussion_input(_line_tag) {
   use _ <- effect.from
-  selector.focus_line_discussion_input(line_tag)
+  // selector.focus_line_discussion_input(line_tag)
+  Nil
 }

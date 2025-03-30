@@ -4866,11 +4866,12 @@ function translate_number_to_letter(loop$number) {
 
 // build/dev/javascript/o11a_common/o11a/attributes.mjs
 function encode_grid_location_data(line_number, column_number) {
-  return data("g", line_number + ":" + column_number);
+  return class$("dl" + line_number + " dc" + column_number);
 }
 
 // build/dev/javascript/o11a_common/o11a/classes.mjs
 var discussion_entry = "de";
+var line_container = "line-container";
 
 // build/dev/javascript/plinth/window_ffi.mjs
 function self() {
@@ -5007,6 +5008,11 @@ async function import_(string6) {
   } catch (error) {
     return new Error(error.toString());
   }
+}
+
+// build/dev/javascript/o11a_client/o11a/client/attributes.mjs
+function encode_column_count_data(column_count) {
+  return data("cc", to_string(column_count));
 }
 
 // build/dev/javascript/o11a_client/o11a/ui/audit_page.mjs
@@ -5162,11 +5168,12 @@ function line_container_view(model, loc, line_topic_id) {
   let $ = get_notes(model.discussion, loc.leading_spaces, line_topic_id);
   let parent_notes = $[0];
   let info_notes = $[1];
+  let column_count = loc.columns + 1;
   return div(
     toList([
       id(loc.line_tag),
-      class$("line-container"),
-      data("line-number", loc.line_number_text)
+      class$(line_container),
+      encode_column_count_data(column_count)
     ]),
     toList([
       keyed(
@@ -5232,7 +5239,7 @@ function line_container_view(model, loc, line_topic_id) {
           inline_comment_preview_view(
             parent_notes,
             loc.line_number_text,
-            to_string(loc.columns + 1)
+            to_string(column_count)
           )
         ])
       )
@@ -5266,7 +5273,18 @@ function loc_view(model, loc) {
 }
 function view(model) {
   return div(
-    toList([class$("code-snippet")]),
+    toList([
+      id("audit-page"),
+      class$("code-snippet"),
+      data(
+        "lc",
+        (() => {
+          let _pipe = model.preprocessed_source;
+          let _pipe$1 = length(_pipe);
+          return to_string(_pipe$1);
+        })()
+      )
+    ]),
     map(
       model.preprocessed_source,
       (_capture) => {
