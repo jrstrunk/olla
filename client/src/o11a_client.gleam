@@ -241,8 +241,7 @@ fn view(model: Model) -> Element(Msg) {
 
     AuditPageRoute(audit_name:, page_path:) ->
       audit_tree.view(
-        audit_page.view(audit_page.Model(
-          page_path:,
+        audit_page.view(
           preprocessed_source: dict.get(model.source_files, page_path)
             |> result.map(fn(source_files) {
               case source_files {
@@ -252,7 +251,7 @@ fn view(model: Model) -> Element(Msg) {
             })
             |> result.unwrap([]),
           discussion: dict.new(),
-        )),
+        ),
         option.Some(html.p([], [html.text("Side Panel")])),
         model.file_tree,
         audit_name,

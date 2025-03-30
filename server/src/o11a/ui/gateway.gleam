@@ -15,16 +15,12 @@ import o11a/server/audit_metadata as server_audit_metadata
 import o11a/server/discussion
 import o11a/server/preprocessor_sol
 import o11a/ui/audit_dashboard
-import o11a/ui/audit_page_sol
 import o11a/ui/discussion_component
-import o11a/ui/page_dashboard
 import simplifile
 import snag
 
 pub type Gateway {
   Gateway(
-    page_gateway: PageGateway,
-    page_dashboard_gateway: PageDashboardGateway,
     dashboard_gateway: DashboardGateway,
     audit_metadata_gateway: AuditMetaDataGateway,
     discussion_component_gateway: DiscussionComponentGateway,
@@ -35,18 +31,6 @@ pub type Gateway {
     ),
   )
 }
-
-pub type PageGateway =
-  concurrent_dict.ConcurrentDict(
-    String,
-    process.Subject(lustre.Action(audit_page_sol.Msg, lustre.ServerComponent)),
-  )
-
-pub type PageDashboardGateway =
-  concurrent_dict.ConcurrentDict(
-    String,
-    process.Subject(lustre.Action(page_dashboard.Msg, lustre.ServerComponent)),
-  )
 
 pub type DashboardGateway =
   concurrent_dict.ConcurrentDict(
@@ -67,8 +51,6 @@ pub type AuditMetaDataGateway =
 
 pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
   let dashboard_gateway = concurrent_dict.new()
-  let page_gateway = concurrent_dict.new()
-  let page_dashboard_gateway = concurrent_dict.new()
   let audit_metadata_gateway = concurrent_dict.new()
 
   let discussion_component_gateway = concurrent_dict.new()
@@ -190,24 +172,11 @@ pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
 
   Gateway(
     dashboard_gateway:,
-    page_gateway:,
-    page_dashboard_gateway:,
     audit_metadata_gateway:,
     discussion_component_gateway:,
     source_files:,
     audit_metadata: audit_metadatas,
   )
-}
-
-pub fn get_page_actor(discussion_gateway: PageGateway, for page_path) {
-  concurrent_dict.get(discussion_gateway, page_path)
-}
-
-pub fn get_page_dashboard_actor(
-  page_dashboard_gateway: PageDashboardGateway,
-  for page_path,
-) {
-  concurrent_dict.get(page_dashboard_gateway, page_path)
 }
 
 pub fn get_dashboard_actor(discussion_gateway: DashboardGateway, for audit_name) {

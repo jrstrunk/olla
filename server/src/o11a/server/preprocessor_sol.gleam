@@ -16,9 +16,7 @@ import lib/snagx
 import lustre/attribute
 import lustre/element
 import lustre/element/html
-import o11a/attributes
 import o11a/audit_metadata
-import o11a/classes
 import o11a/config
 import o11a/preprocessor
 import simplifile
@@ -27,7 +25,7 @@ import snag
 pub fn preprocess_source(
   source source: String,
   nodes nodes: List(Node),
-  declarations declarations: dict.Dict(Int, NodeDeclaration),
+  declarations declarations: dict.Dict(Int, preprocessor.NodeDeclaration),
   page_path page_path: String,
   audit_name audit_name: String,
 ) {
@@ -43,14 +41,15 @@ pub fn preprocess_source(
   let line_tag = "L" <> line_number_text
   let line_id = page_path <> "#" <> line_tag
   let leading_spaces = case line {
-    [PreProcessedGapNode(leading_spaces:, ..), ..] -> leading_spaces
+    [preprocessor.PreProcessedGapNode(leading_spaces:, ..), ..] ->
+      leading_spaces
     _ -> 0
   }
 
   let declaration_count =
     list.count(line, fn(decl) {
       case decl {
-        PreProcessedDeclaration(..) -> True
+        preprocessor.PreProcessedDeclaration(..) -> True
         _ -> False
       }
     })
@@ -58,17 +57,17 @@ pub fn preprocess_source(
   let reference_count =
     list.count(line, fn(ref) {
       case ref {
-        PreProcessedReference(..) -> True
+        preprocessor.PreProcessedReference(..) -> True
         _ -> False
       }
     })
 
   let significance = case declaration_count, reference_count {
     1, _ -> {
-      let assert Ok(PreProcessedDeclaration(node_declaration:, ..)) =
+      let assert Ok(preprocessor.PreProcessedDeclaration(node_declaration:, ..)) =
         list.find(line, fn(decl) {
           case decl {
-            PreProcessedDeclaration(..) -> True
+            preprocessor.PreProcessedDeclaration(..) -> True
             _ -> False
           }
         })
@@ -79,25 +78,13 @@ pub fn preprocess_source(
     _, _ -> preprocessor.NonEmptyLine
   }
 
-  let #(columns, elements) =
-    list.fold(line, #(0, ""), fn(acc, node) {
+  let columns =
+    list.fold(line, 0, fn(acc, node) {
       case node {
-        PreProcessedDeclaration(build_element:, ..)
-        | PreProcessedReference(build_element:, ..) -> {
-          let col_number = acc.0 + 1
-
-          #(
-            col_number,
-            acc.1
-              <> build_element(line_number_text, col_number |> int.to_string)
-            |> element.to_string,
-          )
-        }
-
-        PreProcessedNode(element:) | PreProcessedGapNode(element:, ..) -> #(
-          acc.0,
-          acc.1 <> element |> element.to_string,
-        )
+        preprocessor.PreProcessedDeclaration(..)
+        | preprocessor.PreProcessedReference(..) -> acc + 1
+        preprocessor.PreProcessedNode(..) | preprocessor.PreProcessedGapNode(..) ->
+          acc
       }
     })
 
@@ -108,28 +95,15 @@ pub fn preprocess_source(
     line_number_text:,
     line_tag:,
     leading_spaces:,
-    elements:,
+    elements: line,
     columns:,
   )
-}
-
-pub type PreProcessedNode(msg) {
-  PreProcessedDeclaration(
-    build_element: fn(String, String) -> element.Element(msg),
-    node_declaration: NodeDeclaration,
-  )
-  PreProcessedReference(
-    build_element: fn(String, String) -> element.Element(msg),
-    referenced_node_declaration: NodeDeclaration,
-  )
-  PreProcessedNode(element: element.Element(msg))
-  PreProcessedGapNode(element: element.Element(msg), leading_spaces: Int)
 }
 
 pub fn consume_source(
   source source: String,
   nodes nodes: List(Node),
-  declarations declarations: dict.Dict(Int, NodeDeclaration),
+  declarations declarations: dict.Dict(Int, preprocessor.NodeDeclaration),
   audit_name audit_name: String,
 ) {
   let #(_, current_line, processed, rest) =
@@ -154,45 +128,51 @@ pub fn consume_source(
         | ErrorDefinitionNode(id:, ..)
         | EnumDefinition(id:, ..)
         | StructDefinition(id:, ..)
-        | EnumValue(id:, ..) -> style_declaration_node(
-          declarations:,
-          id:,
-          tokens: _,
-        )
+        | EnumValue(id:, ..) -> {
+          preprocessor.PreProcessedDeclaration(
+            node_id: id,
+            node_declaration: dict.get(declarations, id)
+              |> result.unwrap(preprocessor.unknown_node_declaration),
+            tokens: _,
+          )
+        }
 
-        BaseContract(reference_id:, ..) | Modifier(reference_id:, ..) -> style_reference_node(
-          declarations:,
-          reference_id:,
+        BaseContract(reference_id:, ..) | Modifier(reference_id:, ..) -> preprocessor.PreProcessedReference(
+          referenced_node_id: reference_id,
+          referenced_node_declaration: dict.get(declarations, reference_id)
+            |> result.unwrap(preprocessor.unknown_node_declaration),
           tokens: _,
         )
 
         Identifier(reference_id:, ..) | IdentifierPath(reference_id:, ..) ->
           case reference_id < 0 {
-            True -> style_gap_token(_, class: "global-variable")
-            False -> style_reference_node(
-              declarations:,
-              reference_id:,
+            True -> style_tokens(_, class: "global-variable")
+            False -> preprocessor.PreProcessedReference(
+              referenced_node_id: reference_id,
+              referenced_node_declaration: dict.get(declarations, reference_id)
+                |> result.unwrap(preprocessor.unknown_node_declaration),
               tokens: _,
             )
           }
 
         MemberAccess(reference_id:, is_global_access:, ..) ->
           case reference_id, is_global_access {
-            option.Some(reference_id), _ -> style_reference_node(
-              declarations:,
-              reference_id:,
+            option.Some(reference_id), _ -> preprocessor.PreProcessedReference(
+              referenced_node_id: reference_id,
+              referenced_node_declaration: dict.get(declarations, reference_id)
+                |> result.unwrap(preprocessor.unknown_node_declaration),
               tokens: _,
             )
-            option.None, True -> style_gap_token(_, class: "global-variable")
-            option.None, False -> style_gap_token(_, class: "text")
+            option.None, True -> style_tokens(_, class: "global-variable")
+            option.None, False -> style_tokens(_, class: "text")
           }
 
-        ElementaryTypeNameExpression(..) -> style_gap_token(_, class: "type")
+        ElementaryTypeNameExpression(..) -> style_tokens(_, class: "type")
 
         Literal(kind:, ..) ->
           case kind {
-            StringLiteral -> style_gap_token(_, class: "string")
-            NumberLiteral | BoolLiteral | HexStringLiteral -> style_gap_token(
+            StringLiteral -> style_tokens(_, class: "string")
+            NumberLiteral | BoolLiteral | HexStringLiteral -> style_tokens(
               _,
               class: "number",
             )
@@ -234,8 +214,8 @@ pub fn consume_source(
 pub fn consume_part(
   node node: Node,
   total_consumed_count total_consumed_count,
-  current_line current_line: List(PreProcessedNode(msg)),
-  processed processed: List(List(PreProcessedNode(msg))),
+  current_line current_line,
+  processed processed,
   rest rest,
   style_node_tokens style_node_tokens,
 ) {
@@ -316,67 +296,6 @@ pub fn consume_part(
   }
 }
 
-fn style_declaration_node(
-  declarations declarations,
-  id id,
-  tokens tokens: String,
-) {
-  let node_declaration =
-    dict.get(declarations, id)
-    |> result.unwrap(NodeDeclaration("", "", UnknownDeclaration, []))
-
-  let build_element = fn(line_number, column_number) {
-    html.span(
-      [
-        attribute.id(node_declaration.topic_id),
-        attribute.class(node_declaration_kind_to_string(node_declaration.kind)),
-        attribute.class("declaration-preview N" <> int.to_string(id)),
-        attribute.class(classes.discussion_entry),
-        attribute.class(classes.discussion_entry_hover),
-        attribute.attribute("tabindex", "0"),
-        attributes.encode_grid_location_data(line_number, column_number),
-        attributes.encode_topic_id_data(node_declaration.topic_id),
-        attributes.encode_topic_title_data(node_declaration.title),
-        attributes.encode_is_reference_data(False),
-      ],
-      [html.text(tokens)],
-    )
-  }
-
-  PreProcessedDeclaration(node_declaration:, build_element:)
-}
-
-fn style_reference_node(
-  declarations declarations,
-  reference_id reference_id,
-  tokens tokens: String,
-) {
-  let referenced_node_declaration =
-    dict.get(declarations, reference_id)
-    |> result.unwrap(NodeDeclaration("", "", UnknownDeclaration, []))
-
-  let build_element = fn(line_number, column_number) {
-    html.span(
-      [
-        attribute.class(node_declaration_kind_to_string(
-          referenced_node_declaration.kind,
-        )),
-        attribute.class("reference-preview N" <> int.to_string(reference_id)),
-        attribute.class(classes.discussion_entry),
-        attribute.class(classes.discussion_entry_hover),
-        attribute.attribute("tabindex", "0"),
-        attributes.encode_grid_location_data(line_number, column_number),
-        attributes.encode_topic_id_data(referenced_node_declaration.topic_id),
-        attributes.encode_topic_title_data(referenced_node_declaration.title),
-        attributes.encode_is_reference_data(True),
-      ],
-      [html.text(tokens)],
-    )
-  }
-
-  PreProcessedReference(referenced_node_declaration:, build_element:)
-}
-
 fn style_import_node(
   abs_path: String,
   tokens: String,
@@ -426,13 +345,13 @@ fn style_import_node(
     |> element.to_string
     <> ";"
 
-  html.span([attribute.attribute("dangerous-unescaped-html", styled_line)], [])
-  |> PreProcessedNode
+  preprocessor.PreProcessedNode(element: styled_line)
 }
 
-fn style_gap_token(gap_token, class class) {
-  html.span([attribute.class(class)], [html.text(gap_token)])
-  |> PreProcessedNode
+fn style_tokens(tokens, class class) {
+  html.span([attribute.class(class)], [html.text(tokens)])
+  |> element.to_string
+  |> preprocessor.PreProcessedNode
 }
 
 /// Gap tokens are everything left out of the AST: brackets, comments, etc.
@@ -458,11 +377,7 @@ fn style_gap_tokens(gap_tokens) {
 
   let leading_spaces = enumerate.leading_spaces(gap_tokens)
 
-  html.span(
-    [attribute.attribute("dangerous-unescaped-html", styled_gap_tokens)],
-    [],
-  )
-  |> PreProcessedGapNode(leading_spaces:)
+  preprocessor.PreProcessedGapNode(element: styled_gap_tokens, leading_spaces:)
 }
 
 pub fn style_comment_line(line_text) {
@@ -799,55 +714,6 @@ fn do_linearize_nodes_multi(linearized_nodes: List(Node), nodes: List(Node)) {
   list.fold(nodes, linearized_nodes, do_linearize_nodes)
 }
 
-pub type NodeDeclaration {
-  NodeDeclaration(
-    title: String,
-    topic_id: String,
-    kind: NodeDeclarationKind,
-    references: List(NodeReference),
-  )
-}
-
-pub type NodeDeclarationKind {
-  ContractDeclaration
-  ConstructorDeclaration
-  FunctionDeclaration
-  FallbackDeclaration
-  ReceiveDeclaration
-  ModifierDeclaration
-  VariableDeclaration
-  ConstantDeclaration
-  EnumDeclaration
-  EnumValueDeclaration
-  StructDeclaration
-  ErrorDeclaration
-  EventDeclaration
-  UnknownDeclaration
-}
-
-fn node_declaration_kind_to_string(kind) {
-  case kind {
-    ContractDeclaration -> "contract"
-    ConstructorDeclaration -> "constructor"
-    FunctionDeclaration -> "function"
-    FallbackDeclaration -> "fallback"
-    ReceiveDeclaration -> "receive"
-    ModifierDeclaration -> "modifier"
-    VariableDeclaration -> "variable"
-    ConstantDeclaration -> "constant"
-    EnumDeclaration -> "enum"
-    EnumValueDeclaration -> "enum-value"
-    StructDeclaration -> "struct"
-    ErrorDeclaration -> "error"
-    EventDeclaration -> "event"
-    UnknownDeclaration -> "unknown"
-  }
-}
-
-pub type NodeReference {
-  NodeReference(title: String, topic_id: String)
-}
-
 pub fn enumerate_declarations(declarations, in ast: AST) {
   list.fold(ast.nodes, declarations, fn(declarations, node) {
     do_enumerate_node_declarations(declarations, node, ast.absolute_path)
@@ -861,10 +727,10 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
       dict.insert(
         declarations,
         id,
-        NodeDeclaration(
+        preprocessor.NodeDeclaration(
           title:,
           topic_id: parent <> ":" <> title,
-          kind: UnknownDeclaration,
+          kind: preprocessor.UnknownDeclaration,
           references: [],
         ),
       )
@@ -877,10 +743,10 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
       dict.insert(
         declarations,
         id,
-        NodeDeclaration(
+        preprocessor.NodeDeclaration(
           title:,
           topic_id: parent <> ":" <> title,
-          kind: UnknownDeclaration,
+          kind: preprocessor.UnknownDeclaration,
           references: [],
         ),
       )
@@ -897,10 +763,10 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
       dict.insert(
         declarations,
         id,
-        NodeDeclaration(
+        preprocessor.NodeDeclaration(
           title:,
           topic_id: contract_id,
-          kind: ContractDeclaration,
+          kind: preprocessor.ContractDeclaration,
           references: [],
         ),
       )
@@ -938,14 +804,14 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
         dict.insert(
           declarations,
           id,
-          NodeDeclaration(
+          preprocessor.NodeDeclaration(
             title:,
             topic_id: function_id,
             kind: case function_kind {
-              audit_metadata.Function -> FunctionDeclaration
-              audit_metadata.Constructor -> ConstructorDeclaration
-              audit_metadata.Fallback -> FallbackDeclaration
-              audit_metadata.Receive -> ReceiveDeclaration
+              audit_metadata.Function -> preprocessor.FunctionDeclaration
+              audit_metadata.Constructor -> preprocessor.ConstructorDeclaration
+              audit_metadata.Fallback -> preprocessor.FallbackDeclaration
+              audit_metadata.Receive -> preprocessor.ReceiveDeclaration
             },
             references: [],
           ),
@@ -970,10 +836,10 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
         dict.insert(
           declarations,
           id,
-          NodeDeclaration(
+          preprocessor.NodeDeclaration(
             title:,
             topic_id: modifier_id,
-            kind: ModifierDeclaration,
+            kind: preprocessor.ModifierDeclaration,
             references: [],
           ),
         )
@@ -998,10 +864,10 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
       declarations
       |> dict.insert(
         id,
-        NodeDeclaration(
+        preprocessor.NodeDeclaration(
           title:,
           topic_id: parent <> ":" <> name,
-          kind: ErrorDeclaration,
+          kind: preprocessor.ErrorDeclaration,
           references: [],
         ),
       )
@@ -1016,10 +882,10 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
       declarations
       |> dict.insert(
         id,
-        NodeDeclaration(
+        preprocessor.NodeDeclaration(
           title:,
           topic_id: parent <> ":" <> name,
-          kind: EventDeclaration,
+          kind: preprocessor.EventDeclaration,
           references: [],
         ),
       )
@@ -1041,12 +907,12 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
       dict.insert(
         declarations,
         id,
-        NodeDeclaration(
+        preprocessor.NodeDeclaration(
           title:,
           topic_id: parent <> ":" <> name,
           kind: case constant {
-            True -> ConstantDeclaration
-            False -> VariableDeclaration
+            True -> preprocessor.ConstantDeclaration
+            False -> preprocessor.VariableDeclaration
           },
           references: [],
         ),
@@ -1093,10 +959,10 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
       dict.insert(
         declarations,
         id,
-        NodeDeclaration(
+        preprocessor.NodeDeclaration(
           title:,
           topic_id: enum_id,
-          kind: EnumDeclaration,
+          kind: preprocessor.EnumDeclaration,
           references: [],
         ),
       )
@@ -1113,10 +979,10 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
       dict.insert(
         declarations,
         id,
-        NodeDeclaration(
+        preprocessor.NodeDeclaration(
           title:,
           topic_id: parent <> ":" <> name,
-          kind: EnumValueDeclaration,
+          kind: preprocessor.EnumValueDeclaration,
           references: [],
         ),
       )
@@ -1127,10 +993,10 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
       dict.insert(
         declarations,
         id,
-        NodeDeclaration(
+        preprocessor.NodeDeclaration(
           title:,
           topic_id: struct_id,
-          kind: StructDeclaration,
+          kind: preprocessor.StructDeclaration,
           references: [],
         ),
       )
@@ -1378,7 +1244,7 @@ fn do_count_node_references(
       }
       |> add_reference(
         reference_id,
-        NodeReference(title: parent_title, topic_id: parent_id),
+        preprocessor.NodeReference(title: parent_title, topic_id: parent_id),
       )
 
     MemberAccess(reference_id:, expression:, ..) ->
@@ -1387,7 +1253,7 @@ fn do_count_node_references(
           add_reference(
             declarations,
             reference_id,
-            NodeReference(title: parent_title, topic_id: parent_id),
+            preprocessor.NodeReference(title: parent_title, topic_id: parent_id),
           )
         option.None -> declarations
       }
@@ -1454,7 +1320,7 @@ fn do_count_node_references(
       add_reference(
         declarations,
         reference_id,
-        NodeReference(title: parent_title, topic_id: parent_id),
+        preprocessor.NodeReference(title: parent_title, topic_id: parent_id),
       )
       |> fn(declarations) {
         case arguments {
@@ -1472,13 +1338,13 @@ fn do_count_node_references(
       add_reference(
         declarations,
         reference_id,
-        NodeReference(title: parent_title, topic_id: parent_id),
+        preprocessor.NodeReference(title: parent_title, topic_id: parent_id),
       )
     BaseContract(reference_id:, ..) ->
       add_reference(
         declarations,
         reference_id,
-        NodeReference(title: parent_title, topic_id: parent_id),
+        preprocessor.NodeReference(title: parent_title, topic_id: parent_id),
       )
     Conditional(condition:, true_expression:, false_expression:, ..) ->
       do_count_node_references(declarations, condition, parent_title, parent_id)
@@ -1527,11 +1393,15 @@ fn do_count_node_references(
   }
 }
 
-fn add_reference(declarations, declaration_id: Int, reference: NodeReference) {
+fn add_reference(
+  declarations,
+  declaration_id: Int,
+  reference: preprocessor.NodeReference,
+) {
   dict.upsert(declarations, declaration_id, with: fn(dec) {
     case dec {
       Some(node_declaration) ->
-        NodeDeclaration(..node_declaration, references: [
+        preprocessor.NodeDeclaration(..node_declaration, references: [
           reference,
           ..node_declaration.references
         ])
@@ -1542,10 +1412,10 @@ fn add_reference(declarations, declaration_id: Int, reference: NodeReference) {
           <> int.to_string(declaration_id)
           <> " found, there is an issue with finding all declarations",
         )
-        NodeDeclaration(
+        preprocessor.NodeDeclaration(
           title: "unknown",
           topic_id: "",
-          kind: UnknownDeclaration,
+          kind: preprocessor.UnknownDeclaration,
           references: [reference],
         )
       }

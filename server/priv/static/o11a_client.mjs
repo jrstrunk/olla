@@ -291,9 +291,9 @@ var Ok = class extends Result {
   }
 };
 var Error = class extends Result {
-  constructor(detail2) {
+  constructor(detail) {
     super();
-    this[0] = detail2;
+    this[0] = detail;
   }
   // @internal
   isOk() {
@@ -417,6 +417,11 @@ function unwrap(option, default$) {
 function second(pair) {
   let a2 = pair[1];
   return a2;
+}
+function map_second(pair, fun) {
+  let a2 = pair[0];
+  let b = pair[1];
+  return [a2, fun(b)];
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/list.mjs
@@ -651,6 +656,21 @@ function fold(loop$list, loop$initial, loop$fun) {
     }
   }
 }
+function map_fold(list3, initial, fun) {
+  let _pipe = fold(
+    list3,
+    [initial, toList([])],
+    (acc, item) => {
+      let current_acc = acc[0];
+      let items = acc[1];
+      let $ = fun(current_acc, item);
+      let next_acc = $[0];
+      let next_item = $[1];
+      return [next_acc, prepend(next_item, items)];
+    }
+  );
+  return map_second(_pipe, reverse);
+}
 function index_fold_loop(loop$over, loop$acc, loop$with, loop$index) {
   while (true) {
     let over = loop$over;
@@ -789,34 +809,34 @@ function reverse2(tree) {
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/string.mjs
-function reverse3(string6) {
-  let _pipe = string6;
+function reverse3(string5) {
+  let _pipe = string5;
   let _pipe$1 = identity(_pipe);
   let _pipe$2 = reverse2(_pipe$1);
   return identity(_pipe$2);
 }
-function replace(string6, pattern, substitute) {
-  let _pipe = string6;
+function replace(string5, pattern, substitute) {
+  let _pipe = string5;
   let _pipe$1 = identity(_pipe);
   let _pipe$2 = string_replace(_pipe$1, pattern, substitute);
   return identity(_pipe$2);
 }
-function slice(string6, idx, len) {
+function slice(string5, idx, len) {
   let $ = len < 0;
   if ($) {
     return "";
   } else {
     let $1 = idx < 0;
     if ($1) {
-      let translated_idx = string_length(string6) + idx;
+      let translated_idx = string_length(string5) + idx;
       let $2 = translated_idx < 0;
       if ($2) {
         return "";
       } else {
-        return string_slice(string6, translated_idx, len);
+        return string_slice(string5, translated_idx, len);
       }
     } else {
-      return string_slice(string6, idx, len);
+      return string_slice(string5, idx, len);
     }
   }
 }
@@ -827,19 +847,19 @@ function concat2(strings) {
 }
 function drop_start(loop$string, loop$num_graphemes) {
   while (true) {
-    let string6 = loop$string;
+    let string5 = loop$string;
     let num_graphemes = loop$num_graphemes;
     let $ = num_graphemes > 0;
     if (!$) {
-      return string6;
+      return string5;
     } else {
-      let $1 = pop_grapheme(string6);
+      let $1 = pop_grapheme(string5);
       if ($1.isOk()) {
         let string$1 = $1[0][1];
         loop$string = string$1;
         loop$num_graphemes = num_graphemes - 1;
       } else {
-        return string6;
+        return string5;
       }
     }
   }
@@ -854,13 +874,13 @@ function split2(x, substring) {
     return map(_pipe$2, identity);
   }
 }
-function do_to_utf_codepoints(string6) {
-  let _pipe = string6;
+function do_to_utf_codepoints(string5) {
+  let _pipe = string5;
   let _pipe$1 = string_to_codepoint_integer_list(_pipe);
   return map(_pipe$1, codepoint);
 }
-function to_utf_codepoints(string6) {
-  return do_to_utf_codepoints(string6);
+function to_utf_codepoints(string5) {
+  return do_to_utf_codepoints(string5);
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/result.mjs
@@ -1627,21 +1647,21 @@ function identity(x) {
 function to_string(term) {
   return term.toString();
 }
-function string_replace(string6, target2, substitute) {
-  if (typeof string6.replaceAll !== "undefined") {
-    return string6.replaceAll(target2, substitute);
+function string_replace(string5, target2, substitute) {
+  if (typeof string5.replaceAll !== "undefined") {
+    return string5.replaceAll(target2, substitute);
   }
-  return string6.replace(
+  return string5.replace(
     // $& means the whole matched string
     new RegExp(target2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"),
     substitute
   );
 }
-function string_length(string6) {
-  if (string6 === "") {
+function string_length(string5) {
+  if (string5 === "") {
     return 0;
   }
-  const iterator = graphemes_iterator(string6);
+  const iterator = graphemes_iterator(string5);
   if (iterator) {
     let i = 0;
     for (const _ of iterator) {
@@ -1649,34 +1669,34 @@ function string_length(string6) {
     }
     return i;
   } else {
-    return string6.match(/./gsu).length;
+    return string5.match(/./gsu).length;
   }
 }
-function graphemes(string6) {
-  const iterator = graphemes_iterator(string6);
+function graphemes(string5) {
+  const iterator = graphemes_iterator(string5);
   if (iterator) {
     return List.fromArray(Array.from(iterator).map((item) => item.segment));
   } else {
-    return List.fromArray(string6.match(/./gsu));
+    return List.fromArray(string5.match(/./gsu));
   }
 }
 var segmenter = void 0;
-function graphemes_iterator(string6) {
+function graphemes_iterator(string5) {
   if (globalThis.Intl && Intl.Segmenter) {
     segmenter ||= new Intl.Segmenter();
-    return segmenter.segment(string6)[Symbol.iterator]();
+    return segmenter.segment(string5)[Symbol.iterator]();
   }
 }
-function pop_grapheme(string6) {
+function pop_grapheme(string5) {
   let first3;
-  const iterator = graphemes_iterator(string6);
+  const iterator = graphemes_iterator(string5);
   if (iterator) {
     first3 = iterator.next().value?.segment;
   } else {
-    first3 = string6.match(/./su)?.[0];
+    first3 = string5.match(/./su)?.[0];
   }
   if (first3) {
-    return new Ok([first3, string6.slice(first3.length)]);
+    return new Ok([first3, string5.slice(first3.length)]);
   } else {
     return new Error(Nil);
   }
@@ -1684,8 +1704,8 @@ function pop_grapheme(string6) {
 function pop_codeunit(str) {
   return [str.charCodeAt(0) | 0, str.slice(1)];
 }
-function lowercase(string6) {
-  return string6.toLowerCase();
+function lowercase(string5) {
+  return string5.toLowerCase();
 }
 function split(xs, pattern) {
   return List.fromArray(xs.split(pattern));
@@ -1707,11 +1727,11 @@ function concat(xs) {
   }
   return result;
 }
-function string_slice(string6, idx, len) {
-  if (len <= 0 || idx >= string6.length) {
+function string_slice(string5, idx, len) {
+  if (len <= 0 || idx >= string5.length) {
     return "";
   }
-  const iterator = graphemes_iterator(string6);
+  const iterator = graphemes_iterator(string5);
   if (iterator) {
     while (idx-- > 0) {
       iterator.next();
@@ -1726,7 +1746,7 @@ function string_slice(string6, idx, len) {
     }
     return result;
   } else {
-    return string6.match(/./gsu).slice(idx, idx + len).join("");
+    return string5.match(/./gsu).slice(idx, idx + len).join("");
   }
 }
 function string_codeunit_slice(str, from2, length4) {
@@ -1776,8 +1796,8 @@ function console_log(term) {
 function codepoint(int4) {
   return new UtfCodepoint(int4);
 }
-function string_to_codepoint_integer_list(string6) {
-  return List.fromArray(Array.from(string6).map((item) => item.codePointAt(0)));
+function string_to_codepoint_integer_list(string5) {
+  return List.fromArray(Array.from(string5).map((item) => item.codePointAt(0)));
 }
 function utf_codepoint_to_int(utf_codepoint) {
   return utf_codepoint.value;
@@ -1936,7 +1956,7 @@ function int(data2) {
     return new Ok(data2);
   return new Error(0);
 }
-function string2(data2) {
+function string(data2) {
   if (typeof data2 === "string")
     return new Ok(data2);
   return new Error(0);
@@ -2047,9 +2067,9 @@ function failure(zero, expected) {
 }
 var int2 = /* @__PURE__ */ new Decoder(decode_int2);
 function decode_string2(data2) {
-  return run_dynamic_function(data2, "String", string2);
+  return run_dynamic_function(data2, "String", string);
 }
-var string3 = /* @__PURE__ */ new Decoder(decode_string2);
+var string2 = /* @__PURE__ */ new Decoder(decode_string2);
 function list2(inner) {
   return new Decoder(
     (data2) => {
@@ -2067,7 +2087,7 @@ function list2(inner) {
 }
 function push_path(layer, path) {
   let decoder = one_of(
-    string3,
+    string2,
     toList([
       (() => {
         let _pipe = int2;
@@ -2779,8 +2799,8 @@ function parse_userinfo_loop(loop$original, loop$uri_string, loop$pieces, loop$s
     }
   }
 }
-function parse_authority_pieces(string6, pieces) {
-  return parse_userinfo_loop(string6, string6, pieces, 0);
+function parse_authority_pieces(string5, pieces) {
+  return parse_userinfo_loop(string5, string5, pieces, 0);
 }
 function parse_authority_with_slashes(uri_string, pieces) {
   if (uri_string === "//") {
@@ -3044,12 +3064,12 @@ function guard(requirement, consequence, alternative) {
 }
 
 // build/dev/javascript/gleam_json/gleam_json_ffi.mjs
-function decode(string6) {
+function decode(string5) {
   try {
-    const result = JSON.parse(string6);
+    const result = JSON.parse(string5);
     return new Ok(result);
   } catch (err) {
-    return new Error(getJsonDecodeError(err, string6));
+    return new Error(getJsonDecodeError(err, string5));
   }
 }
 function getJsonDecodeError(stdErr, json) {
@@ -3114,12 +3134,12 @@ function jsCoreUnexpectedByteError(err) {
 function toHex(char) {
   return "0x" + char.charCodeAt(0).toString(16).toUpperCase();
 }
-function getPositionFromMultiline(line, column, string6) {
+function getPositionFromMultiline(line, column, string5) {
   if (line === 1)
     return column - 1;
   let currentLn = 1;
   let position = 0;
-  string6.split("").find((char, idx) => {
+  string5.split("").find((char, idx) => {
     if (char === "\n")
       currentLn += 1;
     if (currentLn === line) {
@@ -4185,11 +4205,11 @@ function scheme_from_string(scheme) {
 
 // build/dev/javascript/gleam_http/gleam/http/request.mjs
 var Request = class extends CustomType {
-  constructor(method, headers, body2, scheme, host, port, path, query) {
+  constructor(method, headers, body, scheme, host, port, path, query) {
     super();
     this.method = method;
     this.headers = headers;
-    this.body = body2;
+    this.body = body;
     this.scheme = scheme;
     this.host = host;
     this.port = port;
@@ -4246,11 +4266,11 @@ function to(url) {
 
 // build/dev/javascript/gleam_http/gleam/http/response.mjs
 var Response = class extends CustomType {
-  constructor(status, headers, body2) {
+  constructor(status, headers, body) {
     super();
     this.status = status;
     this.headers = headers;
-    this.body = body2;
+    this.body = body;
   }
 };
 
@@ -4341,13 +4361,13 @@ function make_headers(headersList) {
   return headers;
 }
 async function read_text_body(response) {
-  let body2;
+  let body;
   try {
-    body2 = await response.body.text();
+    body = await response.body.text();
   } catch (error) {
     return new Error(new UnableToReadBody());
   }
-  return new Ok(response.withFields({ body: body2 }));
+  return new Ok(response.withFields({ body }));
 }
 
 // build/dev/javascript/gleam_fetch/gleam/fetch.mjs
@@ -4506,19 +4526,19 @@ function get(url, expect) {
 function response_to_result(response) {
   if (response instanceof Response && (200 <= response.status && response.status <= 299)) {
     let status = response.status;
-    let body2 = response.body;
-    return new Ok(body2);
+    let body = response.body;
+    return new Ok(body);
   } else if (response instanceof Response && response.status === 401) {
     return new Error(new Unauthorized());
   } else if (response instanceof Response && response.status === 404) {
     return new Error(new NotFound());
   } else if (response instanceof Response && response.status === 500) {
-    let body2 = response.body;
-    return new Error(new InternalServerError(body2));
+    let body = response.body;
+    return new Error(new InternalServerError(body));
   } else {
     let code2 = response.status;
-    let body2 = response.body;
-    return new Error(new OtherError(code2, body2));
+    let body = response.body;
+    return new Error(new OtherError(code2, body));
   }
 }
 function expect_json(decoder, to_msg) {
@@ -4528,8 +4548,8 @@ function expect_json(decoder, to_msg) {
       let _pipe$1 = then$(_pipe, response_to_result);
       let _pipe$2 = then$(
         _pipe$1,
-        (body2) => {
-          let $ = parse2(body2, decoder);
+        (body) => {
+          let $ = parse2(body, decoder);
           if ($.isOk()) {
             let json = $[0];
             return new Ok(json);
@@ -4595,11 +4615,11 @@ var do_init = (dispatch, options = defaults) => {
     });
     dispatch(uri);
   });
-  window.addEventListener("modem-push", ({ detail: detail2 }) => {
-    dispatch(detail2);
+  window.addEventListener("modem-push", ({ detail }) => {
+    dispatch(detail);
   });
-  window.addEventListener("modem-replace", ({ detail: detail2 }) => {
-    dispatch(detail2);
+  window.addEventListener("modem-replace", ({ detail }) => {
+    dispatch(detail);
   });
 };
 var find_anchor = (el) => {
@@ -4663,15 +4683,15 @@ var AuditMetaData = class extends CustomType {
 function audit_metadata_decoder() {
   return field(
     "audit_name",
-    string3,
+    string2,
     (audit_name) => {
       return field(
         "audit_formatted_name",
-        string3,
+        string2,
         (audit_formatted_name) => {
           return field(
             "in_scope_files",
-            list2(string3),
+            list2(string2),
             (in_scope_files) => {
               return success(
                 new AuditMetaData(
@@ -4716,15 +4736,88 @@ var NonEmptyLine = class extends CustomType {
 };
 var EmptyLine = class extends CustomType {
 };
+var PreProcessedDeclaration = class extends CustomType {
+  constructor(node_id, node_declaration, tokens) {
+    super();
+    this.node_id = node_id;
+    this.node_declaration = node_declaration;
+    this.tokens = tokens;
+  }
+};
+var PreProcessedReference = class extends CustomType {
+  constructor(referenced_node_id, referenced_node_declaration, tokens) {
+    super();
+    this.referenced_node_id = referenced_node_id;
+    this.referenced_node_declaration = referenced_node_declaration;
+    this.tokens = tokens;
+  }
+};
+var PreProcessedNode = class extends CustomType {
+  constructor(element2) {
+    super();
+    this.element = element2;
+  }
+};
+var PreProcessedGapNode = class extends CustomType {
+  constructor(element2, leading_spaces) {
+    super();
+    this.element = element2;
+    this.leading_spaces = leading_spaces;
+  }
+};
+var NodeDeclaration = class extends CustomType {
+  constructor(title, topic_id, kind, references) {
+    super();
+    this.title = title;
+    this.topic_id = topic_id;
+    this.kind = kind;
+    this.references = references;
+  }
+};
+var ContractDeclaration = class extends CustomType {
+};
+var ConstructorDeclaration = class extends CustomType {
+};
+var FunctionDeclaration = class extends CustomType {
+};
+var FallbackDeclaration = class extends CustomType {
+};
+var ReceiveDeclaration = class extends CustomType {
+};
+var ModifierDeclaration = class extends CustomType {
+};
+var VariableDeclaration = class extends CustomType {
+};
+var ConstantDeclaration = class extends CustomType {
+};
+var EnumDeclaration = class extends CustomType {
+};
+var EnumValueDeclaration = class extends CustomType {
+};
+var StructDeclaration = class extends CustomType {
+};
+var ErrorDeclaration = class extends CustomType {
+};
+var EventDeclaration = class extends CustomType {
+};
+var UnknownDeclaration = class extends CustomType {
+};
+var NodeReference = class extends CustomType {
+  constructor(title, topic_id) {
+    super();
+    this.title = title;
+    this.topic_id = topic_id;
+  }
+};
 function pre_processed_line_significance_decoder() {
   return field(
     "type",
-    string3,
+    string2,
     (variant) => {
       if (variant === "single_declaration_line") {
         return field(
           "topic_id",
-          string3,
+          string2,
           (topic_id) => {
             return success(new SingleDeclarationLine(topic_id));
           }
@@ -4735,6 +4828,206 @@ function pre_processed_line_significance_decoder() {
         return success(new EmptyLine());
       } else {
         return failure(new EmptyLine(), "PreProcessedLineSignificance");
+      }
+    }
+  );
+}
+function node_declaration_kind_to_string(kind) {
+  if (kind instanceof ContractDeclaration) {
+    return "contract";
+  } else if (kind instanceof ConstructorDeclaration) {
+    return "constructor";
+  } else if (kind instanceof FunctionDeclaration) {
+    return "function";
+  } else if (kind instanceof FallbackDeclaration) {
+    return "fallback";
+  } else if (kind instanceof ReceiveDeclaration) {
+    return "receive";
+  } else if (kind instanceof ModifierDeclaration) {
+    return "modifier";
+  } else if (kind instanceof VariableDeclaration) {
+    return "variable";
+  } else if (kind instanceof ConstantDeclaration) {
+    return "constant";
+  } else if (kind instanceof EnumDeclaration) {
+    return "enum";
+  } else if (kind instanceof EnumValueDeclaration) {
+    return "enum_value";
+  } else if (kind instanceof StructDeclaration) {
+    return "struct";
+  } else if (kind instanceof ErrorDeclaration) {
+    return "error";
+  } else if (kind instanceof EventDeclaration) {
+    return "event";
+  } else {
+    return "unknown";
+  }
+}
+function node_declaration_kind_from_string(kind) {
+  if (kind === "contract") {
+    return new ContractDeclaration();
+  } else if (kind === "constructor") {
+    return new ConstructorDeclaration();
+  } else if (kind === "function") {
+    return new FunctionDeclaration();
+  } else if (kind === "fallback") {
+    return new FallbackDeclaration();
+  } else if (kind === "receive") {
+    return new ReceiveDeclaration();
+  } else if (kind === "modifier") {
+    return new ModifierDeclaration();
+  } else if (kind === "variable") {
+    return new VariableDeclaration();
+  } else if (kind === "constant") {
+    return new ConstantDeclaration();
+  } else if (kind === "enum") {
+    return new EnumDeclaration();
+  } else if (kind === "enum_value") {
+    return new EnumValueDeclaration();
+  } else if (kind === "struct") {
+    return new StructDeclaration();
+  } else if (kind === "error") {
+    return new ErrorDeclaration();
+  } else if (kind === "event") {
+    return new EventDeclaration();
+  } else if (kind === "unknown") {
+    return new UnknownDeclaration();
+  } else {
+    return new UnknownDeclaration();
+  }
+}
+function node_reference_decoder() {
+  return field(
+    "title",
+    string2,
+    (title) => {
+      return field(
+        "topic_id",
+        string2,
+        (topic_id) => {
+          return success(new NodeReference(title, topic_id));
+        }
+      );
+    }
+  );
+}
+function node_declaration_decoder() {
+  return field(
+    "title",
+    string2,
+    (title) => {
+      return field(
+        "topic_id",
+        string2,
+        (topic_id) => {
+          return field(
+            "kind",
+            string2,
+            (kind) => {
+              return field(
+                "references",
+                list2(node_reference_decoder()),
+                (references) => {
+                  return success(
+                    new NodeDeclaration(
+                      title,
+                      topic_id,
+                      node_declaration_kind_from_string(kind),
+                      references
+                    )
+                  );
+                }
+              );
+            }
+          );
+        }
+      );
+    }
+  );
+}
+function pre_processed_node_decoder() {
+  return field(
+    "type",
+    string2,
+    (variant) => {
+      if (variant === "pre_processed_declaration") {
+        return field(
+          "node_id",
+          int2,
+          (node_id) => {
+            return field(
+              "node_declaration",
+              node_declaration_decoder(),
+              (node_declaration) => {
+                return field(
+                  "tokens",
+                  string2,
+                  (tokens) => {
+                    return success(
+                      new PreProcessedDeclaration(
+                        node_id,
+                        node_declaration,
+                        tokens
+                      )
+                    );
+                  }
+                );
+              }
+            );
+          }
+        );
+      } else if (variant === "pre_processed_reference") {
+        return field(
+          "referenced_node_id",
+          int2,
+          (referenced_node_id) => {
+            return field(
+              "referenced_node_declaration",
+              node_declaration_decoder(),
+              (referenced_node_declaration) => {
+                return field(
+                  "tokens",
+                  string2,
+                  (tokens) => {
+                    return success(
+                      new PreProcessedReference(
+                        referenced_node_id,
+                        referenced_node_declaration,
+                        tokens
+                      )
+                    );
+                  }
+                );
+              }
+            );
+          }
+        );
+      } else if (variant === "pre_processed_node") {
+        return field(
+          "element",
+          string2,
+          (element2) => {
+            return success(new PreProcessedNode(element2));
+          }
+        );
+      } else if (variant === "pre_processed_gap_node") {
+        return field(
+          "element",
+          string2,
+          (element2) => {
+            return field(
+              "leading_spaces",
+              int2,
+              (leading_spaces) => {
+                return success(
+                  new PreProcessedGapNode(element2, leading_spaces)
+                );
+              }
+            );
+          }
+        );
+      } else {
+        return failure(new PreProcessedNode(""), "PreProcessedNode");
       }
     }
   );
@@ -4750,7 +5043,7 @@ function pre_processed_line_decoder() {
         (line_number) => {
           return field(
             "i",
-            string3,
+            string2,
             (line_id) => {
               return field(
                 "l",
@@ -4758,7 +5051,7 @@ function pre_processed_line_decoder() {
                 (leading_spaces) => {
                   return field(
                     "e",
-                    string3,
+                    list2(pre_processed_node_decoder()),
                     (elements2) => {
                       return field(
                         "c",
@@ -4868,147 +5161,29 @@ function translate_number_to_letter(loop$number) {
 function encode_grid_location_data(line_number, column_number) {
   return class$("dl" + line_number + " dc" + column_number);
 }
+function encode_topic_id_data(topic_id) {
+  return data("i", topic_id);
+}
+function encode_topic_title_data(topic_title) {
+  return data("t", topic_title);
+}
+function encode_is_reference_data(is_reference) {
+  return data(
+    "r",
+    (() => {
+      if (is_reference) {
+        return "1";
+      } else {
+        return "0";
+      }
+    })()
+  );
+}
 
 // build/dev/javascript/o11a_common/o11a/classes.mjs
+var discussion_entry_hover = "deh";
 var discussion_entry = "de";
 var line_container = "line-container";
-
-// build/dev/javascript/plinth/window_ffi.mjs
-function self() {
-  return globalThis;
-}
-function alert(message) {
-  window.alert(message);
-}
-function prompt(message, defaultValue) {
-  let text3 = window.prompt(message, defaultValue);
-  if (text3 !== null) {
-    return new Ok(text3);
-  } else {
-    return new Error();
-  }
-}
-function addEventListener3(type, listener) {
-  return window.addEventListener(type, listener);
-}
-function document2(window2) {
-  return window2.document;
-}
-async function requestWakeLock() {
-  try {
-    return new Ok(await window.navigator.wakeLock.request("screen"));
-  } catch (error) {
-    return new Error(error.toString());
-  }
-}
-function location2() {
-  return window.location.href;
-}
-function locationOf(w) {
-  try {
-    return new Ok(w.location.href);
-  } catch (error) {
-    return new Error(error.toString());
-  }
-}
-function setLocation(w, url) {
-  w.location.href = url;
-}
-function origin() {
-  return window.location.origin;
-}
-function pathname() {
-  return window.location.pathname;
-}
-function reload() {
-  return window.location.reload();
-}
-function reloadOf(w) {
-  return w.location.reload();
-}
-function focus2(w) {
-  return w.focus();
-}
-function getHash2() {
-  const hash = window.location.hash;
-  if (hash == "") {
-    return new Error();
-  }
-  return new Ok(decodeURIComponent(hash.slice(1)));
-}
-function getSearch() {
-  const search = window.location.search;
-  if (search == "") {
-    return new Error();
-  }
-  return new Ok(decodeURIComponent(search.slice(1)));
-}
-function innerHeight(w) {
-  return w.innerHeight;
-}
-function innerWidth(w) {
-  return w.innerWidth;
-}
-function outerHeight(w) {
-  return w.outerHeight;
-}
-function outerWidth(w) {
-  return w.outerWidth;
-}
-function screenX(w) {
-  return w.screenX;
-}
-function screenY(w) {
-  return w.screenY;
-}
-function screenTop(w) {
-  return w.screenTop;
-}
-function screenLeft(w) {
-  return w.screenLeft;
-}
-function scrollX(w) {
-  return w.scrollX;
-}
-function scrollY(w) {
-  return w.scrollY;
-}
-function open(url, target2, features) {
-  try {
-    return new Ok(window.open(url, target2, features));
-  } catch (error) {
-    return new Error(error.toString());
-  }
-}
-function close(w) {
-  w.close();
-}
-function closed(w) {
-  return w.closed;
-}
-function queueMicrotask(callback) {
-  return window.queueMicrotask(callback);
-}
-function requestAnimationFrame(callback) {
-  return window.requestAnimationFrame(callback);
-}
-function cancelAnimationFrame(callback) {
-  return window.cancelAnimationFrame(callback);
-}
-function eval_(string) {
-  try {
-    return new Ok(eval(string));
-  } catch (error) {
-    return new Error(error.toString());
-  }
-}
-async function import_(string6) {
-  try {
-    return new Ok(await import(string6));
-  } catch (error) {
-    return new Error(error.toString());
-  }
-}
 
 // build/dev/javascript/o11a_client/o11a/client/attributes.mjs
 function encode_column_count_data(column_count) {
@@ -5016,14 +5191,6 @@ function encode_column_count_data(column_count) {
 }
 
 // build/dev/javascript/o11a_client/o11a/ui/audit_page.mjs
-var Model2 = class extends CustomType {
-  constructor(page_path, preprocessed_source, discussion) {
-    super();
-    this.page_path = page_path;
-    this.preprocessed_source = preprocessed_source;
-    this.discussion = discussion;
-  }
-};
 function inline_comment_preview_view(parent_notes, line_number, column_number) {
   let note_result = (() => {
     let _pipe = reverse(parent_notes);
@@ -5075,6 +5242,105 @@ function inline_comment_preview_view(parent_notes, line_number, column_number) {
       toList([text2("Start new thread")])
     );
   }
+}
+function declaration_node_view(node_id, node_declaration, tokens, line_number, column_number) {
+  return span(
+    toList([
+      id(node_declaration.topic_id),
+      class$(
+        node_declaration_kind_to_string(node_declaration.kind)
+      ),
+      class$("declaration-preview N" + to_string(node_id)),
+      class$(discussion_entry),
+      class$(discussion_entry_hover),
+      attribute("tabindex", "0"),
+      encode_grid_location_data(line_number, column_number),
+      encode_topic_id_data(node_declaration.topic_id),
+      encode_topic_title_data(node_declaration.title),
+      encode_is_reference_data(false)
+    ]),
+    toList([text2(tokens)])
+  );
+}
+function reference_node_view(referenced_node_id, referenced_node_declaration, tokens, line_number, column_number) {
+  return span(
+    toList([
+      class$(
+        node_declaration_kind_to_string(
+          referenced_node_declaration.kind
+        )
+      ),
+      class$(
+        "reference-preview N" + to_string(referenced_node_id)
+      ),
+      class$(discussion_entry),
+      class$(discussion_entry_hover),
+      attribute("tabindex", "0"),
+      encode_grid_location_data(line_number, column_number),
+      encode_topic_id_data(referenced_node_declaration.topic_id),
+      encode_topic_title_data(referenced_node_declaration.title),
+      encode_is_reference_data(true)
+    ]),
+    toList([text2(tokens)])
+  );
+}
+function preprocessed_nodes_view(loc) {
+  let _pipe = map_fold(
+    loc.elements,
+    0,
+    (index5, element2) => {
+      if (element2 instanceof PreProcessedDeclaration) {
+        let node_id = element2.node_id;
+        let node_declaration = element2.node_declaration;
+        let tokens = element2.tokens;
+        let new_column_index = index5 + 1;
+        return [
+          new_column_index,
+          declaration_node_view(
+            node_id,
+            node_declaration,
+            tokens,
+            loc.line_number_text,
+            to_string(new_column_index)
+          )
+        ];
+      } else if (element2 instanceof PreProcessedReference) {
+        let referenced_node_id = element2.referenced_node_id;
+        let referenced_node_declaration = element2.referenced_node_declaration;
+        let tokens = element2.tokens;
+        let new_column_index = index5 + 1;
+        return [
+          new_column_index,
+          reference_node_view(
+            referenced_node_id,
+            referenced_node_declaration,
+            tokens,
+            loc.line_number_text,
+            to_string(new_column_index)
+          )
+        ];
+      } else if (element2 instanceof PreProcessedNode) {
+        let element$1 = element2.element;
+        return [
+          index5,
+          span(
+            toList([attribute("dangerous-unescaped-html", element$1)]),
+            toList([])
+          )
+        ];
+      } else {
+        let element$1 = element2.element;
+        return [
+          index5,
+          span(
+            toList([attribute("dangerous-unescaped-html", element$1)]),
+            toList([])
+          )
+        ];
+      }
+    }
+  );
+  return second(_pipe);
 }
 function split_info_comment(comment, contains_expanded_message, leading_spaces) {
   let comment_length = string_length(comment);
@@ -5164,8 +5430,8 @@ function get_notes(discussion, leading_spaces, topic_id) {
   })();
   return [parent_notes, info_notes];
 }
-function line_container_view(model, loc, line_topic_id) {
-  let $ = get_notes(model.discussion, loc.leading_spaces, line_topic_id);
+function line_container_view(discussion, loc, line_topic_id) {
+  let $ = get_notes(discussion, loc.leading_spaces, line_topic_id);
   let parent_notes = $[0];
   let info_notes = $[1];
   let column_count = loc.columns + 1;
@@ -5230,12 +5496,7 @@ function line_container_view(model, loc, line_topic_id) {
             toList([class$("line-number code-extras")]),
             toList([text2(loc.line_number_text)])
           ),
-          span(
-            toList([
-              attribute("dangerous-unescaped-html", loc.elements)
-            ]),
-            toList([])
-          ),
+          fragment(preprocessed_nodes_view(loc)),
           inline_comment_preview_view(
             parent_notes,
             loc.line_number_text,
@@ -5246,32 +5507,27 @@ function line_container_view(model, loc, line_topic_id) {
     ])
   );
 }
-function loc_view(model, loc) {
+function loc_view(discussion, loc) {
   let $ = loc.significance;
   if ($ instanceof EmptyLine) {
     return p(
       toList([class$("loc"), id(loc.line_tag)]),
-      toList([
+      prepend(
         span(
           toList([class$("line-number code-extras")]),
           toList([text2(loc.line_number_text)])
         ),
-        span(
-          toList([
-            attribute("dangerous-unescaped-html", loc.elements)
-          ]),
-          toList([])
-        )
-      ])
+        preprocessed_nodes_view(loc)
+      )
     );
   } else if ($ instanceof SingleDeclarationLine) {
-    let topic_id = $.topic_id;
-    return line_container_view(model, loc, topic_id);
+    let decl_topic_id = $.topic_id;
+    return line_container_view(discussion, loc, decl_topic_id);
   } else {
-    return line_container_view(model, loc, loc.line_id);
+    return line_container_view(discussion, loc, loc.line_id);
   }
 }
-function view(model) {
+function view(preprocessed_source, discussion) {
   return div(
     toList([
       id("audit-page"),
@@ -5279,16 +5535,16 @@ function view(model) {
       data(
         "lc",
         (() => {
-          let _pipe = model.preprocessed_source;
+          let _pipe = preprocessed_source;
           let _pipe$1 = length(_pipe);
           return to_string(_pipe$1);
         })()
       )
     ]),
     map(
-      model.preprocessed_source,
+      preprocessed_source,
       (_capture) => {
-        return loc_view(model, _capture);
+        return loc_view(discussion, _capture);
       }
     )
   );
@@ -5664,7 +5920,7 @@ function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
 }
 
 // build/dev/javascript/o11a_client/o11a_client.mjs
-var Model3 = class extends CustomType {
+var Model2 = class extends CustomType {
   constructor(route, file_tree, audit_metadata, source_files, discussions) {
     super();
     this.route = route;
@@ -5845,7 +6101,7 @@ function init3(_) {
       return new O11aHomeRoute();
     }
   })();
-  let init_model = new Model3(
+  let init_model = new Model2(
     route,
     new_map(),
     new_map(),
@@ -5868,7 +6124,7 @@ function update(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model3(
+        return new Model2(
           route,
           file_tree_from_route(route, model.audit_metadata),
           _record.audit_metadata,
@@ -5889,7 +6145,7 @@ function update(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model3(
+        return new Model2(
           _record.route,
           file_tree_from_route(model.route, updated_audit_metadata),
           updated_audit_metadata,
@@ -5905,7 +6161,7 @@ function update(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model3(
+        return new Model2(
           _record.route,
           _record.file_tree,
           _record.audit_metadata,
@@ -5933,25 +6189,22 @@ function view3(model) {
     let page_path = $.page_path;
     return view2(
       view(
-        new Model2(
-          page_path,
-          (() => {
-            let _pipe = map_get(model.source_files, page_path);
-            let _pipe$1 = map2(
-              _pipe,
-              (source_files) => {
-                if (source_files.isOk()) {
-                  let source_files$1 = source_files[0];
-                  return source_files$1;
-                } else {
-                  return toList([]);
-                }
+        (() => {
+          let _pipe = map_get(model.source_files, page_path);
+          let _pipe$1 = map2(
+            _pipe,
+            (source_files) => {
+              if (source_files.isOk()) {
+                let source_files$1 = source_files[0];
+                return source_files$1;
+              } else {
+                return toList([]);
               }
-            );
-            return unwrap2(_pipe$1, toList([]));
-          })(),
-          new_map()
-        )
+            }
+          );
+          return unwrap2(_pipe$1, toList([]));
+        })(),
+        new_map()
       ),
       new Some(p(toList([]), toList([text2("Side Panel")]))),
       model.file_tree,

@@ -1,7 +1,6 @@
 import gleam/int
 import gleam/io
 import gleam/result
-import gleam/string
 import o11a/attributes
 import o11a/client/attributes as client_attributes
 import o11a/client/selectors
@@ -16,8 +15,6 @@ pub fn main() {
   io.println("Starting page navigation")
 
   window.add_event_listener("keydown", fn(event) {
-    echo "got event " <> string.inspect(event)
-
     let res = case storage.is_user_typing() {
       True -> {
         use <- handle_expanded_input_focus(event)

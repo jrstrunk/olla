@@ -24,8 +24,6 @@ type Context {
   Context(
     config: config.Config,
     dashboard_gateway: gateway.DashboardGateway,
-    page_gateway: gateway.PageGateway,
-    page_dashboard_gateway: gateway.PageDashboardGateway,
     audit_metadata_gateway: gateway.AuditMetaDataGateway,
     discussion_component_gateway: gateway.DiscussionComponentGateway,
     source_files: concurrent_dict.ConcurrentDict(String, string_tree.StringTree),
@@ -51,8 +49,6 @@ pub fn main() {
   use
     gateway.Gateway(
       dashboard_gateway:,
-      page_gateway:,
-      page_dashboard_gateway:,
       audit_metadata_gateway:,
       discussion_component_gateway:,
       source_files:,
@@ -68,8 +64,6 @@ pub fn main() {
     Context(
       config:,
       dashboard_gateway:,
-      page_gateway:,
-      page_dashboard_gateway:,
       audit_metadata_gateway:,
       discussion_component_gateway:,
       skeletons:,

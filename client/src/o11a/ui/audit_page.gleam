@@ -2,17 +2,13 @@ import gleam/dict
 import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/int
-import gleam/io
-import gleam/json
 import gleam/list
 import gleam/option.{None}
 import gleam/pair
 import gleam/result
 import gleam/string
 import lib/enumerate
-import lustre
 import lustre/attribute
-import lustre/effect
 import lustre/element
 import lustre/element/html
 import lustre/event
@@ -23,19 +19,6 @@ import o11a/computed_note
 import o11a/events
 import o11a/note
 import o11a/preprocessor
-import plinth/browser/event as browser_event
-import plinth/browser/window
-import snag
-
-pub fn app() -> lustre.App(Model, Model, Msg) {
-  lustre.component(init, update, view, dict.new())
-}
-
-pub type Msg {
-  ServerUpdatedDiscussion(
-    discussion: dict.Dict(String, List(computed_note.ComputedNote)),
-  )
-}
 
 pub type Model {
   Model(
@@ -45,103 +28,104 @@ pub type Model {
   )
 }
 
-pub fn init(init_model: Model) -> #(Model, effect.Effect(Msg)) {
-  // todo move this to a lustre event listener on the discussion component in
-  // the client controller app
-  let subscribe_to_discussion_updates_effect =
-    effect.from(fn(dispatch) {
-      window.add_event_listener(events.server_updated_discussion, fn(event) {
-        let res = {
-          use detail <- result.try(
-            browser_event.detail(event)
-            |> result.replace_error(snag.new("Failed to get detail")),
-          )
+// pub fn init(init_model: Model) -> #(Model, effect.Effect(Msg)) {
+//   // todo move this to a lustre event listener on the discussion component in
+//   // the client controller app
+//   let subscribe_to_discussion_updates_effect =
+//     effect.from(fn(dispatch) {
+//       window.add_event_listener(events.server_updated_discussion, fn(event) {
+//         let res = {
+//           use detail <- result.try(
+//             // browser_event.detail(event)
+//             Error(Nil)
+//             |> result.replace_error(snag.new("Failed to get detail")),
+//           )
 
-          use detail <- result.try(
-            decode.run(detail, decode.string)
-            |> snag.map_error(string.inspect)
-            |> snag.context("Failed to decode detail"),
-          )
+//           use detail <- result.try(
+//             decode.run(detail, decode.string)
+//             |> snag.map_error(string.inspect)
+//             |> snag.context("Failed to decode detail"),
+//           )
 
-          use discussion <- result.try(
-            json.parse(
-              detail,
-              decode.list(computed_note.computed_note_decoder()),
-            )
-            |> snag.map_error(string.inspect)
-            |> snag.context("Failed to parse discussion"),
-          )
+//           use discussion <- result.try(
+//             json.parse(
+//               detail,
+//               decode.list(computed_note.computed_note_decoder()),
+//             )
+//             |> snag.map_error(string.inspect)
+//             |> snag.context("Failed to parse discussion"),
+//           )
 
-          let discussion =
-            list.group(discussion, by: fn(note) { note.parent_id })
+//           let discussion =
+//             list.group(discussion, by: fn(note) { note.parent_id })
 
-          dispatch(ServerUpdatedDiscussion(discussion:))
+//           dispatch(ServerUpdatedDiscussion(discussion:))
 
-          Ok(Nil)
-        }
+//           Ok(Nil)
+//         }
 
-        case res {
-          Ok(Nil) -> Nil
-          Error(e) -> io.println(snag.line_print(e))
-        }
-      })
-    })
+//         case res {
+//           Ok(Nil) -> Nil
+//           Error(e) -> io.println(snag.line_print(e))
+//         }
+//       })
+//     })
 
-  #(init_model, subscribe_to_discussion_updates_effect)
-}
+//   #(init_model, subscribe_to_discussion_updates_effect)
+// }
 
-pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
-  case msg {
-    ServerUpdatedDiscussion(discussion:) -> #(
-      Model(..model, discussion:),
-      effect.none(),
-    )
-  }
-}
+// pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
+//   case msg {
+//     ServerUpdatedDiscussion(discussion:) -> #(
+//       Model(..model, discussion:),
+//       effect.none(),
+//     )
+//   }
+// }
 
-pub fn view(model: Model) -> element.Element(msg) {
+pub fn view(
+  preprocessed_source preprocessed_source: List(preprocessor.PreProcessedLine),
+  discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
+) -> element.Element(msg) {
   html.div(
     [
       attribute.id("audit-page"),
       attribute.class("code-snippet"),
-      attribute.data(
-        "lc",
-        model.preprocessed_source |> list.length |> int.to_string,
-      ),
+      attribute.data("lc", preprocessed_source |> list.length |> int.to_string),
     ],
-    list.map(model.preprocessed_source, loc_view(model, _)),
+    list.map(preprocessed_source, loc_view(discussion, _)),
   )
 }
 
-fn loc_view(model: Model, loc: preprocessor.PreProcessedLine) {
+fn loc_view(
+  discussion: dict.Dict(String, List(computed_note.ComputedNote)),
+  loc: preprocessor.PreProcessedLine,
+) {
   case loc.significance {
     preprocessor.EmptyLine -> {
       html.p([attribute.class("loc"), attribute.id(loc.line_tag)], [
         html.span([attribute.class("line-number code-extras")], [
           html.text(loc.line_number_text),
         ]),
-        html.span(
-          [attribute.attribute("dangerous-unescaped-html", loc.elements)],
-          [],
-        ),
+        ..preprocessed_nodes_view(loc)
       ])
     }
 
-    preprocessor.SingleDeclarationLine(topic_id:) ->
-      line_container_view(model:, loc:, line_topic_id: topic_id)
+    preprocessor.SingleDeclarationLine(topic_id: decl_topic_id) ->
+      line_container_view(discussion:, loc:, line_topic_id: decl_topic_id)
 
     preprocessor.NonEmptyLine ->
-      line_container_view(model:, loc:, line_topic_id: loc.line_id)
+      line_container_view(discussion:, loc:, line_topic_id: loc.line_id)
   }
 }
 
 fn line_container_view(
-  model model: Model,
+  discussion discussion,
   loc loc: preprocessor.PreProcessedLine,
   line_topic_id line_topic_id: String,
 ) {
   let #(parent_notes, info_notes) =
-    get_notes(model.discussion, loc.leading_spaces, line_topic_id)
+    get_notes(discussion, loc.leading_spaces, line_topic_id)
 
   let column_count = loc.columns + 1
 
@@ -185,10 +169,7 @@ fn line_container_view(
         html.span([attribute.class("line-number code-extras")], [
           html.text(loc.line_number_text),
         ]),
-        html.span(
-          [attribute.attribute("dangerous-unescaped-html", loc.elements)],
-          [],
-        ),
+        element.fragment(preprocessed_nodes_view(loc)),
         inline_comment_preview_view(
           parent_notes,
           loc.line_number_text,
@@ -240,6 +221,107 @@ fn inline_comment_preview_view(
         [html.text("Start new thread")],
       )
   }
+}
+
+fn preprocessed_nodes_view(loc: preprocessor.PreProcessedLine) {
+  list.map_fold(loc.elements, 0, fn(index, element) {
+    case element {
+      preprocessor.PreProcessedDeclaration(node_id:, node_declaration:, tokens:) -> {
+        let new_column_index = index + 1
+        #(
+          new_column_index,
+          declaration_node_view(
+            node_id,
+            node_declaration,
+            tokens,
+            loc.line_number_text,
+            int.to_string(new_column_index),
+          ),
+        )
+      }
+
+      preprocessor.PreProcessedReference(
+        referenced_node_id:,
+        referenced_node_declaration:,
+        tokens:,
+      ) -> {
+        let new_column_index = index + 1
+        #(
+          new_column_index,
+          reference_node_view(
+            referenced_node_id,
+            referenced_node_declaration,
+            tokens,
+            loc.line_number_text,
+            int.to_string(new_column_index),
+          ),
+        )
+      }
+
+      preprocessor.PreProcessedNode(element:)
+      | preprocessor.PreProcessedGapNode(element:, ..) -> #(
+        index,
+        html.span(
+          [attribute.attribute("dangerous-unescaped-html", element)],
+          [],
+        ),
+      )
+    }
+  })
+  |> pair.second
+}
+
+fn declaration_node_view(
+  node_id,
+  node_declaration: preprocessor.NodeDeclaration,
+  tokens tokens: String,
+  line_number line_number,
+  column_number column_number,
+) {
+  html.span(
+    [
+      attribute.id(node_declaration.topic_id),
+      attribute.class(preprocessor.node_declaration_kind_to_string(
+        node_declaration.kind,
+      )),
+      attribute.class("declaration-preview N" <> int.to_string(node_id)),
+      attribute.class(classes.discussion_entry),
+      attribute.class(classes.discussion_entry_hover),
+      attribute.attribute("tabindex", "0"),
+      attributes.encode_grid_location_data(line_number, column_number),
+      attributes.encode_topic_id_data(node_declaration.topic_id),
+      attributes.encode_topic_title_data(node_declaration.title),
+      attributes.encode_is_reference_data(False),
+    ],
+    [html.text(tokens)],
+  )
+}
+
+fn reference_node_view(
+  referenced_node_id: Int,
+  referenced_node_declaration: preprocessor.NodeDeclaration,
+  tokens: String,
+  line_number line_number,
+  column_number column_number,
+) {
+  html.span(
+    [
+      attribute.class(preprocessor.node_declaration_kind_to_string(
+        referenced_node_declaration.kind,
+      )),
+      attribute.class(
+        "reference-preview N" <> int.to_string(referenced_node_id),
+      ),
+      attribute.class(classes.discussion_entry),
+      attribute.class(classes.discussion_entry_hover),
+      attribute.attribute("tabindex", "0"),
+      attributes.encode_grid_location_data(line_number, column_number),
+      attributes.encode_topic_id_data(referenced_node_declaration.topic_id),
+      attributes.encode_topic_title_data(referenced_node_declaration.title),
+      attributes.encode_is_reference_data(True),
+    ],
+    [html.text(tokens)],
+  )
 }
 
 fn get_notes(
