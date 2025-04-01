@@ -55,7 +55,7 @@ pub fn pre_processed_line_decoder() -> decode.Decoder(PreProcessedLine) {
 }
 
 pub type PreProcessedLineSignificance {
-  SingleDeclarationLine(topic_id: String)
+  SingleDeclarationLine(topic_id: String, topic_title: String)
   NonEmptyLine
   EmptyLine
 }
@@ -68,6 +68,10 @@ fn encode_pre_processed_line_significance(
       json.object([
         #("type", json.string("single_declaration_line")),
         #("topic_id", json.string(pre_processed_line_significance.topic_id)),
+        #(
+          "topic_title",
+          json.string(pre_processed_line_significance.topic_title),
+        ),
       ])
     NonEmptyLine -> json.object([#("type", json.string("non_empty_line"))])
     EmptyLine -> json.object([#("type", json.string("empty_line"))])
@@ -81,7 +85,8 @@ fn pre_processed_line_significance_decoder() -> decode.Decoder(
   case variant {
     "single_declaration_line" -> {
       use topic_id <- decode.field("topic_id", decode.string)
-      decode.success(SingleDeclarationLine(topic_id:))
+      use topic_title <- decode.field("topic_title", decode.string)
+      decode.success(SingleDeclarationLine(topic_id:, topic_title:))
     }
     "non_empty_line" -> decode.success(NonEmptyLine)
     "empty_line" -> decode.success(EmptyLine)

@@ -260,8 +260,8 @@ function bitArrayByteAt(buffer, bitOffset, index5) {
   }
 }
 var UtfCodepoint = class {
-  constructor(value2) {
-    this.value = value2;
+  constructor(value4) {
+    this.value = value4;
   }
 };
 var isBitArrayDeprecationMessagePrinted = {};
@@ -274,6 +274,277 @@ function bitArrayPrintDeprecationWarning(name, message) {
   );
   isBitArrayDeprecationMessagePrinted[name] = true;
 }
+function bitArraySlice(bitArray, start3, end) {
+  end ??= bitArray.bitSize;
+  bitArrayValidateRange(bitArray, start3, end);
+  if (start3 === end) {
+    return new BitArray(new Uint8Array());
+  }
+  if (start3 === 0 && end === bitArray.bitSize) {
+    return bitArray;
+  }
+  start3 += bitArray.bitOffset;
+  end += bitArray.bitOffset;
+  const startByteIndex = Math.trunc(start3 / 8);
+  const endByteIndex = Math.trunc((end + 7) / 8);
+  const byteLength = endByteIndex - startByteIndex;
+  let buffer;
+  if (startByteIndex === 0 && byteLength === bitArray.rawBuffer.byteLength) {
+    buffer = bitArray.rawBuffer;
+  } else {
+    buffer = new Uint8Array(
+      bitArray.rawBuffer.buffer,
+      bitArray.rawBuffer.byteOffset + startByteIndex,
+      byteLength
+    );
+  }
+  return new BitArray(buffer, end - start3, start3 % 8);
+}
+function bitArraySliceToInt(bitArray, start3, end, isBigEndian, isSigned) {
+  bitArrayValidateRange(bitArray, start3, end);
+  if (start3 === end) {
+    return 0;
+  }
+  start3 += bitArray.bitOffset;
+  end += bitArray.bitOffset;
+  const isStartByteAligned = start3 % 8 === 0;
+  const isEndByteAligned = end % 8 === 0;
+  if (isStartByteAligned && isEndByteAligned) {
+    return intFromAlignedSlice(
+      bitArray,
+      start3 / 8,
+      end / 8,
+      isBigEndian,
+      isSigned
+    );
+  }
+  const size = end - start3;
+  const startByteIndex = Math.trunc(start3 / 8);
+  const endByteIndex = Math.trunc((end - 1) / 8);
+  if (startByteIndex == endByteIndex) {
+    const mask2 = 255 >> start3 % 8;
+    const unusedLowBitCount = (8 - end % 8) % 8;
+    let value4 = (bitArray.rawBuffer[startByteIndex] & mask2) >> unusedLowBitCount;
+    if (isSigned) {
+      const highBit = 2 ** (size - 1);
+      if (value4 >= highBit) {
+        value4 -= highBit * 2;
+      }
+    }
+    return value4;
+  }
+  if (size <= 53) {
+    return intFromUnalignedSliceUsingNumber(
+      bitArray.rawBuffer,
+      start3,
+      end,
+      isBigEndian,
+      isSigned
+    );
+  } else {
+    return intFromUnalignedSliceUsingBigInt(
+      bitArray.rawBuffer,
+      start3,
+      end,
+      isBigEndian,
+      isSigned
+    );
+  }
+}
+function intFromAlignedSlice(bitArray, start3, end, isBigEndian, isSigned) {
+  const byteSize = end - start3;
+  if (byteSize <= 6) {
+    return intFromAlignedSliceUsingNumber(
+      bitArray.rawBuffer,
+      start3,
+      end,
+      isBigEndian,
+      isSigned
+    );
+  } else {
+    return intFromAlignedSliceUsingBigInt(
+      bitArray.rawBuffer,
+      start3,
+      end,
+      isBigEndian,
+      isSigned
+    );
+  }
+}
+function intFromAlignedSliceUsingNumber(buffer, start3, end, isBigEndian, isSigned) {
+  const byteSize = end - start3;
+  let value4 = 0;
+  if (isBigEndian) {
+    for (let i = start3; i < end; i++) {
+      value4 *= 256;
+      value4 += buffer[i];
+    }
+  } else {
+    for (let i = end - 1; i >= start3; i--) {
+      value4 *= 256;
+      value4 += buffer[i];
+    }
+  }
+  if (isSigned) {
+    const highBit = 2 ** (byteSize * 8 - 1);
+    if (value4 >= highBit) {
+      value4 -= highBit * 2;
+    }
+  }
+  return value4;
+}
+function intFromAlignedSliceUsingBigInt(buffer, start3, end, isBigEndian, isSigned) {
+  const byteSize = end - start3;
+  let value4 = 0n;
+  if (isBigEndian) {
+    for (let i = start3; i < end; i++) {
+      value4 *= 256n;
+      value4 += BigInt(buffer[i]);
+    }
+  } else {
+    for (let i = end - 1; i >= start3; i--) {
+      value4 *= 256n;
+      value4 += BigInt(buffer[i]);
+    }
+  }
+  if (isSigned) {
+    const highBit = 1n << BigInt(byteSize * 8 - 1);
+    if (value4 >= highBit) {
+      value4 -= highBit * 2n;
+    }
+  }
+  return Number(value4);
+}
+function intFromUnalignedSliceUsingNumber(buffer, start3, end, isBigEndian, isSigned) {
+  const isStartByteAligned = start3 % 8 === 0;
+  let size = end - start3;
+  let byteIndex = Math.trunc(start3 / 8);
+  let value4 = 0;
+  if (isBigEndian) {
+    if (!isStartByteAligned) {
+      const leadingBitsCount = 8 - start3 % 8;
+      value4 = buffer[byteIndex++] & (1 << leadingBitsCount) - 1;
+      size -= leadingBitsCount;
+    }
+    while (size >= 8) {
+      value4 *= 256;
+      value4 += buffer[byteIndex++];
+      size -= 8;
+    }
+    if (size > 0) {
+      value4 *= 2 ** size;
+      value4 += buffer[byteIndex] >> 8 - size;
+    }
+  } else {
+    if (isStartByteAligned) {
+      let size2 = end - start3;
+      let scale = 1;
+      while (size2 >= 8) {
+        value4 += buffer[byteIndex++] * scale;
+        scale *= 256;
+        size2 -= 8;
+      }
+      value4 += (buffer[byteIndex] >> 8 - size2) * scale;
+    } else {
+      const highBitsCount = start3 % 8;
+      const lowBitsCount = 8 - highBitsCount;
+      let size2 = end - start3;
+      let scale = 1;
+      while (size2 >= 8) {
+        const byte = buffer[byteIndex] << highBitsCount | buffer[byteIndex + 1] >> lowBitsCount;
+        value4 += (byte & 255) * scale;
+        scale *= 256;
+        size2 -= 8;
+        byteIndex++;
+      }
+      if (size2 > 0) {
+        const lowBitsUsed = size2 - Math.max(0, size2 - lowBitsCount);
+        let trailingByte = (buffer[byteIndex] & (1 << lowBitsCount) - 1) >> lowBitsCount - lowBitsUsed;
+        size2 -= lowBitsUsed;
+        if (size2 > 0) {
+          trailingByte *= 2 ** size2;
+          trailingByte += buffer[byteIndex + 1] >> 8 - size2;
+        }
+        value4 += trailingByte * scale;
+      }
+    }
+  }
+  if (isSigned) {
+    const highBit = 2 ** (end - start3 - 1);
+    if (value4 >= highBit) {
+      value4 -= highBit * 2;
+    }
+  }
+  return value4;
+}
+function intFromUnalignedSliceUsingBigInt(buffer, start3, end, isBigEndian, isSigned) {
+  const isStartByteAligned = start3 % 8 === 0;
+  let size = end - start3;
+  let byteIndex = Math.trunc(start3 / 8);
+  let value4 = 0n;
+  if (isBigEndian) {
+    if (!isStartByteAligned) {
+      const leadingBitsCount = 8 - start3 % 8;
+      value4 = BigInt(buffer[byteIndex++] & (1 << leadingBitsCount) - 1);
+      size -= leadingBitsCount;
+    }
+    while (size >= 8) {
+      value4 *= 256n;
+      value4 += BigInt(buffer[byteIndex++]);
+      size -= 8;
+    }
+    if (size > 0) {
+      value4 <<= BigInt(size);
+      value4 += BigInt(buffer[byteIndex] >> 8 - size);
+    }
+  } else {
+    if (isStartByteAligned) {
+      let size2 = end - start3;
+      let shift = 0n;
+      while (size2 >= 8) {
+        value4 += BigInt(buffer[byteIndex++]) << shift;
+        shift += 8n;
+        size2 -= 8;
+      }
+      value4 += BigInt(buffer[byteIndex] >> 8 - size2) << shift;
+    } else {
+      const highBitsCount = start3 % 8;
+      const lowBitsCount = 8 - highBitsCount;
+      let size2 = end - start3;
+      let shift = 0n;
+      while (size2 >= 8) {
+        const byte = buffer[byteIndex] << highBitsCount | buffer[byteIndex + 1] >> lowBitsCount;
+        value4 += BigInt(byte & 255) << shift;
+        shift += 8n;
+        size2 -= 8;
+        byteIndex++;
+      }
+      if (size2 > 0) {
+        const lowBitsUsed = size2 - Math.max(0, size2 - lowBitsCount);
+        let trailingByte = (buffer[byteIndex] & (1 << lowBitsCount) - 1) >> lowBitsCount - lowBitsUsed;
+        size2 -= lowBitsUsed;
+        if (size2 > 0) {
+          trailingByte <<= size2;
+          trailingByte += buffer[byteIndex + 1] >> 8 - size2;
+        }
+        value4 += BigInt(trailingByte) << shift;
+      }
+    }
+  }
+  if (isSigned) {
+    const highBit = 2n ** BigInt(end - start3 - 1);
+    if (value4 >= highBit) {
+      value4 -= highBit * 2n;
+    }
+  }
+  return Number(value4);
+}
+function bitArrayValidateRange(bitArray, start3, end) {
+  if (start3 < 0 || start3 > bitArray.bitSize || end < start3 || end > bitArray.bitSize) {
+    const msg = `Invalid bit array slice: start = ${start3}, end = ${end}, bit size = ${bitArray.bitSize}`;
+    throw new globalThis.Error(msg);
+  }
+}
 var Result = class _Result extends CustomType {
   // @internal
   static isResult(data2) {
@@ -281,9 +552,9 @@ var Result = class _Result extends CustomType {
   }
 };
 var Ok = class extends Result {
-  constructor(value2) {
+  constructor(value4) {
     super();
-    this[0] = value2;
+    this[0] = value4;
   }
   // @internal
   isOk() {
@@ -300,8 +571,8 @@ var Error = class extends Result {
     return false;
   }
 };
-function isEqual(x, y) {
-  let values2 = [x, y];
+function isEqual(x2, y) {
+  let values2 = [x2, y];
   while (values2.length) {
     let a2 = values2.pop();
     let b = values2.pop();
@@ -331,10 +602,10 @@ function isEqual(x, y) {
 }
 function getters(object3) {
   if (object3 instanceof Map) {
-    return [(x) => x.keys(), (x, y) => x.get(y)];
+    return [(x2) => x2.keys(), (x2, y) => x2.get(y)];
   } else {
     let extra = object3 instanceof globalThis.Error ? ["message"] : [];
-    return [(x) => [...extra, ...Object.keys(x)], (x, y) => x[y]];
+    return [(x2) => [...extra, ...Object.keys(x2)], (x2, y) => x2[y]];
   }
 }
 function unequalDates(a2, b) {
@@ -383,553 +654,16 @@ function divideFloat(a2, b) {
     return a2 / b;
   }
 }
-
-// build/dev/javascript/gleam_stdlib/gleam/option.mjs
-var Some = class extends CustomType {
-  constructor(x0) {
-    super();
-    this[0] = x0;
-  }
-};
-var None = class extends CustomType {
-};
-function is_some(option) {
-  return !isEqual(option, new None());
-}
-function to_result(option, e) {
-  if (option instanceof Some) {
-    let a2 = option[0];
-    return new Ok(a2);
-  } else {
-    return new Error(e);
-  }
-}
-function unwrap(option, default$) {
-  if (option instanceof Some) {
-    let x = option[0];
-    return x;
-  } else {
-    return default$;
-  }
-}
-
-// build/dev/javascript/gleam_stdlib/gleam/pair.mjs
-function second(pair) {
-  let a2 = pair[1];
-  return a2;
-}
-function map_second(pair, fun) {
-  let a2 = pair[0];
-  let b = pair[1];
-  return [a2, fun(b)];
-}
-
-// build/dev/javascript/gleam_stdlib/gleam/list.mjs
-function length_loop(loop$list, loop$count) {
-  while (true) {
-    let list3 = loop$list;
-    let count = loop$count;
-    if (list3.atLeastLength(1)) {
-      let list$1 = list3.tail;
-      loop$list = list$1;
-      loop$count = count + 1;
-    } else {
-      return count;
-    }
-  }
-}
-function length(list3) {
-  return length_loop(list3, 0);
-}
-function reverse_and_prepend(loop$prefix, loop$suffix) {
-  while (true) {
-    let prefix = loop$prefix;
-    let suffix = loop$suffix;
-    if (prefix.hasLength(0)) {
-      return suffix;
-    } else {
-      let first$1 = prefix.head;
-      let rest$1 = prefix.tail;
-      loop$prefix = rest$1;
-      loop$suffix = prepend(first$1, suffix);
-    }
-  }
-}
-function reverse(list3) {
-  return reverse_and_prepend(list3, toList([]));
-}
-function contains(loop$list, loop$elem) {
-  while (true) {
-    let list3 = loop$list;
-    let elem = loop$elem;
-    if (list3.hasLength(0)) {
-      return false;
-    } else if (list3.atLeastLength(1) && isEqual(list3.head, elem)) {
-      let first$1 = list3.head;
-      return true;
-    } else {
-      let rest$1 = list3.tail;
-      loop$list = rest$1;
-      loop$elem = elem;
-    }
-  }
-}
-function first(list3) {
-  if (list3.hasLength(0)) {
-    return new Error(void 0);
-  } else {
-    let first$1 = list3.head;
-    return new Ok(first$1);
-  }
-}
-function filter_loop(loop$list, loop$fun, loop$acc) {
-  while (true) {
-    let list3 = loop$list;
-    let fun = loop$fun;
-    let acc = loop$acc;
-    if (list3.hasLength(0)) {
-      return reverse(acc);
-    } else {
-      let first$1 = list3.head;
-      let rest$1 = list3.tail;
-      let new_acc = (() => {
-        let $ = fun(first$1);
-        if ($) {
-          return prepend(first$1, acc);
-        } else {
-          return acc;
-        }
-      })();
-      loop$list = rest$1;
-      loop$fun = fun;
-      loop$acc = new_acc;
-    }
-  }
-}
-function filter(list3, predicate) {
-  return filter_loop(list3, predicate, toList([]));
-}
-function filter_map_loop(loop$list, loop$fun, loop$acc) {
-  while (true) {
-    let list3 = loop$list;
-    let fun = loop$fun;
-    let acc = loop$acc;
-    if (list3.hasLength(0)) {
-      return reverse(acc);
-    } else {
-      let first$1 = list3.head;
-      let rest$1 = list3.tail;
-      let new_acc = (() => {
-        let $ = fun(first$1);
-        if ($.isOk()) {
-          let first$2 = $[0];
-          return prepend(first$2, acc);
-        } else {
-          return acc;
-        }
-      })();
-      loop$list = rest$1;
-      loop$fun = fun;
-      loop$acc = new_acc;
-    }
-  }
-}
-function filter_map(list3, fun) {
-  return filter_map_loop(list3, fun, toList([]));
-}
-function map_loop(loop$list, loop$fun, loop$acc) {
-  while (true) {
-    let list3 = loop$list;
-    let fun = loop$fun;
-    let acc = loop$acc;
-    if (list3.hasLength(0)) {
-      return reverse(acc);
-    } else {
-      let first$1 = list3.head;
-      let rest$1 = list3.tail;
-      loop$list = rest$1;
-      loop$fun = fun;
-      loop$acc = prepend(fun(first$1), acc);
-    }
-  }
-}
-function map(list3, fun) {
-  return map_loop(list3, fun, toList([]));
-}
-function index_map_loop(loop$list, loop$fun, loop$index, loop$acc) {
-  while (true) {
-    let list3 = loop$list;
-    let fun = loop$fun;
-    let index5 = loop$index;
-    let acc = loop$acc;
-    if (list3.hasLength(0)) {
-      return reverse(acc);
-    } else {
-      let first$1 = list3.head;
-      let rest$1 = list3.tail;
-      let acc$1 = prepend(fun(first$1, index5), acc);
-      loop$list = rest$1;
-      loop$fun = fun;
-      loop$index = index5 + 1;
-      loop$acc = acc$1;
-    }
-  }
-}
-function index_map(list3, fun) {
-  return index_map_loop(list3, fun, 0, toList([]));
-}
-function take_loop(loop$list, loop$n, loop$acc) {
-  while (true) {
-    let list3 = loop$list;
-    let n = loop$n;
-    let acc = loop$acc;
-    let $ = n <= 0;
-    if ($) {
-      return reverse(acc);
-    } else {
-      if (list3.hasLength(0)) {
-        return reverse(acc);
-      } else {
-        let first$1 = list3.head;
-        let rest$1 = list3.tail;
-        loop$list = rest$1;
-        loop$n = n - 1;
-        loop$acc = prepend(first$1, acc);
-      }
-    }
-  }
-}
-function take(list3, n) {
-  return take_loop(list3, n, toList([]));
-}
-function append_loop(loop$first, loop$second) {
-  while (true) {
-    let first3 = loop$first;
-    let second2 = loop$second;
-    if (first3.hasLength(0)) {
-      return second2;
-    } else {
-      let first$1 = first3.head;
-      let rest$1 = first3.tail;
-      loop$first = rest$1;
-      loop$second = prepend(first$1, second2);
-    }
-  }
-}
-function append(first3, second2) {
-  return append_loop(reverse(first3), second2);
-}
-function flatten_loop(loop$lists, loop$acc) {
-  while (true) {
-    let lists = loop$lists;
-    let acc = loop$acc;
-    if (lists.hasLength(0)) {
-      return reverse(acc);
-    } else {
-      let list3 = lists.head;
-      let further_lists = lists.tail;
-      loop$lists = further_lists;
-      loop$acc = reverse_and_prepend(list3, acc);
-    }
-  }
-}
-function flatten(lists) {
-  return flatten_loop(lists, toList([]));
-}
-function flat_map(list3, fun) {
-  let _pipe = map(list3, fun);
-  return flatten(_pipe);
-}
-function fold(loop$list, loop$initial, loop$fun) {
-  while (true) {
-    let list3 = loop$list;
-    let initial = loop$initial;
-    let fun = loop$fun;
-    if (list3.hasLength(0)) {
-      return initial;
-    } else {
-      let first$1 = list3.head;
-      let rest$1 = list3.tail;
-      loop$list = rest$1;
-      loop$initial = fun(initial, first$1);
-      loop$fun = fun;
-    }
-  }
-}
-function map_fold(list3, initial, fun) {
-  let _pipe = fold(
-    list3,
-    [initial, toList([])],
-    (acc, item) => {
-      let current_acc = acc[0];
-      let items = acc[1];
-      let $ = fun(current_acc, item);
-      let next_acc = $[0];
-      let next_item = $[1];
-      return [next_acc, prepend(next_item, items)];
-    }
-  );
-  return map_second(_pipe, reverse);
-}
-function index_fold_loop(loop$over, loop$acc, loop$with, loop$index) {
-  while (true) {
-    let over = loop$over;
-    let acc = loop$acc;
-    let with$ = loop$with;
-    let index5 = loop$index;
-    if (over.hasLength(0)) {
-      return acc;
-    } else {
-      let first$1 = over.head;
-      let rest$1 = over.tail;
-      loop$over = rest$1;
-      loop$acc = with$(acc, first$1, index5);
-      loop$with = with$;
-      loop$index = index5 + 1;
-    }
-  }
-}
-function index_fold(list3, initial, fun) {
-  return index_fold_loop(list3, initial, fun, 0);
-}
-function find(loop$list, loop$is_desired) {
-  while (true) {
-    let list3 = loop$list;
-    let is_desired = loop$is_desired;
-    if (list3.hasLength(0)) {
-      return new Error(void 0);
-    } else {
-      let first$1 = list3.head;
-      let rest$1 = list3.tail;
-      let $ = is_desired(first$1);
-      if ($) {
-        return new Ok(first$1);
-      } else {
-        loop$list = rest$1;
-        loop$is_desired = is_desired;
-      }
-    }
-  }
-}
-function unique_loop(loop$list, loop$seen, loop$acc) {
-  while (true) {
-    let list3 = loop$list;
-    let seen = loop$seen;
-    let acc = loop$acc;
-    if (list3.hasLength(0)) {
-      return reverse(acc);
-    } else {
-      let first$1 = list3.head;
-      let rest$1 = list3.tail;
-      let $ = has_key(seen, first$1);
-      if ($) {
-        loop$list = rest$1;
-        loop$seen = seen;
-        loop$acc = acc;
-      } else {
-        loop$list = rest$1;
-        loop$seen = insert(seen, first$1, void 0);
-        loop$acc = prepend(first$1, acc);
-      }
-    }
-  }
-}
-function unique(list3) {
-  return unique_loop(list3, new_map(), toList([]));
-}
-function repeat_loop(loop$item, loop$times, loop$acc) {
-  while (true) {
-    let item = loop$item;
-    let times = loop$times;
-    let acc = loop$acc;
-    let $ = times <= 0;
-    if ($) {
-      return acc;
-    } else {
-      loop$item = item;
-      loop$times = times - 1;
-      loop$acc = prepend(item, acc);
-    }
-  }
-}
-function repeat(a2, times) {
-  return repeat_loop(a2, times, toList([]));
-}
-function partition_loop(loop$list, loop$categorise, loop$trues, loop$falses) {
-  while (true) {
-    let list3 = loop$list;
-    let categorise = loop$categorise;
-    let trues = loop$trues;
-    let falses = loop$falses;
-    if (list3.hasLength(0)) {
-      return [reverse(trues), reverse(falses)];
-    } else {
-      let first$1 = list3.head;
-      let rest$1 = list3.tail;
-      let $ = categorise(first$1);
-      if ($) {
-        loop$list = rest$1;
-        loop$categorise = categorise;
-        loop$trues = prepend(first$1, trues);
-        loop$falses = falses;
-      } else {
-        loop$list = rest$1;
-        loop$categorise = categorise;
-        loop$trues = trues;
-        loop$falses = prepend(first$1, falses);
-      }
-    }
-  }
-}
-function partition(list3, categorise) {
-  return partition_loop(list3, categorise, toList([]), toList([]));
-}
-function reduce(list3, fun) {
-  if (list3.hasLength(0)) {
-    return new Error(void 0);
-  } else {
-    let first$1 = list3.head;
-    let rest$1 = list3.tail;
-    return new Ok(fold(rest$1, first$1, fun));
-  }
-}
-function last(list3) {
-  return reduce(list3, (_, elem) => {
-    return elem;
-  });
-}
-
-// build/dev/javascript/gleam_stdlib/gleam/string_tree.mjs
-function reverse2(tree) {
-  let _pipe = tree;
-  let _pipe$1 = identity(_pipe);
-  let _pipe$2 = graphemes(_pipe$1);
-  let _pipe$3 = reverse(_pipe$2);
-  return concat(_pipe$3);
-}
-
-// build/dev/javascript/gleam_stdlib/gleam/string.mjs
-function reverse3(string5) {
-  let _pipe = string5;
-  let _pipe$1 = identity(_pipe);
-  let _pipe$2 = reverse2(_pipe$1);
-  return identity(_pipe$2);
-}
-function replace(string5, pattern, substitute) {
-  let _pipe = string5;
-  let _pipe$1 = identity(_pipe);
-  let _pipe$2 = string_replace(_pipe$1, pattern, substitute);
-  return identity(_pipe$2);
-}
-function slice(string5, idx, len) {
-  let $ = len < 0;
-  if ($) {
-    return "";
-  } else {
-    let $1 = idx < 0;
-    if ($1) {
-      let translated_idx = string_length(string5) + idx;
-      let $2 = translated_idx < 0;
-      if ($2) {
-        return "";
-      } else {
-        return string_slice(string5, translated_idx, len);
-      }
-    } else {
-      return string_slice(string5, idx, len);
-    }
-  }
-}
-function concat2(strings) {
-  let _pipe = strings;
-  let _pipe$1 = concat(_pipe);
-  return identity(_pipe$1);
-}
-function drop_start(loop$string, loop$num_graphemes) {
-  while (true) {
-    let string5 = loop$string;
-    let num_graphemes = loop$num_graphemes;
-    let $ = num_graphemes > 0;
-    if (!$) {
-      return string5;
-    } else {
-      let $1 = pop_grapheme(string5);
-      if ($1.isOk()) {
-        let string$1 = $1[0][1];
-        loop$string = string$1;
-        loop$num_graphemes = num_graphemes - 1;
-      } else {
-        return string5;
-      }
-    }
-  }
-}
-function split2(x, substring) {
-  if (substring === "") {
-    return graphemes(x);
-  } else {
-    let _pipe = x;
-    let _pipe$1 = identity(_pipe);
-    let _pipe$2 = split(_pipe$1, substring);
-    return map(_pipe$2, identity);
-  }
-}
-function do_to_utf_codepoints(string5) {
-  let _pipe = string5;
-  let _pipe$1 = string_to_codepoint_integer_list(_pipe);
-  return map(_pipe$1, codepoint);
-}
-function to_utf_codepoints(string5) {
-  return do_to_utf_codepoints(string5);
-}
-
-// build/dev/javascript/gleam_stdlib/gleam/result.mjs
-function map2(result, fun) {
-  if (result.isOk()) {
-    let x = result[0];
-    return new Ok(fun(x));
-  } else {
-    let e = result[0];
-    return new Error(e);
-  }
-}
-function map_error(result, fun) {
-  if (result.isOk()) {
-    let x = result[0];
-    return new Ok(x);
-  } else {
-    let error = result[0];
-    return new Error(fun(error));
-  }
-}
-function try$(result, fun) {
-  if (result.isOk()) {
-    let x = result[0];
-    return fun(x);
-  } else {
-    let e = result[0];
-    return new Error(e);
-  }
-}
-function then$(result, fun) {
-  return try$(result, fun);
-}
-function unwrap2(result, default$) {
-  if (result.isOk()) {
-    let v = result[0];
-    return v;
-  } else {
-    return default$;
-  }
-}
-function try_recover(result, fun) {
-  if (result.isOk()) {
-    let value2 = result[0];
-    return new Ok(value2);
-  } else {
-    let error = result[0];
-    return fun(error);
-  }
+function makeError(variant, module, line2, fn, message, extra) {
+  let error = new globalThis.Error(message);
+  error.gleam_error = variant;
+  error.module = module;
+  error.line = line2;
+  error.function = fn;
+  error.fn = fn;
+  for (let k in extra)
+    error[k] = extra[k];
+  return error;
 }
 
 // build/dev/javascript/gleam_stdlib/dict.mjs
@@ -1057,13 +791,13 @@ function mask(hash, shift) {
 function bitpos(hash, shift) {
   return 1 << mask(hash, shift);
 }
-function bitcount(x) {
-  x -= x >> 1 & 1431655765;
-  x = (x & 858993459) + (x >> 2 & 858993459);
-  x = x + (x >> 4) & 252645135;
-  x += x >> 8;
-  x += x >> 16;
-  return x & 127;
+function bitcount(x2) {
+  x2 -= x2 >> 1 & 1431655765;
+  x2 = (x2 & 858993459) + (x2 >> 2 & 858993459);
+  x2 = x2 + (x2 >> 4) & 252645135;
+  x2 += x2 >> 8;
+  x2 += x2 >> 16;
+  return x2 & 127;
 }
 function index(bitmap, bit) {
   return bitcount(bitmap & bit - 1);
@@ -1304,7 +1038,7 @@ function collisionIndexOf(root, key2) {
   }
   return -1;
 }
-function find2(root, shift, hash, key2) {
+function find(root, shift, hash, key2) {
   switch (root.type) {
     case ARRAY_NODE:
       return findArray(root, shift, hash, key2);
@@ -1321,7 +1055,7 @@ function findArray(root, shift, hash, key2) {
     return void 0;
   }
   if (node.type !== ENTRY) {
-    return find2(node, shift + SHIFT, hash, key2);
+    return find(node, shift + SHIFT, hash, key2);
   }
   if (isEqual(key2, node.k)) {
     return node;
@@ -1336,7 +1070,7 @@ function findIndex(root, shift, hash, key2) {
   const idx = index(root.bitmap, bit);
   const node = root.array[idx];
   if (node.type !== ENTRY) {
-    return find2(node, shift + SHIFT, hash, key2);
+    return find(node, shift + SHIFT, hash, key2);
   }
   if (isEqual(key2, node.k)) {
     return node;
@@ -1541,7 +1275,7 @@ var Dict = class _Dict {
     if (this.root === void 0) {
       return notFound;
     }
-    const found = find2(this.root, 0, getHash(key2), key2);
+    const found = find(this.root, 0, getHash(key2), key2);
     if (found === void 0) {
       return notFound;
     }
@@ -1586,7 +1320,7 @@ var Dict = class _Dict {
     if (this.root === void 0) {
       return false;
     }
-    return find2(this.root, 0, getHash(key2), key2) !== void 0;
+    return find(this.root, 0, getHash(key2), key2) !== void 0;
   }
   /**
    * @returns {[K,V][]}
@@ -1638,11 +1372,702 @@ var Dict = class _Dict {
 };
 var unequalDictSymbol = Symbol();
 
+// build/dev/javascript/gleam_stdlib/gleam/option.mjs
+var Some = class extends CustomType {
+  constructor(x0) {
+    super();
+    this[0] = x0;
+  }
+};
+var None = class extends CustomType {
+};
+function is_some(option) {
+  return !isEqual(option, new None());
+}
+function to_result(option, e) {
+  if (option instanceof Some) {
+    let a2 = option[0];
+    return new Ok(a2);
+  } else {
+    return new Error(e);
+  }
+}
+function unwrap(option, default$) {
+  if (option instanceof Some) {
+    let x2 = option[0];
+    return x2;
+  } else {
+    return default$;
+  }
+}
+function map(option, fun) {
+  if (option instanceof Some) {
+    let x2 = option[0];
+    return new Some(fun(x2));
+  } else {
+    return new None();
+  }
+}
+function flatten(option) {
+  if (option instanceof Some) {
+    let x2 = option[0];
+    return x2;
+  } else {
+    return new None();
+  }
+}
+
+// build/dev/javascript/gleam_stdlib/gleam/float.mjs
+function negate(x2) {
+  return -1 * x2;
+}
+function round2(x2) {
+  let $ = x2 >= 0;
+  if ($) {
+    return round(x2);
+  } else {
+    return 0 - round(negate(x2));
+  }
+}
+
+// build/dev/javascript/gleam_stdlib/gleam/int.mjs
+function random(max) {
+  let _pipe = random_uniform() * identity(max);
+  let _pipe$1 = floor(_pipe);
+  return round2(_pipe$1);
+}
+
+// build/dev/javascript/gleam_stdlib/gleam/pair.mjs
+function second(pair) {
+  let a2 = pair[1];
+  return a2;
+}
+function map_second(pair, fun) {
+  let a2 = pair[0];
+  let b = pair[1];
+  return [a2, fun(b)];
+}
+
+// build/dev/javascript/gleam_stdlib/gleam/list.mjs
+function length_loop(loop$list, loop$count) {
+  while (true) {
+    let list3 = loop$list;
+    let count = loop$count;
+    if (list3.atLeastLength(1)) {
+      let list$1 = list3.tail;
+      loop$list = list$1;
+      loop$count = count + 1;
+    } else {
+      return count;
+    }
+  }
+}
+function length(list3) {
+  return length_loop(list3, 0);
+}
+function reverse_and_prepend(loop$prefix, loop$suffix) {
+  while (true) {
+    let prefix = loop$prefix;
+    let suffix = loop$suffix;
+    if (prefix.hasLength(0)) {
+      return suffix;
+    } else {
+      let first$1 = prefix.head;
+      let rest$1 = prefix.tail;
+      loop$prefix = rest$1;
+      loop$suffix = prepend(first$1, suffix);
+    }
+  }
+}
+function reverse(list3) {
+  return reverse_and_prepend(list3, toList([]));
+}
+function contains(loop$list, loop$elem) {
+  while (true) {
+    let list3 = loop$list;
+    let elem = loop$elem;
+    if (list3.hasLength(0)) {
+      return false;
+    } else if (list3.atLeastLength(1) && isEqual(list3.head, elem)) {
+      let first$1 = list3.head;
+      return true;
+    } else {
+      let rest$1 = list3.tail;
+      loop$list = rest$1;
+      loop$elem = elem;
+    }
+  }
+}
+function first(list3) {
+  if (list3.hasLength(0)) {
+    return new Error(void 0);
+  } else {
+    let first$1 = list3.head;
+    return new Ok(first$1);
+  }
+}
+function filter_loop(loop$list, loop$fun, loop$acc) {
+  while (true) {
+    let list3 = loop$list;
+    let fun = loop$fun;
+    let acc = loop$acc;
+    if (list3.hasLength(0)) {
+      return reverse(acc);
+    } else {
+      let first$1 = list3.head;
+      let rest$1 = list3.tail;
+      let new_acc = (() => {
+        let $ = fun(first$1);
+        if ($) {
+          return prepend(first$1, acc);
+        } else {
+          return acc;
+        }
+      })();
+      loop$list = rest$1;
+      loop$fun = fun;
+      loop$acc = new_acc;
+    }
+  }
+}
+function filter(list3, predicate) {
+  return filter_loop(list3, predicate, toList([]));
+}
+function filter_map_loop(loop$list, loop$fun, loop$acc) {
+  while (true) {
+    let list3 = loop$list;
+    let fun = loop$fun;
+    let acc = loop$acc;
+    if (list3.hasLength(0)) {
+      return reverse(acc);
+    } else {
+      let first$1 = list3.head;
+      let rest$1 = list3.tail;
+      let new_acc = (() => {
+        let $ = fun(first$1);
+        if ($.isOk()) {
+          let first$2 = $[0];
+          return prepend(first$2, acc);
+        } else {
+          return acc;
+        }
+      })();
+      loop$list = rest$1;
+      loop$fun = fun;
+      loop$acc = new_acc;
+    }
+  }
+}
+function filter_map(list3, fun) {
+  return filter_map_loop(list3, fun, toList([]));
+}
+function map_loop(loop$list, loop$fun, loop$acc) {
+  while (true) {
+    let list3 = loop$list;
+    let fun = loop$fun;
+    let acc = loop$acc;
+    if (list3.hasLength(0)) {
+      return reverse(acc);
+    } else {
+      let first$1 = list3.head;
+      let rest$1 = list3.tail;
+      loop$list = rest$1;
+      loop$fun = fun;
+      loop$acc = prepend(fun(first$1), acc);
+    }
+  }
+}
+function map2(list3, fun) {
+  return map_loop(list3, fun, toList([]));
+}
+function index_map_loop(loop$list, loop$fun, loop$index, loop$acc) {
+  while (true) {
+    let list3 = loop$list;
+    let fun = loop$fun;
+    let index5 = loop$index;
+    let acc = loop$acc;
+    if (list3.hasLength(0)) {
+      return reverse(acc);
+    } else {
+      let first$1 = list3.head;
+      let rest$1 = list3.tail;
+      let acc$1 = prepend(fun(first$1, index5), acc);
+      loop$list = rest$1;
+      loop$fun = fun;
+      loop$index = index5 + 1;
+      loop$acc = acc$1;
+    }
+  }
+}
+function index_map(list3, fun) {
+  return index_map_loop(list3, fun, 0, toList([]));
+}
+function take_loop(loop$list, loop$n, loop$acc) {
+  while (true) {
+    let list3 = loop$list;
+    let n = loop$n;
+    let acc = loop$acc;
+    let $ = n <= 0;
+    if ($) {
+      return reverse(acc);
+    } else {
+      if (list3.hasLength(0)) {
+        return reverse(acc);
+      } else {
+        let first$1 = list3.head;
+        let rest$1 = list3.tail;
+        loop$list = rest$1;
+        loop$n = n - 1;
+        loop$acc = prepend(first$1, acc);
+      }
+    }
+  }
+}
+function take(list3, n) {
+  return take_loop(list3, n, toList([]));
+}
+function append_loop(loop$first, loop$second) {
+  while (true) {
+    let first3 = loop$first;
+    let second2 = loop$second;
+    if (first3.hasLength(0)) {
+      return second2;
+    } else {
+      let first$1 = first3.head;
+      let rest$1 = first3.tail;
+      loop$first = rest$1;
+      loop$second = prepend(first$1, second2);
+    }
+  }
+}
+function append(first3, second2) {
+  return append_loop(reverse(first3), second2);
+}
+function flatten_loop(loop$lists, loop$acc) {
+  while (true) {
+    let lists = loop$lists;
+    let acc = loop$acc;
+    if (lists.hasLength(0)) {
+      return reverse(acc);
+    } else {
+      let list3 = lists.head;
+      let further_lists = lists.tail;
+      loop$lists = further_lists;
+      loop$acc = reverse_and_prepend(list3, acc);
+    }
+  }
+}
+function flatten2(lists) {
+  return flatten_loop(lists, toList([]));
+}
+function flat_map(list3, fun) {
+  let _pipe = map2(list3, fun);
+  return flatten2(_pipe);
+}
+function fold(loop$list, loop$initial, loop$fun) {
+  while (true) {
+    let list3 = loop$list;
+    let initial = loop$initial;
+    let fun = loop$fun;
+    if (list3.hasLength(0)) {
+      return initial;
+    } else {
+      let first$1 = list3.head;
+      let rest$1 = list3.tail;
+      loop$list = rest$1;
+      loop$initial = fun(initial, first$1);
+      loop$fun = fun;
+    }
+  }
+}
+function map_fold(list3, initial, fun) {
+  let _pipe = fold(
+    list3,
+    [initial, toList([])],
+    (acc, item) => {
+      let current_acc = acc[0];
+      let items = acc[1];
+      let $ = fun(current_acc, item);
+      let next_acc = $[0];
+      let next_item = $[1];
+      return [next_acc, prepend(next_item, items)];
+    }
+  );
+  return map_second(_pipe, reverse);
+}
+function index_fold_loop(loop$over, loop$acc, loop$with, loop$index) {
+  while (true) {
+    let over = loop$over;
+    let acc = loop$acc;
+    let with$ = loop$with;
+    let index5 = loop$index;
+    if (over.hasLength(0)) {
+      return acc;
+    } else {
+      let first$1 = over.head;
+      let rest$1 = over.tail;
+      loop$over = rest$1;
+      loop$acc = with$(acc, first$1, index5);
+      loop$with = with$;
+      loop$index = index5 + 1;
+    }
+  }
+}
+function index_fold(list3, initial, fun) {
+  return index_fold_loop(list3, initial, fun, 0);
+}
+function find2(loop$list, loop$is_desired) {
+  while (true) {
+    let list3 = loop$list;
+    let is_desired = loop$is_desired;
+    if (list3.hasLength(0)) {
+      return new Error(void 0);
+    } else {
+      let first$1 = list3.head;
+      let rest$1 = list3.tail;
+      let $ = is_desired(first$1);
+      if ($) {
+        return new Ok(first$1);
+      } else {
+        loop$list = rest$1;
+        loop$is_desired = is_desired;
+      }
+    }
+  }
+}
+function unique_loop(loop$list, loop$seen, loop$acc) {
+  while (true) {
+    let list3 = loop$list;
+    let seen = loop$seen;
+    let acc = loop$acc;
+    if (list3.hasLength(0)) {
+      return reverse(acc);
+    } else {
+      let first$1 = list3.head;
+      let rest$1 = list3.tail;
+      let $ = has_key(seen, first$1);
+      if ($) {
+        loop$list = rest$1;
+        loop$seen = seen;
+        loop$acc = acc;
+      } else {
+        loop$list = rest$1;
+        loop$seen = insert(seen, first$1, void 0);
+        loop$acc = prepend(first$1, acc);
+      }
+    }
+  }
+}
+function unique(list3) {
+  return unique_loop(list3, new_map(), toList([]));
+}
+function repeat_loop(loop$item, loop$times, loop$acc) {
+  while (true) {
+    let item = loop$item;
+    let times = loop$times;
+    let acc = loop$acc;
+    let $ = times <= 0;
+    if ($) {
+      return acc;
+    } else {
+      loop$item = item;
+      loop$times = times - 1;
+      loop$acc = prepend(item, acc);
+    }
+  }
+}
+function repeat(a2, times) {
+  return repeat_loop(a2, times, toList([]));
+}
+function partition_loop(loop$list, loop$categorise, loop$trues, loop$falses) {
+  while (true) {
+    let list3 = loop$list;
+    let categorise = loop$categorise;
+    let trues = loop$trues;
+    let falses = loop$falses;
+    if (list3.hasLength(0)) {
+      return [reverse(trues), reverse(falses)];
+    } else {
+      let first$1 = list3.head;
+      let rest$1 = list3.tail;
+      let $ = categorise(first$1);
+      if ($) {
+        loop$list = rest$1;
+        loop$categorise = categorise;
+        loop$trues = prepend(first$1, trues);
+        loop$falses = falses;
+      } else {
+        loop$list = rest$1;
+        loop$categorise = categorise;
+        loop$trues = trues;
+        loop$falses = prepend(first$1, falses);
+      }
+    }
+  }
+}
+function partition(list3, categorise) {
+  return partition_loop(list3, categorise, toList([]), toList([]));
+}
+function reduce(list3, fun) {
+  if (list3.hasLength(0)) {
+    return new Error(void 0);
+  } else {
+    let first$1 = list3.head;
+    let rest$1 = list3.tail;
+    return new Ok(fold(rest$1, first$1, fun));
+  }
+}
+function last(list3) {
+  return reduce(list3, (_, elem) => {
+    return elem;
+  });
+}
+
+// build/dev/javascript/gleam_stdlib/gleam/string_tree.mjs
+function reverse2(tree) {
+  let _pipe = tree;
+  let _pipe$1 = identity(_pipe);
+  let _pipe$2 = graphemes(_pipe$1);
+  let _pipe$3 = reverse(_pipe$2);
+  return concat(_pipe$3);
+}
+
+// build/dev/javascript/gleam_stdlib/gleam/string.mjs
+function reverse3(string5) {
+  let _pipe = string5;
+  let _pipe$1 = identity(_pipe);
+  let _pipe$2 = reverse2(_pipe$1);
+  return identity(_pipe$2);
+}
+function replace(string5, pattern, substitute) {
+  let _pipe = string5;
+  let _pipe$1 = identity(_pipe);
+  let _pipe$2 = string_replace(_pipe$1, pattern, substitute);
+  return identity(_pipe$2);
+}
+function slice(string5, idx, len) {
+  let $ = len < 0;
+  if ($) {
+    return "";
+  } else {
+    let $1 = idx < 0;
+    if ($1) {
+      let translated_idx = string_length(string5) + idx;
+      let $2 = translated_idx < 0;
+      if ($2) {
+        return "";
+      } else {
+        return string_slice(string5, translated_idx, len);
+      }
+    } else {
+      return string_slice(string5, idx, len);
+    }
+  }
+}
+function concat2(strings) {
+  let _pipe = strings;
+  let _pipe$1 = concat(_pipe);
+  return identity(_pipe$1);
+}
+function trim(string5) {
+  let _pipe = string5;
+  let _pipe$1 = trim_start(_pipe);
+  return trim_end(_pipe$1);
+}
+function drop_start(loop$string, loop$num_graphemes) {
+  while (true) {
+    let string5 = loop$string;
+    let num_graphemes = loop$num_graphemes;
+    let $ = num_graphemes > 0;
+    if (!$) {
+      return string5;
+    } else {
+      let $1 = pop_grapheme(string5);
+      if ($1.isOk()) {
+        let string$1 = $1[0][1];
+        loop$string = string$1;
+        loop$num_graphemes = num_graphemes - 1;
+      } else {
+        return string5;
+      }
+    }
+  }
+}
+function split2(x2, substring) {
+  if (substring === "") {
+    return graphemes(x2);
+  } else {
+    let _pipe = x2;
+    let _pipe$1 = identity(_pipe);
+    let _pipe$2 = split(_pipe$1, substring);
+    return map2(_pipe$2, identity);
+  }
+}
+function do_to_utf_codepoints(string5) {
+  let _pipe = string5;
+  let _pipe$1 = string_to_codepoint_integer_list(_pipe);
+  return map2(_pipe$1, codepoint);
+}
+function to_utf_codepoints(string5) {
+  return do_to_utf_codepoints(string5);
+}
+
+// build/dev/javascript/gleam_stdlib/gleam/result.mjs
+function is_ok(result) {
+  if (!result.isOk()) {
+    return false;
+  } else {
+    return true;
+  }
+}
+function map3(result, fun) {
+  if (result.isOk()) {
+    let x2 = result[0];
+    return new Ok(fun(x2));
+  } else {
+    let e = result[0];
+    return new Error(e);
+  }
+}
+function map_error(result, fun) {
+  if (result.isOk()) {
+    let x2 = result[0];
+    return new Ok(x2);
+  } else {
+    let error = result[0];
+    return new Error(fun(error));
+  }
+}
+function try$(result, fun) {
+  if (result.isOk()) {
+    let x2 = result[0];
+    return fun(x2);
+  } else {
+    let e = result[0];
+    return new Error(e);
+  }
+}
+function then$(result, fun) {
+  return try$(result, fun);
+}
+function unwrap2(result, default$) {
+  if (result.isOk()) {
+    let v = result[0];
+    return v;
+  } else {
+    return default$;
+  }
+}
+function replace_error(result, error) {
+  if (result.isOk()) {
+    let x2 = result[0];
+    return new Ok(x2);
+  } else {
+    return new Error(error);
+  }
+}
+function try_recover(result, fun) {
+  if (result.isOk()) {
+    let value4 = result[0];
+    return new Ok(value4);
+  } else {
+    let error = result[0];
+    return fun(error);
+  }
+}
+
+// build/dev/javascript/gleam_stdlib/gleam/dynamic.mjs
+var DecodeError = class extends CustomType {
+  constructor(expected, found, path2) {
+    super();
+    this.expected = expected;
+    this.found = found;
+    this.path = path2;
+  }
+};
+function map_errors(result, f) {
+  return map_error(
+    result,
+    (_capture) => {
+      return map2(_capture, f);
+    }
+  );
+}
+function string(data2) {
+  return decode_string(data2);
+}
+function do_any(decoders) {
+  return (data2) => {
+    if (decoders.hasLength(0)) {
+      return new Error(
+        toList([new DecodeError("another type", classify_dynamic(data2), toList([]))])
+      );
+    } else {
+      let decoder = decoders.head;
+      let decoders$1 = decoders.tail;
+      let $ = decoder(data2);
+      if ($.isOk()) {
+        let decoded = $[0];
+        return new Ok(decoded);
+      } else {
+        return do_any(decoders$1)(data2);
+      }
+    }
+  };
+}
+function push_path(error, name) {
+  let name$1 = identity(name);
+  let decoder = do_any(
+    toList([
+      decode_string,
+      (x2) => {
+        return map3(decode_int(x2), to_string);
+      }
+    ])
+  );
+  let name$2 = (() => {
+    let $ = decoder(name$1);
+    if ($.isOk()) {
+      let name$22 = $[0];
+      return name$22;
+    } else {
+      let _pipe = toList(["<", classify_dynamic(name$1), ">"]);
+      let _pipe$1 = concat(_pipe);
+      return identity(_pipe$1);
+    }
+  })();
+  let _record = error;
+  return new DecodeError(
+    _record.expected,
+    _record.found,
+    prepend(name$2, error.path)
+  );
+}
+function field(name, inner_type) {
+  return (value4) => {
+    let missing_field_error = new DecodeError("field", "nothing", toList([]));
+    return try$(
+      decode_field(value4, name),
+      (maybe_inner) => {
+        let _pipe = maybe_inner;
+        let _pipe$1 = to_result(_pipe, toList([missing_field_error]));
+        let _pipe$2 = try$(_pipe$1, inner_type);
+        return map_errors(
+          _pipe$2,
+          (_capture) => {
+            return push_path(_capture, name);
+          }
+        );
+      }
+    );
+  };
+}
+
 // build/dev/javascript/gleam_stdlib/gleam_stdlib.mjs
 var Nil = void 0;
 var NOT_FOUND = {};
-function identity(x) {
-  return x;
+function identity(x2) {
+  return x2;
 }
 function to_string(term) {
   return term.toString();
@@ -1722,8 +2147,8 @@ function join(xs, separator) {
 }
 function concat(xs) {
   let result = "";
-  for (const x of xs) {
-    result = result + x;
+  for (const x2 of xs) {
+    result = result + x2;
   }
   return result;
 }
@@ -1790,8 +2215,27 @@ var unicode_whitespaces = [
 ].join("");
 var trim_start_regex = new RegExp(`^[${unicode_whitespaces}]*`);
 var trim_end_regex = new RegExp(`[${unicode_whitespaces}]*$`);
+function trim_start(string5) {
+  return string5.replace(trim_start_regex, "");
+}
+function trim_end(string5) {
+  return string5.replace(trim_end_regex, "");
+}
 function console_log(term) {
   console.log(term);
+}
+function floor(float4) {
+  return Math.floor(float4);
+}
+function round(float4) {
+  return Math.round(float4);
+}
+function random_uniform() {
+  const random_uniform_result = Math.random();
+  if (random_uniform_result === 1) {
+    return random_uniform();
+  }
+  return random_uniform_result;
 }
 function codepoint(int4) {
   return new UtfCodepoint(int4);
@@ -1805,18 +2249,21 @@ function utf_codepoint_to_int(utf_codepoint) {
 function new_map() {
   return Dict.new();
 }
-function map_to_list(map7) {
-  return List.fromArray(map7.entries());
+function map_to_list(map8) {
+  return List.fromArray(map8.entries());
 }
-function map_get(map7, key2) {
-  const value2 = map7.get(key2, NOT_FOUND);
-  if (value2 === NOT_FOUND) {
+function map_remove(key2, map8) {
+  return map8.delete(key2);
+}
+function map_get(map8, key2) {
+  const value4 = map8.get(key2, NOT_FOUND);
+  if (value4 === NOT_FOUND) {
     return new Error(Nil);
   }
-  return new Ok(value2);
+  return new Ok(value4);
 }
-function map_insert(key2, value2, map7) {
-  return map7.set(key2, value2);
+function map_insert(key2, value4, map8) {
+  return map8.set(key2, value4);
 }
 function classify_dynamic(data2) {
   if (typeof data2 === "string") {
@@ -1846,6 +2293,40 @@ function classify_dynamic(data2) {
     return type.charAt(0).toUpperCase() + type.slice(1);
   }
 }
+function decoder_error(expected, got) {
+  return decoder_error_no_classify(expected, classify_dynamic(got));
+}
+function decoder_error_no_classify(expected, got) {
+  return new Error(
+    List.fromArray([new DecodeError(expected, got, List.fromArray([]))])
+  );
+}
+function decode_string(data2) {
+  return typeof data2 === "string" ? new Ok(data2) : decoder_error("String", data2);
+}
+function decode_int(data2) {
+  return Number.isInteger(data2) ? new Ok(data2) : decoder_error("Int", data2);
+}
+function decode_field(value4, name) {
+  const not_a_map_error = () => decoder_error("Dict", value4);
+  if (value4 instanceof Dict || value4 instanceof WeakMap || value4 instanceof Map) {
+    const entry = map_get(value4, name);
+    return new Ok(entry.isOk() ? new Some(entry[0]) : new None());
+  } else if (value4 === null) {
+    return not_a_map_error();
+  } else if (Object.getPrototypeOf(value4) == Object.prototype) {
+    return try_get_field(value4, name, () => new Ok(new None()));
+  } else {
+    return try_get_field(value4, name, not_a_map_error);
+  }
+}
+function try_get_field(value4, field3, or_else) {
+  try {
+    return field3 in value4 ? new Ok(new Some(value4[field3])) : or_else();
+  } catch {
+    return or_else();
+  }
+}
 
 // build/dev/javascript/gleam_stdlib/gleam/dict.mjs
 function do_has_key(key2, dict2) {
@@ -1854,8 +2335,8 @@ function do_has_key(key2, dict2) {
 function has_key(dict2, key2) {
   return do_has_key(key2, dict2);
 }
-function insert(dict2, key2, value2) {
-  return map_insert(key2, value2, dict2);
+function insert(dict2, key2, value4) {
+  return map_insert(key2, value4, dict2);
 }
 function from_list_loop(loop$list, loop$initial) {
   while (true) {
@@ -1865,10 +2346,10 @@ function from_list_loop(loop$list, loop$initial) {
       return initial;
     } else {
       let key2 = list3.head[0];
-      let value2 = list3.head[1];
+      let value4 = list3.head[1];
       let rest = list3.tail;
       loop$list = rest;
-      loop$initial = insert(initial, key2, value2);
+      loop$initial = insert(initial, key2, value4);
     }
   }
 }
@@ -1906,22 +2387,25 @@ function do_keys_loop(loop$list, loop$acc) {
 function keys(dict2) {
   return do_keys_loop(map_to_list(dict2), toList([]));
 }
+function delete$(dict2, key2) {
+  return map_remove(key2, dict2);
+}
 
 // build/dev/javascript/gleam_stdlib/gleam_stdlib_decode_ffi.mjs
 function index2(data2, key2) {
   const int4 = Number.isInteger(key2);
   if (data2 instanceof Dict || data2 instanceof WeakMap || data2 instanceof Map) {
-    const token = {};
-    const entry = data2.get(key2, token);
-    if (entry === token)
+    const token2 = {};
+    const entry = data2.get(key2, token2);
+    if (entry === token2)
       return new Ok(new None());
     return new Ok(new Some(entry));
   }
   if (Number.isInteger(key2) && key2 < 8 && data2 instanceof List) {
     let i = 0;
-    for (const value2 of data2) {
+    for (const value4 of data2) {
       if (i === key2)
-        return new Ok(new Some(value2));
+        return new Ok(new Some(value4));
       i++;
     }
     return new Error("Indexable");
@@ -1956,7 +2440,7 @@ function int(data2) {
     return new Ok(data2);
   return new Error(0);
 }
-function string(data2) {
+function string2(data2) {
   if (typeof data2 === "string")
     return new Ok(data2);
   return new Error(0);
@@ -1964,11 +2448,11 @@ function string(data2) {
 
 // build/dev/javascript/gleam_stdlib/gleam/dynamic/decode.mjs
 var DecodeError2 = class extends CustomType {
-  constructor(expected, found, path) {
+  constructor(expected, found, path2) {
     super();
     this.expected = expected;
     this.found = found;
-    this.path = path;
+    this.path = path2;
   }
 };
 var Decoder = class extends CustomType {
@@ -1992,7 +2476,7 @@ function success(data2) {
     return [data2, toList([])];
   });
 }
-function map3(decoder, transformer) {
+function map4(decoder, transformer) {
   return new Decoder(
     (d) => {
       let $ = decoder.function(d);
@@ -2057,6 +2541,19 @@ function run_dynamic_function(data2, name, f) {
     ];
   }
 }
+function decode_bool2(data2) {
+  let $ = isEqual(identity(true), data2);
+  if ($) {
+    return [true, toList([])];
+  } else {
+    let $1 = isEqual(identity(false), data2);
+    if ($1) {
+      return [false, toList([])];
+    } else {
+      return [false, decode_error("Bool", data2)];
+    }
+  }
+}
 function decode_int2(data2) {
   return run_dynamic_function(data2, "Int", int);
 }
@@ -2065,11 +2562,12 @@ function failure(zero, expected) {
     return [zero, decode_error(expected, d)];
   });
 }
+var bool = /* @__PURE__ */ new Decoder(decode_bool2);
 var int2 = /* @__PURE__ */ new Decoder(decode_int2);
 function decode_string2(data2) {
-  return run_dynamic_function(data2, "String", string);
+  return run_dynamic_function(data2, "String", string2);
 }
-var string2 = /* @__PURE__ */ new Decoder(decode_string2);
+var string3 = /* @__PURE__ */ new Decoder(decode_string2);
 function list2(inner) {
   return new Decoder(
     (data2) => {
@@ -2077,7 +2575,7 @@ function list2(inner) {
         data2,
         inner.function,
         (p2, k) => {
-          return push_path(p2, toList([k]));
+          return push_path2(p2, toList([k]));
         },
         0,
         toList([])
@@ -2085,18 +2583,18 @@ function list2(inner) {
     }
   );
 }
-function push_path(layer, path) {
+function push_path2(layer, path2) {
   let decoder = one_of(
-    string2,
+    string3,
     toList([
       (() => {
         let _pipe = int2;
-        return map3(_pipe, to_string);
+        return map4(_pipe, to_string);
       })()
     ])
   );
-  let path$1 = map(
-    path,
+  let path$1 = map2(
+    path2,
     (key2) => {
       let key$1 = identity(key2);
       let $ = run(key$1, decoder);
@@ -2108,7 +2606,7 @@ function push_path(layer, path) {
       }
     }
   );
-  let errors = map(
+  let errors = map2(
     layer[1],
     (error) => {
       let _record = error;
@@ -2123,17 +2621,17 @@ function push_path(layer, path) {
 }
 function index3(loop$path, loop$position, loop$inner, loop$data, loop$handle_miss) {
   while (true) {
-    let path = loop$path;
+    let path2 = loop$path;
     let position = loop$position;
     let inner = loop$inner;
     let data2 = loop$data;
     let handle_miss = loop$handle_miss;
-    if (path.hasLength(0)) {
+    if (path2.hasLength(0)) {
       let _pipe = inner(data2);
-      return push_path(_pipe, reverse(position));
+      return push_path2(_pipe, reverse(position));
     } else {
-      let key2 = path.head;
-      let path$1 = path.tail;
+      let key2 = path2.head;
+      let path$1 = path2.tail;
       let $ = index2(data2, key2);
       if ($.isOk() && $[0] instanceof Some) {
         let data$1 = $[0][0];
@@ -2152,7 +2650,7 @@ function index3(loop$path, loop$position, loop$inner, loop$data, loop$handle_mis
           default$,
           toList([new DecodeError2(kind, classify_dynamic(data2), toList([]))])
         ];
-        return push_path(_pipe, reverse(position));
+        return push_path2(_pipe, reverse(position));
       }
     }
   }
@@ -2172,7 +2670,7 @@ function subfield(field_path, field_decoder, next) {
             default$,
             toList([new DecodeError2("Field", "Nothing", toList([]))])
           ];
-          return push_path(_pipe, reverse(position));
+          return push_path2(_pipe, reverse(position));
         }
       );
       let out = $[0];
@@ -2184,19 +2682,19 @@ function subfield(field_path, field_decoder, next) {
     }
   );
 }
-function field(field_name, field_decoder, next) {
+function field2(field_name, field_decoder, next) {
   return subfield(toList([field_name]), field_decoder, next);
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/uri.mjs
 var Uri = class extends CustomType {
-  constructor(scheme, userinfo, host, port, path, query, fragment2) {
+  constructor(scheme, userinfo, host, port, path2, query, fragment2) {
     super();
     this.scheme = scheme;
     this.userinfo = userinfo;
     this.host = host;
     this.port = port;
-    this.path = path;
+    this.path = path2;
     this.query = query;
     this.fragment = fragment2;
   }
@@ -2281,7 +2779,7 @@ function parse_path_loop(loop$original, loop$uri_string, loop$pieces, loop$size)
     let size = loop$size;
     if (uri_string.startsWith("?")) {
       let rest = uri_string.slice(1);
-      let path = string_codeunit_slice(original, 0, size);
+      let path2 = string_codeunit_slice(original, 0, size);
       let pieces$1 = (() => {
         let _record = pieces;
         return new Uri(
@@ -2289,7 +2787,7 @@ function parse_path_loop(loop$original, loop$uri_string, loop$pieces, loop$size)
           _record.userinfo,
           _record.host,
           _record.port,
-          path,
+          path2,
           _record.query,
           _record.fragment
         );
@@ -2297,7 +2795,7 @@ function parse_path_loop(loop$original, loop$uri_string, loop$pieces, loop$size)
       return parse_query_with_question_mark(rest, pieces$1);
     } else if (uri_string.startsWith("#")) {
       let rest = uri_string.slice(1);
-      let path = string_codeunit_slice(original, 0, size);
+      let path2 = string_codeunit_slice(original, 0, size);
       let pieces$1 = (() => {
         let _record = pieces;
         return new Uri(
@@ -2305,7 +2803,7 @@ function parse_path_loop(loop$original, loop$uri_string, loop$pieces, loop$size)
           _record.userinfo,
           _record.host,
           _record.port,
-          path,
+          path2,
           _record.query,
           _record.fragment
         );
@@ -2931,13 +3429,13 @@ function parse_scheme_loop(loop$original, loop$uri_string, loop$pieces, loop$siz
 }
 function remove_dot_segments_loop(loop$input, loop$accumulator) {
   while (true) {
-    let input = loop$input;
+    let input2 = loop$input;
     let accumulator = loop$accumulator;
-    if (input.hasLength(0)) {
+    if (input2.hasLength(0)) {
       return reverse(accumulator);
     } else {
-      let segment = input.head;
-      let rest = input.tail;
+      let segment = input2.head;
+      let rest = input2.tail;
       let accumulator$1 = (() => {
         if (segment === "") {
           let accumulator$12 = accumulator;
@@ -2961,11 +3459,11 @@ function remove_dot_segments_loop(loop$input, loop$accumulator) {
     }
   }
 }
-function remove_dot_segments(input) {
-  return remove_dot_segments_loop(input, toList([]));
+function remove_dot_segments(input2) {
+  return remove_dot_segments_loop(input2, toList([]));
 }
-function path_segments(path) {
-  return remove_dot_segments(split2(path, "/"));
+function path_segments(path2) {
+  return remove_dot_segments(split2(path2, "/"));
 }
 function to_string2(uri) {
   let parts = (() => {
@@ -3064,6 +3562,15 @@ function guard(requirement, consequence, alternative) {
 }
 
 // build/dev/javascript/gleam_json/gleam_json_ffi.mjs
+function object(entries) {
+  return Object.fromEntries(entries);
+}
+function identity2(x2) {
+  return x2;
+}
+function do_null() {
+  return null;
+}
 function decode(string5) {
   try {
     const result = JSON.parse(string5);
@@ -3117,9 +3624,9 @@ function spidermonkeyUnexpectedByteError(err, json) {
   const match = regex.exec(err.message);
   if (!match)
     return null;
-  const line = Number(match[2]);
+  const line2 = Number(match[2]);
   const column = Number(match[3]);
-  const position = getPositionFromMultiline(line, column, json);
+  const position = getPositionFromMultiline(line2, column, json);
   const byte = toHex(json[position]);
   return new UnexpectedByte(byte, position);
 }
@@ -3134,15 +3641,15 @@ function jsCoreUnexpectedByteError(err) {
 function toHex(char) {
   return "0x" + char.charCodeAt(0).toString(16).toUpperCase();
 }
-function getPositionFromMultiline(line, column, string5) {
-  if (line === 1)
+function getPositionFromMultiline(line2, column, string5) {
+  if (line2 === 1)
     return column - 1;
   let currentLn = 1;
   let position = 0;
   string5.split("").find((char, idx) => {
     if (char === "\n")
       currentLn += 1;
-    if (currentLn === line) {
+    if (currentLn === line2) {
       position = idx + column;
       return true;
     }
@@ -3183,12 +3690,32 @@ function do_parse(json, decoder) {
 function parse2(json, decoder) {
   return do_parse(json, decoder);
 }
+function string4(input2) {
+  return identity2(input2);
+}
+function int3(input2) {
+  return identity2(input2);
+}
+function null$() {
+  return do_null();
+}
+function nullable(input2, inner_type) {
+  if (input2 instanceof Some) {
+    let value4 = input2[0];
+    return inner_type(value4);
+  } else {
+    return null$();
+  }
+}
+function object2(entries) {
+  return object(entries);
+}
 
 // build/dev/javascript/lustre/lustre/effect.mjs
 var Effect = class extends CustomType {
-  constructor(all2) {
+  constructor(all3) {
     super();
-    this.all = all2;
+    this.all = all3;
   }
 };
 function custom(run2) {
@@ -3203,6 +3730,11 @@ function custom(run2) {
 function from(effect) {
   return custom((dispatch, _, _1, _2) => {
     return effect(dispatch);
+  });
+}
+function event(name, data2) {
+  return custom((_, emit3, _1, _2) => {
+    return emit3(name, data2);
   });
 }
 function none() {
@@ -3229,10 +3761,10 @@ var Text = class extends CustomType {
   }
 };
 var Element2 = class extends CustomType {
-  constructor(key2, namespace, tag, attrs, children2, self_closing, void$) {
+  constructor(key2, namespace2, tag, attrs, children2, self_closing, void$) {
     super();
     this.key = key2;
-    this.namespace = namespace;
+    this.namespace = namespace2;
     this.tag = tag;
     this.attrs = attrs;
     this.children = children2;
@@ -3252,6 +3784,13 @@ var Attribute = class extends CustomType {
     this[0] = x0;
     this[1] = x1;
     this.as_property = as_property;
+  }
+};
+var Event2 = class extends CustomType {
+  constructor(x0, x1) {
+    super();
+    this[0] = x0;
+    this[1] = x1;
   }
 };
 function attribute_to_event_handler(attribute2) {
@@ -3312,8 +3851,25 @@ function handlers(element2) {
 }
 
 // build/dev/javascript/lustre/lustre/attribute.mjs
-function attribute(name, value2) {
-  return new Attribute(name, identity(value2), false);
+function attribute(name, value4) {
+  return new Attribute(name, identity(value4), false);
+}
+function on(name, handler) {
+  return new Event2("on" + name, handler);
+}
+function map5(attr, f) {
+  if (attr instanceof Attribute) {
+    let name$1 = attr[0];
+    let value$1 = attr[1];
+    let as_property = attr.as_property;
+    return new Attribute(name$1, value$1, as_property);
+  } else {
+    let on$1 = attr[0];
+    let handler = attr[1];
+    return new Event2(on$1, (e) => {
+      return map3(handler(e), f);
+    });
+  }
 }
 function style(properties) {
   return attribute(
@@ -3332,11 +3888,17 @@ function style(properties) {
 function class$(name) {
   return attribute("class", name);
 }
-function data(key2, value2) {
-  return attribute("data-" + key2, value2);
+function data(key2, value4) {
+  return attribute("data-" + key2, value4);
 }
 function id(name) {
   return attribute("id", name);
+}
+function value(val) {
+  return attribute("value", val);
+}
+function placeholder(text3) {
+  return attribute("placeholder", text3);
 }
 function href(uri) {
   return attribute("href", uri);
@@ -3381,7 +3943,7 @@ function element(tag, attrs, children2) {
 }
 function do_keyed(el, key2) {
   if (el instanceof Element2) {
-    let namespace = el.namespace;
+    let namespace2 = el.namespace;
     let tag = el.tag;
     let attrs = el.attrs;
     let children2 = el.children;
@@ -3389,7 +3951,7 @@ function do_keyed(el, key2) {
     let void$ = el.void;
     return new Element2(
       key2,
-      namespace,
+      namespace2,
       tag,
       attrs,
       children2,
@@ -3407,7 +3969,7 @@ function do_keyed(el, key2) {
 }
 function keyed(el, children2) {
   return el(
-    map(
+    map2(
       children2,
       (_use0) => {
         let key2 = _use0[0];
@@ -3416,6 +3978,9 @@ function keyed(el, children2) {
       }
     )
   );
+}
+function namespaced(namespace2, tag, attrs, children2) {
+  return new Element2("", namespace2, tag, attrs, children2, false, false);
 }
 function text(content) {
   return new Text(content);
@@ -3427,6 +3992,45 @@ function fragment(elements2) {
     elements2
   );
 }
+function map6(element2, f) {
+  if (element2 instanceof Text) {
+    let content = element2.content;
+    return new Text(content);
+  } else if (element2 instanceof Map2) {
+    let subtree = element2.subtree;
+    return new Map2(() => {
+      return map6(subtree(), f);
+    });
+  } else {
+    let key2 = element2.key;
+    let namespace2 = element2.namespace;
+    let tag = element2.tag;
+    let attrs = element2.attrs;
+    let children2 = element2.children;
+    let self_closing = element2.self_closing;
+    let void$ = element2.void;
+    return new Map2(
+      () => {
+        return new Element2(
+          key2,
+          namespace2,
+          tag,
+          map2(
+            attrs,
+            (_capture) => {
+              return map5(_capture, f);
+            }
+          ),
+          map2(children2, (_capture) => {
+            return map6(_capture, f);
+          }),
+          self_closing,
+          void$
+        );
+      }
+    );
+  }
+}
 
 // build/dev/javascript/gleam_stdlib/gleam/set.mjs
 var Set2 = class extends CustomType {
@@ -3437,6 +4041,18 @@ var Set2 = class extends CustomType {
 };
 function new$2() {
   return new Set2(new_map());
+}
+function contains2(set, member) {
+  let _pipe = set.dict;
+  let _pipe$1 = map_get(_pipe, member);
+  return is_ok(_pipe$1);
+}
+function delete$2(set, member) {
+  return new Set2(delete$(set.dict, member));
+}
+var token = void 0;
+function insert2(set, member) {
+  return new Set2(insert(set.dict, member, token));
 }
 
 // build/dev/javascript/lustre/lustre/internals/patch.mjs
@@ -3579,9 +4195,9 @@ function morph(prev, next, dispatch) {
   return out;
 }
 function createElementNode({ prev, next, dispatch, stack }) {
-  const namespace = next.namespace || "http://www.w3.org/1999/xhtml";
+  const namespace2 = next.namespace || "http://www.w3.org/1999/xhtml";
   const canMorph = prev && prev.nodeType === Node.ELEMENT_NODE && prev.localName === next.tag && prev.namespaceURI === (next.namespace || "http://www.w3.org/1999/xhtml");
-  const el = canMorph ? prev : namespace ? document.createElementNS(namespace, next.tag) : document.createElement(next.tag);
+  const el = canMorph ? prev : namespace2 ? document.createElementNS(namespace2, next.tag) : document.createElement(next.tag);
   let handlersForEl;
   if (!registeredHandlers.has(el)) {
     const emptyHandlers = /* @__PURE__ */ new Map();
@@ -3603,15 +4219,15 @@ function createElementNode({ prev, next, dispatch, stack }) {
   const delegated = [];
   for (const attr of next.attrs) {
     const name = attr[0];
-    const value2 = attr[1];
+    const value4 = attr[1];
     if (attr.as_property) {
-      if (el[name] !== value2)
-        el[name] = value2;
+      if (el[name] !== value4)
+        el[name] = value4;
       if (canMorph)
         prevAttributes.delete(name);
     } else if (name.startsWith("on")) {
       const eventName = name.slice(2);
-      const callback = dispatch(value2, eventName === "input");
+      const callback = dispatch(value4, eventName === "input");
       if (!handlersForEl.has(eventName)) {
         el.addEventListener(eventName, lustreGenericEventHandler);
       }
@@ -3625,25 +4241,25 @@ function createElementNode({ prev, next, dispatch, stack }) {
         el.addEventListener(eventName, lustreGenericEventHandler);
       }
       handlersForEl.set(eventName, callback);
-      el.setAttribute(name, value2);
+      el.setAttribute(name, value4);
       if (canMorph) {
         prevHandlers.delete(eventName);
         prevAttributes.delete(name);
       }
     } else if (name.startsWith("delegate:data-") || name.startsWith("delegate:aria-")) {
-      el.setAttribute(name, value2);
-      delegated.push([name.slice(10), value2]);
+      el.setAttribute(name, value4);
+      delegated.push([name.slice(10), value4]);
     } else if (name === "class") {
-      className = className === null ? value2 : className + " " + value2;
+      className = className === null ? value4 : className + " " + value4;
     } else if (name === "style") {
-      style2 = style2 === null ? value2 : style2 + value2;
+      style2 = style2 === null ? value4 : style2 + value4;
     } else if (name === "dangerous-unescaped-html") {
-      innerHTML = value2;
+      innerHTML = value4;
     } else {
-      if (el.getAttribute(name) !== value2)
-        el.setAttribute(name, value2);
+      if (el.getAttribute(name) !== value4)
+        el.setAttribute(name, value4);
       if (name === "value" || name === "selected")
-        el[name] = value2;
+        el[name] = value4;
       if (canMorph)
         prevAttributes.delete(name);
     }
@@ -3670,9 +4286,9 @@ function createElementNode({ prev, next, dispatch, stack }) {
   if (next.tag === "slot") {
     window.queueMicrotask(() => {
       for (const child of el.assignedElements()) {
-        for (const [name, value2] of delegated) {
+        for (const [name, value4] of delegated) {
           if (!child.hasAttribute(name)) {
-            child.setAttribute(name, value2);
+            child.setAttribute(name, value4);
           }
         }
       }
@@ -3748,14 +4364,14 @@ function lustreServerEventHandler(event2) {
     tag,
     data: include.reduce(
       (data3, property) => {
-        const path = property.split(".");
-        for (let i = 0, o = data3, e = event2; i < path.length; i++) {
-          if (i === path.length - 1) {
-            o[path[i]] = e[path[i]];
+        const path2 = property.split(".");
+        for (let i = 0, o = data3, e = event2; i < path2.length; i++) {
+          if (i === path2.length - 1) {
+            o[path2[i]] = e[path2[i]];
           } else {
-            o[path[i]] ??= {};
-            e = e[path[i]];
-            o = o[path[i]];
+            o[path2[i]] ??= {};
+            e = e[path2[i]];
+            o = o[path2[i]];
           }
         }
         return data3;
@@ -3798,9 +4414,9 @@ function diffKeyedChild(prevChild, child, el, stack, incomingKeyedChildren, keye
     return prevChild;
   }
   if (!keyedChild && prevChild !== null) {
-    const placeholder = document.createTextNode("");
-    el.insertBefore(placeholder, prevChild);
-    stack.unshift({ prev: placeholder, next: child, parent: el });
+    const placeholder2 = document.createTextNode("");
+    el.insertBefore(placeholder2, prevChild);
+    stack.unshift({ prev: placeholder2, next: child, parent: el });
     return prevChild;
   }
   if (!keyedChild || keyedChild === prevChild) {
@@ -3839,13 +4455,13 @@ var LustreClientApplication = class _LustreClientApplication {
    *
    * @returns {Gleam.Ok<(action: Lustre.Action<Lustre.Client, Msg>>) => void>}
    */
-  static start({ init: init4, update: update2, view: view4 }, selector, flags) {
+  static start({ init: init5, update: update3, view: view5 }, selector, flags) {
     if (!is_browser())
       return new Error(new NotABrowser());
     const root = selector instanceof HTMLElement ? selector : document.querySelector(selector);
     if (!root)
       return new Error(new ElementNotFound(selector));
-    const app = new _LustreClientApplication(root, init4(flags), update2, view4);
+    const app = new _LustreClientApplication(root, init5(flags), update3, view5);
     return new Ok((action) => app.send(action));
   }
   /**
@@ -3856,11 +4472,11 @@ var LustreClientApplication = class _LustreClientApplication {
    *
    * @returns {LustreClientApplication}
    */
-  constructor(root, [init4, effects], update2, view4) {
+  constructor(root, [init5, effects], update3, view5) {
     this.root = root;
-    this.#model = init4;
-    this.#update = update2;
-    this.#view = view4;
+    this.#model = init5;
+    this.#update = update3;
+    this.#view = view5;
     this.#tickScheduled = window.setTimeout(
       () => this.#tick(effects.all.toArray(), true),
       0
@@ -3956,7 +4572,7 @@ var LustreClientApplication = class _LustreClientApplication {
     while (effects.length > 0) {
       const effect = effects.shift();
       const dispatch = (msg) => this.send(new Dispatch(msg));
-      const emit2 = (event2, data2) => this.root.dispatchEvent(
+      const emit3 = (event2, data2) => this.root.dispatchEvent(
         new CustomEvent(event2, {
           detail: data2,
           bubbles: true,
@@ -3966,7 +4582,7 @@ var LustreClientApplication = class _LustreClientApplication {
       const select = () => {
       };
       const root = this.root;
-      effect({ dispatch, emit: emit2, select, root });
+      effect({ dispatch, emit: emit3, select, root });
     }
     if (this.#queue.length > 0) {
       this.#flush(effects);
@@ -3975,20 +4591,20 @@ var LustreClientApplication = class _LustreClientApplication {
 };
 var start = LustreClientApplication.start;
 var LustreServerApplication = class _LustreServerApplication {
-  static start({ init: init4, update: update2, view: view4, on_attribute_change }, flags) {
+  static start({ init: init5, update: update3, view: view5, on_attribute_change }, flags) {
     const app = new _LustreServerApplication(
-      init4(flags),
-      update2,
-      view4,
+      init5(flags),
+      update3,
+      view5,
       on_attribute_change
     );
     return new Ok((action) => app.send(action));
   }
-  constructor([model, effects], update2, view4, on_attribute_change) {
+  constructor([model, effects], update3, view5, on_attribute_change) {
     this.#model = model;
-    this.#update = update2;
-    this.#view = view4;
-    this.#html = view4(model);
+    this.#update = update3;
+    this.#view = view5;
+    this.#html = view5(model);
     this.#onAttributeChange = on_attribute_change;
     this.#renderers = /* @__PURE__ */ new Map();
     this.#handlers = handlers(this.#html);
@@ -4067,7 +4683,7 @@ var LustreServerApplication = class _LustreServerApplication {
     while (effects.length > 0) {
       const effect = effects.shift();
       const dispatch = (msg) => this.send(new Dispatch(msg));
-      const emit2 = (event2, data2) => this.root.dispatchEvent(
+      const emit3 = (event2, data2) => this.root.dispatchEvent(
         new CustomEvent(event2, {
           detail: data2,
           bubbles: true,
@@ -4077,7 +4693,7 @@ var LustreServerApplication = class _LustreServerApplication {
       const select = () => {
       };
       const root = null;
-      effect({ dispatch, emit: emit2, select, root });
+      effect({ dispatch, emit: emit3, select, root });
     }
     if (this.#queue.length > 0) {
       this.#flush(effects);
@@ -4089,11 +4705,11 @@ var is_browser = () => globalThis.window && window.document;
 
 // build/dev/javascript/lustre/lustre.mjs
 var App = class extends CustomType {
-  constructor(init4, update2, view4, on_attribute_change) {
+  constructor(init5, update3, view5, on_attribute_change) {
     super();
-    this.init = init4;
-    this.update = update2;
-    this.view = view4;
+    this.init = init5;
+    this.update = update3;
+    this.view = view5;
     this.on_attribute_change = on_attribute_change;
   }
 };
@@ -4105,8 +4721,8 @@ var ElementNotFound = class extends CustomType {
 };
 var NotABrowser = class extends CustomType {
 };
-function application(init4, update2, view4) {
-  return new App(init4, update2, view4, new None());
+function application(init5, update3, view5) {
+  return new App(init5, update3, view5, new None());
 }
 function start2(app, selector, flags) {
   return guard(
@@ -4128,6 +4744,9 @@ function h3(attrs, children2) {
 function div(attrs, children2) {
   return element("div", attrs, children2);
 }
+function hr(attrs) {
+  return element("hr", attrs, toList([]));
+}
 function p(attrs, children2) {
   return element("p", attrs, children2);
 }
@@ -4136,6 +4755,15 @@ function a(attrs, children2) {
 }
 function span(attrs, children2) {
   return element("span", attrs, children2);
+}
+function button(attrs, children2) {
+  return element("button", attrs, children2);
+}
+function input(attrs) {
+  return element("input", attrs, toList([]));
+}
+function textarea(attrs, content) {
+  return element("textarea", attrs, toList([text(content)]));
 }
 
 // build/dev/javascript/gleam_http/gleam/http.mjs
@@ -4205,7 +4833,7 @@ function scheme_from_string(scheme) {
 
 // build/dev/javascript/gleam_http/gleam/http/request.mjs
 var Request = class extends CustomType {
-  constructor(method, headers, body, scheme, host, port, path, query) {
+  constructor(method, headers, body, scheme, host, port, path2, query) {
     super();
     this.method = method;
     this.headers = headers;
@@ -4213,7 +4841,7 @@ var Request = class extends CustomType {
     this.scheme = scheme;
     this.host = host;
     this.port = port;
-    this.path = path;
+    this.path = path2;
     this.query = query;
   }
 };
@@ -4279,22 +4907,22 @@ var PromiseLayer = class _PromiseLayer {
   constructor(promise) {
     this.promise = promise;
   }
-  static wrap(value2) {
-    return value2 instanceof Promise ? new _PromiseLayer(value2) : value2;
+  static wrap(value4) {
+    return value4 instanceof Promise ? new _PromiseLayer(value4) : value4;
   }
-  static unwrap(value2) {
-    return value2 instanceof _PromiseLayer ? value2.promise : value2;
+  static unwrap(value4) {
+    return value4 instanceof _PromiseLayer ? value4.promise : value4;
   }
 };
-function resolve(value2) {
-  return Promise.resolve(PromiseLayer.wrap(value2));
+function resolve(value4) {
+  return Promise.resolve(PromiseLayer.wrap(value4));
 }
 function then_await(promise, fn) {
-  return promise.then((value2) => fn(PromiseLayer.unwrap(value2)));
+  return promise.then((value4) => fn(PromiseLayer.unwrap(value4)));
 }
 function map_promise(promise, fn) {
   return promise.then(
-    (value2) => PromiseLayer.wrap(fn(PromiseLayer.unwrap(value2)))
+    (value4) => PromiseLayer.wrap(fn(PromiseLayer.unwrap(value4)))
   );
 }
 function rescue(promise, fn) {
@@ -4681,17 +5309,17 @@ var AuditMetaData = class extends CustomType {
   }
 };
 function audit_metadata_decoder() {
-  return field(
+  return field2(
     "audit_name",
-    string2,
+    string3,
     (audit_name) => {
-      return field(
+      return field2(
         "audit_formatted_name",
-        string2,
+        string3,
         (audit_formatted_name) => {
-          return field(
+          return field2(
             "in_scope_files",
-            list2(string2),
+            list2(string3),
             (in_scope_files) => {
               return success(
                 new AuditMetaData(
@@ -4708,9 +5336,226 @@ function audit_metadata_decoder() {
   );
 }
 
+// build/dev/javascript/o11a_common/o11a/note.mjs
+var NoteSubmission = class extends CustomType {
+  constructor(parent_id, significance, user_id, message, expanded_message, modifier) {
+    super();
+    this.parent_id = parent_id;
+    this.significance = significance;
+    this.user_id = user_id;
+    this.message = message;
+    this.expanded_message = expanded_message;
+    this.modifier = modifier;
+  }
+};
+var Comment = class extends CustomType {
+};
+var Question = class extends CustomType {
+};
+var Answer = class extends CustomType {
+};
+var ToDo = class extends CustomType {
+};
+var ToDoCompletion = class extends CustomType {
+};
+var FindingLead = class extends CustomType {
+};
+var FindingConfirmation = class extends CustomType {
+};
+var FindingRejection = class extends CustomType {
+};
+var DevelperQuestion = class extends CustomType {
+};
+var Informational = class extends CustomType {
+};
+var InformationalRejection = class extends CustomType {
+};
+var InformationalConfirmation = class extends CustomType {
+};
+var None2 = class extends CustomType {
+};
+var Edit = class extends CustomType {
+};
+function note_significance_to_int(note_significance) {
+  if (note_significance instanceof Comment) {
+    return 1;
+  } else if (note_significance instanceof Question) {
+    return 2;
+  } else if (note_significance instanceof Answer) {
+    return 3;
+  } else if (note_significance instanceof ToDo) {
+    return 4;
+  } else if (note_significance instanceof ToDoCompletion) {
+    return 5;
+  } else if (note_significance instanceof FindingLead) {
+    return 6;
+  } else if (note_significance instanceof FindingConfirmation) {
+    return 7;
+  } else if (note_significance instanceof FindingRejection) {
+    return 8;
+  } else if (note_significance instanceof DevelperQuestion) {
+    return 9;
+  } else if (note_significance instanceof Informational) {
+    return 10;
+  } else if (note_significance instanceof InformationalRejection) {
+    return 11;
+  } else {
+    return 12;
+  }
+}
+function note_modifier_to_int(note_modifier) {
+  if (note_modifier instanceof None2) {
+    return 0;
+  } else if (note_modifier instanceof Edit) {
+    return 1;
+  } else {
+    return 2;
+  }
+}
+function encode_note_submission(note) {
+  return object2(
+    toList([
+      ["p", string4(note.parent_id)],
+      [
+        "s",
+        int3(
+          (() => {
+            let _pipe = note.significance;
+            return note_significance_to_int(_pipe);
+          })()
+        )
+      ],
+      ["u", string4(note.user_id)],
+      ["m", string4(note.message)],
+      ["x", nullable(note.expanded_message, string4)],
+      [
+        "d",
+        int3(
+          (() => {
+            let _pipe = note.modifier;
+            return note_modifier_to_int(_pipe);
+          })()
+        )
+      ]
+    ])
+  );
+}
+
 // build/dev/javascript/o11a_common/o11a/computed_note.mjs
+var Comment2 = class extends CustomType {
+};
+var UnansweredQuestion = class extends CustomType {
+};
+var AnsweredQuestion = class extends CustomType {
+};
+var Answer2 = class extends CustomType {
+};
+var IncompleteToDo = class extends CustomType {
+};
+var CompleteToDo = class extends CustomType {
+};
+var ToDoCompletion2 = class extends CustomType {
+};
+var UnconfirmedFinding = class extends CustomType {
+};
+var ConfirmedFinding = class extends CustomType {
+};
+var RejectedFinding = class extends CustomType {
+};
+var FindingConfirmation2 = class extends CustomType {
+};
+var FindingRejection2 = class extends CustomType {
+};
+var UnansweredDeveloperQuestion = class extends CustomType {
+};
+var AnsweredDeveloperQuestion = class extends CustomType {
+};
 var Informational2 = class extends CustomType {
 };
+var RejectedInformational = class extends CustomType {
+};
+var InformationalRejection2 = class extends CustomType {
+};
+var InformationalConfirmation2 = class extends CustomType {
+};
+function significance_to_string(significance) {
+  if (significance instanceof Comment2) {
+    return new None();
+  } else if (significance instanceof UnansweredQuestion) {
+    return new Some("Unanswered Question");
+  } else if (significance instanceof AnsweredQuestion) {
+    return new Some("Answered");
+  } else if (significance instanceof Answer2) {
+    return new Some("Answer");
+  } else if (significance instanceof IncompleteToDo) {
+    return new Some("Incomplete ToDo");
+  } else if (significance instanceof CompleteToDo) {
+    return new Some("Complete");
+  } else if (significance instanceof ToDoCompletion2) {
+    return new Some("Completion");
+  } else if (significance instanceof UnconfirmedFinding) {
+    return new Some("Unconfirmed Finding");
+  } else if (significance instanceof ConfirmedFinding) {
+    return new Some("Confirmed Finding");
+  } else if (significance instanceof RejectedFinding) {
+    return new Some("Rejected Finding");
+  } else if (significance instanceof FindingConfirmation2) {
+    return new Some("Confirmation");
+  } else if (significance instanceof FindingRejection2) {
+    return new Some("Rejection");
+  } else if (significance instanceof UnansweredDeveloperQuestion) {
+    return new Some("Unanswered Dev Question");
+  } else if (significance instanceof AnsweredDeveloperQuestion) {
+    return new Some("Answered Dev Question");
+  } else if (significance instanceof Informational2) {
+    return new Some("Info");
+  } else if (significance instanceof RejectedInformational) {
+    return new Some("Incorrect Info");
+  } else if (significance instanceof InformationalRejection2) {
+    return new Some("Rejection");
+  } else {
+    return new Some("Confirmation");
+  }
+}
+function is_significance_threadable(note_significance) {
+  if (note_significance instanceof Comment2) {
+    return false;
+  } else if (note_significance instanceof UnansweredQuestion) {
+    return true;
+  } else if (note_significance instanceof AnsweredQuestion) {
+    return true;
+  } else if (note_significance instanceof Answer2) {
+    return false;
+  } else if (note_significance instanceof IncompleteToDo) {
+    return true;
+  } else if (note_significance instanceof CompleteToDo) {
+    return true;
+  } else if (note_significance instanceof ToDoCompletion2) {
+    return false;
+  } else if (note_significance instanceof UnconfirmedFinding) {
+    return true;
+  } else if (note_significance instanceof ConfirmedFinding) {
+    return true;
+  } else if (note_significance instanceof RejectedFinding) {
+    return true;
+  } else if (note_significance instanceof FindingConfirmation2) {
+    return false;
+  } else if (note_significance instanceof FindingRejection2) {
+    return false;
+  } else if (note_significance instanceof UnansweredDeveloperQuestion) {
+    return true;
+  } else if (note_significance instanceof AnsweredDeveloperQuestion) {
+    return true;
+  } else if (note_significance instanceof Informational2) {
+    return true;
+  } else if (note_significance instanceof RejectedInformational) {
+    return true;
+  } else if (note_significance instanceof InformationalRejection2) {
+    return false;
+  } else {
+    return false;
+  }
+}
 
 // build/dev/javascript/o11a_common/o11a/preprocessor.mjs
 var PreProcessedLine = class extends CustomType {
@@ -4727,9 +5572,10 @@ var PreProcessedLine = class extends CustomType {
   }
 };
 var SingleDeclarationLine = class extends CustomType {
-  constructor(topic_id) {
+  constructor(topic_id, topic_title) {
     super();
     this.topic_id = topic_id;
+    this.topic_title = topic_title;
   }
 };
 var NonEmptyLine = class extends CustomType {
@@ -4810,16 +5656,24 @@ var NodeReference = class extends CustomType {
   }
 };
 function pre_processed_line_significance_decoder() {
-  return field(
+  return field2(
     "type",
-    string2,
+    string3,
     (variant) => {
       if (variant === "single_declaration_line") {
-        return field(
+        return field2(
           "topic_id",
-          string2,
+          string3,
           (topic_id) => {
-            return success(new SingleDeclarationLine(topic_id));
+            return field2(
+              "topic_title",
+              string3,
+              (topic_title) => {
+                return success(
+                  new SingleDeclarationLine(topic_id, topic_title)
+                );
+              }
+            );
           }
         );
       } else if (variant === "non_empty_line") {
@@ -4897,13 +5751,13 @@ function node_declaration_kind_from_string(kind) {
   }
 }
 function node_reference_decoder() {
-  return field(
+  return field2(
     "title",
-    string2,
+    string3,
     (title) => {
-      return field(
+      return field2(
         "topic_id",
-        string2,
+        string3,
         (topic_id) => {
           return success(new NodeReference(title, topic_id));
         }
@@ -4912,19 +5766,19 @@ function node_reference_decoder() {
   );
 }
 function node_declaration_decoder() {
-  return field(
+  return field2(
     "title",
-    string2,
+    string3,
     (title) => {
-      return field(
+      return field2(
         "topic_id",
-        string2,
+        string3,
         (topic_id) => {
-          return field(
+          return field2(
             "kind",
-            string2,
+            string3,
             (kind) => {
-              return field(
+              return field2(
                 "references",
                 list2(node_reference_decoder()),
                 (references) => {
@@ -4946,22 +5800,22 @@ function node_declaration_decoder() {
   );
 }
 function pre_processed_node_decoder() {
-  return field(
+  return field2(
     "type",
-    string2,
+    string3,
     (variant) => {
       if (variant === "pre_processed_declaration") {
-        return field(
+        return field2(
           "node_id",
           int2,
           (node_id) => {
-            return field(
+            return field2(
               "node_declaration",
               node_declaration_decoder(),
               (node_declaration) => {
-                return field(
+                return field2(
                   "tokens",
-                  string2,
+                  string3,
                   (tokens) => {
                     return success(
                       new PreProcessedDeclaration(
@@ -4977,17 +5831,17 @@ function pre_processed_node_decoder() {
           }
         );
       } else if (variant === "pre_processed_reference") {
-        return field(
+        return field2(
           "referenced_node_id",
           int2,
           (referenced_node_id) => {
-            return field(
+            return field2(
               "referenced_node_declaration",
               node_declaration_decoder(),
               (referenced_node_declaration) => {
-                return field(
+                return field2(
                   "tokens",
-                  string2,
+                  string3,
                   (tokens) => {
                     return success(
                       new PreProcessedReference(
@@ -5003,19 +5857,19 @@ function pre_processed_node_decoder() {
           }
         );
       } else if (variant === "pre_processed_node") {
-        return field(
+        return field2(
           "element",
-          string2,
+          string3,
           (element2) => {
             return success(new PreProcessedNode(element2));
           }
         );
       } else if (variant === "pre_processed_gap_node") {
-        return field(
+        return field2(
           "element",
-          string2,
+          string3,
           (element2) => {
-            return field(
+            return field2(
               "leading_spaces",
               int2,
               (leading_spaces) => {
@@ -5033,27 +5887,27 @@ function pre_processed_node_decoder() {
   );
 }
 function pre_processed_line_decoder() {
-  return field(
+  return field2(
     "s",
     pre_processed_line_significance_decoder(),
     (significance) => {
-      return field(
+      return field2(
         "n",
         int2,
         (line_number) => {
-          return field(
+          return field2(
             "i",
-            string2,
+            string3,
             (line_id) => {
-              return field(
+              return field2(
                 "l",
                 int2,
                 (leading_spaces) => {
-                  return field(
+                  return field2(
                     "e",
                     list2(pre_processed_node_decoder()),
                     (elements2) => {
-                      return field(
+                      return field2(
                         "c",
                         int2,
                         (columns) => {
@@ -5083,6 +5937,54 @@ function pre_processed_line_decoder() {
           );
         }
       );
+    }
+  );
+}
+
+// build/dev/javascript/lustre/lustre/event.mjs
+function emit2(event2, data2) {
+  return event(event2, data2);
+}
+function on2(name, handler) {
+  return on(name, handler);
+}
+function on_click(msg) {
+  return on2("click", (_) => {
+    return new Ok(msg);
+  });
+}
+function on_mouse_enter(msg) {
+  return on2("mouseenter", (_) => {
+    return new Ok(msg);
+  });
+}
+function on_mouse_leave(msg) {
+  return on2("mouseleave", (_) => {
+    return new Ok(msg);
+  });
+}
+function on_focus(msg) {
+  return on2("focus", (_) => {
+    return new Ok(msg);
+  });
+}
+function on_blur(msg) {
+  return on2("blur", (_) => {
+    return new Ok(msg);
+  });
+}
+function value2(event2) {
+  let _pipe = event2;
+  return field("target", field("value", string))(
+    _pipe
+  );
+}
+function on_input(msg) {
+  return on2(
+    "input",
+    (event2) => {
+      let _pipe = value2(event2);
+      return map3(_pipe, msg);
     }
   );
 }
@@ -5185,16 +6087,1646 @@ var discussion_entry_hover = "deh";
 var discussion_entry = "de";
 var line_container = "line-container";
 
+// build/dev/javascript/o11a_common/o11a/events.mjs
+var user_submitted_note = "user-submitted-line-note";
+var user_clicked_discussion_preview = "user-clicked-discussion-preview";
+var user_focused_input = "user-focused-input";
+var user_unfocused_input = "user-unfocused-input";
+var user_maximized_thread = "user-maximized-thread";
+
 // build/dev/javascript/o11a_client/o11a/client/attributes.mjs
 function encode_column_count_data(column_count) {
   return data("cc", to_string(column_count));
 }
 
+// build/dev/javascript/given/given.mjs
+function that(requirement, consequence, alternative) {
+  if (requirement) {
+    return consequence();
+  } else {
+    return alternative();
+  }
+}
+
+// build/dev/javascript/lustre/lustre/element/svg.mjs
+var namespace = "http://www.w3.org/2000/svg";
+function line(attrs) {
+  return namespaced(namespace, "line", attrs, toList([]));
+}
+function polyline(attrs) {
+  return namespaced(namespace, "polyline", attrs, toList([]));
+}
+function svg(attrs, children2) {
+  return namespaced(namespace, "svg", attrs, children2);
+}
+function path(attrs) {
+  return namespaced(namespace, "path", attrs, toList([]));
+}
+
+// build/dev/javascript/o11a_common/lib/lucide.mjs
+function messages_square(attributes) {
+  return svg(
+    prepend(
+      attribute("stroke-linejoin", "round"),
+      prepend(
+        attribute("stroke-linecap", "round"),
+        prepend(
+          attribute("stroke-width", "2"),
+          prepend(
+            attribute("stroke", "currentColor"),
+            prepend(
+              attribute("fill", "none"),
+              prepend(
+                attribute("viewBox", "0 0 24 24"),
+                prepend(
+                  attribute("height", "24"),
+                  prepend(attribute("width", "24"), attributes)
+                )
+              )
+            )
+          )
+        )
+      )
+    ),
+    toList([
+      path(
+        toList([
+          attribute(
+            "d",
+            "M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"
+          )
+        ])
+      ),
+      path(
+        toList([
+          attribute("d", "M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1")
+        ])
+      )
+    ])
+  );
+}
+function pencil_ruler(attributes) {
+  return svg(
+    prepend(
+      attribute("stroke-linejoin", "round"),
+      prepend(
+        attribute("stroke-linecap", "round"),
+        prepend(
+          attribute("stroke-width", "2"),
+          prepend(
+            attribute("stroke", "currentColor"),
+            prepend(
+              attribute("fill", "none"),
+              prepend(
+                attribute("viewBox", "0 0 24 24"),
+                prepend(
+                  attribute("height", "24"),
+                  prepend(attribute("width", "24"), attributes)
+                )
+              )
+            )
+          )
+        )
+      )
+    ),
+    toList([
+      path(
+        toList([
+          attribute(
+            "d",
+            "M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"
+          )
+        ])
+      ),
+      path(toList([attribute("d", "m8 6 2-2")])),
+      path(toList([attribute("d", "m18 16 2-2")])),
+      path(
+        toList([
+          attribute(
+            "d",
+            "m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"
+          )
+        ])
+      ),
+      path(
+        toList([
+          attribute(
+            "d",
+            "M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+          )
+        ])
+      ),
+      path(toList([attribute("d", "m15 5 4 4")]))
+    ])
+  );
+}
+function list_collapse(attributes) {
+  return svg(
+    prepend(
+      attribute("stroke-linejoin", "round"),
+      prepend(
+        attribute("stroke-linecap", "round"),
+        prepend(
+          attribute("stroke-width", "2"),
+          prepend(
+            attribute("stroke", "currentColor"),
+            prepend(
+              attribute("fill", "none"),
+              prepend(
+                attribute("viewBox", "0 0 24 24"),
+                prepend(
+                  attribute("height", "24"),
+                  prepend(attribute("width", "24"), attributes)
+                )
+              )
+            )
+          )
+        )
+      )
+    ),
+    toList([
+      path(toList([attribute("d", "m3 10 2.5-2.5L3 5")])),
+      path(toList([attribute("d", "m3 19 2.5-2.5L3 14")])),
+      path(toList([attribute("d", "M10 6h11")])),
+      path(toList([attribute("d", "M10 12h11")])),
+      path(toList([attribute("d", "M10 18h11")]))
+    ])
+  );
+}
+function maximize_2(attributes) {
+  return svg(
+    prepend(
+      attribute("stroke-linejoin", "round"),
+      prepend(
+        attribute("stroke-linecap", "round"),
+        prepend(
+          attribute("stroke-width", "2"),
+          prepend(
+            attribute("stroke", "currentColor"),
+            prepend(
+              attribute("fill", "none"),
+              prepend(
+                attribute("viewBox", "0 0 24 24"),
+                prepend(
+                  attribute("height", "24"),
+                  prepend(attribute("width", "24"), attributes)
+                )
+              )
+            )
+          )
+        )
+      )
+    ),
+    toList([
+      polyline(toList([attribute("points", "15 3 21 3 21 9")])),
+      polyline(toList([attribute("points", "9 21 3 21 3 15")])),
+      line(
+        toList([
+          attribute("y2", "10"),
+          attribute("y1", "3"),
+          attribute("x2", "14"),
+          attribute("x1", "21")
+        ])
+      ),
+      line(
+        toList([
+          attribute("y2", "14"),
+          attribute("y1", "21"),
+          attribute("x2", "10"),
+          attribute("x1", "3")
+        ])
+      )
+    ])
+  );
+}
+function x(attributes) {
+  return svg(
+    prepend(
+      attribute("stroke-linejoin", "round"),
+      prepend(
+        attribute("stroke-linecap", "round"),
+        prepend(
+          attribute("stroke-width", "2"),
+          prepend(
+            attribute("stroke", "currentColor"),
+            prepend(
+              attribute("fill", "none"),
+              prepend(
+                attribute("viewBox", "0 0 24 24"),
+                prepend(
+                  attribute("height", "24"),
+                  prepend(attribute("width", "24"), attributes)
+                )
+              )
+            )
+          )
+        )
+      )
+    ),
+    toList([
+      path(toList([attribute("d", "M18 6 6 18")])),
+      path(toList([attribute("d", "m6 6 12 12")]))
+    ])
+  );
+}
+function pencil(attributes) {
+  return svg(
+    prepend(
+      attribute("stroke-linejoin", "round"),
+      prepend(
+        attribute("stroke-linecap", "round"),
+        prepend(
+          attribute("stroke-width", "2"),
+          prepend(
+            attribute("stroke", "currentColor"),
+            prepend(
+              attribute("fill", "none"),
+              prepend(
+                attribute("viewBox", "0 0 24 24"),
+                prepend(
+                  attribute("height", "24"),
+                  prepend(attribute("width", "24"), attributes)
+                )
+              )
+            )
+          )
+        )
+      )
+    ),
+    toList([
+      path(
+        toList([
+          attribute(
+            "d",
+            "M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+          )
+        ])
+      ),
+      path(toList([attribute("d", "m15 5 4 4")]))
+    ])
+  );
+}
+
+// build/dev/javascript/o11a_client/lib/eventx.mjs
+function on_ctrl_enter(msg) {
+  return on2(
+    "keydown",
+    (event2) => {
+      let decoder = field2(
+        "ctrlKey",
+        bool,
+        (ctrl_key) => {
+          return field2(
+            "key",
+            string3,
+            (key2) => {
+              return success([ctrl_key, key2]);
+            }
+          );
+        }
+      );
+      let empty_error = toList([new DecodeError("", "", toList([]))]);
+      return try$(
+        (() => {
+          let _pipe = run(event2, decoder);
+          return replace_error(_pipe, empty_error);
+        })(),
+        (_use0) => {
+          let ctrl_key = _use0[0];
+          let key2 = _use0[1];
+          if (ctrl_key && key2 === "Enter") {
+            return new Ok(msg);
+          } else {
+            return new Error(empty_error);
+          }
+        }
+      );
+    }
+  );
+}
+
+// build/dev/javascript/o11a_client/o11a/ui/discussion_overlay.mjs
+var Model2 = class extends CustomType {
+  constructor(is_reference, show_reference_discussion, user_name, line_number, column_number, topic_id, topic_title, current_note_draft, current_thread_id, active_thread, show_expanded_message_box, current_expanded_message_draft, expanded_messages, editing_note) {
+    super();
+    this.is_reference = is_reference;
+    this.show_reference_discussion = show_reference_discussion;
+    this.user_name = user_name;
+    this.line_number = line_number;
+    this.column_number = column_number;
+    this.topic_id = topic_id;
+    this.topic_title = topic_title;
+    this.current_note_draft = current_note_draft;
+    this.current_thread_id = current_thread_id;
+    this.active_thread = active_thread;
+    this.show_expanded_message_box = show_expanded_message_box;
+    this.current_expanded_message_draft = current_expanded_message_draft;
+    this.expanded_messages = expanded_messages;
+    this.editing_note = editing_note;
+  }
+};
+var ActiveThread = class extends CustomType {
+  constructor(current_thread_id, parent_note, prior_thread_id, prior_thread) {
+    super();
+    this.current_thread_id = current_thread_id;
+    this.parent_note = parent_note;
+    this.prior_thread_id = prior_thread_id;
+    this.prior_thread = prior_thread;
+  }
+};
+var UserWroteNote = class extends CustomType {
+  constructor(x0) {
+    super();
+    this[0] = x0;
+  }
+};
+var UserSubmittedNote = class extends CustomType {
+};
+var UserSwitchedToThread = class extends CustomType {
+  constructor(new_thread_id, parent_note) {
+    super();
+    this.new_thread_id = new_thread_id;
+    this.parent_note = parent_note;
+  }
+};
+var UserClosedThread = class extends CustomType {
+};
+var UserToggledExpandedMessageBox = class extends CustomType {
+  constructor(x0) {
+    super();
+    this[0] = x0;
+  }
+};
+var UserWroteExpandedMessage = class extends CustomType {
+  constructor(x0) {
+    super();
+    this[0] = x0;
+  }
+};
+var UserToggledExpandedMessage = class extends CustomType {
+  constructor(for_note_id) {
+    super();
+    this.for_note_id = for_note_id;
+  }
+};
+var UserEnteredDiscussionPreview = class extends CustomType {
+};
+var UserFocusedInput = class extends CustomType {
+};
+var UserFocusedExpandedInput = class extends CustomType {
+};
+var UserUnfocusedInput = class extends CustomType {
+};
+var UserMaximizeThread = class extends CustomType {
+};
+var UserEditedNote = class extends CustomType {
+  constructor(x0) {
+    super();
+    this[0] = x0;
+  }
+};
+var UserCancelledEdit = class extends CustomType {
+};
+var UserToggledReferenceDiscussion = class extends CustomType {
+};
+function init3(line_number, column_number, topic_id, topic_title, is_reference) {
+  return new Model2(
+    is_reference,
+    false,
+    "guest",
+    line_number,
+    column_number,
+    topic_id,
+    topic_title,
+    "",
+    topic_id,
+    new None(),
+    false,
+    new None(),
+    new$2(),
+    new None()
+  );
+}
+function thread_header_view(model) {
+  let $ = model.active_thread;
+  if ($ instanceof Some) {
+    let active_thread = $[0];
+    return div(
+      toList([]),
+      toList([
+        div(
+          toList([class$("flex justify-end width-full")]),
+          toList([
+            button(
+              toList([
+                on_click(new UserClosedThread()),
+                class$(
+                  "icon-button flex gap-[.5rem] pl-[.5rem] pr-[.3rem] pt-[.3rem] pb-[.1rem] mb-[.25rem]"
+                )
+              ]),
+              toList([text2("Close Thread"), x(toList([]))])
+            )
+          ])
+        ),
+        text2("Current Thread: "),
+        text2(active_thread.parent_note.message),
+        (() => {
+          let $1 = active_thread.parent_note.expanded_message;
+          if ($1 instanceof Some) {
+            let expanded_message = $1[0];
+            return div(
+              toList([class$("mt-[.5rem]")]),
+              toList([
+                p(toList([]), toList([text2(expanded_message)]))
+              ])
+            );
+          } else {
+            return fragment(toList([]));
+          }
+        })(),
+        hr(toList([class$("mt-[.5rem]")]))
+      ])
+    );
+  } else {
+    return div(
+      toList([
+        class$(
+          "flex items-start justify-between width-full mb-[.5rem]"
+        )
+      ]),
+      toList([
+        span(
+          toList([class$("pt-[.1rem] underline")]),
+          toList([
+            (() => {
+              let $1 = model.is_reference;
+              if ($1) {
+                return a(
+                  toList([href("/" + model.topic_id)]),
+                  toList([text2(model.topic_title)])
+                );
+              } else {
+                return text2(model.topic_title);
+              }
+            })()
+          ])
+        ),
+        div(
+          toList([]),
+          toList([
+            (() => {
+              let $1 = model.is_reference;
+              if ($1) {
+                return button(
+                  toList([
+                    on_click(new UserToggledReferenceDiscussion()),
+                    class$("icon-button p-[.3rem] mr-[.5rem]")
+                  ]),
+                  toList([x(toList([]))])
+                );
+              } else {
+                return fragment(toList([]));
+              }
+            })(),
+            button(
+              toList([
+                on_click(new UserMaximizeThread()),
+                class$("icon-button p-[.3rem] ")
+              ]),
+              toList([maximize_2(toList([]))])
+            )
+          ])
+        )
+      ])
+    );
+  }
+}
+function significance_badge_view(sig) {
+  let badge_style = "input-border rounded-md text-[0.65rem] pb-[0.15rem] pt-1 px-[0.5rem]";
+  let $ = significance_to_string(sig);
+  if ($ instanceof Some) {
+    let significance = $[0];
+    return span(
+      toList([class$(badge_style)]),
+      toList([text2(significance)])
+    );
+  } else {
+    return fragment(toList([]));
+  }
+}
+function comments_view(model, current_thread_notes) {
+  return map2(
+    current_thread_notes,
+    (note) => {
+      return div(
+        toList([class$("line-discussion-item")]),
+        toList([
+          div(
+            toList([class$("flex justify-between mb-[.2rem]")]),
+            toList([
+              div(
+                toList([class$("flex gap-[.5rem] items-start")]),
+                toList([
+                  p(toList([]), toList([text2(note.user_name)])),
+                  significance_badge_view(note.significance)
+                ])
+              ),
+              div(
+                toList([class$("flex gap-[.5rem]")]),
+                toList([
+                  button(
+                    toList([
+                      id("edit-message-button"),
+                      class$("icon-button p-[.3rem]"),
+                      on_click(new UserEditedNote(new Ok(note)))
+                    ]),
+                    toList([pencil(toList([]))])
+                  ),
+                  (() => {
+                    let $ = note.expanded_message;
+                    if ($ instanceof Some) {
+                      return button(
+                        toList([
+                          id("expand-message-button"),
+                          class$("icon-button p-[.3rem]"),
+                          on_click(
+                            new UserToggledExpandedMessage(note.note_id)
+                          )
+                        ]),
+                        toList([list_collapse(toList([]))])
+                      );
+                    } else {
+                      return fragment(toList([]));
+                    }
+                  })(),
+                  (() => {
+                    let $ = is_significance_threadable(
+                      note.significance
+                    );
+                    if ($) {
+                      return button(
+                        toList([
+                          id("switch-thread-button"),
+                          class$("icon-button p-[.3rem]"),
+                          on_click(
+                            new UserSwitchedToThread(note.note_id, note)
+                          )
+                        ]),
+                        toList([messages_square(toList([]))])
+                      );
+                    } else {
+                      return fragment(toList([]));
+                    }
+                  })()
+                ])
+              )
+            ])
+          ),
+          p(toList([]), toList([text2(note.message)])),
+          (() => {
+            let $ = contains2(model.expanded_messages, note.note_id);
+            if ($) {
+              return div(
+                toList([class$("mt-[.5rem]")]),
+                toList([
+                  p(
+                    toList([]),
+                    toList([
+                      text2(
+                        (() => {
+                          let _pipe = note.expanded_message;
+                          return unwrap(_pipe, "");
+                        })()
+                      )
+                    ])
+                  )
+                ])
+              );
+            } else {
+              return fragment(toList([]));
+            }
+          })(),
+          hr(toList([class$("mt-[.5rem]")]))
+        ])
+      );
+    }
+  );
+}
+function expanded_message_view(model) {
+  let expanded_message_style = "absolute overlay p-[.5rem] flex w-[100%] h-60 mt-2";
+  let textarea_style = "grow text-[.95rem] resize-none p-[.3rem]";
+  return div(
+    toList([
+      id("expanded-message"),
+      (() => {
+        let $ = model.show_expanded_message_box;
+        if ($) {
+          return class$(expanded_message_style + " show-exp");
+        } else {
+          return class$(expanded_message_style);
+        }
+      })()
+    ]),
+    toList([
+      textarea(
+        toList([
+          id("expanded-message-box"),
+          class$(textarea_style),
+          placeholder("Write an expanded message body"),
+          on_input(
+            (var0) => {
+              return new UserWroteExpandedMessage(var0);
+            }
+          ),
+          on_focus(new UserFocusedExpandedInput()),
+          on_blur(new UserUnfocusedInput()),
+          on_ctrl_enter(new UserSubmittedNote())
+        ]),
+        (() => {
+          let _pipe = model.current_expanded_message_draft;
+          return unwrap(_pipe, "");
+        })()
+      )
+    ])
+  );
+}
+function classify_message(message, is_thread_open) {
+  if (!is_thread_open) {
+    if (message.startsWith("todo: ")) {
+      let rest = message.slice(6);
+      return [new ToDo(), rest];
+    } else if (message.startsWith("q: ")) {
+      let rest = message.slice(3);
+      return [new Question(), rest];
+    } else if (message.startsWith("question: ")) {
+      let rest = message.slice(10);
+      return [new Question(), rest];
+    } else if (message.startsWith("finding: ")) {
+      let rest = message.slice(9);
+      return [new FindingLead(), rest];
+    } else if (message.startsWith("dev: ")) {
+      let rest = message.slice(5);
+      return [new DevelperQuestion(), rest];
+    } else if (message.startsWith("info: ")) {
+      let rest = message.slice(6);
+      return [new Informational(), rest];
+    } else {
+      return [new Comment(), message];
+    }
+  } else {
+    if (message === "done") {
+      return [new ToDoCompletion(), "done"];
+    } else if (message.startsWith("done: ")) {
+      let rest = message.slice(6);
+      return [new ToDoCompletion(), rest];
+    } else if (message.startsWith("a: ")) {
+      let rest = message.slice(3);
+      return [new Answer(), rest];
+    } else if (message.startsWith("answer: ")) {
+      let rest = message.slice(8);
+      return [new Answer(), rest];
+    } else if (message.startsWith("reject: ")) {
+      let rest = message.slice(8);
+      return [new FindingRejection(), rest];
+    } else if (message.startsWith("confirm: ")) {
+      let rest = message.slice(9);
+      return [new FindingConfirmation(), rest];
+    } else if (message.startsWith("incorrect: ")) {
+      let rest = message.slice(11);
+      return [new InformationalRejection(), rest];
+    } else if (message.startsWith("correct: ")) {
+      let rest = message.slice(9);
+      return [new InformationalConfirmation(), rest];
+    } else {
+      return [new Comment(), message];
+    }
+  }
+}
+function get_message_classification_prefix(significance) {
+  if (significance instanceof Answer2) {
+    return "a: ";
+  } else if (significance instanceof AnsweredDeveloperQuestion) {
+    return "dev: ";
+  } else if (significance instanceof AnsweredQuestion) {
+    return "q: ";
+  } else if (significance instanceof Comment2) {
+    return "";
+  } else if (significance instanceof CompleteToDo) {
+    return "todo: ";
+  } else if (significance instanceof ConfirmedFinding) {
+    return "finding: ";
+  } else if (significance instanceof FindingConfirmation2) {
+    return "confirm: ";
+  } else if (significance instanceof FindingRejection2) {
+    return "reject: ";
+  } else if (significance instanceof IncompleteToDo) {
+    return "todo: ";
+  } else if (significance instanceof Informational2) {
+    return "info: ";
+  } else if (significance instanceof InformationalConfirmation2) {
+    return "correct: ";
+  } else if (significance instanceof InformationalRejection2) {
+    return "incorrect: ";
+  } else if (significance instanceof RejectedFinding) {
+    return "finding: ";
+  } else if (significance instanceof RejectedInformational) {
+    return "info: ";
+  } else if (significance instanceof ToDoCompletion2) {
+    return "done: ";
+  } else if (significance instanceof UnansweredDeveloperQuestion) {
+    return "dev: ";
+  } else if (significance instanceof UnansweredQuestion) {
+    return "q: ";
+  } else {
+    return "finding: ";
+  }
+}
+function update(model, msg) {
+  if (msg instanceof UserWroteNote) {
+    let draft = msg[0];
+    echo("user wrote note", "src/o11a/ui/discussion_overlay.gleam", 101);
+    return [
+      (() => {
+        let _record = model;
+        return new Model2(
+          _record.is_reference,
+          _record.show_reference_discussion,
+          _record.user_name,
+          _record.line_number,
+          _record.column_number,
+          _record.topic_id,
+          _record.topic_title,
+          draft,
+          _record.current_thread_id,
+          _record.active_thread,
+          _record.show_expanded_message_box,
+          _record.current_expanded_message_draft,
+          _record.expanded_messages,
+          _record.editing_note
+        );
+      })(),
+      none()
+    ];
+  } else if (msg instanceof UserSubmittedNote) {
+    let $ = classify_message(
+      (() => {
+        let _pipe = model.current_note_draft;
+        return trim(_pipe);
+      })(),
+      is_some(model.active_thread)
+    );
+    let significance = $[0];
+    let message = $[1];
+    return that(
+      model.current_note_draft === "",
+      () => {
+        return [model, none()];
+      },
+      () => {
+        let $1 = (() => {
+          let $2 = model.editing_note;
+          if ($2 instanceof Some) {
+            let note2 = $2[0];
+            return [new Edit(), note2.note_id];
+          } else {
+            return [new None2(), model.current_thread_id];
+          }
+        })();
+        let modifier = $1[0];
+        let parent_id = $1[1];
+        let expanded_message = (() => {
+          let $2 = (() => {
+            let _pipe = model.current_expanded_message_draft;
+            return map(_pipe, trim);
+          })();
+          if ($2 instanceof Some && $2[0] === "") {
+            return new None();
+          } else {
+            let msg$1 = $2;
+            return msg$1;
+          }
+        })();
+        let note = new NoteSubmission(
+          parent_id,
+          significance,
+          "user" + (() => {
+            let _pipe = random(100);
+            return to_string(_pipe);
+          })(),
+          message,
+          expanded_message,
+          modifier
+        );
+        return [
+          (() => {
+            let _record = model;
+            return new Model2(
+              _record.is_reference,
+              _record.show_reference_discussion,
+              _record.user_name,
+              _record.line_number,
+              _record.column_number,
+              _record.topic_id,
+              _record.topic_title,
+              "",
+              _record.current_thread_id,
+              _record.active_thread,
+              false,
+              new None(),
+              _record.expanded_messages,
+              new None()
+            );
+          })(),
+          emit2(
+            user_submitted_note,
+            object2(
+              toList([
+                ["note", encode_note_submission(note)],
+                ["topic_id", string4(model.topic_id)]
+              ])
+            )
+          )
+        ];
+      }
+    );
+  } else if (msg instanceof UserSwitchedToThread) {
+    let new_thread_id = msg.new_thread_id;
+    let parent_note = msg.parent_note;
+    return [
+      (() => {
+        let _record = model;
+        return new Model2(
+          _record.is_reference,
+          _record.show_reference_discussion,
+          _record.user_name,
+          _record.line_number,
+          _record.column_number,
+          _record.topic_id,
+          _record.topic_title,
+          _record.current_note_draft,
+          new_thread_id,
+          new Some(
+            new ActiveThread(
+              new_thread_id,
+              parent_note,
+              model.current_thread_id,
+              model.active_thread
+            )
+          ),
+          _record.show_expanded_message_box,
+          _record.current_expanded_message_draft,
+          _record.expanded_messages,
+          _record.editing_note
+        );
+      })(),
+      none()
+    ];
+  } else if (msg instanceof UserClosedThread) {
+    let new_active_thread = (() => {
+      let _pipe = model.active_thread;
+      let _pipe$1 = map(
+        _pipe,
+        (thread) => {
+          return thread.prior_thread;
+        }
+      );
+      return flatten(_pipe$1);
+    })();
+    let new_current_thread_id = (() => {
+      let _pipe = map(
+        new_active_thread,
+        (thread) => {
+          return thread.current_thread_id;
+        }
+      );
+      return unwrap(_pipe, model.topic_id);
+    })();
+    return [
+      (() => {
+        let _record = model;
+        return new Model2(
+          _record.is_reference,
+          _record.show_reference_discussion,
+          _record.user_name,
+          _record.line_number,
+          _record.column_number,
+          _record.topic_id,
+          _record.topic_title,
+          _record.current_note_draft,
+          new_current_thread_id,
+          new_active_thread,
+          _record.show_expanded_message_box,
+          _record.current_expanded_message_draft,
+          _record.expanded_messages,
+          _record.editing_note
+        );
+      })(),
+      none()
+    ];
+  } else if (msg instanceof UserToggledExpandedMessageBox) {
+    let show_expanded_message_box = msg[0];
+    return [
+      (() => {
+        let _record = model;
+        return new Model2(
+          _record.is_reference,
+          _record.show_reference_discussion,
+          _record.user_name,
+          _record.line_number,
+          _record.column_number,
+          _record.topic_id,
+          _record.topic_title,
+          _record.current_note_draft,
+          _record.current_thread_id,
+          _record.active_thread,
+          show_expanded_message_box,
+          _record.current_expanded_message_draft,
+          _record.expanded_messages,
+          _record.editing_note
+        );
+      })(),
+      none()
+    ];
+  } else if (msg instanceof UserWroteExpandedMessage) {
+    let expanded_message = msg[0];
+    return [
+      (() => {
+        let _record = model;
+        return new Model2(
+          _record.is_reference,
+          _record.show_reference_discussion,
+          _record.user_name,
+          _record.line_number,
+          _record.column_number,
+          _record.topic_id,
+          _record.topic_title,
+          _record.current_note_draft,
+          _record.current_thread_id,
+          _record.active_thread,
+          _record.show_expanded_message_box,
+          new Some(expanded_message),
+          _record.expanded_messages,
+          _record.editing_note
+        );
+      })(),
+      none()
+    ];
+  } else if (msg instanceof UserToggledExpandedMessage) {
+    let for_note_id = msg.for_note_id;
+    let $ = contains2(model.expanded_messages, for_note_id);
+    if ($) {
+      return [
+        (() => {
+          let _record = model;
+          return new Model2(
+            _record.is_reference,
+            _record.show_reference_discussion,
+            _record.user_name,
+            _record.line_number,
+            _record.column_number,
+            _record.topic_id,
+            _record.topic_title,
+            _record.current_note_draft,
+            _record.current_thread_id,
+            _record.active_thread,
+            _record.show_expanded_message_box,
+            _record.current_expanded_message_draft,
+            delete$2(model.expanded_messages, for_note_id),
+            _record.editing_note
+          );
+        })(),
+        none()
+      ];
+    } else {
+      return [
+        (() => {
+          let _record = model;
+          return new Model2(
+            _record.is_reference,
+            _record.show_reference_discussion,
+            _record.user_name,
+            _record.line_number,
+            _record.column_number,
+            _record.topic_id,
+            _record.topic_title,
+            _record.current_note_draft,
+            _record.current_thread_id,
+            _record.active_thread,
+            _record.show_expanded_message_box,
+            _record.current_expanded_message_draft,
+            insert2(model.expanded_messages, for_note_id),
+            _record.editing_note
+          );
+        })(),
+        none()
+      ];
+    }
+  } else if (msg instanceof UserEnteredDiscussionPreview) {
+    return [
+      model,
+      emit2(
+        user_clicked_discussion_preview,
+        object2(
+          toList([
+            ["line_number", int3(model.line_number)],
+            ["discussion_lane", int3(1)]
+          ])
+        )
+      )
+    ];
+  } else if (msg instanceof UserFocusedInput) {
+    return [
+      model,
+      emit2(
+        user_focused_input,
+        object2(
+          toList([
+            ["line_number", int3(model.line_number)],
+            ["discussion_lane", int3(1)]
+          ])
+        )
+      )
+    ];
+  } else if (msg instanceof UserFocusedExpandedInput) {
+    return [
+      (() => {
+        let _record = model;
+        return new Model2(
+          _record.is_reference,
+          _record.show_reference_discussion,
+          _record.user_name,
+          _record.line_number,
+          _record.column_number,
+          _record.topic_id,
+          _record.topic_title,
+          _record.current_note_draft,
+          _record.current_thread_id,
+          _record.active_thread,
+          true,
+          _record.current_expanded_message_draft,
+          _record.expanded_messages,
+          _record.editing_note
+        );
+      })(),
+      emit2(
+        user_focused_input,
+        object2(
+          toList([
+            ["line_number", int3(model.line_number)],
+            ["discussion_lane", int3(1)]
+          ])
+        )
+      )
+    ];
+  } else if (msg instanceof UserUnfocusedInput) {
+    return [
+      model,
+      emit2(
+        user_unfocused_input,
+        object2(
+          toList([
+            ["line_number", int3(model.line_number)],
+            ["discussion_lane", int3(1)]
+          ])
+        )
+      )
+    ];
+  } else if (msg instanceof UserMaximizeThread) {
+    return [
+      model,
+      emit2(
+        user_maximized_thread,
+        object2(
+          toList([
+            ["line_number", int3(model.line_number)],
+            ["discussion_lane", int3(1)]
+          ])
+        )
+      )
+    ];
+  } else if (msg instanceof UserEditedNote) {
+    let note = msg[0];
+    if (note.isOk()) {
+      let note$1 = note[0];
+      return [
+        (() => {
+          let _record = model;
+          return new Model2(
+            _record.is_reference,
+            _record.show_reference_discussion,
+            _record.user_name,
+            _record.line_number,
+            _record.column_number,
+            _record.topic_id,
+            _record.topic_title,
+            get_message_classification_prefix(note$1.significance) + note$1.message,
+            _record.current_thread_id,
+            _record.active_thread,
+            (() => {
+              let $ = note$1.expanded_message;
+              if ($ instanceof Some) {
+                return true;
+              } else {
+                return false;
+              }
+            })(),
+            note$1.expanded_message,
+            _record.expanded_messages,
+            new Some(note$1)
+          );
+        })(),
+        none()
+      ];
+    } else {
+      return [model, none()];
+    }
+  } else if (msg instanceof UserCancelledEdit) {
+    return [
+      (() => {
+        let _record = model;
+        return new Model2(
+          _record.is_reference,
+          _record.show_reference_discussion,
+          _record.user_name,
+          _record.line_number,
+          _record.column_number,
+          _record.topic_id,
+          _record.topic_title,
+          "",
+          _record.current_thread_id,
+          _record.active_thread,
+          false,
+          new None(),
+          _record.expanded_messages,
+          new None()
+        );
+      })(),
+      none()
+    ];
+  } else {
+    return [
+      (() => {
+        let _record = model;
+        return new Model2(
+          _record.is_reference,
+          !model.show_reference_discussion,
+          _record.user_name,
+          _record.line_number,
+          _record.column_number,
+          _record.topic_id,
+          _record.topic_title,
+          _record.current_note_draft,
+          _record.current_thread_id,
+          _record.active_thread,
+          _record.show_expanded_message_box,
+          _record.current_expanded_message_draft,
+          _record.expanded_messages,
+          _record.editing_note
+        );
+      })(),
+      none()
+    ];
+  }
+}
+function on_input_keydown(enter_msg, up_msg) {
+  return on2(
+    "keydown",
+    (event2) => {
+      let decoder = field2(
+        "ctrlKey",
+        bool,
+        (ctrl_key) => {
+          return field2(
+            "key",
+            string3,
+            (key2) => {
+              return success([ctrl_key, key2]);
+            }
+          );
+        }
+      );
+      let empty_error = toList([new DecodeError("", "", toList([]))]);
+      return try$(
+        (() => {
+          let _pipe = run(event2, decoder);
+          return replace_error(_pipe, empty_error);
+        })(),
+        (_use0) => {
+          let ctrl_key = _use0[0];
+          let key2 = _use0[1];
+          if (ctrl_key && key2 === "Enter") {
+            return new Ok(enter_msg);
+          } else if (key2 === "ArrowUp") {
+            return new Ok(up_msg);
+          } else {
+            return new Error(empty_error);
+          }
+        }
+      );
+    }
+  );
+}
+function new_message_input_view(model, current_thread_notes) {
+  return div(
+    toList([class$("flex justify-between items-center gap-[.35rem]")]),
+    toList([
+      button(
+        toList([
+          id("toggle-expanded-message-button"),
+          class$("icon-button p-[.3rem]"),
+          on_click(
+            new UserToggledExpandedMessageBox(!model.show_expanded_message_box)
+          )
+        ]),
+        toList([pencil_ruler(toList([]))])
+      ),
+      (() => {
+        let $ = model.editing_note;
+        if ($ instanceof Some) {
+          return button(
+            toList([
+              id("cancel-message-edit-button"),
+              class$("icon-button p-[.3rem]"),
+              on_click(new UserCancelledEdit())
+            ]),
+            toList([x(toList([]))])
+          );
+        } else {
+          return fragment(toList([]));
+        }
+      })(),
+      input(
+        toList([
+          id("new-comment-input"),
+          class$(
+            "inline-block w-full grow text-[0.9rem] pl-2 pb-[.2rem] p-[0.3rem] border-[none] border-t border-solid;"
+          ),
+          placeholder("Add a new comment"),
+          on_input((var0) => {
+            return new UserWroteNote(var0);
+          }),
+          on_focus(new UserFocusedInput()),
+          on_blur(new UserUnfocusedInput()),
+          on_input_keydown(
+            new UserSubmittedNote(),
+            new UserEditedNote(first(current_thread_notes))
+          ),
+          value(model.current_note_draft)
+        ])
+      )
+    ])
+  );
+}
+function view(model, notes) {
+  console_log("Rendering line discussion " + model.topic_title);
+  let current_thread_notes = (() => {
+    let _pipe = map_get(notes, model.current_thread_id);
+    return unwrap2(_pipe, toList([]));
+  })();
+  return div(
+    toList([
+      class$(
+        "absolute z-[3] w-[30rem] not-italic text-wrap select-text left-[-.3rem]"
+      ),
+      (() => {
+        let $ = model.line_number < 27;
+        if ($) {
+          return class$("top-[1.4rem]");
+        } else {
+          return class$("bottom-[1.4rem]");
+        }
+      })()
+    ]),
+    toList([
+      (() => {
+        let $ = model.is_reference && !model.show_reference_discussion;
+        if ($) {
+          return fragment(
+            toList([
+              div(
+                toList([class$("overlay p-[.5rem]")]),
+                toList([
+                  div(
+                    toList([
+                      class$(
+                        "flex items-start justify-between width-full mb-[.5rem]"
+                      )
+                    ]),
+                    toList([
+                      span(
+                        toList([class$("pt-[.1rem] underline")]),
+                        toList([
+                          a(
+                            toList([href("/" + model.topic_id)]),
+                            toList([text2(model.topic_title)])
+                          )
+                        ])
+                      ),
+                      button(
+                        toList([
+                          on_click(new UserToggledReferenceDiscussion()),
+                          class$("icon-button p-[.3rem]")
+                        ]),
+                        toList([messages_square(toList([]))])
+                      )
+                    ])
+                  ),
+                  div(
+                    toList([
+                      class$(
+                        "flex flex-col overflow-auto max-h-[30rem] gap-[.5rem]"
+                      )
+                    ]),
+                    filter_map(
+                      current_thread_notes,
+                      (note) => {
+                        let $1 = isEqual(
+                          note.significance,
+                          new Informational2()
+                        );
+                        if ($1) {
+                          return new Ok(
+                            p(
+                              toList([]),
+                              toList([
+                                text2(
+                                  note.message + (() => {
+                                    let $2 = is_some(
+                                      note.expanded_message
+                                    );
+                                    if ($2) {
+                                      return "^";
+                                    } else {
+                                      return "";
+                                    }
+                                  })()
+                                )
+                              ])
+                            )
+                          );
+                        } else {
+                          return new Error(void 0);
+                        }
+                      }
+                    )
+                  )
+                ])
+              )
+            ])
+          );
+        } else {
+          return fragment(
+            toList([
+              div(
+                toList([class$("overlay p-[.5rem]")]),
+                toList([
+                  thread_header_view(model),
+                  (() => {
+                    let $1 = is_some(model.active_thread) || length(
+                      current_thread_notes
+                    ) > 0;
+                    if ($1) {
+                      return div(
+                        toList([
+                          id("comment-list"),
+                          class$(
+                            "flex flex-col-reverse overflow-auto max-h-[30rem] gap-[.5rem] mb-[.5rem]"
+                          )
+                        ]),
+                        comments_view(model, current_thread_notes)
+                      );
+                    } else {
+                      return fragment(toList([]));
+                    }
+                  })(),
+                  new_message_input_view(model, current_thread_notes)
+                ])
+              ),
+              expanded_message_view(model)
+            ])
+          );
+        }
+      })()
+    ])
+  );
+}
+function echo(value4, file, line2) {
+  const grey = "\x1B[90m";
+  const reset_color = "\x1B[39m";
+  const file_line = `${file}:${line2}`;
+  const string_value = echo$inspect(value4);
+  if (typeof process === "object" && process.stderr?.write) {
+    const string5 = `${grey}${file_line}${reset_color}
+${string_value}
+`;
+    process.stderr.write(string5);
+  } else if (typeof Deno === "object") {
+    const string5 = `${grey}${file_line}${reset_color}
+${string_value}
+`;
+    Deno.stderr.writeSync(new TextEncoder().encode(string5));
+  } else {
+    const string5 = `${file_line}
+${string_value}`;
+    console.log(string5);
+  }
+  return value4;
+}
+function echo$inspectString(str) {
+  let new_str = '"';
+  for (let i = 0; i < str.length; i++) {
+    let char = str[i];
+    if (char == "\n")
+      new_str += "\\n";
+    else if (char == "\r")
+      new_str += "\\r";
+    else if (char == "	")
+      new_str += "\\t";
+    else if (char == "\f")
+      new_str += "\\f";
+    else if (char == "\\")
+      new_str += "\\\\";
+    else if (char == '"')
+      new_str += '\\"';
+    else if (char < " " || char > "~" && char < "\xA0") {
+      new_str += "\\u{" + char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0") + "}";
+    } else {
+      new_str += char;
+    }
+  }
+  new_str += '"';
+  return new_str;
+}
+function echo$inspectDict(map8) {
+  let body = "dict.from_list([";
+  let first3 = true;
+  let key_value_pairs = [];
+  map8.forEach((value4, key2) => {
+    key_value_pairs.push([key2, value4]);
+  });
+  key_value_pairs.sort();
+  key_value_pairs.forEach(([key2, value4]) => {
+    if (!first3)
+      body = body + ", ";
+    body = body + "#(" + echo$inspect(key2) + ", " + echo$inspect(value4) + ")";
+    first3 = false;
+  });
+  return body + "])";
+}
+function echo$inspectCustomType(record) {
+  const props = Object.keys(record).map((label) => {
+    const value4 = echo$inspect(record[label]);
+    return isNaN(parseInt(label)) ? `${label}: ${value4}` : value4;
+  }).join(", ");
+  return props ? `${record.constructor.name}(${props})` : record.constructor.name;
+}
+function echo$inspectObject(v) {
+  const name = Object.getPrototypeOf(v)?.constructor?.name || "Object";
+  const props = [];
+  for (const k of Object.keys(v)) {
+    props.push(`${echo$inspect(k)}: ${echo$inspect(v[k])}`);
+  }
+  const body = props.length ? " " + props.join(", ") + " " : "";
+  const head = name === "Object" ? "" : name + " ";
+  return `//js(${head}{${body}})`;
+}
+function echo$inspect(v) {
+  const t = typeof v;
+  if (v === true)
+    return "True";
+  if (v === false)
+    return "False";
+  if (v === null)
+    return "//js(null)";
+  if (v === void 0)
+    return "Nil";
+  if (t === "string")
+    return echo$inspectString(v);
+  if (t === "bigint" || t === "number")
+    return v.toString();
+  if (Array.isArray(v))
+    return `#(${v.map(echo$inspect).join(", ")})`;
+  if (v instanceof List)
+    return `[${v.toArray().map(echo$inspect).join(", ")}]`;
+  if (v instanceof UtfCodepoint)
+    return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
+  if (v instanceof BitArray)
+    return echo$inspectBitArray(v);
+  if (v instanceof CustomType)
+    return echo$inspectCustomType(v);
+  if (echo$isDict(v))
+    return echo$inspectDict(v);
+  if (v instanceof Set)
+    return `//js(Set(${[...v].map(echo$inspect).join(", ")}))`;
+  if (v instanceof RegExp)
+    return `//js(${v})`;
+  if (v instanceof Date)
+    return `//js(Date("${v.toISOString()}"))`;
+  if (v instanceof Function) {
+    const args = [];
+    for (const i of Array(v.length).keys())
+      args.push(String.fromCharCode(i + 97));
+    return `//fn(${args.join(", ")}) { ... }`;
+  }
+  return echo$inspectObject(v);
+}
+function echo$inspectBitArray(bitArray) {
+  let endOfAlignedBytes = bitArray.bitOffset + 8 * Math.trunc(bitArray.bitSize / 8);
+  let alignedBytes = bitArraySlice(bitArray, bitArray.bitOffset, endOfAlignedBytes);
+  let remainingUnalignedBits = bitArray.bitSize % 8;
+  if (remainingUnalignedBits > 0) {
+    let remainingBits = bitArraySliceToInt(bitArray, endOfAlignedBytes, bitArray.bitSize, false, false);
+    let alignedBytesArray = Array.from(alignedBytes.rawBuffer);
+    let suffix = `${remainingBits}:size(${remainingUnalignedBits})`;
+    if (alignedBytesArray.length === 0) {
+      return `<<${suffix}>>`;
+    } else {
+      return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}, ${suffix}>>`;
+    }
+  } else {
+    return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}>>`;
+  }
+}
+function echo$isDict(value4) {
+  try {
+    return value4 instanceof Dict;
+  } catch {
+    return false;
+  }
+}
+
 // build/dev/javascript/o11a_client/o11a/ui/audit_page.mjs
-function inline_comment_preview_view(parent_notes, line_number, column_number) {
+var DiscussionReference = class extends CustomType {
+  constructor(line_number, column_number, model) {
+    super();
+    this.line_number = line_number;
+    this.column_number = column_number;
+    this.model = model;
+  }
+};
+var UserHoveredDiscussionEntry = class extends CustomType {
+  constructor(line_number, column_number, node_id, topic_id, topic_title, is_reference) {
+    super();
+    this.line_number = line_number;
+    this.column_number = column_number;
+    this.node_id = node_id;
+    this.topic_id = topic_id;
+    this.topic_title = topic_title;
+    this.is_reference = is_reference;
+  }
+};
+var UserUnhoveredDiscussionEntry = class extends CustomType {
+};
+var UserClickedDiscussionEntry = class extends CustomType {
+  constructor(line_number, column_number) {
+    super();
+    this.line_number = line_number;
+    this.column_number = column_number;
+  }
+};
+var UserUpdatedDiscussion = class extends CustomType {
+  constructor(msg, line_number, column_number, update3) {
+    super();
+    this.msg = msg;
+    this.line_number = line_number;
+    this.column_number = column_number;
+    this.update = update3;
+  }
+};
+function map_discussion_msg(msg, selected_discussion) {
+  return new UserUpdatedDiscussion(
+    msg,
+    selected_discussion.line_number,
+    selected_discussion.column_number,
+    update(selected_discussion.model, msg)
+  );
+}
+function discussion_view(discussion, element_line_number, element_column_number, selected_discussion) {
+  if (selected_discussion instanceof Some) {
+    let selected_discussion$1 = selected_discussion[0];
+    let $ = element_line_number === selected_discussion$1.line_number && element_column_number === selected_discussion$1.column_number;
+    if ($) {
+      let _pipe = view(
+        selected_discussion$1.model,
+        discussion
+      );
+      return map6(
+        _pipe,
+        (_capture) => {
+          return map_discussion_msg(_capture, selected_discussion$1);
+        }
+      );
+    } else {
+      return fragment(toList([]));
+    }
+  } else {
+    return fragment(toList([]));
+  }
+}
+function inline_comment_preview_view(parent_notes, topic_id, topic_title, element_line_number, element_column_number, selected_discussion, discussion) {
   let note_result = (() => {
     let _pipe = reverse(parent_notes);
-    return find(
+    return find2(
       _pipe,
       (note) => {
         return !isEqual(note.significance, new Informational2());
@@ -5206,12 +7738,38 @@ function inline_comment_preview_view(parent_notes, line_number, column_number) {
     return span(
       toList([
         class$(
-          "inline-comment relative font-code code-extras font-code fade-in"
+          "inline-comment font-code code-extras font-code fade-in relative"
         ),
         class$("comment-preview"),
         class$(discussion_entry),
         attribute("tabindex", "0"),
-        encode_grid_location_data(line_number, column_number)
+        encode_grid_location_data(
+          (() => {
+            let _pipe = element_line_number;
+            return to_string(_pipe);
+          })(),
+          (() => {
+            let _pipe = element_column_number;
+            return to_string(_pipe);
+          })()
+        ),
+        on_mouse_enter(
+          new UserHoveredDiscussionEntry(
+            element_line_number,
+            element_column_number,
+            new None(),
+            topic_id,
+            topic_title,
+            false
+          )
+        ),
+        on_mouse_leave(new UserUnhoveredDiscussionEntry()),
+        on_click(
+          new UserClickedDiscussionEntry(
+            element_line_number,
+            element_column_number
+          )
+        )
       ]),
       toList([
         text2(
@@ -5227,42 +7785,118 @@ function inline_comment_preview_view(parent_notes, line_number, column_number) {
               return slice(_pipe, 0, 40);
             }
           })()
+        ),
+        discussion_view(
+          discussion,
+          element_line_number,
+          element_column_number,
+          selected_discussion
         )
       ])
     );
   } else {
     return span(
       toList([
-        class$("inline-comment relative font-code code-extras"),
+        class$("inline-comment font-code code-extras relative"),
         class$("new-thread-preview"),
         class$(discussion_entry),
         attribute("tabindex", "0"),
-        encode_grid_location_data(line_number, column_number)
+        encode_grid_location_data(
+          (() => {
+            let _pipe = element_line_number;
+            return to_string(_pipe);
+          })(),
+          (() => {
+            let _pipe = element_column_number;
+            return to_string(_pipe);
+          })()
+        ),
+        on_mouse_enter(
+          new UserHoveredDiscussionEntry(
+            element_line_number,
+            element_column_number,
+            new None(),
+            topic_id,
+            topic_title,
+            false
+          )
+        ),
+        on_mouse_leave(new UserUnhoveredDiscussionEntry()),
+        on_click(
+          new UserClickedDiscussionEntry(
+            element_line_number,
+            element_column_number
+          )
+        )
       ]),
-      toList([text2("Start new thread")])
+      toList([
+        text2("Start new thread"),
+        discussion_view(
+          discussion,
+          element_line_number,
+          element_column_number,
+          selected_discussion
+        )
+      ])
     );
   }
 }
-function declaration_node_view(node_id, node_declaration, tokens, line_number, column_number) {
+function declaration_node_view(node_id, node_declaration, tokens, discussion, element_line_number, element_column_number, selected_discussion) {
   return span(
     toList([
       id(node_declaration.topic_id),
       class$(
         node_declaration_kind_to_string(node_declaration.kind)
       ),
-      class$("declaration-preview N" + to_string(node_id)),
+      class$(
+        "declaration-preview relative N" + to_string(node_id)
+      ),
       class$(discussion_entry),
       class$(discussion_entry_hover),
       attribute("tabindex", "0"),
-      encode_grid_location_data(line_number, column_number),
       encode_topic_id_data(node_declaration.topic_id),
       encode_topic_title_data(node_declaration.title),
-      encode_is_reference_data(false)
+      encode_is_reference_data(false),
+      encode_grid_location_data(
+        (() => {
+          let _pipe = element_line_number;
+          return to_string(_pipe);
+        })(),
+        (() => {
+          let _pipe = element_column_number;
+          return to_string(_pipe);
+        })()
+      ),
+      on_mouse_enter(
+        new UserHoveredDiscussionEntry(
+          element_line_number,
+          element_column_number,
+          new Some(node_id),
+          node_declaration.topic_id,
+          node_declaration.title,
+          false
+        )
+      ),
+      on_mouse_leave(new UserUnhoveredDiscussionEntry()),
+      on_click(
+        new UserClickedDiscussionEntry(
+          element_line_number,
+          element_column_number
+        )
+      )
     ]),
-    toList([text2(tokens)])
+    toList([
+      text2(tokens),
+      discussion_view(
+        discussion,
+        element_line_number,
+        element_column_number,
+        selected_discussion
+      )
+    ])
   );
 }
-function reference_node_view(referenced_node_id, referenced_node_declaration, tokens, line_number, column_number) {
+function reference_node_view(referenced_node_id, referenced_node_declaration, tokens, discussion, element_line_number, element_column_number, selected_discussion) {
   return span(
     toList([
       class$(
@@ -5271,20 +7905,54 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
         )
       ),
       class$(
-        "reference-preview N" + to_string(referenced_node_id)
+        "reference-preview relative N" + to_string(referenced_node_id)
       ),
       class$(discussion_entry),
       class$(discussion_entry_hover),
       attribute("tabindex", "0"),
-      encode_grid_location_data(line_number, column_number),
       encode_topic_id_data(referenced_node_declaration.topic_id),
       encode_topic_title_data(referenced_node_declaration.title),
-      encode_is_reference_data(true)
+      encode_is_reference_data(true),
+      encode_grid_location_data(
+        (() => {
+          let _pipe = element_line_number;
+          return to_string(_pipe);
+        })(),
+        (() => {
+          let _pipe = element_column_number;
+          return to_string(_pipe);
+        })()
+      ),
+      on_mouse_enter(
+        new UserHoveredDiscussionEntry(
+          element_line_number,
+          element_column_number,
+          new Some(referenced_node_id),
+          referenced_node_declaration.topic_id,
+          referenced_node_declaration.title,
+          false
+        )
+      ),
+      on_mouse_leave(new UserUnhoveredDiscussionEntry()),
+      on_click(
+        new UserClickedDiscussionEntry(
+          element_line_number,
+          element_column_number
+        )
+      )
     ]),
-    toList([text2(tokens)])
+    toList([
+      text2(tokens),
+      discussion_view(
+        discussion,
+        element_line_number,
+        element_column_number,
+        selected_discussion
+      )
+    ])
   );
 }
-function preprocessed_nodes_view(loc) {
+function preprocessed_nodes_view(loc, discussion, selected_discussion) {
   let _pipe = map_fold(
     loc.elements,
     0,
@@ -5300,8 +7968,10 @@ function preprocessed_nodes_view(loc) {
             node_id,
             node_declaration,
             tokens,
-            loc.line_number_text,
-            to_string(new_column_index)
+            discussion,
+            loc.line_number,
+            new_column_index,
+            selected_discussion
           )
         ];
       } else if (element2 instanceof PreProcessedReference) {
@@ -5315,8 +7985,10 @@ function preprocessed_nodes_view(loc) {
             referenced_node_id,
             referenced_node_declaration,
             tokens,
-            loc.line_number_text,
-            to_string(new_column_index)
+            discussion,
+            loc.line_number,
+            new_column_index,
+            selected_discussion
           )
         ];
       } else if (element2 instanceof PreProcessedNode) {
@@ -5420,17 +8092,17 @@ function get_notes(discussion, leading_spaces, topic_id) {
         );
       }
     );
-    let _pipe$2 = map(
+    let _pipe$2 = map2(
       _pipe$1,
       (_capture) => {
         return split_info_note(_capture, leading_spaces);
       }
     );
-    return flatten(_pipe$2);
+    return flatten2(_pipe$2);
   })();
   return [parent_notes, info_notes];
 }
-function line_container_view(discussion, loc, line_topic_id) {
+function line_container_view(discussion, loc, line_topic_id, line_topic_title, selected_discussion) {
   let $ = get_notes(discussion, loc.leading_spaces, line_topic_id);
   let parent_notes = $[0];
   let info_notes = $[1];
@@ -5453,9 +8125,7 @@ function line_container_view(discussion, loc, line_topic_id) {
               toList([class$("loc flex")]),
               toList([
                 span(
-                  toList([
-                    class$("line-number code-extras relative italic")
-                  ]),
+                  toList([class$("line-number code-extras italic")]),
                   toList([
                     text2(loc.line_number_text),
                     span(
@@ -5496,18 +8166,24 @@ function line_container_view(discussion, loc, line_topic_id) {
             toList([class$("line-number code-extras")]),
             toList([text2(loc.line_number_text)])
           ),
-          fragment(preprocessed_nodes_view(loc)),
+          fragment(
+            preprocessed_nodes_view(loc, discussion, selected_discussion)
+          ),
           inline_comment_preview_view(
             parent_notes,
-            loc.line_number_text,
-            to_string(column_count)
+            line_topic_id,
+            line_topic_title,
+            loc.line_number,
+            column_count,
+            selected_discussion,
+            discussion
           )
         ])
       )
     ])
   );
 }
-function loc_view(discussion, loc) {
+function loc_view(discussion, loc, selected_discussion) {
   let $ = loc.significance;
   if ($ instanceof EmptyLine) {
     return p(
@@ -5517,17 +8193,30 @@ function loc_view(discussion, loc) {
           toList([class$("line-number code-extras")]),
           toList([text2(loc.line_number_text)])
         ),
-        preprocessed_nodes_view(loc)
+        preprocessed_nodes_view(loc, discussion, selected_discussion)
       )
     );
   } else if ($ instanceof SingleDeclarationLine) {
-    let decl_topic_id = $.topic_id;
-    return line_container_view(discussion, loc, decl_topic_id);
+    let topic_id = $.topic_id;
+    let topic_title = $.topic_title;
+    return line_container_view(
+      discussion,
+      loc,
+      topic_id,
+      topic_title,
+      selected_discussion
+    );
   } else {
-    return line_container_view(discussion, loc, loc.line_id);
+    return line_container_view(
+      discussion,
+      loc,
+      loc.line_id,
+      loc.line_tag,
+      selected_discussion
+    );
   }
 }
-function view(preprocessed_source, discussion) {
+function view2(preprocessed_source, discussion, selected_discussion) {
   return div(
     toList([
       id("audit-page"),
@@ -5541,10 +8230,10 @@ function view(preprocessed_source, discussion) {
         })()
       )
     ]),
-    map(
+    map2(
       preprocessed_source,
       (_capture) => {
-        return loc_view(discussion, _capture);
+        return loc_view(discussion, _capture, selected_discussion);
       }
     )
   );
@@ -5556,9 +8245,9 @@ function is_windows() {
 }
 
 // build/dev/javascript/filepath/filepath.mjs
-function split_unix(path) {
+function split_unix(path2) {
   let _pipe = (() => {
-    let $ = split2(path, "/");
+    let $ = split2(path2, "/");
     if ($.hasLength(1) && $.head === "") {
       return toList([]);
     } else if ($.atLeastLength(1) && $.head === "") {
@@ -5569,28 +8258,28 @@ function split_unix(path) {
       return rest;
     }
   })();
-  return filter(_pipe, (x) => {
-    return x !== "";
+  return filter(_pipe, (x2) => {
+    return x2 !== "";
   });
 }
-function pop_windows_drive_specifier(path) {
-  let start3 = slice(path, 0, 3);
+function pop_windows_drive_specifier(path2) {
+  let start3 = slice(path2, 0, 3);
   let codepoints = to_utf_codepoints(start3);
-  let $ = map(codepoints, utf_codepoint_to_int);
+  let $ = map2(codepoints, utf_codepoint_to_int);
   if ($.hasLength(3) && (($.tail.tail.head === 47 || $.tail.tail.head === 92) && $.tail.head === 58 && ($.head >= 65 && $.head <= 90 || $.head >= 97 && $.head <= 122))) {
     let drive = $.head;
     let colon = $.tail.head;
     let slash = $.tail.tail.head;
-    let drive_letter = slice(path, 0, 1);
+    let drive_letter = slice(path2, 0, 1);
     let drive$1 = lowercase(drive_letter) + ":/";
-    let path$1 = drop_start(path, 3);
+    let path$1 = drop_start(path2, 3);
     return [new Some(drive$1), path$1];
   } else {
-    return [new None(), path];
+    return [new None(), path2];
   }
 }
-function split_windows(path) {
-  let $ = pop_windows_drive_specifier(path);
+function split_windows(path2) {
+  let $ = pop_windows_drive_specifier(path2);
   let drive = $[0];
   let path$1 = $[1];
   let segments = (() => {
@@ -5620,20 +8309,20 @@ function split_windows(path) {
     return rest;
   }
 }
-function split4(path) {
+function split4(path2) {
   let $ = is_windows();
   if ($) {
-    return split_windows(path);
+    return split_windows(path2);
   } else {
-    return split_unix(path);
+    return split_unix(path2);
   }
 }
-function base_name(path) {
+function base_name(path2) {
   return guard(
-    path === "/",
+    path2 === "/",
     "",
     () => {
-      let _pipe = path;
+      let _pipe = path2;
       let _pipe$1 = split4(_pipe);
       let _pipe$2 = last(_pipe$1);
       return unwrap2(_pipe$2, "");
@@ -5668,7 +8357,7 @@ function sub_file_tree_view(dir_name, current_file_path, all_audit_files) {
           id(dir_name + "-dirs"),
           class$("nested-tree-items")
         ]),
-        map(
+        map2(
           subdirs,
           (_capture) => {
             return sub_file_tree_view(
@@ -5684,7 +8373,7 @@ function sub_file_tree_view(dir_name, current_file_path, all_audit_files) {
           id(dir_name + "-files"),
           class$("nested-tree-items")
         ]),
-        map(
+        map2(
           direct_files,
           (file) => {
             return a(
@@ -5729,7 +8418,7 @@ function audit_file_tree_view(grouped_files, audit_name, current_file_path) {
     toList([
       div(
         toList([id(audit_name + "-files")]),
-        map(
+        map2(
           direct_files,
           (file) => {
             return a(
@@ -5761,7 +8450,7 @@ function audit_file_tree_view(grouped_files, audit_name, current_file_path) {
       ),
       div(
         toList([id(audit_name + "-dirs")]),
-        map(
+        map2(
           subdirs,
           (_capture) => {
             return sub_file_tree_view(
@@ -5775,7 +8464,7 @@ function audit_file_tree_view(grouped_files, audit_name, current_file_path) {
     ])
   );
 }
-function view2(file_contents, side_panel, grouped_files, audit_name, current_file_path) {
+function view3(file_contents, side_panel, grouped_files, audit_name, current_file_path) {
   return div(
     toList([id("tree-grid")]),
     toList([
@@ -5816,10 +8505,10 @@ function view2(file_contents, side_panel, grouped_files, audit_name, current_fil
     ])
   );
 }
-function get_all_parents(path) {
-  let _pipe = path;
+function get_all_parents(path2) {
+  let _pipe = path2;
   let _pipe$1 = split2(_pipe, "/");
-  let _pipe$2 = take(_pipe$1, length(split2(path, "/")) - 1);
+  let _pipe$2 = take(_pipe$1, length(split2(path2, "/")) - 1);
   let _pipe$3 = index_fold(
     _pipe$2,
     toList([]),
@@ -5872,7 +8561,7 @@ function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
     return unique(_pipe$12);
   })();
   let _pipe = parents;
-  let _pipe$1 = map(
+  let _pipe$1 = map2(
     _pipe,
     (parent) => {
       let parent_prefix = parent + "/";
@@ -5880,8 +8569,8 @@ function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
         let _pipe$12 = in_scope_files$2;
         return filter(
           _pipe$12,
-          (path) => {
-            return starts_with(path, parent_prefix);
+          (path2) => {
+            return starts_with(path2, parent_prefix);
           }
         );
       })();
@@ -5889,8 +8578,8 @@ function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
         let _pipe$12 = items;
         return partition(
           _pipe$12,
-          (path) => {
-            let relative = replace(path, parent_prefix, "");
+          (path2) => {
+            let relative = replace(path2, parent_prefix, "");
             return contains_string(relative, "/");
           }
         );
@@ -5899,7 +8588,7 @@ function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
       let direct_files = $[1];
       let subdirs = (() => {
         let _pipe$12 = dirs;
-        let _pipe$2 = map(
+        let _pipe$2 = map2(
           _pipe$12,
           (dir) => {
             let relative = replace(dir, parent_prefix, "");
@@ -5920,14 +8609,17 @@ function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
 }
 
 // build/dev/javascript/o11a_client/o11a_client.mjs
-var Model2 = class extends CustomType {
-  constructor(route, file_tree, audit_metadata, source_files, discussions) {
+var Model3 = class extends CustomType {
+  constructor(route, file_tree, audit_metadata, source_files, discussions, discussion_references, selected_discussion, selected_node_id) {
     super();
     this.route = route;
     this.file_tree = file_tree;
     this.audit_metadata = audit_metadata;
     this.source_files = source_files;
     this.discussions = discussions;
+    this.discussion_references = discussion_references;
+    this.selected_discussion = selected_discussion;
+    this.selected_node_id = selected_node_id;
   }
 };
 var O11aHomeRoute = class extends CustomType {
@@ -5965,6 +8657,35 @@ var ClientFetchedSourceFile = class extends CustomType {
     this.source_file = source_file;
   }
 };
+var UserHoveredDiscussionEntry2 = class extends CustomType {
+  constructor(line_number, column_number, node_id, topic_id, topic_title, is_reference) {
+    super();
+    this.line_number = line_number;
+    this.column_number = column_number;
+    this.node_id = node_id;
+    this.topic_id = topic_id;
+    this.topic_title = topic_title;
+    this.is_reference = is_reference;
+  }
+};
+var UserUnhoveredDiscussionEntry2 = class extends CustomType {
+};
+var UserClickedDiscussionEntry2 = class extends CustomType {
+  constructor(line_number, column_number) {
+    super();
+    this.line_number = line_number;
+    this.column_number = column_number;
+  }
+};
+var UserUpdatedDiscussion2 = class extends CustomType {
+  constructor(msg, line_number, column_number, update3) {
+    super();
+    this.msg = msg;
+    this.line_number = line_number;
+    this.column_number = column_number;
+    this.update = update3;
+  }
+};
 function parse_route(uri) {
   let $ = path_segments(uri.path);
   if ($.hasLength(0)) {
@@ -5999,7 +8720,7 @@ function file_tree_from_route(route, audit_metadata) {
     let audit_name = route.audit_name;
     let in_scope_files = (() => {
       let _pipe = map_get(audit_metadata, audit_name);
-      let _pipe$1 = map2(
+      let _pipe$1 = map3(
         _pipe,
         (audit_metadata2) => {
           if (audit_metadata2.isOk()) {
@@ -6022,7 +8743,7 @@ function file_tree_from_route(route, audit_metadata) {
     let current_file_path = route.page_path;
     let in_scope_files = (() => {
       let _pipe = map_get(audit_metadata, audit_name);
-      let _pipe$1 = map2(
+      let _pipe$1 = map3(
         _pipe,
         (audit_metadata2) => {
           if (audit_metadata2.isOk()) {
@@ -6091,7 +8812,7 @@ function route_change_effect(model, route) {
     return none();
   }
 }
-function init3(_) {
+function init4(_) {
   let route = (() => {
     let $ = do_initial_uri();
     if ($.isOk()) {
@@ -6101,12 +8822,15 @@ function init3(_) {
       return new O11aHomeRoute();
     }
   })();
-  let init_model = new Model2(
+  let init_model = new Model3(
     route,
     new_map(),
     new_map(),
     new_map(),
-    new_map()
+    new_map(),
+    new_map(),
+    new None(),
+    new None()
   );
   return [
     init_model,
@@ -6118,18 +8842,21 @@ function init3(_) {
     )
   ];
 }
-function update(model, msg) {
+function update2(model, msg) {
   if (msg instanceof OnRouteChange) {
     let route = msg.route;
     return [
       (() => {
         let _record = model;
-        return new Model2(
+        return new Model3(
           route,
           file_tree_from_route(route, model.audit_metadata),
           _record.audit_metadata,
           _record.source_files,
-          _record.discussions
+          _record.discussions,
+          _record.discussion_references,
+          _record.selected_discussion,
+          _record.selected_node_id
         );
       })(),
       route_change_effect(model, route)
@@ -6145,39 +8872,166 @@ function update(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model2(
+        return new Model3(
           _record.route,
           file_tree_from_route(model.route, updated_audit_metadata),
           updated_audit_metadata,
           _record.source_files,
-          _record.discussions
+          _record.discussions,
+          _record.discussion_references,
+          _record.selected_discussion,
+          _record.selected_node_id
         );
       })(),
       none()
     ];
-  } else {
+  } else if (msg instanceof ClientFetchedSourceFile) {
     let page_path = msg.page_path;
     let source_files = msg.source_file;
     return [
       (() => {
         let _record = model;
-        return new Model2(
+        return new Model3(
           _record.route,
           _record.file_tree,
           _record.audit_metadata,
           insert(model.source_files, page_path, source_files),
-          _record.discussions
+          _record.discussions,
+          _record.discussion_references,
+          _record.selected_discussion,
+          _record.selected_node_id
         );
       })(),
       none()
     ];
+  } else if (msg instanceof UserHoveredDiscussionEntry2) {
+    let line_number = msg.line_number;
+    let column_number = msg.column_number;
+    let node_id = msg.node_id;
+    let topic_id = msg.topic_id;
+    let topic_title = msg.topic_title;
+    let is_reference = msg.is_reference;
+    let selected_discussion = (() => {
+      let _pipe = map_get(
+        model.discussion_references,
+        [line_number, column_number]
+      );
+      let _pipe$1 = map3(
+        _pipe,
+        (var0) => {
+          return new Some(var0);
+        }
+      );
+      return unwrap2(
+        _pipe$1,
+        new Some(
+          new DiscussionReference(
+            line_number,
+            column_number,
+            init3(
+              line_number,
+              column_number,
+              topic_id,
+              topic_title,
+              is_reference
+            )
+          )
+        )
+      );
+    })();
+    return [
+      (() => {
+        let _record = model;
+        return new Model3(
+          _record.route,
+          _record.file_tree,
+          _record.audit_metadata,
+          _record.source_files,
+          _record.discussions,
+          _record.discussion_references,
+          selected_discussion,
+          node_id
+        );
+      })(),
+      none()
+    ];
+  } else if (msg instanceof UserUnhoveredDiscussionEntry2) {
+    return [
+      (() => {
+        let _record = model;
+        return new Model3(
+          _record.route,
+          _record.file_tree,
+          _record.audit_metadata,
+          _record.source_files,
+          _record.discussions,
+          _record.discussion_references,
+          new None(),
+          new None()
+        );
+      })(),
+      none()
+    ];
+  } else if (msg instanceof UserClickedDiscussionEntry2) {
+    let line_number = msg.line_number;
+    let column_number = msg.column_number;
+    echo2("Clicked discussion entry", "src/o11a_client.gleam", 258);
+    return [model, none()];
+  } else {
+    let msg$1 = msg.msg;
+    let line_number = msg.line_number;
+    let column_number = msg.column_number;
+    let update$1 = msg.update;
+    throw makeError(
+      "todo",
+      "o11a_client",
+      263,
+      "update",
+      "`todo` expression evaluated. This code has not yet been implemented.",
+      {}
+    );
   }
 }
-function view3(model) {
+function map_audit_page_msg(msg) {
+  if (msg instanceof UserHoveredDiscussionEntry) {
+    let line_number = msg.line_number;
+    let column_number = msg.column_number;
+    let node_id = msg.node_id;
+    let topic_id = msg.topic_id;
+    let topic_title = msg.topic_title;
+    let is_reference = msg.is_reference;
+    return new UserHoveredDiscussionEntry2(
+      line_number,
+      column_number,
+      node_id,
+      topic_id,
+      topic_title,
+      is_reference
+    );
+  } else if (msg instanceof UserUnhoveredDiscussionEntry) {
+    return new UserUnhoveredDiscussionEntry2();
+  } else if (msg instanceof UserClickedDiscussionEntry) {
+    let line_number = msg.line_number;
+    let column_number = msg.column_number;
+    return new UserClickedDiscussionEntry2(line_number, column_number);
+  } else {
+    let msg$1 = msg.msg;
+    let line_number = msg.line_number;
+    let column_number = msg.column_number;
+    let update$1 = msg.update;
+    return new UserUpdatedDiscussion2(
+      msg$1,
+      line_number,
+      column_number,
+      update$1
+    );
+  }
+}
+function view4(model) {
   let $ = model.route;
   if ($ instanceof AuditDashboardRoute) {
     let audit_name = $.audit_name;
-    return view2(
+    return view3(
       p(toList([]), toList([text2("Dashboard")])),
       new None(),
       model.file_tree,
@@ -6187,29 +9041,38 @@ function view3(model) {
   } else if ($ instanceof AuditPageRoute) {
     let audit_name = $.audit_name;
     let page_path = $.page_path;
-    return view2(
-      view(
-        (() => {
-          let _pipe = map_get(model.source_files, page_path);
-          let _pipe$1 = map2(
-            _pipe,
-            (source_files) => {
-              if (source_files.isOk()) {
-                let source_files$1 = source_files[0];
-                return source_files$1;
-              } else {
-                return toList([]);
-              }
-            }
-          );
-          return unwrap2(_pipe$1, toList([]));
-        })(),
-        new_map()
-      ),
-      new Some(p(toList([]), toList([text2("Side Panel")]))),
-      model.file_tree,
-      audit_name,
-      page_path
+    return div(
+      toList([]),
+      toList([
+        view3(
+          (() => {
+            let _pipe = view2(
+              (() => {
+                let _pipe2 = map_get(model.source_files, page_path);
+                let _pipe$1 = map3(
+                  _pipe2,
+                  (source_files) => {
+                    if (source_files.isOk()) {
+                      let source_files$1 = source_files[0];
+                      return source_files$1;
+                    } else {
+                      return toList([]);
+                    }
+                  }
+                );
+                return unwrap2(_pipe$1, toList([]));
+              })(),
+              new_map(),
+              model.selected_discussion
+            );
+            return map6(_pipe, map_audit_page_msg);
+          })(),
+          new None(),
+          model.file_tree,
+          audit_name,
+          page_path
+        )
+      ])
     );
   } else {
     return p(toList([]), toList([text2("Home")]));
@@ -6217,8 +9080,152 @@ function view3(model) {
 }
 function main() {
   console_log("Starting client controller");
-  let _pipe = application(init3, update, view3);
+  let _pipe = application(init4, update2, view4);
   return start2(_pipe, "#app", void 0);
+}
+function echo2(value4, file, line2) {
+  const grey = "\x1B[90m";
+  const reset_color = "\x1B[39m";
+  const file_line = `${file}:${line2}`;
+  const string_value = echo$inspect2(value4);
+  if (typeof process === "object" && process.stderr?.write) {
+    const string5 = `${grey}${file_line}${reset_color}
+${string_value}
+`;
+    process.stderr.write(string5);
+  } else if (typeof Deno === "object") {
+    const string5 = `${grey}${file_line}${reset_color}
+${string_value}
+`;
+    Deno.stderr.writeSync(new TextEncoder().encode(string5));
+  } else {
+    const string5 = `${file_line}
+${string_value}`;
+    console.log(string5);
+  }
+  return value4;
+}
+function echo$inspectString2(str) {
+  let new_str = '"';
+  for (let i = 0; i < str.length; i++) {
+    let char = str[i];
+    if (char == "\n")
+      new_str += "\\n";
+    else if (char == "\r")
+      new_str += "\\r";
+    else if (char == "	")
+      new_str += "\\t";
+    else if (char == "\f")
+      new_str += "\\f";
+    else if (char == "\\")
+      new_str += "\\\\";
+    else if (char == '"')
+      new_str += '\\"';
+    else if (char < " " || char > "~" && char < "\xA0") {
+      new_str += "\\u{" + char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0") + "}";
+    } else {
+      new_str += char;
+    }
+  }
+  new_str += '"';
+  return new_str;
+}
+function echo$inspectDict2(map8) {
+  let body = "dict.from_list([";
+  let first3 = true;
+  let key_value_pairs = [];
+  map8.forEach((value4, key2) => {
+    key_value_pairs.push([key2, value4]);
+  });
+  key_value_pairs.sort();
+  key_value_pairs.forEach(([key2, value4]) => {
+    if (!first3)
+      body = body + ", ";
+    body = body + "#(" + echo$inspect2(key2) + ", " + echo$inspect2(value4) + ")";
+    first3 = false;
+  });
+  return body + "])";
+}
+function echo$inspectCustomType2(record) {
+  const props = Object.keys(record).map((label) => {
+    const value4 = echo$inspect2(record[label]);
+    return isNaN(parseInt(label)) ? `${label}: ${value4}` : value4;
+  }).join(", ");
+  return props ? `${record.constructor.name}(${props})` : record.constructor.name;
+}
+function echo$inspectObject2(v) {
+  const name = Object.getPrototypeOf(v)?.constructor?.name || "Object";
+  const props = [];
+  for (const k of Object.keys(v)) {
+    props.push(`${echo$inspect2(k)}: ${echo$inspect2(v[k])}`);
+  }
+  const body = props.length ? " " + props.join(", ") + " " : "";
+  const head = name === "Object" ? "" : name + " ";
+  return `//js(${head}{${body}})`;
+}
+function echo$inspect2(v) {
+  const t = typeof v;
+  if (v === true)
+    return "True";
+  if (v === false)
+    return "False";
+  if (v === null)
+    return "//js(null)";
+  if (v === void 0)
+    return "Nil";
+  if (t === "string")
+    return echo$inspectString2(v);
+  if (t === "bigint" || t === "number")
+    return v.toString();
+  if (Array.isArray(v))
+    return `#(${v.map(echo$inspect2).join(", ")})`;
+  if (v instanceof List)
+    return `[${v.toArray().map(echo$inspect2).join(", ")}]`;
+  if (v instanceof UtfCodepoint)
+    return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
+  if (v instanceof BitArray)
+    return echo$inspectBitArray2(v);
+  if (v instanceof CustomType)
+    return echo$inspectCustomType2(v);
+  if (echo$isDict2(v))
+    return echo$inspectDict2(v);
+  if (v instanceof Set)
+    return `//js(Set(${[...v].map(echo$inspect2).join(", ")}))`;
+  if (v instanceof RegExp)
+    return `//js(${v})`;
+  if (v instanceof Date)
+    return `//js(Date("${v.toISOString()}"))`;
+  if (v instanceof Function) {
+    const args = [];
+    for (const i of Array(v.length).keys())
+      args.push(String.fromCharCode(i + 97));
+    return `//fn(${args.join(", ")}) { ... }`;
+  }
+  return echo$inspectObject2(v);
+}
+function echo$inspectBitArray2(bitArray) {
+  let endOfAlignedBytes = bitArray.bitOffset + 8 * Math.trunc(bitArray.bitSize / 8);
+  let alignedBytes = bitArraySlice(bitArray, bitArray.bitOffset, endOfAlignedBytes);
+  let remainingUnalignedBits = bitArray.bitSize % 8;
+  if (remainingUnalignedBits > 0) {
+    let remainingBits = bitArraySliceToInt(bitArray, endOfAlignedBytes, bitArray.bitSize, false, false);
+    let alignedBytesArray = Array.from(alignedBytes.rawBuffer);
+    let suffix = `${remainingBits}:size(${remainingUnalignedBits})`;
+    if (alignedBytesArray.length === 0) {
+      return `<<${suffix}>>`;
+    } else {
+      return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}, ${suffix}>>`;
+    }
+  } else {
+    return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}>>`;
+  }
+}
+function echo$isDict2(value4) {
+  try {
+    return value4 instanceof Dict;
+  } catch {
+    return false;
+  }
 }
 
 // build/.lustre/entry.mjs

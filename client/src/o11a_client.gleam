@@ -16,6 +16,7 @@ import o11a/computed_note
 import o11a/preprocessor
 import o11a/ui/audit_page
 import o11a/ui/audit_tree
+import o11a/ui/discussion_overlay
 
 pub fn main() {
   io.println("Starting client controller")
@@ -39,6 +40,12 @@ pub type Model {
       String,
       dict.Dict(String, List(computed_note.ComputedNote)),
     ),
+    discussion_references: dict.Dict(
+      #(Int, Int),
+      audit_page.DiscussionReference,
+    ),
+    selected_discussion: option.Option(audit_page.DiscussionReference),
+    selected_node_id: option.Option(Int),
   )
 }
 
@@ -61,6 +68,9 @@ fn init(_) -> #(Model, Effect(Msg)) {
       audit_metadata: dict.new(),
       source_files: dict.new(),
       discussions: dict.new(),
+      discussion_references: dict.new(),
+      selected_discussion: option.None,
+      selected_node_id: option.None,
     )
 
   #(
@@ -152,6 +162,22 @@ pub type Msg {
       lustre_http.HttpError,
     ),
   )
+  UserHoveredDiscussionEntry(
+    line_number: Int,
+    column_number: Int,
+    node_id: option.Option(Int),
+    topic_id: String,
+    topic_title: String,
+    is_reference: Bool,
+  )
+  UserUnhoveredDiscussionEntry
+  UserClickedDiscussionEntry(line_number: Int, column_number: Int)
+  UserUpdatedDiscussion(
+    msg: discussion_overlay.Msg,
+    line_number: Int,
+    column_number: Int,
+    update: #(discussion_overlay.Model, effect.Effect(Msg)),
+  )
 }
 
 fn update(model, msg: Msg) -> #(Model, Effect(Msg)) {
@@ -185,6 +211,59 @@ fn update(model, msg: Msg) -> #(Model, Effect(Msg)) {
       ),
       effect.none(),
     )
+
+    UserHoveredDiscussionEntry(
+      line_number:,
+      column_number:,
+      node_id:,
+      topic_id:,
+      topic_title:,
+      is_reference:,
+    ) -> {
+      let selected_discussion =
+        dict.get(model.discussion_references, #(line_number, column_number))
+        |> result.map(option.Some)
+        |> result.unwrap(
+          option.Some(audit_page.DiscussionReference(
+            line_number:,
+            column_number:,
+            model: discussion_overlay.init(
+              line_number:,
+              column_number:,
+              topic_id:,
+              topic_title:,
+              is_reference:,
+            ),
+          )),
+        )
+
+      #(
+        Model(..model, selected_discussion:, selected_node_id: node_id),
+        effect.none(),
+      )
+    }
+
+    UserUnhoveredDiscussionEntry -> {
+      #(
+        Model(
+          ..model,
+          selected_discussion: option.None,
+          selected_node_id: option.None,
+        ),
+        effect.none(),
+      )
+    }
+
+    UserClickedDiscussionEntry(line_number:, column_number:) -> {
+      echo "Clicked discussion entry"
+      #(model, effect.none())
+    }
+
+    UserUpdatedDiscussion(msg:, line_number:, column_number:, update:) -> {
+      todo
+      // let #(model, effect) = update(model, msg)
+      // #(model, effect)*
+    }
   }
 }
 
@@ -240,24 +319,58 @@ fn view(model: Model) -> Element(Msg) {
       )
 
     AuditPageRoute(audit_name:, page_path:) ->
-      audit_tree.view(
-        audit_page.view(
-          preprocessed_source: dict.get(model.source_files, page_path)
-            |> result.map(fn(source_files) {
-              case source_files {
-                Ok(source_files) -> source_files
-                Error(..) -> []
-              }
-            })
-            |> result.unwrap([]),
-          discussion: dict.new(),
+      html.div([], [
+        audit_tree.view(
+          audit_page.view(
+            preprocessed_source: dict.get(model.source_files, page_path)
+              |> result.map(fn(source_files) {
+                case source_files {
+                  Ok(source_files) -> source_files
+                  Error(..) -> []
+                }
+              })
+              |> result.unwrap([]),
+            discussion: dict.new(),
+            selected_discussion: model.selected_discussion,
+          )
+            |> element.map(map_audit_page_msg),
+          option.None,
+          model.file_tree,
+          audit_name,
+          page_path,
         ),
-        option.Some(html.p([], [html.text("Side Panel")])),
-        model.file_tree,
-        audit_name,
-        page_path,
-      )
+      ])
 
     O11aHomeRoute -> html.p([], [html.text("Home")])
+  }
+}
+
+fn map_audit_page_msg(msg) {
+  case msg {
+    audit_page.UserHoveredDiscussionEntry(
+      line_number:,
+      column_number:,
+      node_id:,
+      topic_id:,
+      topic_title:,
+      is_reference:,
+    ) ->
+      UserHoveredDiscussionEntry(
+        line_number:,
+        column_number:,
+        node_id:,
+        topic_id:,
+        topic_title:,
+        is_reference:,
+      )
+    audit_page.UserUnhoveredDiscussionEntry -> UserUnhoveredDiscussionEntry
+    audit_page.UserClickedDiscussionEntry(line_number:, column_number:) ->
+      UserClickedDiscussionEntry(line_number:, column_number:)
+    audit_page.UserUpdatedDiscussion(
+      msg:,
+      line_number:,
+      column_number:,
+      update:,
+    ) -> UserUpdatedDiscussion(msg:, line_number:, column_number:, update:)
   }
 }

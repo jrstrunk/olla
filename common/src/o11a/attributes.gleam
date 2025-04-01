@@ -8,13 +8,6 @@ pub fn encode_grid_location_data(
   attribute.class("dl" <> line_number <> " dc" <> column_number)
 }
 
-pub fn grid_location_selector(
-  line_number line_number,
-  column_number column_number,
-) {
-  ".dl" <> int.to_string(line_number) <> ".dc" <> int.to_string(column_number)
-}
-
 pub fn grid_line_selector(line_number line_number) {
   ".dl" <> int.to_string(line_number)
 }

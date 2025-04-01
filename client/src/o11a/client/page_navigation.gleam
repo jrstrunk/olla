@@ -1,7 +1,6 @@
 import gleam/int
 import gleam/io
 import gleam/result
-import o11a/attributes
 import o11a/client/attributes as client_attributes
 import o11a/client/selectors
 import o11a/client/storage
@@ -193,10 +192,7 @@ fn focus_line_discussion(
   line_number line_number: Int,
   column_number column_number: Int,
 ) {
-  document.query_selector(attributes.grid_location_selector(
-    line_number:,
-    column_number:,
-  ))
+  selectors.discussion_entry(line_number:, column_number:)
   |> result.replace_error(snag.new("Failed to find line discussion to focus"))
   |> result.map(element.focus)
 }

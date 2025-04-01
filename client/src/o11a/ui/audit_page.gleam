@@ -9,6 +9,7 @@ import gleam/result
 import gleam/string
 import lib/enumerate
 import lustre/attribute
+import lustre/effect
 import lustre/element
 import lustre/element/html
 import lustre/event
@@ -19,6 +20,15 @@ import o11a/computed_note
 import o11a/events
 import o11a/note
 import o11a/preprocessor
+import o11a/ui/discussion_overlay
+
+pub type DiscussionReference {
+  DiscussionReference(
+    line_number: Int,
+    column_number: Int,
+    model: discussion_overlay.Model,
+  )
+}
 
 pub type Model {
   Model(
@@ -83,23 +93,44 @@ pub type Model {
 //   }
 // }
 
+pub type Msg(msg) {
+  UserHoveredDiscussionEntry(
+    line_number: Int,
+    column_number: Int,
+    node_id: option.Option(Int),
+    topic_id: String,
+    topic_title: String,
+    is_reference: Bool,
+  )
+  UserUnhoveredDiscussionEntry
+  UserClickedDiscussionEntry(line_number: Int, column_number: Int)
+  UserUpdatedDiscussion(
+    msg: discussion_overlay.Msg,
+    line_number: Int,
+    column_number: Int,
+    update: #(discussion_overlay.Model, effect.Effect(msg)),
+  )
+}
+
 pub fn view(
   preprocessed_source preprocessed_source: List(preprocessor.PreProcessedLine),
   discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
-) -> element.Element(msg) {
+  selected_discussion selected_discussion: option.Option(DiscussionReference),
+) {
   html.div(
     [
       attribute.id("audit-page"),
       attribute.class("code-snippet"),
       attribute.data("lc", preprocessed_source |> list.length |> int.to_string),
     ],
-    list.map(preprocessed_source, loc_view(discussion, _)),
+    list.map(preprocessed_source, loc_view(discussion, _, selected_discussion:)),
   )
 }
 
 fn loc_view(
   discussion: dict.Dict(String, List(computed_note.ComputedNote)),
   loc: preprocessor.PreProcessedLine,
+  selected_discussion selected_discussion: option.Option(DiscussionReference),
 ) {
   case loc.significance {
     preprocessor.EmptyLine -> {
@@ -107,15 +138,27 @@ fn loc_view(
         html.span([attribute.class("line-number code-extras")], [
           html.text(loc.line_number_text),
         ]),
-        ..preprocessed_nodes_view(loc)
+        ..preprocessed_nodes_view(loc, selected_discussion:, discussion:)
       ])
     }
 
-    preprocessor.SingleDeclarationLine(topic_id: decl_topic_id) ->
-      line_container_view(discussion:, loc:, line_topic_id: decl_topic_id)
+    preprocessor.SingleDeclarationLine(topic_id:, topic_title:) ->
+      line_container_view(
+        discussion:,
+        loc:,
+        line_topic_id: topic_id,
+        line_topic_title: topic_title,
+        selected_discussion:,
+      )
 
     preprocessor.NonEmptyLine ->
-      line_container_view(discussion:, loc:, line_topic_id: loc.line_id)
+      line_container_view(
+        discussion:,
+        loc:,
+        line_topic_id: loc.line_id,
+        line_topic_title: loc.line_tag,
+        selected_discussion:,
+      )
   }
 }
 
@@ -123,6 +166,8 @@ fn line_container_view(
   discussion discussion,
   loc loc: preprocessor.PreProcessedLine,
   line_topic_id line_topic_id: String,
+  line_topic_title line_topic_title: String,
+  selected_discussion selected_discussion: option.Option(DiscussionReference),
 ) {
   let #(parent_notes, info_notes) =
     get_notes(discussion, loc.leading_spaces, line_topic_id)
@@ -141,20 +186,17 @@ fn line_container_view(
 
         let child =
           html.p([attribute.class("loc flex")], [
-            html.span(
-              [attribute.class("line-number code-extras relative italic")],
-              [
-                html.text(loc.line_number_text),
-                html.span(
-                  [
-                    attribute.class(
-                      "absolute code-extras pl-[.1rem] pt-[.15rem] text-[.9rem]",
-                    ),
-                  ],
-                  [html.text(enumerate.translate_number_to_letter(index + 1))],
-                ),
-              ],
-            ),
+            html.span([attribute.class("line-number code-extras italic")], [
+              html.text(loc.line_number_text),
+              html.span(
+                [
+                  attribute.class(
+                    "absolute code-extras pl-[.1rem] pt-[.15rem] text-[.9rem]",
+                  ),
+                ],
+                [html.text(enumerate.translate_number_to_letter(index + 1))],
+              ),
+            ]),
             html.span([attribute.class("comment italic")], [
               html.text(
                 list.repeat(" ", loc.leading_spaces) |> string.join("")
@@ -169,11 +211,19 @@ fn line_container_view(
         html.span([attribute.class("line-number code-extras")], [
           html.text(loc.line_number_text),
         ]),
-        element.fragment(preprocessed_nodes_view(loc)),
+        element.fragment(preprocessed_nodes_view(
+          loc,
+          selected_discussion:,
+          discussion:,
+        )),
         inline_comment_preview_view(
           parent_notes,
-          loc.line_number_text,
-          int.to_string(column_count),
+          topic_id: line_topic_id,
+          topic_title: line_topic_title,
+          element_line_number: loc.line_number,
+          element_column_number: column_count,
+          selected_discussion:,
+          discussion:,
         ),
       ]),
     ],
@@ -182,8 +232,12 @@ fn line_container_view(
 
 fn inline_comment_preview_view(
   parent_notes: List(computed_note.ComputedNote),
-  line_number,
-  column_number,
+  topic_id topic_id: String,
+  topic_title topic_title: String,
+  element_line_number element_line_number,
+  element_column_number element_column_number,
+  selected_discussion selected_discussion: option.Option(DiscussionReference),
+  discussion discussion,
 ) {
   let note_result =
     list.reverse(parent_notes)
@@ -194,36 +248,86 @@ fn inline_comment_preview_view(
       html.span(
         [
           attribute.class(
-            "inline-comment relative font-code code-extras font-code fade-in",
+            "inline-comment font-code code-extras font-code fade-in relative",
           ),
           attribute.class("comment-preview"),
           attribute.class(classes.discussion_entry),
           attribute.attribute("tabindex", "0"),
-          attributes.encode_grid_location_data(line_number, column_number),
+          attributes.encode_grid_location_data(
+            element_line_number |> int.to_string,
+            element_column_number |> int.to_string,
+          ),
+          event.on_mouse_enter(UserHoveredDiscussionEntry(
+            line_number: element_line_number,
+            column_number: element_column_number,
+            node_id: option.None,
+            topic_id:,
+            topic_title:,
+            is_reference: False,
+          )),
+          event.on_mouse_leave(UserUnhoveredDiscussionEntry),
+          event.on_click(UserClickedDiscussionEntry(
+            line_number: element_line_number,
+            column_number: element_column_number,
+          )),
         ],
         [
           html.text(case string.length(note.message) > 40 {
             True -> note.message |> string.slice(0, length: 37) <> "..."
             False -> note.message |> string.slice(0, length: 40)
           }),
+          discussion_view(
+            element_line_number:,
+            element_column_number:,
+            selected_discussion:,
+            discussion:,
+          ),
         ],
       )
 
     Error(Nil) ->
       html.span(
         [
-          attribute.class("inline-comment relative font-code code-extras"),
+          attribute.class("inline-comment font-code code-extras relative"),
           attribute.class("new-thread-preview"),
           attribute.class(classes.discussion_entry),
           attribute.attribute("tabindex", "0"),
-          attributes.encode_grid_location_data(line_number, column_number),
+          attributes.encode_grid_location_data(
+            element_line_number |> int.to_string,
+            element_column_number |> int.to_string,
+          ),
+          event.on_mouse_enter(UserHoveredDiscussionEntry(
+            line_number: element_line_number,
+            column_number: element_column_number,
+            node_id: option.None,
+            topic_id:,
+            topic_title:,
+            is_reference: False,
+          )),
+          event.on_mouse_leave(UserUnhoveredDiscussionEntry),
+          event.on_click(UserClickedDiscussionEntry(
+            line_number: element_line_number,
+            column_number: element_column_number,
+          )),
         ],
-        [html.text("Start new thread")],
+        [
+          html.text("Start new thread"),
+          discussion_view(
+            element_line_number:,
+            element_column_number:,
+            selected_discussion:,
+            discussion:,
+          ),
+        ],
       )
   }
 }
 
-fn preprocessed_nodes_view(loc: preprocessor.PreProcessedLine) {
+fn preprocessed_nodes_view(
+  loc: preprocessor.PreProcessedLine,
+  discussion discussion,
+  selected_discussion selected_discussion: option.Option(DiscussionReference),
+) {
   list.map_fold(loc.elements, 0, fn(index, element) {
     case element {
       preprocessor.PreProcessedDeclaration(node_id:, node_declaration:, tokens:) -> {
@@ -234,8 +338,10 @@ fn preprocessed_nodes_view(loc: preprocessor.PreProcessedLine) {
             node_id,
             node_declaration,
             tokens,
-            loc.line_number_text,
-            int.to_string(new_column_index),
+            element_line_number: loc.line_number,
+            element_column_number: new_column_index,
+            selected_discussion:,
+            discussion:,
           ),
         )
       }
@@ -252,8 +358,10 @@ fn preprocessed_nodes_view(loc: preprocessor.PreProcessedLine) {
             referenced_node_id,
             referenced_node_declaration,
             tokens,
-            loc.line_number_text,
-            int.to_string(new_column_index),
+            element_line_number: loc.line_number,
+            element_column_number: new_column_index,
+            selected_discussion:,
+            discussion:,
           ),
         )
       }
@@ -275,8 +383,10 @@ fn declaration_node_view(
   node_id,
   node_declaration: preprocessor.NodeDeclaration,
   tokens tokens: String,
-  line_number line_number,
-  column_number column_number,
+  discussion discussion,
+  element_line_number element_line_number,
+  element_column_number element_column_number,
+  selected_discussion selected_discussion: option.Option(DiscussionReference),
 ) {
   html.span(
     [
@@ -284,16 +394,42 @@ fn declaration_node_view(
       attribute.class(preprocessor.node_declaration_kind_to_string(
         node_declaration.kind,
       )),
-      attribute.class("declaration-preview N" <> int.to_string(node_id)),
+      attribute.class(
+        "declaration-preview relative N" <> int.to_string(node_id),
+      ),
       attribute.class(classes.discussion_entry),
       attribute.class(classes.discussion_entry_hover),
       attribute.attribute("tabindex", "0"),
-      attributes.encode_grid_location_data(line_number, column_number),
       attributes.encode_topic_id_data(node_declaration.topic_id),
       attributes.encode_topic_title_data(node_declaration.title),
       attributes.encode_is_reference_data(False),
+      attributes.encode_grid_location_data(
+        element_line_number |> int.to_string,
+        element_column_number |> int.to_string,
+      ),
+      event.on_mouse_enter(UserHoveredDiscussionEntry(
+        line_number: element_line_number,
+        column_number: element_column_number,
+        node_id: option.Some(node_id),
+        topic_id: node_declaration.topic_id,
+        topic_title: node_declaration.title,
+        is_reference: False,
+      )),
+      event.on_mouse_leave(UserUnhoveredDiscussionEntry),
+      event.on_click(UserClickedDiscussionEntry(
+        line_number: element_line_number,
+        column_number: element_column_number,
+      )),
     ],
-    [html.text(tokens)],
+    [
+      html.text(tokens),
+      discussion_view(
+        element_line_number:,
+        element_column_number:,
+        selected_discussion:,
+        discussion:,
+      ),
+    ],
   )
 }
 
@@ -301,8 +437,10 @@ fn reference_node_view(
   referenced_node_id: Int,
   referenced_node_declaration: preprocessor.NodeDeclaration,
   tokens: String,
-  line_number line_number,
-  column_number column_number,
+  discussion discussion,
+  element_line_number element_line_number,
+  element_column_number element_column_number,
+  selected_discussion selected_discussion: option.Option(DiscussionReference),
 ) {
   html.span(
     [
@@ -310,17 +448,71 @@ fn reference_node_view(
         referenced_node_declaration.kind,
       )),
       attribute.class(
-        "reference-preview N" <> int.to_string(referenced_node_id),
+        "reference-preview relative N" <> int.to_string(referenced_node_id),
       ),
       attribute.class(classes.discussion_entry),
       attribute.class(classes.discussion_entry_hover),
       attribute.attribute("tabindex", "0"),
-      attributes.encode_grid_location_data(line_number, column_number),
       attributes.encode_topic_id_data(referenced_node_declaration.topic_id),
       attributes.encode_topic_title_data(referenced_node_declaration.title),
       attributes.encode_is_reference_data(True),
+      attributes.encode_grid_location_data(
+        element_line_number |> int.to_string,
+        element_column_number |> int.to_string,
+      ),
+      event.on_mouse_enter(UserHoveredDiscussionEntry(
+        line_number: element_line_number,
+        column_number: element_column_number,
+        node_id: option.Some(referenced_node_id),
+        topic_id: referenced_node_declaration.topic_id,
+        topic_title: referenced_node_declaration.title,
+        is_reference: False,
+      )),
+      event.on_mouse_leave(UserUnhoveredDiscussionEntry),
+      event.on_click(UserClickedDiscussionEntry(
+        line_number: element_line_number,
+        column_number: element_column_number,
+      )),
     ],
-    [html.text(tokens)],
+    [
+      html.text(tokens),
+      discussion_view(
+        discussion:,
+        element_line_number:,
+        element_column_number:,
+        selected_discussion:,
+      ),
+    ],
+  )
+}
+
+fn discussion_view(
+  discussion discussion,
+  element_line_number element_line_number,
+  element_column_number element_column_number,
+  selected_discussion selected_discussion: option.Option(DiscussionReference),
+) {
+  case selected_discussion {
+    option.Some(selected_discussion) ->
+      case
+        element_line_number == selected_discussion.line_number
+        && element_column_number == selected_discussion.column_number
+      {
+        True ->
+          discussion_overlay.view(selected_discussion.model, discussion)
+          |> element.map(map_discussion_msg(_, selected_discussion))
+        False -> element.fragment([])
+      }
+    option.None -> element.fragment([])
+  }
+}
+
+fn map_discussion_msg(msg, selected_discussion: DiscussionReference) {
+  UserUpdatedDiscussion(
+    msg:,
+    line_number: selected_discussion.line_number,
+    column_number: selected_discussion.column_number,
+    update: discussion_overlay.update(selected_discussion.model, msg),
   )
 }
 

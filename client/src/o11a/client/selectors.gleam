@@ -10,3 +10,9 @@ pub fn non_empty_line(line_number) {
   )
   |> result.replace_error(snag.new("Failed to find non-empty line"))
 }
+
+pub fn discussion_entry(line_number line_number, column_number column_number) {
+  document.query_selector(
+    ".dl" <> int.to_string(line_number) <> ".dc" <> int.to_string(column_number),
+  )
+}

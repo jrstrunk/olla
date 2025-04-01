@@ -234,10 +234,6 @@ line-discussion:focus-within {
   font-style: italic;
 }
 
-.relative {
-  position: relative;
-}
-
 .absolute {
   position: absolute;
 }
