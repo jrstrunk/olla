@@ -40,11 +40,8 @@ pub type Model {
       String,
       dict.Dict(String, List(computed_note.ComputedNote)),
     ),
-    discussion_references: dict.Dict(
-      #(Int, Int),
-      audit_page.DiscussionReference,
-    ),
-    selected_discussion: option.Option(audit_page.DiscussionReference),
+    discussion_overlay_models: dict.Dict(#(Int, Int), discussion_overlay.Model),
+    selected_discussion: option.Option(#(Int, Int)),
     selected_node_id: option.Option(Int),
   )
 }
@@ -68,7 +65,7 @@ fn init(_) -> #(Model, Effect(Msg)) {
       audit_metadata: dict.new(),
       source_files: dict.new(),
       discussions: dict.new(),
-      discussion_references: dict.new(),
+      discussion_overlay_models: dict.new(),
       selected_discussion: option.None,
       selected_node_id: option.None,
     )
@@ -180,7 +177,7 @@ pub type Msg {
   )
 }
 
-fn update(model, msg: Msg) -> #(Model, Effect(Msg)) {
+fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
     OnRouteChange(route:) -> #(
       Model(
@@ -220,25 +217,33 @@ fn update(model, msg: Msg) -> #(Model, Effect(Msg)) {
       topic_title:,
       is_reference:,
     ) -> {
-      let selected_discussion =
-        dict.get(model.discussion_references, #(line_number, column_number))
-        |> result.map(option.Some)
-        |> result.unwrap(
-          option.Some(audit_page.DiscussionReference(
-            line_number:,
-            column_number:,
-            model: discussion_overlay.init(
+      let selected_discussion = #(line_number, column_number)
+
+      let discussion_overlay_models = case
+        dict.get(model.discussion_overlay_models, selected_discussion)
+      {
+        Ok(..) -> model.discussion_overlay_models
+        Error(Nil) ->
+          dict.insert(
+            model.discussion_overlay_models,
+            selected_discussion,
+            discussion_overlay.init(
               line_number:,
               column_number:,
               topic_id:,
               topic_title:,
               is_reference:,
             ),
-          )),
-        )
+          )
+      }
 
       #(
-        Model(..model, selected_discussion:, selected_node_id: node_id),
+        Model(
+          ..model,
+          selected_discussion: option.Some(selected_discussion),
+          discussion_overlay_models:,
+          selected_node_id: node_id,
+        ),
         effect.none(),
       )
     }
@@ -260,9 +265,19 @@ fn update(model, msg: Msg) -> #(Model, Effect(Msg)) {
     }
 
     UserUpdatedDiscussion(msg:, line_number:, column_number:, update:) -> {
-      todo
-      // let #(model, effect) = update(model, msg)
-      // #(model, effect)*
+      let #(discussion_model, effect) = update
+
+      #(
+        Model(
+          ..model,
+          discussion_overlay_models: dict.insert(
+            model.discussion_overlay_models,
+            #(line_number, column_number),
+            discussion_model,
+          ),
+        ),
+        effect,
+      )
     }
   }
 }
@@ -331,7 +346,19 @@ fn view(model: Model) -> Element(Msg) {
               })
               |> result.unwrap([]),
             discussion: dict.new(),
-            selected_discussion: model.selected_discussion,
+            selected_discussion: case model.selected_discussion {
+              option.Some(selected_discussion) ->
+                dict.get(model.discussion_overlay_models, selected_discussion)
+                |> result.map(fn(model) {
+                  option.Some(audit_page.DiscussionReference(
+                    line_number: selected_discussion.0,
+                    column_number: selected_discussion.1,
+                    model:,
+                  ))
+                })
+                |> result.unwrap(option.None)
+              option.None -> option.None
+            },
           )
             |> element.map(map_audit_page_msg),
           option.None,

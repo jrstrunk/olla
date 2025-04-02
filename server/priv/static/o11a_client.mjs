@@ -654,17 +654,6 @@ function divideFloat(a2, b) {
     return a2 / b;
   }
 }
-function makeError(variant, module, line2, fn, message, extra) {
-  let error = new globalThis.Error(message);
-  error.gleam_error = variant;
-  error.module = module;
-  error.line = line2;
-  error.function = fn;
-  error.fn = fn;
-  for (let k in extra)
-    error[k] = extra[k];
-  return error;
-}
 
 // build/dev/javascript/gleam_stdlib/dict.mjs
 var referenceMap = /* @__PURE__ */ new WeakMap();
@@ -8610,14 +8599,14 @@ function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
 
 // build/dev/javascript/o11a_client/o11a_client.mjs
 var Model3 = class extends CustomType {
-  constructor(route, file_tree, audit_metadata, source_files, discussions, discussion_references, selected_discussion, selected_node_id) {
+  constructor(route, file_tree, audit_metadata, source_files, discussions, discussion_overlay_models, selected_discussion, selected_node_id) {
     super();
     this.route = route;
     this.file_tree = file_tree;
     this.audit_metadata = audit_metadata;
     this.source_files = source_files;
     this.discussions = discussions;
-    this.discussion_references = discussion_references;
+    this.discussion_overlay_models = discussion_overlay_models;
     this.selected_discussion = selected_discussion;
     this.selected_node_id = selected_node_id;
   }
@@ -8854,7 +8843,7 @@ function update2(model, msg) {
           _record.audit_metadata,
           _record.source_files,
           _record.discussions,
-          _record.discussion_references,
+          _record.discussion_overlay_models,
           _record.selected_discussion,
           _record.selected_node_id
         );
@@ -8878,7 +8867,7 @@ function update2(model, msg) {
           updated_audit_metadata,
           _record.source_files,
           _record.discussions,
-          _record.discussion_references,
+          _record.discussion_overlay_models,
           _record.selected_discussion,
           _record.selected_node_id
         );
@@ -8897,7 +8886,7 @@ function update2(model, msg) {
           _record.audit_metadata,
           insert(model.source_files, page_path, source_files),
           _record.discussions,
-          _record.discussion_references,
+          _record.discussion_overlay_models,
           _record.selected_discussion,
           _record.selected_node_id
         );
@@ -8911,33 +8900,24 @@ function update2(model, msg) {
     let topic_id = msg.topic_id;
     let topic_title = msg.topic_title;
     let is_reference = msg.is_reference;
-    let selected_discussion = (() => {
-      let _pipe = map_get(
-        model.discussion_references,
-        [line_number, column_number]
-      );
-      let _pipe$1 = map3(
-        _pipe,
-        (var0) => {
-          return new Some(var0);
-        }
-      );
-      return unwrap2(
-        _pipe$1,
-        new Some(
-          new DiscussionReference(
+    let selected_discussion = [line_number, column_number];
+    let discussion_overlay_models = (() => {
+      let $ = map_get(model.discussion_overlay_models, selected_discussion);
+      if ($.isOk()) {
+        return model.discussion_overlay_models;
+      } else {
+        return insert(
+          model.discussion_overlay_models,
+          selected_discussion,
+          init3(
             line_number,
             column_number,
-            init3(
-              line_number,
-              column_number,
-              topic_id,
-              topic_title,
-              is_reference
-            )
+            topic_id,
+            topic_title,
+            is_reference
           )
-        )
-      );
+        );
+      }
     })();
     return [
       (() => {
@@ -8948,8 +8928,8 @@ function update2(model, msg) {
           _record.audit_metadata,
           _record.source_files,
           _record.discussions,
-          _record.discussion_references,
-          selected_discussion,
+          discussion_overlay_models,
+          new Some(selected_discussion),
           node_id
         );
       })(),
@@ -8965,7 +8945,7 @@ function update2(model, msg) {
           _record.audit_metadata,
           _record.source_files,
           _record.discussions,
-          _record.discussion_references,
+          _record.discussion_overlay_models,
           new None(),
           new None()
         );
@@ -8975,21 +8955,35 @@ function update2(model, msg) {
   } else if (msg instanceof UserClickedDiscussionEntry2) {
     let line_number = msg.line_number;
     let column_number = msg.column_number;
-    echo2("Clicked discussion entry", "src/o11a_client.gleam", 258);
+    echo2("Clicked discussion entry", "src/o11a_client.gleam", 263);
     return [model, none()];
   } else {
     let msg$1 = msg.msg;
     let line_number = msg.line_number;
     let column_number = msg.column_number;
     let update$1 = msg.update;
-    throw makeError(
-      "todo",
-      "o11a_client",
-      263,
-      "update",
-      "`todo` expression evaluated. This code has not yet been implemented.",
-      {}
-    );
+    let discussion_model = update$1[0];
+    let effect = update$1[1];
+    return [
+      (() => {
+        let _record = model;
+        return new Model3(
+          _record.route,
+          _record.file_tree,
+          _record.audit_metadata,
+          _record.source_files,
+          _record.discussions,
+          insert(
+            model.discussion_overlay_models,
+            [line_number, column_number],
+            discussion_model
+          ),
+          _record.selected_discussion,
+          _record.selected_node_id
+        );
+      })(),
+      effect
+    ];
   }
 }
 function map_audit_page_msg(msg) {
@@ -9063,7 +9057,31 @@ function view4(model) {
                 return unwrap2(_pipe$1, toList([]));
               })(),
               new_map(),
-              model.selected_discussion
+              (() => {
+                let $1 = model.selected_discussion;
+                if ($1 instanceof Some) {
+                  let selected_discussion = $1[0];
+                  let _pipe2 = map_get(
+                    model.discussion_overlay_models,
+                    selected_discussion
+                  );
+                  let _pipe$1 = map3(
+                    _pipe2,
+                    (model2) => {
+                      return new Some(
+                        new DiscussionReference(
+                          selected_discussion[0],
+                          selected_discussion[1],
+                          model2
+                        )
+                      );
+                    }
+                  );
+                  return unwrap2(_pipe$1, new None());
+                } else {
+                  return new None();
+                }
+              })()
             );
             return map6(_pipe, map_audit_page_msg);
           })(),
