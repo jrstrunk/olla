@@ -2432,15 +2432,15 @@ function inspectString(str) {
   return new_str;
 }
 function inspectDict(map8) {
-  let body = "dict.from_list([";
+  let body2 = "dict.from_list([";
   let first3 = true;
   map8.forEach((value4, key2) => {
     if (!first3)
-      body = body + ", ";
-    body = body + "#(" + inspect(key2) + ", " + inspect(value4) + ")";
+      body2 = body2 + ", ";
+    body2 = body2 + "#(" + inspect(key2) + ", " + inspect(value4) + ")";
     first3 = false;
   });
-  return body + "])";
+  return body2 + "])";
 }
 function inspectObject(v) {
   const name = Object.getPrototypeOf(v)?.constructor?.name || "Object";
@@ -2448,9 +2448,9 @@ function inspectObject(v) {
   for (const k of Object.keys(v)) {
     props.push(`${inspect(k)}: ${inspect(v[k])}`);
   }
-  const body = props.length ? " " + props.join(", ") + " " : "";
+  const body2 = props.length ? " " + props.join(", ") + " " : "";
   const head = name === "Object" ? "" : name + " ";
-  return `//js(${head}{${body}})`;
+  return `//js(${head}{${body2}})`;
 }
 function inspectCustomType(record) {
   const props = Object.keys(record).map((label) => {
@@ -5122,11 +5122,11 @@ function scheme_from_string(scheme) {
 
 // build/dev/javascript/gleam_http/gleam/http/request.mjs
 var Request = class extends CustomType {
-  constructor(method, headers, body, scheme, host, port, path2, query) {
+  constructor(method, headers, body2, scheme, host, port, path2, query) {
     super();
     this.method = method;
     this.headers = headers;
-    this.body = body;
+    this.body = body2;
     this.scheme = scheme;
     this.host = host;
     this.port = port;
@@ -5189,7 +5189,7 @@ function set_header(request, key2, value4) {
     _record.query
   );
 }
-function set_body(req, body) {
+function set_body(req, body2) {
   let method = req.method;
   let headers = req.headers;
   let scheme = req.scheme;
@@ -5197,7 +5197,7 @@ function set_body(req, body) {
   let port = req.port;
   let path2 = req.path;
   let query = req.query;
-  return new Request(method, headers, body, scheme, host, port, path2, query);
+  return new Request(method, headers, body2, scheme, host, port, path2, query);
 }
 function set_method(req, method) {
   let _record = req;
@@ -5220,11 +5220,11 @@ function to(url) {
 
 // build/dev/javascript/gleam_http/gleam/http/response.mjs
 var Response = class extends CustomType {
-  constructor(status, headers, body) {
+  constructor(status, headers, body2) {
     super();
     this.status = status;
     this.headers = headers;
-    this.body = body;
+    this.body = body2;
   }
 };
 
@@ -5315,13 +5315,13 @@ function make_headers(headersList) {
   return headers;
 }
 async function read_text_body(response) {
-  let body;
+  let body2;
   try {
-    body = await response.body.text();
+    body2 = await response.body.text();
   } catch (error) {
     return new Error(new UnableToReadBody());
   }
-  return new Ok(response.withFields({ body }));
+  return new Ok(response.withFields({ body: body2 }));
 }
 
 // build/dev/javascript/gleam_fetch/gleam/fetch.mjs
@@ -5477,7 +5477,7 @@ function get(url, expect) {
     }
   );
 }
-function post(url, body, expect) {
+function post(url, body2, expect) {
   return from(
     (dispatch) => {
       let $ = form_request(url);
@@ -5490,7 +5490,7 @@ function post(url, body, expect) {
           "Content-Type",
           "application/json"
         );
-        let _pipe$3 = set_body(_pipe$2, to_string2(body));
+        let _pipe$3 = set_body(_pipe$2, to_string2(body2));
         return do_send(_pipe$3, expect, dispatch);
       } else {
         return dispatch(expect.run(new Error(new BadUrl(url))));
@@ -5501,19 +5501,19 @@ function post(url, body, expect) {
 function response_to_result(response) {
   if (response instanceof Response && (200 <= response.status && response.status <= 299)) {
     let status = response.status;
-    let body = response.body;
-    return new Ok(body);
+    let body2 = response.body;
+    return new Ok(body2);
   } else if (response instanceof Response && response.status === 401) {
     return new Error(new Unauthorized());
   } else if (response instanceof Response && response.status === 404) {
     return new Error(new NotFound());
   } else if (response instanceof Response && response.status === 500) {
-    let body = response.body;
-    return new Error(new InternalServerError(body));
+    let body2 = response.body;
+    return new Error(new InternalServerError(body2));
   } else {
     let code2 = response.status;
-    let body = response.body;
-    return new Error(new OtherError(code2, body));
+    let body2 = response.body;
+    return new Error(new OtherError(code2, body2));
   }
 }
 function expect_json(decoder, to_msg) {
@@ -5523,8 +5523,8 @@ function expect_json(decoder, to_msg) {
       let _pipe$1 = then$(_pipe, response_to_result);
       let _pipe$2 = then$(
         _pipe$1,
-        (body) => {
-          let $ = parse(body, decoder);
+        (body2) => {
+          let $ = parse(body2, decoder);
           if ($.isOk()) {
             let json = $[0];
             return new Ok(json);
@@ -6158,9 +6158,9 @@ var PreProcessedGapNode = class extends CustomType {
   }
 };
 var NodeDeclaration = class extends CustomType {
-  constructor(title, topic_id, kind, references) {
+  constructor(title2, topic_id, kind, references) {
     super();
-    this.title = title;
+    this.title = title2;
     this.topic_id = topic_id;
     this.kind = kind;
     this.references = references;
@@ -6195,9 +6195,9 @@ var EventDeclaration = class extends CustomType {
 var UnknownDeclaration = class extends CustomType {
 };
 var NodeReference = class extends CustomType {
-  constructor(title, topic_id) {
+  constructor(title2, topic_id) {
     super();
-    this.title = title;
+    this.title = title2;
     this.topic_id = topic_id;
   }
 };
@@ -6300,12 +6300,12 @@ function node_reference_decoder() {
   return field2(
     "title",
     string3,
-    (title) => {
+    (title2) => {
       return field2(
         "topic_id",
         string3,
         (topic_id) => {
-          return success(new NodeReference(title, topic_id));
+          return success(new NodeReference(title2, topic_id));
         }
       );
     }
@@ -6315,7 +6315,7 @@ function node_declaration_decoder() {
   return field2(
     "title",
     string3,
-    (title) => {
+    (title2) => {
       return field2(
         "topic_id",
         string3,
@@ -6330,7 +6330,7 @@ function node_declaration_decoder() {
                 (references) => {
                   return success(
                     new NodeDeclaration(
-                      title,
+                      title2,
                       topic_id,
                       node_declaration_kind_from_string(kind),
                       references
@@ -6487,6 +6487,34 @@ function pre_processed_line_decoder() {
   );
 }
 
+// build/dev/javascript/plinth/element_ffi.mjs
+function focus(element2) {
+  element2.focus();
+}
+
+// build/dev/javascript/o11a_common/o11a/classes.mjs
+var discussion_entry_hover = "deh";
+var discussion_entry = "de";
+var line_container = "line-container";
+
+// build/dev/javascript/plinth/document_ffi.mjs
+function querySelector(query) {
+  let found = document.querySelector(query);
+  if (!found) {
+    return new Error();
+  }
+  return new Ok(found);
+}
+
+// build/dev/javascript/o11a_client/o11a/client/selectors.mjs
+function discussion_input(line_number, column_number) {
+  return querySelector(
+    ".dl" + to_string(line_number) + ".dc" + to_string(
+      column_number
+    ) + " input"
+  );
+}
+
 // build/dev/javascript/o11a_common/lib/enumerate.mjs
 function translate_number_to_letter(loop$number) {
   while (true) {
@@ -6579,11 +6607,6 @@ function encode_is_reference_data(is_reference) {
     })()
   );
 }
-
-// build/dev/javascript/o11a_common/o11a/classes.mjs
-var discussion_entry_hover = "deh";
-var discussion_entry = "de";
-var line_container = "line-container";
 
 // build/dev/javascript/o11a_client/o11a/client/attributes.mjs
 function encode_column_count_data(column_count) {
@@ -9363,8 +9386,24 @@ function update2(model, msg) {
       none()
     ];
   } else if (msg instanceof UserClickedDiscussionEntry2) {
-    echo("Clicked discussion entry", "src/o11a_client.gleam", 303);
-    return [model, none()];
+    let line_number = msg.line_number;
+    let column_number = msg.column_number;
+    return [
+      model,
+      from(
+        (_) => {
+          let res = (() => {
+            let _pipe = discussion_input(line_number, column_number);
+            return map3(_pipe, focus);
+          })();
+          if (res.isOk() && !res[0]) {
+            return void 0;
+          } else {
+            return console_log("Failed to focus discussion input");
+          }
+        }
+      )
+    ];
   } else if (msg instanceof UserUpdatedDiscussion2) {
     let line_number = msg.line_number;
     let column_number = msg.column_number;
@@ -9403,7 +9442,7 @@ function update2(model, msg) {
                         return failure(void 0, msg2);
                       }
                     })();
-                    return echo(_pipe, "src/o11a_client.gleam", 330);
+                    return echo(_pipe, "src/o11a_client.gleam", 341);
                   }
                 ),
                 (response) => {
@@ -9415,7 +9454,7 @@ function update2(model, msg) {
                       return new UserFailedToSubmitNote(e);
                     }
                   })();
-                  return echo(_pipe, "src/o11a_client.gleam", 337);
+                  return echo(_pipe, "src/o11a_client.gleam", 348);
                 }
               )
             );
@@ -9444,7 +9483,7 @@ function update2(model, msg) {
                         return failure(void 0, msg2);
                       }
                     })();
-                    return echo(_pipe, "src/o11a_client.gleam", 330);
+                    return echo(_pipe, "src/o11a_client.gleam", 341);
                   }
                 ),
                 (response) => {
@@ -9456,7 +9495,7 @@ function update2(model, msg) {
                       return new UserFailedToSubmitNote(e);
                     }
                   })();
-                  return echo(_pipe, "src/o11a_client.gleam", 337);
+                  return echo(_pipe, "src/o11a_client.gleam", 348);
                 }
               )
             );
@@ -9800,7 +9839,7 @@ function echo$inspectString(str) {
   return new_str;
 }
 function echo$inspectDict(map8) {
-  let body = "dict.from_list([";
+  let body2 = "dict.from_list([";
   let first3 = true;
   let key_value_pairs = [];
   map8.forEach((value4, key2) => {
@@ -9809,11 +9848,11 @@ function echo$inspectDict(map8) {
   key_value_pairs.sort();
   key_value_pairs.forEach(([key2, value4]) => {
     if (!first3)
-      body = body + ", ";
-    body = body + "#(" + echo$inspect(key2) + ", " + echo$inspect(value4) + ")";
+      body2 = body2 + ", ";
+    body2 = body2 + "#(" + echo$inspect(key2) + ", " + echo$inspect(value4) + ")";
     first3 = false;
   });
-  return body + "])";
+  return body2 + "])";
 }
 function echo$inspectCustomType(record) {
   const props = Object.keys(record).map((label) => {
@@ -9828,9 +9867,9 @@ function echo$inspectObject(v) {
   for (const k of Object.keys(v)) {
     props.push(`${echo$inspect(k)}: ${echo$inspect(v[k])}`);
   }
-  const body = props.length ? " " + props.join(", ") + " " : "";
+  const body2 = props.length ? " " + props.join(", ") + " " : "";
   const head = name === "Object" ? "" : name + " ";
-  return `//js(${head}{${body}})`;
+  return `//js(${head}{${body2}})`;
 }
 function echo$inspect(v) {
   const t = typeof v;

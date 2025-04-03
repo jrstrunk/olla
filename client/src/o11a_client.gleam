@@ -17,6 +17,7 @@ import lustre/server_component
 import lustre_http
 import modem
 import o11a/audit_metadata
+import o11a/client/selectors
 import o11a/computed_note
 import o11a/events
 import o11a/note
@@ -24,6 +25,7 @@ import o11a/preprocessor
 import o11a/ui/audit_page
 import o11a/ui/audit_tree
 import o11a/ui/discussion_overlay
+import plinth/browser/element as browser_element
 
 pub fn main() {
   io.println("Starting client controller")
@@ -297,9 +299,20 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       )
     }
 
-    UserClickedDiscussionEntry(_line_number, _column_number) -> {
-      echo "Clicked discussion entry"
-      #(model, effect.none())
+    UserClickedDiscussionEntry(line_number:, column_number:) -> {
+      #(
+        model,
+        effect.from(fn(_dispatch) {
+          let res =
+            selectors.discussion_input(line_number:, column_number:)
+            |> result.map(browser_element.focus)
+
+          case res {
+            Ok(Nil) -> Nil
+            Error(Nil) -> io.println("Failed to focus discussion input")
+          }
+        }),
+      )
     }
 
     UserUpdatedDiscussion(line_number:, column_number:, update:) -> {

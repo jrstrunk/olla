@@ -45,7 +45,6 @@ pub fn init(init_model: Model) -> #(Model, effect.Effect(Msg)) {
 pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
     ServerUpdatedDiscussion -> {
-      echo "Server updated discussion"
       #(
         model,
         server_component.emit(

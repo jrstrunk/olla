@@ -18,6 +18,29 @@ pub fn discussion_entry(line_number line_number, column_number column_number) {
   )
 }
 
+pub fn discussion_input(line_number line_number, column_number column_number) {
+  document.query_selector(
+    ".dl"
+    <> int.to_string(line_number)
+    <> ".dc"
+    <> int.to_string(column_number)
+    <> " input",
+  )
+}
+
+pub fn discussion_expanded_input(
+  line_number line_number,
+  column_number column_number,
+) {
+  document.query_selector(
+    ".dl"
+    <> int.to_string(line_number)
+    <> ".dc"
+    <> int.to_string(column_number)
+    <> " textarea",
+  )
+}
+
 pub fn audit_discussion() {
   document.query_selector("#discussion-component")
   |> result.try(shadow.shadow_root)

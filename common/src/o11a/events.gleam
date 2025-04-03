@@ -1,6 +1,6 @@
 pub const user_submitted_note = "user-submitted-line-note"
 
-pub const user_clicked_discussion_preview = "user-clicked-discussion-preview"
+pub const user_clicked_discussion_entry = "ucde"
 
 pub const user_focused_input = "user-focused-input"
 
