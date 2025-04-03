@@ -24,6 +24,10 @@ pub type Gateway {
     dashboard_gateway: DashboardGateway,
     audit_metadata_gateway: AuditMetaDataGateway,
     discussion_component_gateway: DiscussionComponentGateway,
+    discussion_gateway: concurrent_dict.ConcurrentDict(
+      String,
+      discussion.Discussion,
+    ),
     source_files: concurrent_dict.ConcurrentDict(String, string_tree.StringTree),
     audit_metadata: concurrent_dict.ConcurrentDict(
       String,
@@ -52,6 +56,7 @@ pub type AuditMetaDataGateway =
 pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
   let dashboard_gateway = concurrent_dict.new()
   let audit_metadata_gateway = concurrent_dict.new()
+  let discussion_gateway = concurrent_dict.new()
 
   let discussion_component_gateway = concurrent_dict.new()
   let source_files = concurrent_dict.new()
@@ -75,6 +80,8 @@ pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
       |> concurrent_dict.insert(audit_metadatas, audit_name, _)
 
       use discussion <- result.try(discussion.build_audit_discussion(audit_name))
+
+      concurrent_dict.insert(discussion_gateway, audit_name, discussion)
 
       use audit_dashboard_actor <- result.try(
         lustre.start_actor(
@@ -173,6 +180,7 @@ pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
   Gateway(
     dashboard_gateway:,
     audit_metadata_gateway:,
+    discussion_gateway:,
     discussion_component_gateway:,
     source_files:,
     audit_metadata: audit_metadatas,
@@ -210,4 +218,8 @@ pub fn get_source_file(source_files, for page_path) {
 
 pub fn get_audit_metadata(audit_metadata, for audit_name) {
   concurrent_dict.get(audit_metadata, audit_name)
+}
+
+pub fn get_discussion(discussion_gateway, for audit_name) {
+  concurrent_dict.get(discussion_gateway, audit_name)
 }

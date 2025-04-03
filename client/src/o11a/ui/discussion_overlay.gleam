@@ -4,21 +4,18 @@ import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/int
 import gleam/io
-import gleam/json
 import gleam/list
-import gleam/option.{type Option, None, Some}
+import gleam/option
 import gleam/result
 import gleam/set
 import gleam/string
 import lib/eventx
 import lib/lucide
 import lustre/attribute
-import lustre/effect
 import lustre/element
 import lustre/element/html
 import lustre/event
 import o11a/computed_note
-import o11a/events
 import o11a/note
 
 pub type Model {
@@ -32,11 +29,11 @@ pub type Model {
     topic_title: String,
     current_note_draft: String,
     current_thread_id: String,
-    active_thread: Option(ActiveThread),
+    active_thread: option.Option(ActiveThread),
     show_expanded_message_box: Bool,
-    current_expanded_message_draft: Option(String),
+    current_expanded_message_draft: option.Option(String),
     expanded_messages: set.Set(String),
-    editing_note: Option(computed_note.ComputedNote),
+    editing_note: option.Option(computed_note.ComputedNote),
   )
 }
 
@@ -45,7 +42,7 @@ pub type ActiveThread {
     current_thread_id: String,
     parent_note: computed_note.ComputedNote,
     prior_thread_id: String,
-    prior_thread: Option(ActiveThread),
+    prior_thread: option.Option(ActiveThread),
   )
 }
 
@@ -68,9 +65,9 @@ pub fn init(
     current_thread_id: topic_id,
     active_thread: option.None,
     show_expanded_message_box: False,
-    current_expanded_message_draft: None,
+    current_expanded_message_draft: option.None,
     expanded_messages: set.new(),
-    editing_note: None,
+    editing_note: option.None,
   )
 }
 
@@ -85,7 +82,6 @@ pub type Msg {
   UserToggledExpandedMessageBox(Bool)
   UserWroteExpandedMessage(String)
   UserToggledExpandedMessage(for_note_id: String)
-  UserEnteredDiscussionPreview
   UserFocusedInput
   UserFocusedExpandedInput
   UserUnfocusedInput
@@ -95,11 +91,19 @@ pub type Msg {
   UserToggledReferenceDiscussion
 }
 
+pub type Effect {
+  SubmitNote(note: note.NoteSubmission, topic_id: String)
+  FocusDiscussionInput(line_number: Int, column_number: Int)
+  FocusExpandedDiscussionInput(line_number: Int, column_number: Int)
+  UnfocusDiscussionInput(line_number: Int, column_number: Int)
+  MaximizeDiscussion(line_number: Int, column_number: Int)
+  None
+}
+
 pub fn update(model: Model, msg: Msg) {
   case msg {
     UserWroteNote(draft) -> {
-      echo "user wrote note"
-      #(Model(..model, current_note_draft: draft), effect.none())
+      #(Model(..model, current_note_draft: draft), None)
     }
     UserSubmittedNote -> {
       let #(significance, message) =
@@ -109,18 +113,18 @@ pub fn update(model: Model, msg: Msg) {
         )
 
       use <- given.that(model.current_note_draft == "", return: fn() {
-        #(model, effect.none())
+        #(model, None)
       })
 
       let #(modifier, parent_id) = case model.editing_note {
-        Some(note) -> #(note.Edit, note.note_id)
-        None -> #(note.None, model.current_thread_id)
+        option.Some(note) -> #(note.Edit, note.note_id)
+        option.None -> #(note.None, model.current_thread_id)
       }
 
       let expanded_message = case
         model.current_expanded_message_draft |> option.map(string.trim)
       {
-        Some("") -> None
+        option.Some("") -> option.None
         msg -> msg
       }
 
@@ -138,31 +142,25 @@ pub fn update(model: Model, msg: Msg) {
         Model(
           ..model,
           current_note_draft: "",
-          current_expanded_message_draft: None,
+          current_expanded_message_draft: option.None,
           show_expanded_message_box: False,
-          editing_note: None,
+          editing_note: option.None,
         ),
-        event.emit(
-          events.user_submitted_note,
-          json.object([
-            #("note", note.encode_note_submission(note)),
-            #("topic_id", json.string(model.topic_id)),
-          ]),
-        ),
+        SubmitNote(note:, topic_id: model.topic_id),
       )
     }
     UserSwitchedToThread(new_thread_id:, parent_note:) -> #(
       Model(
         ..model,
         current_thread_id: new_thread_id,
-        active_thread: Some(ActiveThread(
+        active_thread: option.Some(ActiveThread(
           current_thread_id: new_thread_id,
           parent_note:,
           prior_thread_id: model.current_thread_id,
           prior_thread: model.active_thread,
         )),
       ),
-      effect.none(),
+      None,
     )
     UserClosedThread -> {
       let new_active_thread =
@@ -180,16 +178,19 @@ pub fn update(model: Model, msg: Msg) {
           current_thread_id: new_current_thread_id,
           active_thread: new_active_thread,
         ),
-        effect.none(),
+        None,
       )
     }
     UserToggledExpandedMessageBox(show_expanded_message_box) -> #(
       Model(..model, show_expanded_message_box:),
-      effect.none(),
+      None,
     )
     UserWroteExpandedMessage(expanded_message) -> #(
-      Model(..model, current_expanded_message_draft: Some(expanded_message)),
-      effect.none(),
+      Model(
+        ..model,
+        current_expanded_message_draft: option.Some(expanded_message),
+      ),
+      None,
     )
     UserToggledExpandedMessage(for_note_id) ->
       case set.contains(model.expanded_messages, for_note_id) {
@@ -198,36 +199,21 @@ pub fn update(model: Model, msg: Msg) {
             ..model,
             expanded_messages: set.delete(model.expanded_messages, for_note_id),
           ),
-          effect.none(),
+          None,
         )
         False -> #(
           Model(
             ..model,
             expanded_messages: set.insert(model.expanded_messages, for_note_id),
           ),
-          effect.none(),
+          None,
         )
       }
-    UserEnteredDiscussionPreview -> #(
-      model,
-      event.emit(
-        events.user_clicked_discussion_preview,
-        json.object([
-          #("line_number", json.int(model.line_number)),
-          // 1 for line discussion
-          #("discussion_lane", json.int(1)),
-        ]),
-      ),
-    )
     UserFocusedInput -> #(
       model,
-      event.emit(
-        events.user_focused_input,
-        json.object([
-          #("line_number", json.int(model.line_number)),
-          // 1 for line discussion
-          #("discussion_lane", json.int(1)),
-        ]),
+      FocusDiscussionInput(
+        line_number: model.line_number,
+        column_number: model.column_number,
       ),
     )
     // When the expanaded message box is focused, set the show_expanded_message_box
@@ -235,35 +221,23 @@ pub fn update(model: Model, msg: Msg) {
     // calls to focus the expanded message box.
     UserFocusedExpandedInput -> #(
       Model(..model, show_expanded_message_box: True),
-      event.emit(
-        events.user_focused_input,
-        json.object([
-          #("line_number", json.int(model.line_number)),
-          // 1 for line discussion
-          #("discussion_lane", json.int(1)),
-        ]),
+      FocusExpandedDiscussionInput(
+        line_number: model.line_number,
+        column_number: model.column_number,
       ),
     )
     UserUnfocusedInput -> #(
       model,
-      event.emit(
-        events.user_unfocused_input,
-        json.object([
-          #("line_number", json.int(model.line_number)),
-          // 1 for line discussion
-          #("discussion_lane", json.int(1)),
-        ]),
+      UnfocusDiscussionInput(
+        line_number: model.line_number,
+        column_number: model.column_number,
       ),
     )
     UserMaximizeThread -> #(
       model,
-      event.emit(
-        events.user_maximized_thread,
-        json.object([
-          #("line_number", json.int(model.line_number)),
-          // 1 for line discussion
-          #("discussion_lane", json.int(1)),
-        ]),
+      MaximizeDiscussion(
+        line_number: model.line_number,
+        column_number: model.column_number,
       ),
     )
     UserEditedNote(note) ->
@@ -276,32 +250,32 @@ pub fn update(model: Model, msg: Msg) {
               )
               <> note.message,
             current_expanded_message_draft: note.expanded_message,
-            editing_note: Some(note),
+            editing_note: option.Some(note),
             show_expanded_message_box: case note.expanded_message {
-              Some(..) -> True
-              None -> False
+              option.Some(..) -> True
+              option.None -> False
             },
           ),
-          effect.none(),
+          None,
         )
-        Error(Nil) -> #(model, effect.none())
+        Error(Nil) -> #(model, None)
       }
     UserCancelledEdit -> #(
       Model(
         ..model,
         current_note_draft: "",
-        current_expanded_message_draft: None,
-        editing_note: None,
+        current_expanded_message_draft: option.None,
+        editing_note: option.None,
         show_expanded_message_box: False,
       ),
-      effect.none(),
+      None,
     )
     UserToggledReferenceDiscussion -> #(
       Model(
         ..model,
         show_reference_discussion: !model.show_reference_discussion,
       ),
-      effect.none(),
+      None,
     )
   }
 }
@@ -319,7 +293,7 @@ pub fn view(
   html.div(
     [
       attribute.class(
-        "absolute z-[3] w-[30rem] not-italic text-wrap select-text left-[-.3rem]",
+        "absolute z-[3] w-[30rem] not-italic text-wrap select-text text left-[-.3rem]",
       ),
       // The line discussion component is too close to the edge of the
       // screen, so we want to show it below the line
@@ -411,7 +385,7 @@ pub fn view(
 
 fn thread_header_view(model: Model) {
   case model.active_thread {
-    Some(active_thread) ->
+    option.Some(active_thread) ->
       html.div([], [
         html.div([attribute.class("flex justify-end width-full")], [
           html.button(
@@ -427,15 +401,15 @@ fn thread_header_view(model: Model) {
         html.text("Current Thread: "),
         html.text(active_thread.parent_note.message),
         case active_thread.parent_note.expanded_message {
-          Some(expanded_message) ->
+          option.Some(expanded_message) ->
             html.div([attribute.class("mt-[.5rem]")], [
               html.p([], [html.text(expanded_message)]),
             ])
-          None -> element.fragment([])
+          option.None -> element.fragment([])
         },
         html.hr([attribute.class("mt-[.5rem]")]),
       ])
-    None ->
+    option.None ->
       html.div(
         [
           attribute.class(
@@ -499,7 +473,7 @@ fn comments_view(
             [lucide.pencil([])],
           ),
           case note.expanded_message {
-            Some(_) ->
+            option.Some(_) ->
               html.button(
                 [
                   attribute.id("expand-message-button"),
@@ -508,7 +482,7 @@ fn comments_view(
                 ],
                 [lucide.list_collapse([])],
               )
-            None -> element.fragment([])
+            option.None -> element.fragment([])
           },
           case computed_note.is_significance_threadable(note.significance) {
             True ->
@@ -545,9 +519,9 @@ fn significance_badge_view(sig: computed_note.ComputedNoteSignificance) {
     "input-border rounded-md text-[0.65rem] pb-[0.15rem] pt-1 px-[0.5rem]"
 
   case computed_note.significance_to_string(sig) {
-    Some(significance) ->
+    option.Some(significance) ->
       html.span([attribute.class(badge_style)], [html.text(significance)])
-    None -> element.fragment([])
+    option.None -> element.fragment([])
   }
 }
 
@@ -564,7 +538,7 @@ fn new_message_input_view(model: Model, current_thread_notes) {
       [lucide.pencil_ruler([])],
     ),
     case model.editing_note {
-      Some(..) ->
+      option.Some(..) ->
         html.button(
           [
             attribute.id("cancel-message-edit-button"),
@@ -573,7 +547,7 @@ fn new_message_input_view(model: Model, current_thread_notes) {
           ],
           [lucide.x([])],
         )
-      None -> element.fragment([])
+      option.None -> element.fragment([])
     },
     html.input([
       attribute.id("new-comment-input"),

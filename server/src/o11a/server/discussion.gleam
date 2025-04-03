@@ -187,3 +187,15 @@ pub fn dump_computed_notes(discussion: Discussion) {
 
   json.array(notes, computed_note.encode_computed_note)
 }
+
+pub fn dump_computed_notes_since(discussion: Discussion, since ref_time) {
+  let notes =
+    pcs_dict.to_list(discussion.notes)
+    |> list.map(pair.second)
+    |> list.flatten
+    |> list.filter(fn(note) {
+      note.time |> datetime.is_later_or_equal(to: ref_time)
+    })
+
+  json.array(notes, computed_note.encode_computed_note)
+}

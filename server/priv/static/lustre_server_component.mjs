@@ -557,6 +557,8 @@ var LustreServerComponent = class extends HTMLElement {
     if (initial.length) {
       this.#socket?.send(JSON.stringify([attrs, initial]));
     }
+    // Emit an event here ig
+    window.dispatchEvent(new CustomEvent("lustre-server-component-init"));
   }
   #reconnect(socketUrl = this.#socket.url) {
     this.#socket?.close();

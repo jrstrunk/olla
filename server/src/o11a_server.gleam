@@ -1,10 +1,13 @@
 import argv
 import concurrent_dict
 import filepath
+import gleam/dynamic/decode
 import gleam/erlang/process
+import gleam/http
 import gleam/http/request
 import gleam/http/response
 import gleam/io
+import gleam/json
 import gleam/list
 import gleam/option.{None}
 import gleam/result
@@ -15,8 +18,11 @@ import lustre/element
 import lustre/element/html
 import mist
 import o11a/config
+import o11a/note
+import o11a/server/discussion
 import o11a/ui/gateway
 import snag
+import tempo/datetime
 import wisp
 import wisp/wisp_mist
 
@@ -25,6 +31,10 @@ type Context {
     config: config.Config,
     dashboard_gateway: gateway.DashboardGateway,
     audit_metadata_gateway: gateway.AuditMetaDataGateway,
+    discussion_gateway: concurrent_dict.ConcurrentDict(
+      String,
+      discussion.Discussion,
+    ),
     discussion_component_gateway: gateway.DiscussionComponentGateway,
     source_files: concurrent_dict.ConcurrentDict(String, string_tree.StringTree),
     audit_metadata: concurrent_dict.ConcurrentDict(
@@ -50,6 +60,7 @@ pub fn main() {
     gateway.Gateway(
       dashboard_gateway:,
       audit_metadata_gateway:,
+      discussion_gateway:,
       discussion_component_gateway:,
       source_files:,
       audit_metadata:,
@@ -65,6 +76,7 @@ pub fn main() {
       config:,
       dashboard_gateway:,
       audit_metadata_gateway:,
+      discussion_gateway:,
       discussion_component_gateway:,
       skeletons:,
       source_files:,
@@ -124,6 +136,104 @@ fn handle_wisp_request(req, context: Context) {
       // TODO: try_recover to get the source file from disk
       |> result.unwrap(string_tree.from_string("<p>Source not found</p>"))
       |> wisp.json_response(200)
+
+    ["audit-discussion", audit_name] -> {
+      use <- wisp.require_method(req, http.Get)
+
+      let result = {
+        use discussion <- result.map(
+          gateway.get_discussion(context.discussion_gateway, audit_name)
+          |> result.replace_error(snag.new("Failed to get discussion")),
+        )
+
+        discussion.dump_computed_notes(discussion)
+      }
+
+      case result {
+        Ok(discussion) ->
+          wisp.json_response(discussion |> json.to_string_tree, 200)
+        Error(e) ->
+          wisp.json_response(
+            json.object([#("error", json.string(snag.line_print(e)))])
+              |> json.to_string_tree,
+            500,
+          )
+      }
+    }
+
+    ["audit-discussion-since", audit_name, since_time] -> {
+      use <- wisp.require_method(req, http.Get)
+
+      let result = {
+        use discussion <- result.try(
+          gateway.get_discussion(context.discussion_gateway, audit_name)
+          |> result.replace_error(snag.new("Failed to get discussion")),
+        )
+        use ref_time <- result.map(
+          datetime.from_string(since_time)
+          |> snag.map_error(datetime.describe_parse_error),
+        )
+
+        discussion.dump_computed_notes_since(discussion, ref_time)
+      }
+
+      case result {
+        Ok(discussion) ->
+          wisp.json_response(discussion |> json.to_string_tree, 200)
+        Error(e) ->
+          wisp.json_response(
+            json.object([#("error", json.string(snag.line_print(e)))])
+              |> json.to_string_tree,
+            500,
+          )
+      }
+    }
+
+    ["submit-note", audit_name] -> {
+      use <- wisp.require_method(req, http.Post)
+      use json <- wisp.require_json(req)
+
+      let result = {
+        use discussion <- result.try(
+          gateway.get_discussion(context.discussion_gateway, audit_name)
+          |> result.replace_error(snag.new("Failed to get discussion")),
+        )
+        use #(topic_id, note_submission) <- result.try(
+          decode.run(json, {
+            use topic_id <- decode.field("topic_id", decode.string)
+            use note_submission <- decode.field(
+              "note_submission",
+              note.note_submission_decoder(),
+            )
+            decode.success(#(topic_id, note_submission))
+          })
+          |> result.replace_error(snag.new("Failed to decode note")),
+        )
+
+        discussion.add_note(discussion, note_submission, topic_id)
+        |> result.replace_error(snag.new("Failed to add note"))
+      }
+
+      // An appropriate response is returned depending on whether the JSON could be
+      // successfully handled or not.
+      case result {
+        Ok(Nil) ->
+          wisp.json_response(
+            json.object([#("msg", json.string("success"))])
+              |> json.to_string_tree,
+            201,
+          )
+
+        // In a real application we would probably want to return some JSON error
+        // object, but for this example we'll just return an empty response.
+        Error(e) ->
+          wisp.json_response(
+            json.object([#("error", json.string(snag.line_print(e)))])
+              |> json.to_string_tree,
+            500,
+          )
+      }
+    }
 
     _ -> {
       html.html([], [

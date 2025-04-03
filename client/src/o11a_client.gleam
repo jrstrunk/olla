@@ -1,18 +1,25 @@
 import gleam/dict
+import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/io
+import gleam/json
+import gleam/list
 import gleam/option
 import gleam/result
 import gleam/string
 import gleam/uri.{type Uri}
 import lustre
 import lustre/effect.{type Effect}
-import lustre/element.{type Element}
+import lustre/element
 import lustre/element/html
+import lustre/event
+import lustre/server_component
 import lustre_http
 import modem
 import o11a/audit_metadata
 import o11a/computed_note
+import o11a/events
+import o11a/note
 import o11a/preprocessor
 import o11a/ui/audit_page
 import o11a/ui/audit_tree
@@ -159,6 +166,11 @@ pub type Msg {
       lustre_http.HttpError,
     ),
   )
+  ClientFetchedDiscussion(
+    audit_name: String,
+    discussion: Result(List(computed_note.ComputedNote), lustre_http.HttpError),
+  )
+  ServerUpdatedDiscussion(audit_name: String)
   UserHoveredDiscussionEntry(
     line_number: Int,
     column_number: Int,
@@ -170,11 +182,12 @@ pub type Msg {
   UserUnhoveredDiscussionEntry
   UserClickedDiscussionEntry(line_number: Int, column_number: Int)
   UserUpdatedDiscussion(
-    msg: discussion_overlay.Msg,
     line_number: Int,
     column_number: Int,
-    update: #(discussion_overlay.Model, effect.Effect(Msg)),
+    update: #(discussion_overlay.Model, discussion_overlay.Effect),
   )
+  UserSuccessfullySubmittedNote(updated_model: discussion_overlay.Model)
+  UserFailedToSubmitNote(error: lustre_http.HttpError)
 }
 
 fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
@@ -207,6 +220,31 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         source_files: dict.insert(model.source_files, page_path, source_files),
       ),
       effect.none(),
+    )
+
+    ClientFetchedDiscussion(audit_name:, discussion:) ->
+      case discussion {
+        Ok(discussion) -> #(
+          Model(
+            ..model,
+            discussions: dict.insert(
+              model.discussions,
+              audit_name,
+              discussion
+                |> list.group(by: fn(note) { note.parent_id }),
+            ),
+          ),
+          effect.none(),
+        )
+        Error(e) -> {
+          io.println("Failed to fetch discussion: " <> string.inspect(e))
+          #(model, effect.none())
+        }
+      }
+
+    ServerUpdatedDiscussion(audit_name:) -> #(
+      model,
+      fetch_discussion(audit_name),
     )
 
     UserHoveredDiscussionEntry(
@@ -259,34 +297,101 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       )
     }
 
-    UserClickedDiscussionEntry(line_number:, column_number:) -> {
+    UserClickedDiscussionEntry(_line_number, _column_number) -> {
       echo "Clicked discussion entry"
       #(model, effect.none())
     }
 
-    UserUpdatedDiscussion(msg:, line_number:, column_number:, update:) -> {
-      let #(discussion_model, effect) = update
+    UserUpdatedDiscussion(line_number:, column_number:, update:) -> {
+      let #(discussion_model, discussion_effect) = update
 
-      #(
-        Model(
-          ..model,
-          discussion_overlay_models: dict.insert(
-            model.discussion_overlay_models,
-            #(line_number, column_number),
-            discussion_model,
+      case discussion_effect {
+        discussion_overlay.SubmitNote(note_submission, topic_id) -> #(
+          model,
+          case model.route {
+            AuditPageRoute(audit_name:, ..) | AuditDashboardRoute(audit_name:) -> {
+              lustre_http.post(
+                "/submit-note/" <> audit_name,
+                json.object([
+                  #("topic_id", json.string(topic_id)),
+                  #(
+                    "note_submission",
+                    note.encode_note_submission(note_submission),
+                  ),
+                ]),
+                lustre_http.expect_json(
+                  decode.field("msg", decode.string, fn(msg) {
+                    case msg {
+                      "success" -> decode.success(Nil)
+                      _ -> decode.failure(Nil, msg)
+                    }
+                    |> echo
+                  }),
+                  fn(response) {
+                    case response {
+                      Ok(Nil) -> UserSuccessfullySubmittedNote(discussion_model)
+                      Error(e) -> UserFailedToSubmitNote(e)
+                    }
+                    |> echo
+                  },
+                ),
+              )
+            }
+            O11aHomeRoute -> effect.none()
+          },
+        )
+
+        discussion_overlay.FocusDiscussionInput(_line_number, _column_number)
+        | discussion_overlay.FocusExpandedDiscussionInput(
+            _line_number,
+            _column_number,
+          )
+        | discussion_overlay.UnfocusDiscussionInput(
+            _line_number,
+            _column_number,
+          )
+        | discussion_overlay.MaximizeDiscussion(_line_number, _column_number)
+        | discussion_overlay.None -> #(
+          Model(
+            ..model,
+            discussion_overlay_models: dict.insert(
+              model.discussion_overlay_models,
+              #(line_number, column_number),
+              discussion_model,
+            ),
           ),
+          effect.none(),
+        )
+      }
+    }
+    UserSuccessfullySubmittedNote(updated_model) -> #(
+      Model(
+        ..model,
+        discussion_overlay_models: dict.insert(
+          model.discussion_overlay_models,
+          #(updated_model.line_number, updated_model.column_number),
+          updated_model,
         ),
-        effect,
-      )
+      ),
+      effect.none(),
+    )
+    UserFailedToSubmitNote(error) -> {
+      io.print("Failed to submit note: " <> string.inspect(error))
+      #(model, effect.none())
     }
   }
 }
 
 fn route_change_effect(model, new_route route: Route) {
   case route {
-    AuditDashboardRoute(audit_name:) -> fetch_metadata(model, audit_name)
+    AuditDashboardRoute(audit_name:) ->
+      effect.batch([
+        fetch_metadata(model, audit_name),
+        fetch_discussion(audit_name),
+      ])
     AuditPageRoute(audit_name:, page_path:) ->
       effect.batch([
+        fetch_discussion(audit_name),
         fetch_metadata(model, audit_name),
         fetch_source_file(model, page_path),
       ])
@@ -322,19 +427,38 @@ fn fetch_source_file(model: Model, page_path: String) -> Effect(Msg) {
   }
 }
 
-fn view(model: Model) -> Element(Msg) {
+fn fetch_discussion(audit_name) {
+  lustre_http.get(
+    "/audit-discussion/" <> audit_name,
+    lustre_http.expect_json(
+      decode.list(computed_note.computed_note_decoder()),
+      ClientFetchedDiscussion(audit_name, _),
+    ),
+  )
+}
+
+fn view(model: Model) {
   case model.route {
     AuditDashboardRoute(audit_name:) ->
-      audit_tree.view(
-        html.p([], [html.text("Dashboard")]),
-        option.None,
-        model.file_tree,
-        audit_name,
-        audit_tree.dashboard_path(for: audit_name),
-      )
+      html.div([], [
+        server_component.component([
+          server_component.route("/component-discussion/" <> audit_name),
+        ]),
+        audit_tree.view(
+          html.p([], [html.text("Dashboard")]),
+          option.None,
+          model.file_tree,
+          audit_name,
+          audit_tree.dashboard_path(for: audit_name),
+        ),
+      ])
 
     AuditPageRoute(audit_name:, page_path:) ->
       html.div([], [
+        server_component.component([
+          server_component.route("/component-discussion/" <> audit_name),
+          on_server_updated_discussion(ServerUpdatedDiscussion),
+        ]),
         audit_tree.view(
           audit_page.view(
             preprocessed_source: dict.get(model.source_files, page_path)
@@ -345,7 +469,8 @@ fn view(model: Model) -> Element(Msg) {
                 }
               })
               |> result.unwrap([]),
-            discussion: dict.new(),
+            discussion: dict.get(model.discussions, audit_name)
+              |> result.unwrap(dict.new()),
             selected_discussion: case model.selected_discussion {
               option.Some(selected_discussion) ->
                 dict.get(model.discussion_overlay_models, selected_discussion)
@@ -372,6 +497,20 @@ fn view(model: Model) -> Element(Msg) {
   }
 }
 
+pub fn on_server_updated_discussion(msg) {
+  use event <- event.on(events.server_updated_discussion)
+
+  let empty_error = [dynamic.DecodeError("", "", [])]
+
+  use audit_name <- result.try(
+    decode.run(event, decode.at(["detail", "audit_name"], decode.string))
+    |> result.replace_error(empty_error),
+  )
+
+  msg(audit_name)
+  |> Ok
+}
+
 fn map_audit_page_msg(msg) {
   case msg {
     audit_page.UserHoveredDiscussionEntry(
@@ -393,11 +532,7 @@ fn map_audit_page_msg(msg) {
     audit_page.UserUnhoveredDiscussionEntry -> UserUnhoveredDiscussionEntry
     audit_page.UserClickedDiscussionEntry(line_number:, column_number:) ->
       UserClickedDiscussionEntry(line_number:, column_number:)
-    audit_page.UserUpdatedDiscussion(
-      msg:,
-      line_number:,
-      column_number:,
-      update:,
-    ) -> UserUpdatedDiscussion(msg:, line_number:, column_number:, update:)
+    audit_page.UserUpdatedDiscussion(line_number:, column_number:, update:) ->
+      UserUpdatedDiscussion(line_number:, column_number:, update:)
   }
 }

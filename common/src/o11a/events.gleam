@@ -9,3 +9,5 @@ pub const user_unfocused_input = "user-unfocused-input"
 pub const user_maximized_thread = "user-maximized-thread"
 
 pub const server_updated_discussion = "sud"
+
+pub const client_mounted_discussion = "lustre-server-component-init"

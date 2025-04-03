@@ -9,7 +9,6 @@ import gleam/result
 import gleam/string
 import lib/enumerate
 import lustre/attribute
-import lustre/effect
 import lustre/element
 import lustre/element/html
 import lustre/event
@@ -38,61 +37,6 @@ pub type Model {
   )
 }
 
-// pub fn init(init_model: Model) -> #(Model, effect.Effect(Msg)) {
-//   // todo move this to a lustre event listener on the discussion component in
-//   // the client controller app
-//   let subscribe_to_discussion_updates_effect =
-//     effect.from(fn(dispatch) {
-//       window.add_event_listener(events.server_updated_discussion, fn(event) {
-//         let res = {
-//           use detail <- result.try(
-//             // browser_event.detail(event)
-//             Error(Nil)
-//             |> result.replace_error(snag.new("Failed to get detail")),
-//           )
-
-//           use detail <- result.try(
-//             decode.run(detail, decode.string)
-//             |> snag.map_error(string.inspect)
-//             |> snag.context("Failed to decode detail"),
-//           )
-
-//           use discussion <- result.try(
-//             json.parse(
-//               detail,
-//               decode.list(computed_note.computed_note_decoder()),
-//             )
-//             |> snag.map_error(string.inspect)
-//             |> snag.context("Failed to parse discussion"),
-//           )
-
-//           let discussion =
-//             list.group(discussion, by: fn(note) { note.parent_id })
-
-//           dispatch(ServerUpdatedDiscussion(discussion:))
-
-//           Ok(Nil)
-//         }
-
-//         case res {
-//           Ok(Nil) -> Nil
-//           Error(e) -> io.println(snag.line_print(e))
-//         }
-//       })
-//     })
-
-//   #(init_model, subscribe_to_discussion_updates_effect)
-// }
-
-// pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
-//   case msg {
-//     ServerUpdatedDiscussion(discussion:) -> #(
-//       Model(..model, discussion:),
-//       effect.none(),
-//     )
-//   }
-// }
-
 pub type Msg(msg) {
   UserHoveredDiscussionEntry(
     line_number: Int,
@@ -105,10 +49,9 @@ pub type Msg(msg) {
   UserUnhoveredDiscussionEntry
   UserClickedDiscussionEntry(line_number: Int, column_number: Int)
   UserUpdatedDiscussion(
-    msg: discussion_overlay.Msg,
     line_number: Int,
     column_number: Int,
-    update: #(discussion_overlay.Model, effect.Effect(msg)),
+    update: #(discussion_overlay.Model, discussion_overlay.Effect),
   )
 }
 
@@ -240,8 +183,9 @@ fn inline_comment_preview_view(
   discussion discussion,
 ) {
   let note_result =
-    list.reverse(parent_notes)
-    |> list.find(fn(note) { note.significance != computed_note.Informational })
+    list.find(parent_notes, fn(note) {
+      note.significance != computed_note.Informational
+    })
 
   case note_result {
     Ok(note) ->
@@ -509,7 +453,6 @@ fn discussion_view(
 
 fn map_discussion_msg(msg, selected_discussion: DiscussionReference) {
   UserUpdatedDiscussion(
-    msg:,
     line_number: selected_discussion.line_number,
     column_number: selected_discussion.column_number,
     update: discussion_overlay.update(selected_discussion.model, msg),
