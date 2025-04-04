@@ -9,7 +9,6 @@ all:
 run:
 	@(cd client \
 	&& gleam run -m lustre/dev build app --minify --outdir="../server/priv/static" \
-	&& npx vite build \
 	&& cd ../server \
 	add && gleam run dev)
 
