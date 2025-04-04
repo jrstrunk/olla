@@ -8607,12 +8607,6 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
           )
         ),
         on_mouse_leave(new UserUnhoveredDiscussionEntry()),
-        on_click(
-          new UserClickedDiscussionEntry(
-            element_line_number,
-            element_column_number
-          )
-        ),
         on_focus(
           new UserFocusedDiscussionEntry(
             element_line_number,
@@ -8621,19 +8615,31 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
         )
       ]),
       toList([
-        text2(
-          (() => {
-            let $ = string_length(note.message) > 40;
-            if ($) {
-              return (() => {
-                let _pipe = note.message;
-                return slice(_pipe, 0, 37);
-              })() + "...";
-            } else {
-              let _pipe = note.message;
-              return slice(_pipe, 0, 40);
-            }
-          })()
+        span(
+          toList([
+            on_click(
+              new UserClickedDiscussionEntry(
+                element_line_number,
+                element_column_number
+              )
+            )
+          ]),
+          toList([
+            text2(
+              (() => {
+                let $ = string_length(note.message) > 40;
+                if ($) {
+                  return (() => {
+                    let _pipe = note.message;
+                    return slice(_pipe, 0, 37);
+                  })() + "...";
+                } else {
+                  let _pipe = note.message;
+                  return slice(_pipe, 0, 40);
+                }
+              })()
+            )
+          ])
         ),
         discussion_view(
           discussion,
@@ -8671,12 +8677,6 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
           )
         ),
         on_mouse_leave(new UserUnhoveredDiscussionEntry()),
-        on_click(
-          new UserClickedDiscussionEntry(
-            element_line_number,
-            element_column_number
-          )
-        ),
         on_focus(
           new UserFocusedDiscussionEntry(
             element_line_number,
@@ -8685,7 +8685,17 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
         )
       ]),
       toList([
-        text2("Start new thread"),
+        span(
+          toList([
+            on_click(
+              new UserClickedDiscussionEntry(
+                element_line_number,
+                element_column_number
+              )
+            )
+          ]),
+          toList([text2("Start new thread")])
+        ),
         discussion_view(
           discussion,
           element_line_number,
@@ -8733,12 +8743,6 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, el
         )
       ),
       on_mouse_leave(new UserUnhoveredDiscussionEntry()),
-      on_click(
-        new UserClickedDiscussionEntry(
-          element_line_number,
-          element_column_number
-        )
-      ),
       on_focus(
         new UserFocusedDiscussionEntry(
           element_line_number,
@@ -8747,7 +8751,17 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, el
       )
     ]),
     toList([
-      text2(tokens),
+      span(
+        toList([
+          on_click(
+            new UserClickedDiscussionEntry(
+              element_line_number,
+              element_column_number
+            )
+          )
+        ]),
+        toList([text2(tokens)])
+      ),
       discussion_view(
         discussion,
         element_line_number,
@@ -8795,12 +8809,6 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
         )
       ),
       on_mouse_leave(new UserUnhoveredDiscussionEntry()),
-      on_click(
-        new UserClickedDiscussionEntry(
-          element_line_number,
-          element_column_number
-        )
-      ),
       on_focus(
         new UserFocusedDiscussionEntry(
           element_line_number,
@@ -8809,7 +8817,17 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
       )
     ]),
     toList([
-      text2(tokens),
+      span(
+        toList([
+          on_click(
+            new UserClickedDiscussionEntry(
+              element_line_number,
+              element_column_number
+            )
+          )
+        ]),
+        toList([text2(tokens)])
+      ),
       discussion_view(
         discussion,
         element_line_number,
@@ -9879,7 +9897,6 @@ function update2(model, msg) {
     return [model, fetch_discussion(audit_name)];
   } else if (msg instanceof UserEnteredKey) {
     let browser_event = msg.browser_event;
-    echo("user entered key", "src/o11a_client.gleam", 270);
     let $ = do_page_navigation(
       browser_event,
       model.keyboard_model
@@ -9995,6 +10012,7 @@ function update2(model, msg) {
   } else if (msg instanceof UserClickedDiscussionEntry2) {
     let line_number = msg.line_number;
     let column_number = msg.column_number;
+    echo("clicked discussion entry", "src/o11a_client.gleam", 338);
     return [
       model,
       from(

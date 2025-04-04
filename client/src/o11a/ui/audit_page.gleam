@@ -48,6 +48,7 @@ pub type Msg(msg) {
   )
   UserUnhoveredDiscussionEntry
   UserClickedDiscussionEntry(line_number: Int, column_number: Int)
+  UserFocusedDiscussionEntry(line_number: Int, column_number: Int)
   UserUpdatedDiscussion(
     line_number: Int,
     column_number: Int,
@@ -78,7 +79,7 @@ fn loc_view(
   case loc.significance {
     preprocessor.EmptyLine -> {
       html.p([attribute.class("loc"), attribute.id(loc.line_tag)], [
-        html.span([attribute.class("line-number code-extras")], [
+        html.span([attribute.class("line-number code-extras relative")], [
           html.text(loc.line_number_text),
         ]),
         ..preprocessed_nodes_view(loc, selected_discussion:, discussion:)
@@ -129,7 +130,7 @@ fn line_container_view(
 
         let child =
           html.p([attribute.class("loc flex")], [
-            html.span([attribute.class("line-number code-extras italic")], [
+            html.span([attribute.class("line-number code-extras relative")], [
               html.text(loc.line_number_text),
               html.span(
                 [
@@ -151,7 +152,7 @@ fn line_container_view(
         #(note_index_id, child)
       }),
       html.p([attribute.class("loc flex")], [
-        html.span([attribute.class("line-number code-extras")], [
+        html.span([attribute.class("line-number code-extras relative")], [
           html.text(loc.line_number_text),
         ]),
         element.fragment(preprocessed_nodes_view(
@@ -210,16 +211,26 @@ fn inline_comment_preview_view(
             is_reference: False,
           )),
           event.on_mouse_leave(UserUnhoveredDiscussionEntry),
-          event.on_click(UserClickedDiscussionEntry(
+          event.on_focus(UserFocusedDiscussionEntry(
             line_number: element_line_number,
             column_number: element_column_number,
           )),
         ],
         [
-          html.text(case string.length(note.message) > 40 {
-            True -> note.message |> string.slice(0, length: 37) <> "..."
-            False -> note.message |> string.slice(0, length: 40)
-          }),
+          html.span(
+            [
+              event.on_click(UserClickedDiscussionEntry(
+                line_number: element_line_number,
+                column_number: element_column_number,
+              )),
+            ],
+            [
+              html.text(case string.length(note.message) > 40 {
+                True -> note.message |> string.slice(0, length: 37) <> "..."
+                False -> note.message |> string.slice(0, length: 40)
+              }),
+            ],
+          ),
           discussion_view(
             element_line_number:,
             element_column_number:,
@@ -249,13 +260,21 @@ fn inline_comment_preview_view(
             is_reference: False,
           )),
           event.on_mouse_leave(UserUnhoveredDiscussionEntry),
-          event.on_click(UserClickedDiscussionEntry(
+          event.on_focus(UserFocusedDiscussionEntry(
             line_number: element_line_number,
             column_number: element_column_number,
           )),
         ],
         [
-          html.text("Start new thread"),
+          html.span(
+            [
+              event.on_click(UserClickedDiscussionEntry(
+                line_number: element_line_number,
+                column_number: element_column_number,
+              )),
+            ],
+            [html.text("Start new thread")],
+          ),
           discussion_view(
             element_line_number:,
             element_column_number:,
@@ -360,13 +379,21 @@ fn declaration_node_view(
         is_reference: False,
       )),
       event.on_mouse_leave(UserUnhoveredDiscussionEntry),
-      event.on_click(UserClickedDiscussionEntry(
+      event.on_focus(UserFocusedDiscussionEntry(
         line_number: element_line_number,
         column_number: element_column_number,
       )),
     ],
     [
-      html.text(tokens),
+      html.span(
+        [
+          event.on_click(UserClickedDiscussionEntry(
+            line_number: element_line_number,
+            column_number: element_column_number,
+          )),
+        ],
+        [html.text(tokens)],
+      ),
       discussion_view(
         element_line_number:,
         element_column_number:,
@@ -413,13 +440,21 @@ fn reference_node_view(
         is_reference: False,
       )),
       event.on_mouse_leave(UserUnhoveredDiscussionEntry),
-      event.on_click(UserClickedDiscussionEntry(
+      event.on_focus(UserFocusedDiscussionEntry(
         line_number: element_line_number,
         column_number: element_column_number,
       )),
     ],
     [
-      html.text(tokens),
+      html.span(
+        [
+          event.on_click(UserClickedDiscussionEntry(
+            line_number: element_line_number,
+            column_number: element_column_number,
+          )),
+        ],
+        [html.text(tokens)],
+      ),
       discussion_view(
         discussion:,
         element_line_number:,

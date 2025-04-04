@@ -335,6 +335,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     }
 
     UserClickedDiscussionEntry(line_number:, column_number:) -> {
+      echo "clicked discussion entry"
       #(
         model,
         effect.from(fn(_dispatch) {
