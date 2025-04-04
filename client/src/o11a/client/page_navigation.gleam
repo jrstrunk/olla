@@ -1,59 +1,93 @@
 import gleam/int
 import gleam/io
 import gleam/result
+import lustre/effect
 import o11a/client/attributes as client_attributes
 import o11a/client/selectors
-import o11a/client/storage
 import plinth/browser/document
 import plinth/browser/element
 import plinth/browser/event
-import plinth/browser/window
 import snag
 
-pub fn main() {
-  io.println("Starting page navigation")
-
-  window.add_event_listener("keydown", fn(event) {
-    let res = case storage.is_user_typing() {
-      True -> {
-        use <- handle_expanded_input_focus(event)
-        use <- handle_input_escape(event)
-        Ok(Nil)
-      }
-      False -> {
-        use <- handle_keyboard_navigation(event)
-        use <- handle_input_focus(event)
-        use <- handle_expanded_input_focus(event)
-        use <- handle_discussion_escape(event)
-        Ok(Nil)
-      }
-    }
-
-    case res {
-      Ok(Nil) -> Nil
-      Error(e) -> io.println(snag.line_print(e))
-    }
-  })
+pub type Model {
+  Model(
+    current_line_number: Int,
+    current_column_number: Int,
+    current_line_column_count: Int,
+    is_user_typing: Bool,
+  )
 }
 
-fn handle_input_escape(event, else_do) {
+pub fn init() {
+  Model(
+    current_line_number: 16,
+    current_column_number: 1,
+    current_line_column_count: 16,
+    is_user_typing: False,
+  )
+}
+
+/// Prevents the default browser behavior for the given accepted navigation keys
+pub fn prevent_default(event) {
   case event.key(event) {
-    "Escape" -> {
-      event.prevent_default(event)
-      focus_line_discussion(
-        line_number: storage.current_line_number(),
-        column_number: storage.current_column_number(),
-      )
+    "ArrowUp"
+    | "ArrowDown"
+    | "ArrowLeft"
+    | "ArrowRight"
+    | "PageUp"
+    | "PageDown"
+    | "Enter"
+    | "e"
+    | "Escape" -> event.prevent_default(event)
+    _ -> Nil
+  }
+}
+
+pub fn do_page_navigation(event, model: Model) {
+  let res = case model.is_user_typing {
+    True -> {
+      use <- handle_expanded_input_focus(event, model)
+      use <- handle_input_escape(event, model)
+      Ok(#(model, effect.none()))
     }
+    False -> {
+      use <- handle_keyboard_navigation(event, model)
+      use <- handle_input_focus(event, model)
+      use <- handle_expanded_input_focus(event, model)
+      use <- handle_discussion_escape(event, model)
+      Ok(#(model, effect.none()))
+    }
+  }
+
+  case res {
+    Ok(model_effect) -> model_effect
+    Error(e) -> {
+      io.println(snag.line_print(e))
+      #(model, effect.none())
+    }
+  }
+}
+
+fn handle_input_escape(event, model: Model, else_do) {
+  case event.key(event) {
+    "Escape" ->
+      #(
+        model,
+        focus_line_discussion(
+          line_number: model.current_line_number,
+          column_number: model.current_column_number,
+        ),
+      )
+      |> Ok
+
     _ -> else_do()
   }
 }
 
-fn handle_expanded_input_focus(event, else_do) {
+fn handle_expanded_input_focus(event, model, else_do) {
   case event.ctrl_key(event), event.key(event) {
     True, "e" -> {
-      event.prevent_default(event)
-      Ok(Nil)
+      Ok(#(model, effect.none()))
       // let exp =
       // get_line_discussion_expanded_input(
       // storage.current_line_number(),
@@ -64,78 +98,72 @@ fn handle_expanded_input_focus(event, else_do) {
   }
 }
 
-fn handle_keyboard_navigation(event, else_do) {
+fn handle_keyboard_navigation(event, model, else_do) {
   case event.shift_key(event), event.key(event) {
     False, "ArrowUp" -> {
-      event.prevent_default(event)
-      move_focus_line(by: -1)
+      move_focus_line(model, by: -1)
     }
     False, "ArrowDown" -> {
-      event.prevent_default(event)
-      move_focus_line(by: 1)
+      move_focus_line(model, by: 1)
     }
     True, "ArrowUp" -> {
-      event.prevent_default(event)
-      move_focus_line(by: -5)
+      move_focus_line(model, by: -5)
     }
     True, "ArrowDown" -> {
-      event.prevent_default(event)
-      move_focus_line(by: 5)
+      move_focus_line(model, by: 5)
     }
     _, "PageUp" -> {
-      event.prevent_default(event)
-      move_focus_line(by: -20)
+      move_focus_line(model, by: -20)
     }
     _, "PageDown" -> {
-      event.prevent_default(event)
-      move_focus_line(by: 20)
+      move_focus_line(model, by: 20)
     }
     _, "ArrowLeft" -> {
-      event.prevent_default(event)
-      move_focus_column(by: -1)
+      move_focus_column(model, by: -1)
     }
     _, "ArrowRight" -> {
-      event.prevent_default(event)
-      move_focus_column(by: 1)
+      move_focus_column(model, by: 1)
     }
     _, _ -> else_do()
   }
 }
 
-fn move_focus_line(by step) {
-  use #(new_line, column_count) <- result.try(find_next_discussion_line(
-    storage.current_line_number(),
+fn move_focus_line(model: Model, by step) {
+  use #(new_line, column_count) <- result.map(find_next_discussion_line(
+    model.current_line_number,
     step,
   ))
 
-  use Nil <- result.map(focus_line_discussion(
-    line_number: new_line,
-    column_number: int.min(column_count, storage.current_column_number()),
-  ))
-
-  storage.set_current_line_number(new_line)
-  storage.set_current_line_column_count(column_count)
+  #(
+    Model(..model, current_line_column_count: column_count),
+    focus_line_discussion(
+      line_number: new_line,
+      column_number: int.min(column_count, model.current_column_number),
+    ),
+  )
 }
 
-fn move_focus_column(by step) {
+fn move_focus_column(model: Model, by step) {
   let new_column =
-    int.max(1, storage.current_column_number() + step)
-    |> int.min(storage.current_line_column_count())
+    int.max(1, model.current_column_number + step)
+    |> int.min(model.current_line_column_count)
 
-  use Nil <- result.map(focus_line_discussion(
-    line_number: storage.current_line_number(),
-    column_number: new_column,
-  ))
-
-  storage.set_current_column_number(new_column)
+  #(
+    model,
+    focus_line_discussion(
+      line_number: model.current_line_number,
+      column_number: new_column,
+    ),
+  )
+  |> Ok
 }
 
-fn handle_discussion_escape(_event, _else_do) {
-  Ok(Nil)
+fn handle_discussion_escape(_event, model, _else_do) {
+  Ok(#(model, effect.none()))
 }
 
-fn handle_input_focus(_event, _else_do) {
-  Ok(Nil)
+fn handle_input_focus(_event, model, _else_do) {
+  Ok(#(model, effect.none()))
 }
 
 fn find_next_discussion_line(current_line current_line: Int, step step: Int) {
@@ -192,7 +220,13 @@ fn focus_line_discussion(
   line_number line_number: Int,
   column_number column_number: Int,
 ) {
-  selectors.discussion_entry(line_number:, column_number:)
-  |> result.replace_error(snag.new("Failed to find line discussion to focus"))
-  |> result.map(element.focus)
+  effect.from(fn(_dispatch) {
+    let _ =
+      selectors.discussion_entry(line_number:, column_number:)
+      |> result.replace_error(snag.new(
+        "Failed to find line discussion to focus",
+      ))
+      |> result.map(element.focus)
+    Nil
+  })
 }

@@ -2,6 +2,7 @@ import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/result
 import lustre/event
+import plinth/browser/event as browser_event
 
 pub fn on_ctrl_enter(msg: msg) {
   use event <- event.on("keydown")
@@ -43,6 +44,22 @@ pub fn on_up_arrow(msg: msg) {
   }
 }
 
+pub fn on_parent_click(msg: msg) {
+  event.on("click", fn(event) {
+    event.stop_propagation(event)
+    let empty_error = [dynamic.DecodeError("", "", [])]
+    use event <- result.try(
+      browser_event.cast_event(event)
+      |> result.replace_error(empty_error),
+    )
+
+    case browser_event.target(event) == browser_event.current_target(event) {
+      True -> Ok(msg)
+      False -> Error(empty_error)
+    }
+  })
+}
+
 pub fn on_input_no_propagation(msg: fn(String) -> msg) {
   use event <- event.on("input")
   event.stop_propagation(event)
@@ -59,4 +76,11 @@ pub fn suppress_keydown_propagation(msg) {
   use event <- event.on("keydown")
   event.stop_propagation(event)
   Ok(msg)
+}
+
+pub fn suppress_click_propagation() {
+  use event <- event.on("click")
+  event.stop_propagation(event)
+  // Ok(msg)
+  Error([dynamic.DecodeError("", "", [])])
 }

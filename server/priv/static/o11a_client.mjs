@@ -655,15 +655,15 @@ function divideFloat(a2, b) {
   }
 }
 function makeError(variant, module, line2, fn, message, extra) {
-  let error = new globalThis.Error(message);
-  error.gleam_error = variant;
-  error.module = module;
-  error.line = line2;
-  error.function = fn;
-  error.fn = fn;
+  let error2 = new globalThis.Error(message);
+  error2.gleam_error = variant;
+  error2.module = module;
+  error2.line = line2;
+  error2.function = fn;
+  error2.fn = fn;
   for (let k in extra)
-    error[k] = extra[k];
-  return error;
+    error2[k] = extra[k];
+  return error2;
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/option.mjs
@@ -1221,8 +1221,8 @@ function map_error(result, fun) {
     let x2 = result[0];
     return new Ok(x2);
   } else {
-    let error = result[0];
-    return new Error(fun(error));
+    let error2 = result[0];
+    return new Error(fun(error2));
   }
 }
 function try$(result, fun) {
@@ -1245,12 +1245,12 @@ function unwrap2(result, default$) {
     return default$;
   }
 }
-function replace_error(result, error) {
+function replace_error(result, error2) {
   if (result.isOk()) {
     let x2 = result[0];
     return new Ok(x2);
   } else {
-    return new Error(error);
+    return new Error(error2);
   }
 }
 function try_recover(result, fun) {
@@ -1258,12 +1258,15 @@ function try_recover(result, fun) {
     let value4 = result[0];
     return new Ok(value4);
   } else {
-    let error = result[0];
-    return fun(error);
+    let error2 = result[0];
+    return fun(error2);
   }
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/string_tree.mjs
+function append2(tree, second2) {
+  return add(tree, identity(second2));
+}
 function reverse2(tree) {
   let _pipe = tree;
   let _pipe$1 = identity(_pipe);
@@ -1289,7 +1292,7 @@ function map_errors(result, f) {
     }
   );
 }
-function string(data2) {
+function string2(data2) {
   return decode_string(data2);
 }
 function do_any(decoders) {
@@ -1311,7 +1314,7 @@ function do_any(decoders) {
     }
   };
 }
-function push_path(error, name) {
+function push_path(error2, name) {
   let name$1 = identity(name);
   let decoder = do_any(
     toList([
@@ -1332,11 +1335,11 @@ function push_path(error, name) {
       return identity(_pipe$1);
     }
   })();
-  let _record = error;
+  let _record = error2;
   return new DecodeError(
     _record.expected,
     _record.found,
-    prepend(name$2, error.path)
+    prepend(name$2, error2.path)
   );
 }
 function field(name, inner_type) {
@@ -2073,37 +2076,44 @@ var NOT_FOUND = {};
 function identity(x2) {
   return x2;
 }
+function parse_int(value4) {
+  if (/^[-+]?(\d+)$/.test(value4)) {
+    return new Ok(parseInt(value4));
+  } else {
+    return new Error(Nil);
+  }
+}
 function to_string(term) {
   return term.toString();
 }
 function float_to_string(float4) {
-  const string5 = float4.toString().replace("+", "");
-  if (string5.indexOf(".") >= 0) {
-    return string5;
+  const string6 = float4.toString().replace("+", "");
+  if (string6.indexOf(".") >= 0) {
+    return string6;
   } else {
-    const index5 = string5.indexOf("e");
+    const index5 = string6.indexOf("e");
     if (index5 >= 0) {
-      return string5.slice(0, index5) + ".0" + string5.slice(index5);
+      return string6.slice(0, index5) + ".0" + string6.slice(index5);
     } else {
-      return string5 + ".0";
+      return string6 + ".0";
     }
   }
 }
-function string_replace(string5, target2, substitute) {
-  if (typeof string5.replaceAll !== "undefined") {
-    return string5.replaceAll(target2, substitute);
+function string_replace(string6, target2, substitute) {
+  if (typeof string6.replaceAll !== "undefined") {
+    return string6.replaceAll(target2, substitute);
   }
-  return string5.replace(
+  return string6.replace(
     // $& means the whole matched string
     new RegExp(target2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"),
     substitute
   );
 }
-function string_length(string5) {
-  if (string5 === "") {
+function string_length(string6) {
+  if (string6 === "") {
     return 0;
   }
-  const iterator = graphemes_iterator(string5);
+  const iterator = graphemes_iterator(string6);
   if (iterator) {
     let i = 0;
     for (const _ of iterator) {
@@ -2111,34 +2121,34 @@ function string_length(string5) {
     }
     return i;
   } else {
-    return string5.match(/./gsu).length;
+    return string6.match(/./gsu).length;
   }
 }
-function graphemes(string5) {
-  const iterator = graphemes_iterator(string5);
+function graphemes(string6) {
+  const iterator = graphemes_iterator(string6);
   if (iterator) {
     return List.fromArray(Array.from(iterator).map((item) => item.segment));
   } else {
-    return List.fromArray(string5.match(/./gsu));
+    return List.fromArray(string6.match(/./gsu));
   }
 }
 var segmenter = void 0;
-function graphemes_iterator(string5) {
+function graphemes_iterator(string6) {
   if (globalThis.Intl && Intl.Segmenter) {
     segmenter ||= new Intl.Segmenter();
-    return segmenter.segment(string5)[Symbol.iterator]();
+    return segmenter.segment(string6)[Symbol.iterator]();
   }
 }
-function pop_grapheme(string5) {
+function pop_grapheme(string6) {
   let first3;
-  const iterator = graphemes_iterator(string5);
+  const iterator = graphemes_iterator(string6);
   if (iterator) {
     first3 = iterator.next().value?.segment;
   } else {
-    first3 = string5.match(/./su)?.[0];
+    first3 = string6.match(/./su)?.[0];
   }
   if (first3) {
-    return new Ok([first3, string5.slice(first3.length)]);
+    return new Ok([first3, string6.slice(first3.length)]);
   } else {
     return new Error(Nil);
   }
@@ -2146,8 +2156,11 @@ function pop_grapheme(string5) {
 function pop_codeunit(str) {
   return [str.charCodeAt(0) | 0, str.slice(1)];
 }
-function lowercase(string5) {
-  return string5.toLowerCase();
+function lowercase(string6) {
+  return string6.toLowerCase();
+}
+function add(a2, b) {
+  return a2 + b;
 }
 function split(xs, pattern) {
   return List.fromArray(xs.split(pattern));
@@ -2169,11 +2182,11 @@ function concat(xs) {
   }
   return result;
 }
-function string_slice(string5, idx, len) {
-  if (len <= 0 || idx >= string5.length) {
+function string_slice(string6, idx, len) {
+  if (len <= 0 || idx >= string6.length) {
     return "";
   }
-  const iterator = graphemes_iterator(string5);
+  const iterator = graphemes_iterator(string6);
   if (iterator) {
     while (idx-- > 0) {
       iterator.next();
@@ -2188,7 +2201,7 @@ function string_slice(string5, idx, len) {
     }
     return result;
   } else {
-    return string5.match(/./gsu).slice(idx, idx + len).join("");
+    return string6.match(/./gsu).slice(idx, idx + len).join("");
   }
 }
 function string_codeunit_slice(str, from2, length4) {
@@ -2234,22 +2247,22 @@ var trim_start_regex = /* @__PURE__ */ new RegExp(
   `^[${unicode_whitespaces}]*`
 );
 var trim_end_regex = /* @__PURE__ */ new RegExp(`[${unicode_whitespaces}]*$`);
-function trim_start(string5) {
-  return string5.replace(trim_start_regex, "");
+function trim_start(string6) {
+  return string6.replace(trim_start_regex, "");
 }
-function trim_end(string5) {
-  return string5.replace(trim_end_regex, "");
+function trim_end(string6) {
+  return string6.replace(trim_end_regex, "");
 }
 function console_log(term) {
   console.log(term);
 }
-function print(string5) {
+function print(string6) {
   if (typeof process === "object" && process.stdout?.write) {
-    process.stdout.write(string5);
+    process.stdout.write(string6);
   } else if (typeof Deno === "object") {
-    Deno.stdout.writeSync(new TextEncoder().encode(string5));
+    Deno.stdout.writeSync(new TextEncoder().encode(string6));
   } else {
-    console.log(string5);
+    console.log(string6);
   }
 }
 function floor(float4) {
@@ -2268,8 +2281,8 @@ function random_uniform() {
 function codepoint(int5) {
   return new UtfCodepoint(int5);
 }
-function string_to_codepoint_integer_list(string5) {
-  return List.fromArray(Array.from(string5).map((item) => item.codePointAt(0)));
+function string_to_codepoint_integer_list(string6) {
+  return List.fromArray(Array.from(string6).map((item) => item.codePointAt(0)));
 }
 function utf_codepoint_to_int(utf_codepoint) {
   return utf_codepoint.value;
@@ -2497,69 +2510,91 @@ function round(x2) {
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/int.mjs
-function random(max) {
-  let _pipe = random_uniform() * identity(max);
+function min(a2, b) {
+  let $ = a2 < b;
+  if ($) {
+    return a2;
+  } else {
+    return b;
+  }
+}
+function max(a2, b) {
+  let $ = a2 > b;
+  if ($) {
+    return a2;
+  } else {
+    return b;
+  }
+}
+function random(max2) {
+  let _pipe = random_uniform() * identity(max2);
   let _pipe$1 = floor(_pipe);
   return round(_pipe$1);
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/string.mjs
-function reverse3(string5) {
-  let _pipe = string5;
+function reverse3(string6) {
+  let _pipe = string6;
   let _pipe$1 = identity(_pipe);
   let _pipe$2 = reverse2(_pipe$1);
   return identity(_pipe$2);
 }
-function replace(string5, pattern, substitute) {
-  let _pipe = string5;
+function replace(string6, pattern, substitute) {
+  let _pipe = string6;
   let _pipe$1 = identity(_pipe);
   let _pipe$2 = string_replace(_pipe$1, pattern, substitute);
   return identity(_pipe$2);
 }
-function slice(string5, idx, len) {
+function slice(string6, idx, len) {
   let $ = len < 0;
   if ($) {
     return "";
   } else {
     let $1 = idx < 0;
     if ($1) {
-      let translated_idx = string_length(string5) + idx;
+      let translated_idx = string_length(string6) + idx;
       let $2 = translated_idx < 0;
       if ($2) {
         return "";
       } else {
-        return string_slice(string5, translated_idx, len);
+        return string_slice(string6, translated_idx, len);
       }
     } else {
-      return string_slice(string5, idx, len);
+      return string_slice(string6, idx, len);
     }
   }
+}
+function append3(first3, second2) {
+  let _pipe = first3;
+  let _pipe$1 = identity(_pipe);
+  let _pipe$2 = append2(_pipe$1, second2);
+  return identity(_pipe$2);
 }
 function concat2(strings) {
   let _pipe = strings;
   let _pipe$1 = concat(_pipe);
   return identity(_pipe$1);
 }
-function trim(string5) {
-  let _pipe = string5;
+function trim(string6) {
+  let _pipe = string6;
   let _pipe$1 = trim_start(_pipe);
   return trim_end(_pipe$1);
 }
 function drop_start(loop$string, loop$num_graphemes) {
   while (true) {
-    let string5 = loop$string;
+    let string6 = loop$string;
     let num_graphemes = loop$num_graphemes;
     let $ = num_graphemes > 0;
     if (!$) {
-      return string5;
+      return string6;
     } else {
-      let $1 = pop_grapheme(string5);
+      let $1 = pop_grapheme(string6);
       if ($1.isOk()) {
         let string$1 = $1[0][1];
         loop$string = string$1;
         loop$num_graphemes = num_graphemes - 1;
       } else {
-        return string5;
+        return string6;
       }
     }
   }
@@ -2574,13 +2609,13 @@ function split2(x2, substring) {
     return map2(_pipe$2, identity);
   }
 }
-function do_to_utf_codepoints(string5) {
-  let _pipe = string5;
+function do_to_utf_codepoints(string6) {
+  let _pipe = string6;
   let _pipe$1 = string_to_codepoint_integer_list(_pipe);
   return map2(_pipe$1, codepoint);
 }
-function to_utf_codepoints(string5) {
-  return do_to_utf_codepoints(string5);
+function to_utf_codepoints(string6) {
+  return do_to_utf_codepoints(string6);
 }
 function inspect2(term) {
   let _pipe = inspect(term);
@@ -2615,8 +2650,8 @@ function index2(data2, key2) {
 }
 function list(data2, decode2, pushPath, index5, emptyList) {
   if (!(data2 instanceof List || Array.isArray(data2))) {
-    const error = new DecodeError2("List", classify_dynamic(data2), emptyList);
-    return [emptyList, List.fromArray([error])];
+    const error2 = new DecodeError2("List", classify_dynamic(data2), emptyList);
+    return [emptyList, List.fromArray([error2])];
   }
   const decoded = [];
   for (const element2 of data2) {
@@ -2636,7 +2671,7 @@ function int(data2) {
     return new Ok(data2);
   return new Error(0);
 }
-function string2(data2) {
+function string3(data2) {
   if (typeof data2 === "string")
     return new Ok(data2);
   return new Error(0);
@@ -2779,9 +2814,9 @@ function failure(zero, expected) {
 var bool = /* @__PURE__ */ new Decoder(decode_bool2);
 var int2 = /* @__PURE__ */ new Decoder(decode_int2);
 function decode_string2(data2) {
-  return run_dynamic_function(data2, "String", string2);
+  return run_dynamic_function(data2, "String", string3);
 }
-var string3 = /* @__PURE__ */ new Decoder(decode_string2);
+var string4 = /* @__PURE__ */ new Decoder(decode_string2);
 function list2(inner) {
   return new Decoder(
     (data2) => {
@@ -2799,7 +2834,7 @@ function list2(inner) {
 }
 function push_path2(layer, path2) {
   let decoder = one_of(
-    string3,
+    string4,
     toList([
       (() => {
         let _pipe = int2;
@@ -2822,12 +2857,12 @@ function push_path2(layer, path2) {
   );
   let errors = map2(
     layer[1],
-    (error) => {
-      let _record = error;
+    (error2) => {
+      let _record = error2;
       return new DecodeError2(
         _record.expected,
         _record.found,
-        append(path$1, error.path)
+        append(path$1, error2.path)
       );
     }
   );
@@ -2934,12 +2969,12 @@ function identity2(x2) {
 function do_null() {
   return null;
 }
-function decode(string5) {
+function decode(string6) {
   try {
-    const result = JSON.parse(string5);
+    const result = JSON.parse(string6);
     return new Ok(result);
   } catch (err) {
-    return new Error(getJsonDecodeError(err, string5));
+    return new Error(getJsonDecodeError(err, string6));
   }
 }
 function getJsonDecodeError(stdErr, json) {
@@ -3004,12 +3039,12 @@ function jsCoreUnexpectedByteError(err) {
 function toHex(char) {
   return "0x" + char.charCodeAt(0).toString(16).toUpperCase();
 }
-function getPositionFromMultiline(line2, column, string5) {
+function getPositionFromMultiline(line2, column, string6) {
   if (line2 === 1)
     return column - 1;
   let currentLn = 1;
   let position = 0;
-  string5.split("").find((char, idx) => {
+  string6.split("").find((char, idx) => {
     if (char === "\n")
       currentLn += 1;
     if (currentLn === line2) {
@@ -3056,7 +3091,7 @@ function parse(json, decoder) {
 function to_string2(json) {
   return json_to_string(json);
 }
-function string4(input2) {
+function string5(input2) {
   return identity2(input2);
 }
 function int3(input2) {
@@ -3688,8 +3723,8 @@ function parse_userinfo_loop(loop$original, loop$uri_string, loop$pieces, loop$s
     }
   }
 }
-function parse_authority_pieces(string5, pieces) {
-  return parse_userinfo_loop(string5, string5, pieces, 0);
+function parse_authority_pieces(string6, pieces) {
+  return parse_userinfo_loop(string6, string6, pieces, 0);
 }
 function parse_authority_with_slashes(uri_string, pieces) {
   if (uri_string === "//") {
@@ -4691,13 +4726,13 @@ var LustreClientApplication = class _LustreClientApplication {
    *
    * @returns {Gleam.Ok<(action: Lustre.Action<Lustre.Client, Msg>>) => void>}
    */
-  static start({ init: init5, update: update3, view: view5 }, selector, flags) {
+  static start({ init: init6, update: update3, view: view5 }, selector, flags) {
     if (!is_browser())
       return new Error(new NotABrowser());
     const root = selector instanceof HTMLElement ? selector : document.querySelector(selector);
     if (!root)
       return new Error(new ElementNotFound(selector));
-    const app = new _LustreClientApplication(root, init5(flags), update3, view5);
+    const app = new _LustreClientApplication(root, init6(flags), update3, view5);
     return new Ok((action) => app.send(action));
   }
   /**
@@ -4708,9 +4743,9 @@ var LustreClientApplication = class _LustreClientApplication {
    *
    * @returns {LustreClientApplication}
    */
-  constructor(root, [init5, effects], update3, view5) {
+  constructor(root, [init6, effects], update3, view5) {
     this.root = root;
-    this.#model = init5;
+    this.#model = init6;
     this.#update = update3;
     this.#view = view5;
     this.#tickScheduled = window.setTimeout(
@@ -4827,9 +4862,9 @@ var LustreClientApplication = class _LustreClientApplication {
 };
 var start = LustreClientApplication.start;
 var LustreServerApplication = class _LustreServerApplication {
-  static start({ init: init5, update: update3, view: view5, on_attribute_change }, flags) {
+  static start({ init: init6, update: update3, view: view5, on_attribute_change }, flags) {
     const app = new _LustreServerApplication(
-      init5(flags),
+      init6(flags),
       update3,
       view5,
       on_attribute_change
@@ -4941,9 +4976,9 @@ var is_browser = () => globalThis.window && window.document;
 
 // build/dev/javascript/lustre/lustre.mjs
 var App = class extends CustomType {
-  constructor(init5, update3, view5, on_attribute_change) {
+  constructor(init6, update3, view5, on_attribute_change) {
     super();
-    this.init = init5;
+    this.init = init6;
     this.update = update3;
     this.view = view5;
     this.on_attribute_change = on_attribute_change;
@@ -4957,8 +4992,8 @@ var ElementNotFound = class extends CustomType {
 };
 var NotABrowser = class extends CustomType {
 };
-function application(init5, update3, view5) {
-  return new App(init5, update3, view5, new None());
+function application(init6, update3, view5) {
+  return new App(init6, update3, view5, new None());
 }
 function start2(app, selector, flags) {
   return guard(
@@ -5033,7 +5068,7 @@ function on_blur(msg) {
 }
 function value2(event3) {
   let _pipe = event3;
-  return field("target", field("value", string))(
+  return field("target", field("value", string2))(
     _pipe
   );
 }
@@ -5252,7 +5287,7 @@ function map_promise(promise, fn) {
   );
 }
 function rescue(promise, fn) {
-  return promise.catch((error) => fn(error));
+  return promise.catch((error2) => fn(error2));
 }
 
 // build/dev/javascript/gleam_javascript/gleam/javascript/promise.mjs
@@ -5286,8 +5321,8 @@ function try_await(promise, callback) {
 async function raw_send(request) {
   try {
     return new Ok(await fetch(request));
-  } catch (error) {
-    return new Error(new NetworkError(error.toString()));
+  } catch (error2) {
+    return new Error(new NetworkError(error2.toString()));
   }
 }
 function from_fetch_response(response) {
@@ -5318,7 +5353,7 @@ async function read_text_body(response) {
   let body2;
   try {
     body2 = await response.body.text();
-  } catch (error) {
+  } catch (error2) {
     return new Error(new UnableToReadBody());
   }
   return new Ok(response.withFields({ body: body2 }));
@@ -5658,15 +5693,15 @@ var AuditMetaData = class extends CustomType {
 function audit_metadata_decoder() {
   return field2(
     "audit_name",
-    string3,
+    string4,
     (audit_name) => {
       return field2(
         "audit_formatted_name",
-        string3,
+        string4,
         (audit_formatted_name) => {
           return field2(
             "in_scope_files",
-            list2(string3),
+            list2(string4),
             (in_scope_files) => {
               return success(
                 new AuditMetaData(
@@ -5835,7 +5870,7 @@ function note_modifier_to_int(note_modifier) {
 function encode_note_submission(note) {
   return object2(
     toList([
-      ["p", string4(note.parent_id)],
+      ["p", string5(note.parent_id)],
       [
         "s",
         int3(
@@ -5845,9 +5880,9 @@ function encode_note_submission(note) {
           })()
         )
       ],
-      ["u", string4(note.user_id)],
-      ["m", string4(note.message)],
-      ["x", nullable(note.expanded_message, string4)],
+      ["u", string5(note.user_id)],
+      ["m", string5(note.message)],
+      ["x", nullable(note.expanded_message, string5)],
       [
         "d",
         int3(
@@ -5962,11 +5997,11 @@ function significance_from_int(note_significance) {
 function computed_note_decoder() {
   return field2(
     "n",
-    string3,
+    string4,
     (note_id) => {
       return field2(
         "p",
-        string3,
+        string4,
         (parent_id) => {
           return field2(
             "s",
@@ -5974,15 +6009,15 @@ function computed_note_decoder() {
             (significance) => {
               return field2(
                 "u",
-                string3,
+                string4,
                 (user_name) => {
                   return field2(
                     "m",
-                    string3,
+                    string4,
                     (message) => {
                       return field2(
                         "x",
-                        optional(string3),
+                        optional(string4),
                         (expanded_message) => {
                           return field2(
                             "t",
@@ -6204,16 +6239,16 @@ var NodeReference = class extends CustomType {
 function pre_processed_line_significance_decoder() {
   return field2(
     "type",
-    string3,
+    string4,
     (variant) => {
       if (variant === "single_declaration_line") {
         return field2(
           "topic_id",
-          string3,
+          string4,
           (topic_id) => {
             return field2(
               "topic_title",
-              string3,
+              string4,
               (topic_title) => {
                 return success(
                   new SingleDeclarationLine(topic_id, topic_title)
@@ -6299,11 +6334,11 @@ function node_declaration_kind_from_string(kind) {
 function node_reference_decoder() {
   return field2(
     "title",
-    string3,
+    string4,
     (title2) => {
       return field2(
         "topic_id",
-        string3,
+        string4,
         (topic_id) => {
           return success(new NodeReference(title2, topic_id));
         }
@@ -6314,15 +6349,15 @@ function node_reference_decoder() {
 function node_declaration_decoder() {
   return field2(
     "title",
-    string3,
+    string4,
     (title2) => {
       return field2(
         "topic_id",
-        string3,
+        string4,
         (topic_id) => {
           return field2(
             "kind",
-            string3,
+            string4,
             (kind) => {
               return field2(
                 "references",
@@ -6348,7 +6383,7 @@ function node_declaration_decoder() {
 function pre_processed_node_decoder() {
   return field2(
     "type",
-    string3,
+    string4,
     (variant) => {
       if (variant === "pre_processed_declaration") {
         return field2(
@@ -6361,7 +6396,7 @@ function pre_processed_node_decoder() {
               (node_declaration) => {
                 return field2(
                   "tokens",
-                  string3,
+                  string4,
                   (tokens) => {
                     return success(
                       new PreProcessedDeclaration(
@@ -6387,7 +6422,7 @@ function pre_processed_node_decoder() {
               (referenced_node_declaration) => {
                 return field2(
                   "tokens",
-                  string3,
+                  string4,
                   (tokens) => {
                     return success(
                       new PreProcessedReference(
@@ -6405,7 +6440,7 @@ function pre_processed_node_decoder() {
       } else if (variant === "pre_processed_node") {
         return field2(
           "element",
-          string3,
+          string4,
           (element2) => {
             return success(new PreProcessedNode(element2));
           }
@@ -6413,7 +6448,7 @@ function pre_processed_node_decoder() {
       } else if (variant === "pre_processed_gap_node") {
         return field2(
           "element",
-          string3,
+          string4,
           (element2) => {
             return field2(
               "leading_spaces",
@@ -6443,7 +6478,7 @@ function pre_processed_line_decoder() {
         (line_number) => {
           return field2(
             "i",
-            string3,
+            string4,
             (line_id) => {
               return field2(
                 "l",
@@ -6491,11 +6526,26 @@ function pre_processed_line_decoder() {
 function focus(element2) {
   element2.focus();
 }
+function datasetGet(el, key2) {
+  if (key2 in el.dataset) {
+    return new Ok(el.dataset[key2]);
+  }
+  return new Error(void 0);
+}
 
-// build/dev/javascript/o11a_common/o11a/classes.mjs
-var discussion_entry_hover = "deh";
-var discussion_entry = "de";
-var line_container = "line-container";
+// build/dev/javascript/plinth/event_ffi.mjs
+function preventDefault(event3) {
+  return event3.preventDefault();
+}
+function ctrlKey(event3) {
+  return event3.ctrlKey;
+}
+function key(event3) {
+  return event3.key;
+}
+function shiftKey(event3) {
+  return event3.shiftKey;
+}
 
 // build/dev/javascript/plinth/document_ffi.mjs
 function querySelector(query) {
@@ -6506,13 +6556,458 @@ function querySelector(query) {
   return new Ok(found);
 }
 
+// build/dev/javascript/plinth/window_ffi.mjs
+function self() {
+  return globalThis;
+}
+function alert(message) {
+  window.alert(message);
+}
+function prompt(message, defaultValue) {
+  let text3 = window.prompt(message, defaultValue);
+  if (text3 !== null) {
+    return new Ok(text3);
+  } else {
+    return new Error();
+  }
+}
+function addEventListener3(type, listener) {
+  return window.addEventListener(type, listener);
+}
+function document2(window2) {
+  return window2.document;
+}
+async function requestWakeLock() {
+  try {
+    return new Ok(await window.navigator.wakeLock.request("screen"));
+  } catch (error2) {
+    return new Error(error2.toString());
+  }
+}
+function location2() {
+  return window.location.href;
+}
+function locationOf(w) {
+  try {
+    return new Ok(w.location.href);
+  } catch (error2) {
+    return new Error(error2.toString());
+  }
+}
+function setLocation(w, url) {
+  w.location.href = url;
+}
+function origin() {
+  return window.location.origin;
+}
+function pathname() {
+  return window.location.pathname;
+}
+function reload() {
+  return window.location.reload();
+}
+function reloadOf(w) {
+  return w.location.reload();
+}
+function focus2(w) {
+  return w.focus();
+}
+function getHash2() {
+  const hash = window.location.hash;
+  if (hash == "") {
+    return new Error();
+  }
+  return new Ok(decodeURIComponent(hash.slice(1)));
+}
+function getSearch() {
+  const search = window.location.search;
+  if (search == "") {
+    return new Error();
+  }
+  return new Ok(decodeURIComponent(search.slice(1)));
+}
+function innerHeight(w) {
+  return w.innerHeight;
+}
+function innerWidth(w) {
+  return w.innerWidth;
+}
+function outerHeight(w) {
+  return w.outerHeight;
+}
+function outerWidth(w) {
+  return w.outerWidth;
+}
+function screenX(w) {
+  return w.screenX;
+}
+function screenY(w) {
+  return w.screenY;
+}
+function screenTop(w) {
+  return w.screenTop;
+}
+function screenLeft(w) {
+  return w.screenLeft;
+}
+function scrollX(w) {
+  return w.scrollX;
+}
+function scrollY(w) {
+  return w.scrollY;
+}
+function open(url, target2, features) {
+  try {
+    return new Ok(window.open(url, target2, features));
+  } catch (error2) {
+    return new Error(error2.toString());
+  }
+}
+function close(w) {
+  w.close();
+}
+function closed(w) {
+  return w.closed;
+}
+function queueMicrotask(callback) {
+  return window.queueMicrotask(callback);
+}
+function requestAnimationFrame(callback) {
+  return window.requestAnimationFrame(callback);
+}
+function cancelAnimationFrame(callback) {
+  return window.cancelAnimationFrame(callback);
+}
+function eval_(string) {
+  try {
+    return new Ok(eval(string));
+  } catch (error2) {
+    return new Error(error2.toString());
+  }
+}
+async function import_(string6) {
+  try {
+    return new Ok(await import(string6));
+  } catch (error2) {
+    return new Error(error2.toString());
+  }
+}
+
+// build/dev/javascript/snag/snag.mjs
+var Snag = class extends CustomType {
+  constructor(issue, cause) {
+    super();
+    this.issue = issue;
+    this.cause = cause;
+  }
+};
+function new$4(issue) {
+  return new Snag(issue, toList([]));
+}
+function error(issue) {
+  return new Error(new$4(issue));
+}
+function line_print(snag) {
+  let _pipe = prepend(append3("error: ", snag.issue), snag.cause);
+  return join(_pipe, " <- ");
+}
+
+// build/dev/javascript/o11a_client/o11a/client/attributes.mjs
+function read_line_count_data(data2) {
+  let _pipe = datasetGet(data2, "lc");
+  let _pipe$1 = try$(_pipe, parse_int);
+  return replace_error(
+    _pipe$1,
+    new$4("Failed to read line count data")
+  );
+}
+function encode_column_count_data(column_count) {
+  return data("cc", to_string(column_count));
+}
+function read_column_count_data(data2) {
+  let _pipe = datasetGet(data2, "cc");
+  let _pipe$1 = try$(_pipe, parse_int);
+  return replace_error(
+    _pipe$1,
+    new$4("Failed to read column count data")
+  );
+}
+
+// build/dev/javascript/o11a_common/o11a/classes.mjs
+var discussion_entry_hover = "deh";
+var discussion_entry = "de";
+var line_container = "line-container";
+
 // build/dev/javascript/o11a_client/o11a/client/selectors.mjs
+function non_empty_line(line_number) {
+  let _pipe = querySelector(
+    "#L" + to_string(line_number) + "." + line_container
+  );
+  return replace_error(
+    _pipe,
+    new$4("Failed to find non-empty line")
+  );
+}
+function discussion_entry2(line_number, column_number) {
+  return querySelector(
+    ".dl" + to_string(line_number) + ".dc" + to_string(
+      column_number
+    )
+  );
+}
 function discussion_input(line_number, column_number) {
   return querySelector(
     ".dl" + to_string(line_number) + ".dc" + to_string(
       column_number
     ) + " input"
   );
+}
+
+// build/dev/javascript/o11a_client/o11a/client/page_navigation.mjs
+var Model2 = class extends CustomType {
+  constructor(current_line_number, current_column_number, current_line_column_count, is_user_typing) {
+    super();
+    this.current_line_number = current_line_number;
+    this.current_column_number = current_column_number;
+    this.current_line_column_count = current_line_column_count;
+    this.is_user_typing = is_user_typing;
+  }
+};
+function init3() {
+  return new Model2(16, 1, 16, false);
+}
+function prevent_default2(event3) {
+  let $ = key(event3);
+  if ($ === "ArrowUp") {
+    return preventDefault(event3);
+  } else if ($ === "ArrowDown") {
+    return preventDefault(event3);
+  } else if ($ === "ArrowLeft") {
+    return preventDefault(event3);
+  } else if ($ === "ArrowRight") {
+    return preventDefault(event3);
+  } else if ($ === "PageUp") {
+    return preventDefault(event3);
+  } else if ($ === "PageDown") {
+    return preventDefault(event3);
+  } else if ($ === "Enter") {
+    return preventDefault(event3);
+  } else if ($ === "e") {
+    return preventDefault(event3);
+  } else if ($ === "Escape") {
+    return preventDefault(event3);
+  } else {
+    return void 0;
+  }
+}
+function handle_expanded_input_focus(event3, model, else_do) {
+  let $ = ctrlKey(event3);
+  let $1 = key(event3);
+  if ($ && $1 === "e") {
+    return new Ok([model, none()]);
+  } else {
+    return else_do();
+  }
+}
+function handle_discussion_escape(_, model, _1) {
+  return new Ok([model, none()]);
+}
+function handle_input_focus(_, model, _1) {
+  return new Ok([model, none()]);
+}
+function find_next_discussion_line(current_line, step) {
+  return try$(
+    (() => {
+      let _pipe = querySelector("#audit-page");
+      let _pipe$1 = replace_error(
+        _pipe,
+        new$4("Failed to find audit page")
+      );
+      return try$(_pipe$1, read_line_count_data);
+    })(),
+    (line_count) => {
+      if (step > 0 && current_line === line_count) {
+        return error(
+          "Line is " + to_string(line_count) + ", cannot go further down"
+        );
+      } else if (step < 0 && current_line === 1) {
+        return error("Line is 1, cannot go further up");
+      } else if (step === 0) {
+        return error("Step is zero");
+      } else {
+        let next_line = max(1, min(line_count, current_line + step));
+        let $ = non_empty_line(next_line);
+        if ($.isOk()) {
+          let line2 = $[0];
+          return map3(
+            read_column_count_data(line2),
+            (column_count) => {
+              return [next_line, column_count];
+            }
+          );
+        } else {
+          return find_next_discussion_line(
+            next_line,
+            (() => {
+              if (step > 0 && next_line === line_count) {
+                return -1;
+              } else if (step > 0) {
+                return 1;
+              } else if (step < 0 && next_line === 1) {
+                return 1;
+              } else if (step < 0) {
+                return -1;
+              } else {
+                return 0;
+              }
+            })()
+          );
+        }
+      }
+    }
+  );
+}
+function focus_line_discussion(line_number, column_number) {
+  return from(
+    (_) => {
+      let $ = (() => {
+        let _pipe = discussion_entry2(line_number, column_number);
+        let _pipe$1 = replace_error(
+          _pipe,
+          new$4("Failed to find line discussion to focus")
+        );
+        return map3(_pipe$1, focus);
+      })();
+      return void 0;
+    }
+  );
+}
+function handle_input_escape(event3, model, else_do) {
+  let $ = key(event3);
+  if ($ === "Escape") {
+    let _pipe = [
+      model,
+      focus_line_discussion(
+        model.current_line_number,
+        model.current_column_number
+      )
+    ];
+    return new Ok(_pipe);
+  } else {
+    return else_do();
+  }
+}
+function move_focus_line(model, step) {
+  return map3(
+    find_next_discussion_line(model.current_line_number, step),
+    (_use0) => {
+      let new_line = _use0[0];
+      let column_count = _use0[1];
+      return [
+        (() => {
+          let _record = model;
+          return new Model2(
+            _record.current_line_number,
+            _record.current_column_number,
+            column_count,
+            _record.is_user_typing
+          );
+        })(),
+        focus_line_discussion(
+          new_line,
+          min(column_count, model.current_column_number)
+        )
+      ];
+    }
+  );
+}
+function move_focus_column(model, step) {
+  let new_column = (() => {
+    let _pipe2 = max(1, model.current_column_number + step);
+    return min(_pipe2, model.current_line_column_count);
+  })();
+  let _pipe = [
+    model,
+    focus_line_discussion(model.current_line_number, new_column)
+  ];
+  return new Ok(_pipe);
+}
+function handle_keyboard_navigation(event3, model, else_do) {
+  let $ = shiftKey(event3);
+  let $1 = key(event3);
+  if (!$ && $1 === "ArrowUp") {
+    return move_focus_line(model, -1);
+  } else if (!$ && $1 === "ArrowDown") {
+    return move_focus_line(model, 1);
+  } else if ($ && $1 === "ArrowUp") {
+    return move_focus_line(model, -5);
+  } else if ($ && $1 === "ArrowDown") {
+    return move_focus_line(model, 5);
+  } else if ($1 === "PageUp") {
+    return move_focus_line(model, -20);
+  } else if ($1 === "PageDown") {
+    return move_focus_line(model, 20);
+  } else if ($1 === "ArrowLeft") {
+    return move_focus_column(model, -1);
+  } else if ($1 === "ArrowRight") {
+    return move_focus_column(model, 1);
+  } else {
+    return else_do();
+  }
+}
+function do_page_navigation(event3, model) {
+  let res = (() => {
+    let $ = model.is_user_typing;
+    if ($) {
+      return handle_expanded_input_focus(
+        event3,
+        model,
+        () => {
+          return handle_input_escape(
+            event3,
+            model,
+            () => {
+              return new Ok([model, none()]);
+            }
+          );
+        }
+      );
+    } else {
+      return handle_keyboard_navigation(
+        event3,
+        model,
+        () => {
+          return handle_input_focus(
+            event3,
+            model,
+            () => {
+              return handle_expanded_input_focus(
+                event3,
+                model,
+                () => {
+                  return handle_discussion_escape(
+                    event3,
+                    model,
+                    () => {
+                      return new Ok([model, none()]);
+                    }
+                  );
+                }
+              );
+            }
+          );
+        }
+      );
+    }
+  })();
+  if (res.isOk()) {
+    let model_effect = res[0];
+    return model_effect;
+  } else {
+    let e = res[0];
+    console_log(line_print(e));
+    return [model, none()];
+  }
 }
 
 // build/dev/javascript/o11a_common/lib/enumerate.mjs
@@ -6606,11 +7101,6 @@ function encode_is_reference_data(is_reference) {
       }
     })()
   );
-}
-
-// build/dev/javascript/o11a_client/o11a/client/attributes.mjs
-function encode_column_count_data(column_count) {
-  return data("cc", to_string(column_count));
 }
 
 // build/dev/javascript/given/given.mjs
@@ -6892,7 +7382,7 @@ function on_ctrl_enter(msg) {
         (ctrl_key) => {
           return field2(
             "key",
-            string3,
+            string4,
             (key2) => {
               return success([ctrl_key, key2]);
             }
@@ -6920,7 +7410,7 @@ function on_ctrl_enter(msg) {
 }
 
 // build/dev/javascript/o11a_client/o11a/ui/discussion_overlay.mjs
-var Model2 = class extends CustomType {
+var Model3 = class extends CustomType {
   constructor(is_reference, show_reference_discussion, user_name, line_number, column_number, topic_id, topic_title, current_note_draft, current_thread_id, active_thread, show_expanded_message_box, current_expanded_message_draft, expanded_messages, editing_note) {
     super();
     this.is_reference = is_reference;
@@ -7038,8 +7528,8 @@ var MaximizeDiscussion = class extends CustomType {
 };
 var None3 = class extends CustomType {
 };
-function init3(line_number, column_number, topic_id, topic_title, is_reference) {
-  return new Model2(
+function init4(line_number, column_number, topic_id, topic_title, is_reference) {
+  return new Model3(
     is_reference,
     false,
     "guest",
@@ -7396,7 +7886,7 @@ function update(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model2(
+        return new Model3(
           _record.is_reference,
           _record.show_reference_discussion,
           _record.user_name,
@@ -7468,7 +7958,7 @@ function update(model, msg) {
         return [
           (() => {
             let _record = model;
-            return new Model2(
+            return new Model3(
               _record.is_reference,
               _record.show_reference_discussion,
               _record.user_name,
@@ -7495,7 +7985,7 @@ function update(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model2(
+        return new Model3(
           _record.is_reference,
           _record.show_reference_discussion,
           _record.user_name,
@@ -7544,7 +8034,7 @@ function update(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model2(
+        return new Model3(
           _record.is_reference,
           _record.show_reference_discussion,
           _record.user_name,
@@ -7568,7 +8058,7 @@ function update(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model2(
+        return new Model3(
           _record.is_reference,
           _record.show_reference_discussion,
           _record.user_name,
@@ -7592,7 +8082,7 @@ function update(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model2(
+        return new Model3(
           _record.is_reference,
           _record.show_reference_discussion,
           _record.user_name,
@@ -7618,7 +8108,7 @@ function update(model, msg) {
       return [
         (() => {
           let _record = model;
-          return new Model2(
+          return new Model3(
             _record.is_reference,
             _record.show_reference_discussion,
             _record.user_name,
@@ -7641,7 +8131,7 @@ function update(model, msg) {
       return [
         (() => {
           let _record = model;
-          return new Model2(
+          return new Model3(
             _record.is_reference,
             _record.show_reference_discussion,
             _record.user_name,
@@ -7670,7 +8160,7 @@ function update(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model2(
+        return new Model3(
           _record.is_reference,
           _record.show_reference_discussion,
           _record.user_name,
@@ -7706,7 +8196,7 @@ function update(model, msg) {
       return [
         (() => {
           let _record = model;
-          return new Model2(
+          return new Model3(
             _record.is_reference,
             _record.show_reference_discussion,
             _record.user_name,
@@ -7739,7 +8229,7 @@ function update(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model2(
+        return new Model3(
           _record.is_reference,
           _record.show_reference_discussion,
           _record.user_name,
@@ -7762,7 +8252,7 @@ function update(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model2(
+        return new Model3(
           _record.is_reference,
           !model.show_reference_discussion,
           _record.user_name,
@@ -7793,7 +8283,7 @@ function on_input_keydown(enter_msg, up_msg) {
         (ctrl_key) => {
           return field2(
             "key",
-            string3,
+            string4,
             (key2) => {
               return success([ctrl_key, key2]);
             }
@@ -8035,6 +8525,13 @@ var UserClickedDiscussionEntry = class extends CustomType {
     this.column_number = column_number;
   }
 };
+var UserFocusedDiscussionEntry = class extends CustomType {
+  constructor(line_number, column_number) {
+    super();
+    this.line_number = line_number;
+    this.column_number = column_number;
+  }
+};
 var UserUpdatedDiscussion = class extends CustomType {
   constructor(line_number, column_number, update3) {
     super();
@@ -8115,6 +8612,12 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
             element_line_number,
             element_column_number
           )
+        ),
+        on_focus(
+          new UserFocusedDiscussionEntry(
+            element_line_number,
+            element_column_number
+          )
         )
       ]),
       toList([
@@ -8170,6 +8673,12 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
         on_mouse_leave(new UserUnhoveredDiscussionEntry()),
         on_click(
           new UserClickedDiscussionEntry(
+            element_line_number,
+            element_column_number
+          )
+        ),
+        on_focus(
+          new UserFocusedDiscussionEntry(
             element_line_number,
             element_column_number
           )
@@ -8229,6 +8738,12 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, el
           element_line_number,
           element_column_number
         )
+      ),
+      on_focus(
+        new UserFocusedDiscussionEntry(
+          element_line_number,
+          element_column_number
+        )
       )
     ]),
     toList([
@@ -8282,6 +8797,12 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
       on_mouse_leave(new UserUnhoveredDiscussionEntry()),
       on_click(
         new UserClickedDiscussionEntry(
+          element_line_number,
+          element_column_number
+        )
+      ),
+      on_focus(
+        new UserFocusedDiscussionEntry(
           element_line_number,
           element_column_number
         )
@@ -8471,7 +8992,7 @@ function line_container_view(discussion, loc, line_topic_id, line_topic_title, s
               toList([class$("loc flex")]),
               toList([
                 span(
-                  toList([class$("line-number code-extras italic")]),
+                  toList([class$("line-number code-extras relative")]),
                   toList([
                     text2(loc.line_number_text),
                     span(
@@ -8509,7 +9030,7 @@ function line_container_view(discussion, loc, line_topic_id, line_topic_title, s
         toList([class$("loc flex")]),
         toList([
           span(
-            toList([class$("line-number code-extras")]),
+            toList([class$("line-number code-extras relative")]),
             toList([text2(loc.line_number_text)])
           ),
           fragment(
@@ -8536,7 +9057,7 @@ function loc_view(discussion, loc, selected_discussion) {
       toList([class$("loc"), id(loc.line_tag)]),
       prepend(
         span(
-          toList([class$("line-number code-extras")]),
+          toList([class$("line-number code-extras relative")]),
           toList([text2(loc.line_number_text)])
         ),
         preprocessed_nodes_view(loc, discussion, selected_discussion)
@@ -8955,8 +9476,8 @@ function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
 }
 
 // build/dev/javascript/o11a_client/o11a_client.mjs
-var Model3 = class extends CustomType {
-  constructor(route2, file_tree, audit_metadata, source_files, discussions, discussion_overlay_models, selected_discussion, selected_node_id) {
+var Model4 = class extends CustomType {
+  constructor(route2, file_tree, audit_metadata, source_files, discussions, discussion_overlay_models, keyboard_model, selected_discussion, selected_node_id) {
     super();
     this.route = route2;
     this.file_tree = file_tree;
@@ -8964,6 +9485,7 @@ var Model3 = class extends CustomType {
     this.source_files = source_files;
     this.discussions = discussions;
     this.discussion_overlay_models = discussion_overlay_models;
+    this.keyboard_model = keyboard_model;
     this.selected_discussion = selected_discussion;
     this.selected_node_id = selected_node_id;
   }
@@ -9016,6 +9538,12 @@ var ServerUpdatedDiscussion = class extends CustomType {
     this.audit_name = audit_name;
   }
 };
+var UserEnteredKey = class extends CustomType {
+  constructor(browser_event) {
+    super();
+    this.browser_event = browser_event;
+  }
+};
 var UserHoveredDiscussionEntry2 = class extends CustomType {
   constructor(line_number, column_number, node_id, topic_id, topic_title, is_reference) {
     super();
@@ -9030,6 +9558,13 @@ var UserHoveredDiscussionEntry2 = class extends CustomType {
 var UserUnhoveredDiscussionEntry2 = class extends CustomType {
 };
 var UserClickedDiscussionEntry2 = class extends CustomType {
+  constructor(line_number, column_number) {
+    super();
+    this.line_number = line_number;
+    this.column_number = column_number;
+  }
+};
+var UserFocusedDiscussionEntry2 = class extends CustomType {
   constructor(line_number, column_number) {
     super();
     this.line_number = line_number;
@@ -9051,9 +9586,9 @@ var UserSuccessfullySubmittedNote = class extends CustomType {
   }
 };
 var UserFailedToSubmitNote = class extends CustomType {
-  constructor(error) {
+  constructor(error2) {
     super();
-    this.error = error;
+    this.error = error2;
   }
 };
 function parse_route(uri) {
@@ -9196,7 +9731,7 @@ function route_change_effect(model, route2) {
     return none();
   }
 }
-function init4(_) {
+function init5(_) {
   let route2 = (() => {
     let $ = do_initial_uri();
     if ($.isOk()) {
@@ -9206,13 +9741,14 @@ function init4(_) {
       return new O11aHomeRoute();
     }
   })();
-  let init_model = new Model3(
+  let init_model = new Model4(
     route2,
     new_map(),
     new_map(),
     new_map(),
     new_map(),
     new_map(),
+    init3(),
     new None(),
     new None()
   );
@@ -9221,6 +9757,17 @@ function init4(_) {
     batch(
       toList([
         init2(on_url_change),
+        from(
+          (dispatch) => {
+            return addEventListener3(
+              "keydown",
+              (event3) => {
+                prevent_default2(event3);
+                return dispatch(new UserEnteredKey(event3));
+              }
+            );
+          }
+        ),
         route_change_effect(init_model, init_model.route)
       ])
     )
@@ -9232,13 +9779,14 @@ function update2(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model3(
+        return new Model4(
           route2,
           file_tree_from_route(route2, model.audit_metadata),
           _record.audit_metadata,
           _record.source_files,
           _record.discussions,
           _record.discussion_overlay_models,
+          _record.keyboard_model,
           _record.selected_discussion,
           _record.selected_node_id
         );
@@ -9256,13 +9804,14 @@ function update2(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model3(
+        return new Model4(
           _record.route,
           file_tree_from_route(model.route, updated_audit_metadata),
           updated_audit_metadata,
           _record.source_files,
           _record.discussions,
           _record.discussion_overlay_models,
+          _record.keyboard_model,
           _record.selected_discussion,
           _record.selected_node_id
         );
@@ -9275,13 +9824,14 @@ function update2(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model3(
+        return new Model4(
           _record.route,
           _record.file_tree,
           _record.audit_metadata,
           insert(model.source_files, page_path, source_files),
           _record.discussions,
           _record.discussion_overlay_models,
+          _record.keyboard_model,
           _record.selected_discussion,
           _record.selected_node_id
         );
@@ -9296,7 +9846,7 @@ function update2(model, msg) {
       return [
         (() => {
           let _record = model;
-          return new Model3(
+          return new Model4(
             _record.route,
             _record.file_tree,
             _record.audit_metadata,
@@ -9312,6 +9862,7 @@ function update2(model, msg) {
               })()
             ),
             _record.discussion_overlay_models,
+            _record.keyboard_model,
             _record.selected_discussion,
             _record.selected_node_id
           );
@@ -9326,6 +9877,60 @@ function update2(model, msg) {
   } else if (msg instanceof ServerUpdatedDiscussion) {
     let audit_name = msg.audit_name;
     return [model, fetch_discussion(audit_name)];
+  } else if (msg instanceof UserEnteredKey) {
+    let browser_event = msg.browser_event;
+    echo("user entered key", "src/o11a_client.gleam", 270);
+    let $ = do_page_navigation(
+      browser_event,
+      model.keyboard_model
+    );
+    let keyboard_model = $[0];
+    let effect = $[1];
+    return [
+      (() => {
+        let _record = model;
+        return new Model4(
+          _record.route,
+          _record.file_tree,
+          _record.audit_metadata,
+          _record.source_files,
+          _record.discussions,
+          _record.discussion_overlay_models,
+          keyboard_model,
+          _record.selected_discussion,
+          _record.selected_node_id
+        );
+      })(),
+      effect
+    ];
+  } else if (msg instanceof UserFocusedDiscussionEntry2) {
+    let line_number = msg.line_number;
+    let column_number = msg.column_number;
+    return [
+      (() => {
+        let _record = model;
+        return new Model4(
+          _record.route,
+          _record.file_tree,
+          _record.audit_metadata,
+          _record.source_files,
+          _record.discussions,
+          _record.discussion_overlay_models,
+          (() => {
+            let _record$1 = model.keyboard_model;
+            return new Model2(
+              line_number,
+              column_number,
+              _record$1.current_line_column_count,
+              _record$1.is_user_typing
+            );
+          })(),
+          _record.selected_discussion,
+          _record.selected_node_id
+        );
+      })(),
+      none()
+    ];
   } else if (msg instanceof UserHoveredDiscussionEntry2) {
     let line_number = msg.line_number;
     let column_number = msg.column_number;
@@ -9342,7 +9947,7 @@ function update2(model, msg) {
         return insert(
           model.discussion_overlay_models,
           selected_discussion,
-          init3(
+          init4(
             line_number,
             column_number,
             topic_id,
@@ -9355,13 +9960,14 @@ function update2(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model3(
+        return new Model4(
           _record.route,
           _record.file_tree,
           _record.audit_metadata,
           _record.source_files,
           _record.discussions,
           discussion_overlay_models,
+          _record.keyboard_model,
           new Some(selected_discussion),
           node_id
         );
@@ -9372,13 +9978,14 @@ function update2(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model3(
+        return new Model4(
           _record.route,
           _record.file_tree,
           _record.audit_metadata,
           _record.source_files,
           _record.discussions,
           _record.discussion_overlay_models,
+          _record.keyboard_model,
           new None(),
           new None()
         );
@@ -9423,7 +10030,7 @@ function update2(model, msg) {
               "/submit-note/" + audit_name,
               object2(
                 toList([
-                  ["topic_id", string4(topic_id)],
+                  ["topic_id", string5(topic_id)],
                   [
                     "note_submission",
                     encode_note_submission(note_submission)
@@ -9433,7 +10040,7 @@ function update2(model, msg) {
               expect_json(
                 field2(
                   "msg",
-                  string3,
+                  string4,
                   (msg2) => {
                     let _pipe = (() => {
                       if (msg2 === "success") {
@@ -9442,7 +10049,7 @@ function update2(model, msg) {
                         return failure(void 0, msg2);
                       }
                     })();
-                    return echo(_pipe, "src/o11a_client.gleam", 341);
+                    return echo(_pipe, "src/o11a_client.gleam", 377);
                   }
                 ),
                 (response) => {
@@ -9454,7 +10061,7 @@ function update2(model, msg) {
                       return new UserFailedToSubmitNote(e);
                     }
                   })();
-                  return echo(_pipe, "src/o11a_client.gleam", 348);
+                  return echo(_pipe, "src/o11a_client.gleam", 384);
                 }
               )
             );
@@ -9464,7 +10071,7 @@ function update2(model, msg) {
               "/submit-note/" + audit_name,
               object2(
                 toList([
-                  ["topic_id", string4(topic_id)],
+                  ["topic_id", string5(topic_id)],
                   [
                     "note_submission",
                     encode_note_submission(note_submission)
@@ -9474,7 +10081,7 @@ function update2(model, msg) {
               expect_json(
                 field2(
                   "msg",
-                  string3,
+                  string4,
                   (msg2) => {
                     let _pipe = (() => {
                       if (msg2 === "success") {
@@ -9483,7 +10090,7 @@ function update2(model, msg) {
                         return failure(void 0, msg2);
                       }
                     })();
-                    return echo(_pipe, "src/o11a_client.gleam", 341);
+                    return echo(_pipe, "src/o11a_client.gleam", 377);
                   }
                 ),
                 (response) => {
@@ -9495,7 +10102,7 @@ function update2(model, msg) {
                       return new UserFailedToSubmitNote(e);
                     }
                   })();
-                  return echo(_pipe, "src/o11a_client.gleam", 348);
+                  return echo(_pipe, "src/o11a_client.gleam", 384);
                 }
               )
             );
@@ -9508,7 +10115,7 @@ function update2(model, msg) {
       return [
         (() => {
           let _record = model;
-          return new Model3(
+          return new Model4(
             _record.route,
             _record.file_tree,
             _record.audit_metadata,
@@ -9519,6 +10126,7 @@ function update2(model, msg) {
               [line_number, column_number],
               discussion_model
             ),
+            _record.keyboard_model,
             _record.selected_discussion,
             _record.selected_node_id
           );
@@ -9529,7 +10137,7 @@ function update2(model, msg) {
       return [
         (() => {
           let _record = model;
-          return new Model3(
+          return new Model4(
             _record.route,
             _record.file_tree,
             _record.audit_metadata,
@@ -9540,6 +10148,7 @@ function update2(model, msg) {
               [line_number, column_number],
               discussion_model
             ),
+            _record.keyboard_model,
             _record.selected_discussion,
             _record.selected_node_id
           );
@@ -9550,7 +10159,7 @@ function update2(model, msg) {
       return [
         (() => {
           let _record = model;
-          return new Model3(
+          return new Model4(
             _record.route,
             _record.file_tree,
             _record.audit_metadata,
@@ -9561,6 +10170,7 @@ function update2(model, msg) {
               [line_number, column_number],
               discussion_model
             ),
+            _record.keyboard_model,
             _record.selected_discussion,
             _record.selected_node_id
           );
@@ -9571,7 +10181,7 @@ function update2(model, msg) {
       return [
         (() => {
           let _record = model;
-          return new Model3(
+          return new Model4(
             _record.route,
             _record.file_tree,
             _record.audit_metadata,
@@ -9582,6 +10192,7 @@ function update2(model, msg) {
               [line_number, column_number],
               discussion_model
             ),
+            _record.keyboard_model,
             _record.selected_discussion,
             _record.selected_node_id
           );
@@ -9592,7 +10203,7 @@ function update2(model, msg) {
       return [
         (() => {
           let _record = model;
-          return new Model3(
+          return new Model4(
             _record.route,
             _record.file_tree,
             _record.audit_metadata,
@@ -9603,6 +10214,7 @@ function update2(model, msg) {
               [line_number, column_number],
               discussion_model
             ),
+            _record.keyboard_model,
             _record.selected_discussion,
             _record.selected_node_id
           );
@@ -9615,7 +10227,7 @@ function update2(model, msg) {
     return [
       (() => {
         let _record = model;
-        return new Model3(
+        return new Model4(
           _record.route,
           _record.file_tree,
           _record.audit_metadata,
@@ -9626,6 +10238,7 @@ function update2(model, msg) {
             [updated_model.line_number, updated_model.column_number],
             updated_model
           ),
+          _record.keyboard_model,
           _record.selected_discussion,
           _record.selected_node_id
         );
@@ -9633,8 +10246,8 @@ function update2(model, msg) {
       none()
     ];
   } else {
-    let error = msg.error;
-    print("Failed to submit note: " + inspect2(error));
+    let error2 = msg.error;
+    print("Failed to submit note: " + inspect2(error2));
     return [model, none()];
   }
 }
@@ -9647,7 +10260,7 @@ function on_server_updated_discussion(msg) {
         (() => {
           let _pipe = run(
             event3,
-            at(toList(["detail", "audit_name"]), string3)
+            at(toList(["detail", "audit_name"]), string4)
           );
           return replace_error(_pipe, empty_error);
         })(),
@@ -9681,11 +10294,15 @@ function map_audit_page_msg(msg) {
     let line_number = msg.line_number;
     let column_number = msg.column_number;
     return new UserClickedDiscussionEntry2(line_number, column_number);
-  } else {
+  } else if (msg instanceof UserUpdatedDiscussion) {
     let line_number = msg.line_number;
     let column_number = msg.column_number;
     let update$1 = msg.update;
     return new UserUpdatedDiscussion2(line_number, column_number, update$1);
+  } else {
+    let line_number = msg.line_number;
+    let column_number = msg.column_number;
+    return new UserFocusedDiscussionEntry2(line_number, column_number);
   }
 }
 function view4(model) {
@@ -9788,7 +10405,7 @@ function view4(model) {
 }
 function main() {
   console_log("Starting client controller");
-  let _pipe = application(init4, update2, view4);
+  let _pipe = application(init5, update2, view4);
   return start2(_pipe, "#app", void 0);
 }
 function echo(value4, file, line2) {
@@ -9797,19 +10414,19 @@ function echo(value4, file, line2) {
   const file_line = `${file}:${line2}`;
   const string_value = echo$inspect(value4);
   if (typeof process === "object" && process.stderr?.write) {
-    const string5 = `${grey}${file_line}${reset_color}
+    const string6 = `${grey}${file_line}${reset_color}
 ${string_value}
 `;
-    process.stderr.write(string5);
+    process.stderr.write(string6);
   } else if (typeof Deno === "object") {
-    const string5 = `${grey}${file_line}${reset_color}
+    const string6 = `${grey}${file_line}${reset_color}
 ${string_value}
 `;
-    Deno.stderr.writeSync(new TextEncoder().encode(string5));
+    Deno.stderr.writeSync(new TextEncoder().encode(string6));
   } else {
-    const string5 = `${file_line}
+    const string6 = `${file_line}
 ${string_value}`;
-    console.log(string5);
+    console.log(string6);
   }
   return value4;
 }

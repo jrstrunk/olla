@@ -17,6 +17,7 @@ import lustre/server_component
 import lustre_http
 import modem
 import o11a/audit_metadata
+import o11a/client/page_navigation
 import o11a/client/selectors
 import o11a/computed_note
 import o11a/events
@@ -26,6 +27,8 @@ import o11a/ui/audit_page
 import o11a/ui/audit_tree
 import o11a/ui/discussion_overlay
 import plinth/browser/element as browser_element
+import plinth/browser/event as browser_event
+import plinth/browser/window
 
 pub fn main() {
   io.println("Starting client controller")
@@ -50,6 +53,7 @@ pub type Model {
       dict.Dict(String, List(computed_note.ComputedNote)),
     ),
     discussion_overlay_models: dict.Dict(#(Int, Int), discussion_overlay.Model),
+    keyboard_model: page_navigation.Model,
     selected_discussion: option.Option(#(Int, Int)),
     selected_node_id: option.Option(Int),
   )
@@ -75,6 +79,7 @@ fn init(_) -> #(Model, Effect(Msg)) {
       source_files: dict.new(),
       discussions: dict.new(),
       discussion_overlay_models: dict.new(),
+      keyboard_model: page_navigation.init(),
       selected_discussion: option.None,
       selected_node_id: option.None,
     )
@@ -83,6 +88,12 @@ fn init(_) -> #(Model, Effect(Msg)) {
     init_model,
     effect.batch([
       modem.init(on_url_change),
+      effect.from(fn(dispatch) {
+        window.add_event_listener("keydown", fn(event) {
+          page_navigation.prevent_default(event)
+          dispatch(UserEnteredKey(event))
+        })
+      }),
       route_change_effect(init_model, new_route: init_model.route),
     ]),
   )
@@ -173,6 +184,11 @@ pub type Msg {
     discussion: Result(List(computed_note.ComputedNote), lustre_http.HttpError),
   )
   ServerUpdatedDiscussion(audit_name: String)
+  UserEnteredKey(
+    browser_event: browser_event.Event(
+      browser_event.UIEvent(browser_event.KeyboardEvent),
+    ),
+  )
   UserHoveredDiscussionEntry(
     line_number: Int,
     column_number: Int,
@@ -183,6 +199,7 @@ pub type Msg {
   )
   UserUnhoveredDiscussionEntry
   UserClickedDiscussionEntry(line_number: Int, column_number: Int)
+  UserFocusedDiscussionEntry(line_number: Int, column_number: Int)
   UserUpdatedDiscussion(
     line_number: Int,
     column_number: Int,
@@ -247,6 +264,24 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     ServerUpdatedDiscussion(audit_name:) -> #(
       model,
       fetch_discussion(audit_name),
+    )
+
+    UserEnteredKey(browser_event:) -> {
+      let #(keyboard_model, effect) =
+        page_navigation.do_page_navigation(browser_event, model.keyboard_model)
+      #(Model(..model, keyboard_model:), effect)
+    }
+
+    UserFocusedDiscussionEntry(line_number:, column_number:) -> #(
+      Model(
+        ..model,
+        keyboard_model: page_navigation.Model(
+          ..model.keyboard_model,
+          current_line_number: line_number,
+          current_column_number: column_number,
+        ),
+      ),
+      effect.none(),
     )
 
     UserHoveredDiscussionEntry(
@@ -547,5 +582,7 @@ fn map_audit_page_msg(msg) {
       UserClickedDiscussionEntry(line_number:, column_number:)
     audit_page.UserUpdatedDiscussion(line_number:, column_number:, update:) ->
       UserUpdatedDiscussion(line_number:, column_number:, update:)
+    audit_page.UserFocusedDiscussionEntry(line_number:, column_number:) ->
+      UserFocusedDiscussionEntry(line_number:, column_number:)
   }
 }
