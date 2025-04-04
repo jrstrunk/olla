@@ -56,6 +56,7 @@ pub type Model {
     keyboard_model: page_navigation.Model,
     selected_discussion: option.Option(#(Int, Int)),
     selected_node_id: option.Option(Int),
+    focused_discussion: option.Option(#(Int, Int)),
   )
 }
 
@@ -82,6 +83,7 @@ fn init(_) -> #(Model, Effect(Msg)) {
       keyboard_model: page_navigation.init(),
       selected_discussion: option.None,
       selected_node_id: option.None,
+      focused_discussion: option.None,
     )
 
   #(
@@ -189,7 +191,8 @@ pub type Msg {
       browser_event.UIEvent(browser_event.KeyboardEvent),
     ),
   )
-  UserHoveredDiscussionEntry(
+  UserSelectedDiscussionEntry(
+    kind: audit_page.DiscussionSelectKind,
     line_number: Int,
     column_number: Int,
     node_id: option.Option(Int),
@@ -197,9 +200,8 @@ pub type Msg {
     topic_title: String,
     is_reference: Bool,
   )
-  UserUnhoveredDiscussionEntry
+  UserUnselectedDiscussionEntry(kind: audit_page.DiscussionSelectKind)
   UserClickedDiscussionEntry(line_number: Int, column_number: Int)
-  UserFocusedDiscussionEntry(line_number: Int, column_number: Int)
   UserUpdatedDiscussion(
     line_number: Int,
     column_number: Int,
@@ -237,6 +239,13 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       Model(
         ..model,
         source_files: dict.insert(model.source_files, page_path, source_files),
+        keyboard_model: page_navigation.Model(
+          ..model.keyboard_model,
+          line_count: case source_files {
+            Ok(source_files) -> list.length(source_files)
+            Error(..) -> model.keyboard_model.line_count
+          },
+        ),
       ),
       effect.none(),
     )
@@ -272,19 +281,8 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       #(Model(..model, keyboard_model:), effect)
     }
 
-    UserFocusedDiscussionEntry(line_number:, column_number:) -> #(
-      Model(
-        ..model,
-        keyboard_model: page_navigation.Model(
-          ..model.keyboard_model,
-          current_line_number: line_number,
-          current_column_number: column_number,
-        ),
-      ),
-      effect.none(),
-    )
-
-    UserHoveredDiscussionEntry(
+    UserSelectedDiscussionEntry(
+      kind:,
       line_number:,
       column_number:,
       node_id:,
@@ -313,29 +311,52 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       }
 
       #(
-        Model(
-          ..model,
-          selected_discussion: option.Some(selected_discussion),
-          discussion_overlay_models:,
-          selected_node_id: node_id,
-        ),
+        case kind {
+          audit_page.Hover ->
+            Model(
+              ..model,
+              selected_discussion: option.Some(selected_discussion),
+              discussion_overlay_models:,
+              selected_node_id: node_id,
+            )
+          audit_page.Focus ->
+            Model(
+              ..model,
+              focused_discussion: option.Some(selected_discussion),
+              discussion_overlay_models:,
+              selected_node_id: node_id,
+              keyboard_model: page_navigation.Model(
+                ..model.keyboard_model,
+                current_line_number: line_number,
+                current_column_number: column_number,
+              ),
+            )
+        },
         effect.none(),
       )
     }
 
-    UserUnhoveredDiscussionEntry -> {
+    UserUnselectedDiscussionEntry(kind:) -> {
       #(
-        Model(
-          ..model,
-          selected_discussion: option.None,
-          selected_node_id: option.None,
-        ),
+        case kind {
+          audit_page.Hover ->
+            Model(
+              ..model,
+              selected_discussion: option.None,
+              selected_node_id: option.None,
+            )
+          audit_page.Focus ->
+            Model(
+              ..model,
+              focused_discussion: option.None,
+              selected_node_id: option.None,
+            )
+        },
         effect.none(),
       )
     }
 
     UserClickedDiscussionEntry(line_number:, column_number:) -> {
-      echo "clicked discussion entry"
       #(
         model,
         effect.from(fn(_dispatch) {
@@ -359,31 +380,11 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           model,
           case model.route {
             AuditPageRoute(audit_name:, ..) | AuditDashboardRoute(audit_name:) -> {
-              lustre_http.post(
-                "/submit-note/" <> audit_name,
-                json.object([
-                  #("topic_id", json.string(topic_id)),
-                  #(
-                    "note_submission",
-                    note.encode_note_submission(note_submission),
-                  ),
-                ]),
-                lustre_http.expect_json(
-                  decode.field("msg", decode.string, fn(msg) {
-                    case msg {
-                      "success" -> decode.success(Nil)
-                      _ -> decode.failure(Nil, msg)
-                    }
-                    |> echo
-                  }),
-                  fn(response) {
-                    case response {
-                      Ok(Nil) -> UserSuccessfullySubmittedNote(discussion_model)
-                      Error(e) -> UserFailedToSubmitNote(e)
-                    }
-                    |> echo
-                  },
-                ),
+              submit_note(
+                audit_name,
+                topic_id,
+                note_submission,
+                discussion_model,
               )
             }
             O11aHomeRoute -> effect.none()
@@ -486,6 +487,30 @@ fn fetch_discussion(audit_name) {
   )
 }
 
+fn submit_note(audit_name, topic_id, note_submission, discussion_model) {
+  lustre_http.post(
+    "/submit-note/" <> audit_name,
+    json.object([
+      #("topic_id", json.string(topic_id)),
+      #("note_submission", note.encode_note_submission(note_submission)),
+    ]),
+    lustre_http.expect_json(
+      decode.field("msg", decode.string, fn(msg) {
+        case msg {
+          "success" -> decode.success(Nil)
+          _ -> decode.failure(Nil, msg)
+        }
+      }),
+      fn(response) {
+        case response {
+          Ok(Nil) -> UserSuccessfullySubmittedNote(discussion_model)
+          Error(e) -> UserFailedToSubmitNote(e)
+        }
+      },
+    ),
+  )
+}
+
 fn view(model: Model) {
   case model.route {
     AuditDashboardRoute(audit_name:) ->
@@ -520,19 +545,7 @@ fn view(model: Model) {
               |> result.unwrap([]),
             discussion: dict.get(model.discussions, audit_name)
               |> result.unwrap(dict.new()),
-            selected_discussion: case model.selected_discussion {
-              option.Some(selected_discussion) ->
-                dict.get(model.discussion_overlay_models, selected_discussion)
-                |> result.map(fn(model) {
-                  option.Some(audit_page.DiscussionReference(
-                    line_number: selected_discussion.0,
-                    column_number: selected_discussion.1,
-                    model:,
-                  ))
-                })
-                |> result.unwrap(option.None)
-              option.None -> option.None
-            },
+            selected_discussion: get_selected_discussion(model),
           )
             |> element.map(map_audit_page_msg),
           option.None,
@@ -543,6 +556,22 @@ fn view(model: Model) {
       ])
 
     O11aHomeRoute -> html.p([], [html.text("Home")])
+  }
+}
+
+fn get_selected_discussion(model: Model) {
+  case model.focused_discussion, model.selected_discussion {
+    option.Some(discussion), _ | _, option.Some(discussion) ->
+      dict.get(model.discussion_overlay_models, discussion)
+      |> result.map(fn(model) {
+        option.Some(audit_page.DiscussionReference(
+          line_number: discussion.0,
+          column_number: discussion.1,
+          model:,
+        ))
+      })
+      |> result.unwrap(option.None)
+    option.None, option.None -> option.None
   }
 }
 
@@ -562,7 +591,8 @@ pub fn on_server_updated_discussion(msg) {
 
 fn map_audit_page_msg(msg) {
   case msg {
-    audit_page.UserHoveredDiscussionEntry(
+    audit_page.UserSelectedDiscussionEntry(
+      kind:,
       line_number:,
       column_number:,
       node_id:,
@@ -570,7 +600,8 @@ fn map_audit_page_msg(msg) {
       topic_title:,
       is_reference:,
     ) ->
-      UserHoveredDiscussionEntry(
+      UserSelectedDiscussionEntry(
+        kind:,
         line_number:,
         column_number:,
         node_id:,
@@ -578,12 +609,11 @@ fn map_audit_page_msg(msg) {
         topic_title:,
         is_reference:,
       )
-    audit_page.UserUnhoveredDiscussionEntry -> UserUnhoveredDiscussionEntry
+    audit_page.UserUnselectedDiscussionEntry(kind:) ->
+      UserUnselectedDiscussionEntry(kind:)
     audit_page.UserClickedDiscussionEntry(line_number:, column_number:) ->
       UserClickedDiscussionEntry(line_number:, column_number:)
     audit_page.UserUpdatedDiscussion(line_number:, column_number:, update:) ->
       UserUpdatedDiscussion(line_number:, column_number:, update:)
-    audit_page.UserFocusedDiscussionEntry(line_number:, column_number:) ->
-      UserFocusedDiscussionEntry(line_number:, column_number:)
   }
 }

@@ -8,7 +8,7 @@ all:
 .PHONY: run
 run:
 	@(cd client \
-	&& gleam run -m lustre/dev build app --minify --outdir="../server/priv/static" \
+	&& gleam run -m lustre/dev build app --outdir="../server/priv/static" \
 	&& cd ../server \
 	add && gleam run dev)
 

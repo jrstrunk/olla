@@ -6713,14 +6713,6 @@ function line_print(snag) {
 }
 
 // build/dev/javascript/o11a_client/o11a/client/attributes.mjs
-function read_line_count_data(data2) {
-  let _pipe = datasetGet(data2, "lc");
-  let _pipe$1 = try$(_pipe, parse_int);
-  return replace_error(
-    _pipe$1,
-    new$4("Failed to read line count data")
-  );
-}
 function encode_column_count_data(column_count) {
   return data("cc", to_string(column_count));
 }
@@ -6765,16 +6757,17 @@ function discussion_input(line_number, column_number) {
 
 // build/dev/javascript/o11a_client/o11a/client/page_navigation.mjs
 var Model2 = class extends CustomType {
-  constructor(current_line_number, current_column_number, current_line_column_count, is_user_typing) {
+  constructor(current_line_number, current_column_number, current_line_column_count, line_count, is_user_typing) {
     super();
     this.current_line_number = current_line_number;
     this.current_column_number = current_column_number;
     this.current_line_column_count = current_line_column_count;
+    this.line_count = line_count;
     this.is_user_typing = is_user_typing;
   }
 };
 function init3() {
-  return new Model2(16, 1, 16, false);
+  return new Model2(16, 1, 16, 16, false);
 }
 function prevent_default2(event3) {
   let $ = key(event3);
@@ -6815,57 +6808,52 @@ function handle_discussion_escape(_, model, _1) {
 function handle_input_focus(_, model, _1) {
   return new Ok([model, none()]);
 }
-function find_next_discussion_line(current_line, step) {
-  return try$(
-    (() => {
-      let _pipe = querySelector("#audit-page");
-      let _pipe$1 = replace_error(
-        _pipe,
-        new$4("Failed to find audit page")
+function find_next_discussion_line(loop$model, loop$current_line, loop$step) {
+  while (true) {
+    let model = loop$model;
+    let current_line = loop$current_line;
+    let step = loop$step;
+    if (step > 0 && current_line === model.line_count) {
+      return error(
+        "Line is " + to_string(model.line_count) + ", cannot go further down"
       );
-      return try$(_pipe$1, read_line_count_data);
-    })(),
-    (line_count) => {
-      if (step > 0 && current_line === line_count) {
-        return error(
-          "Line is " + to_string(line_count) + ", cannot go further down"
+    } else if (step < 0 && current_line === 1) {
+      return error("Line is 1, cannot go further up");
+    } else if (step === 0) {
+      return error("Step is zero");
+    } else {
+      let next_line = max(
+        1,
+        min(model.line_count, current_line + step)
+      );
+      let $ = non_empty_line(next_line);
+      if ($.isOk()) {
+        let line2 = $[0];
+        return map3(
+          read_column_count_data(line2),
+          (column_count) => {
+            return [next_line, column_count];
+          }
         );
-      } else if (step < 0 && current_line === 1) {
-        return error("Line is 1, cannot go further up");
-      } else if (step === 0) {
-        return error("Step is zero");
       } else {
-        let next_line = max(1, min(line_count, current_line + step));
-        let $ = non_empty_line(next_line);
-        if ($.isOk()) {
-          let line2 = $[0];
-          return map3(
-            read_column_count_data(line2),
-            (column_count) => {
-              return [next_line, column_count];
-            }
-          );
-        } else {
-          return find_next_discussion_line(
-            next_line,
-            (() => {
-              if (step > 0 && next_line === line_count) {
-                return -1;
-              } else if (step > 0) {
-                return 1;
-              } else if (step < 0 && next_line === 1) {
-                return 1;
-              } else if (step < 0) {
-                return -1;
-              } else {
-                return 0;
-              }
-            })()
-          );
-        }
+        loop$model = model;
+        loop$current_line = next_line;
+        loop$step = (() => {
+          if (step > 0 && next_line === model.line_count) {
+            return -1;
+          } else if (step > 0) {
+            return 1;
+          } else if (step < 0 && next_line === 1) {
+            return 1;
+          } else if (step < 0) {
+            return -1;
+          } else {
+            return 0;
+          }
+        })();
       }
     }
-  );
+  }
 }
 function focus_line_discussion(line_number, column_number) {
   return from(
@@ -6898,11 +6886,26 @@ function handle_input_escape(event3, model, else_do) {
   }
 }
 function move_focus_line(model, step) {
+  echo(
+    "moving focus line by " + to_string(step),
+    "src/o11a/client/page_navigation.gleam",
+    133
+  );
   return map3(
-    find_next_discussion_line(model.current_line_number, step),
+    find_next_discussion_line(model, model.current_line_number, step),
     (_use0) => {
       let new_line = _use0[0];
       let column_count = _use0[1];
+      echo(
+        "new line " + to_string(new_line),
+        "src/o11a/client/page_navigation.gleam",
+        140
+      );
+      echo(
+        "column count " + to_string(column_count),
+        "src/o11a/client/page_navigation.gleam",
+        141
+      );
       return [
         (() => {
           let _record = model;
@@ -6910,6 +6913,7 @@ function move_focus_line(model, step) {
             _record.current_line_number,
             _record.current_column_number,
             column_count,
+            _record.line_count,
             _record.is_user_typing
           );
         })(),
@@ -6922,10 +6926,20 @@ function move_focus_line(model, step) {
   );
 }
 function move_focus_column(model, step) {
+  echo(
+    "moving focus column by " + to_string(step),
+    "src/o11a/client/page_navigation.gleam",
+    153
+  );
   let new_column = (() => {
     let _pipe2 = max(1, model.current_column_number + step);
     return min(_pipe2, model.current_line_column_count);
   })();
+  echo(
+    "new column " + to_string(new_column),
+    "src/o11a/client/page_navigation.gleam",
+    158
+  );
   let _pipe = [
     model,
     focus_line_discussion(model.current_line_number, new_column)
@@ -7007,6 +7021,150 @@ function do_page_navigation(event3, model) {
     let e = res[0];
     console_log(line_print(e));
     return [model, none()];
+  }
+}
+function echo(value4, file, line2) {
+  const grey = "\x1B[90m";
+  const reset_color = "\x1B[39m";
+  const file_line = `${file}:${line2}`;
+  const string_value = echo$inspect(value4);
+  if (typeof process === "object" && process.stderr?.write) {
+    const string6 = `${grey}${file_line}${reset_color}
+${string_value}
+`;
+    process.stderr.write(string6);
+  } else if (typeof Deno === "object") {
+    const string6 = `${grey}${file_line}${reset_color}
+${string_value}
+`;
+    Deno.stderr.writeSync(new TextEncoder().encode(string6));
+  } else {
+    const string6 = `${file_line}
+${string_value}`;
+    console.log(string6);
+  }
+  return value4;
+}
+function echo$inspectString(str) {
+  let new_str = '"';
+  for (let i = 0; i < str.length; i++) {
+    let char = str[i];
+    if (char == "\n")
+      new_str += "\\n";
+    else if (char == "\r")
+      new_str += "\\r";
+    else if (char == "	")
+      new_str += "\\t";
+    else if (char == "\f")
+      new_str += "\\f";
+    else if (char == "\\")
+      new_str += "\\\\";
+    else if (char == '"')
+      new_str += '\\"';
+    else if (char < " " || char > "~" && char < "\xA0") {
+      new_str += "\\u{" + char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0") + "}";
+    } else {
+      new_str += char;
+    }
+  }
+  new_str += '"';
+  return new_str;
+}
+function echo$inspectDict(map8) {
+  let body2 = "dict.from_list([";
+  let first3 = true;
+  let key_value_pairs = [];
+  map8.forEach((value4, key2) => {
+    key_value_pairs.push([key2, value4]);
+  });
+  key_value_pairs.sort();
+  key_value_pairs.forEach(([key2, value4]) => {
+    if (!first3)
+      body2 = body2 + ", ";
+    body2 = body2 + "#(" + echo$inspect(key2) + ", " + echo$inspect(value4) + ")";
+    first3 = false;
+  });
+  return body2 + "])";
+}
+function echo$inspectCustomType(record) {
+  const props = Object.keys(record).map((label) => {
+    const value4 = echo$inspect(record[label]);
+    return isNaN(parseInt(label)) ? `${label}: ${value4}` : value4;
+  }).join(", ");
+  return props ? `${record.constructor.name}(${props})` : record.constructor.name;
+}
+function echo$inspectObject(v) {
+  const name = Object.getPrototypeOf(v)?.constructor?.name || "Object";
+  const props = [];
+  for (const k of Object.keys(v)) {
+    props.push(`${echo$inspect(k)}: ${echo$inspect(v[k])}`);
+  }
+  const body2 = props.length ? " " + props.join(", ") + " " : "";
+  const head = name === "Object" ? "" : name + " ";
+  return `//js(${head}{${body2}})`;
+}
+function echo$inspect(v) {
+  const t = typeof v;
+  if (v === true)
+    return "True";
+  if (v === false)
+    return "False";
+  if (v === null)
+    return "//js(null)";
+  if (v === void 0)
+    return "Nil";
+  if (t === "string")
+    return echo$inspectString(v);
+  if (t === "bigint" || t === "number")
+    return v.toString();
+  if (Array.isArray(v))
+    return `#(${v.map(echo$inspect).join(", ")})`;
+  if (v instanceof List)
+    return `[${v.toArray().map(echo$inspect).join(", ")}]`;
+  if (v instanceof UtfCodepoint)
+    return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
+  if (v instanceof BitArray)
+    return echo$inspectBitArray(v);
+  if (v instanceof CustomType)
+    return echo$inspectCustomType(v);
+  if (echo$isDict(v))
+    return echo$inspectDict(v);
+  if (v instanceof Set)
+    return `//js(Set(${[...v].map(echo$inspect).join(", ")}))`;
+  if (v instanceof RegExp)
+    return `//js(${v})`;
+  if (v instanceof Date)
+    return `//js(Date("${v.toISOString()}"))`;
+  if (v instanceof Function) {
+    const args = [];
+    for (const i of Array(v.length).keys())
+      args.push(String.fromCharCode(i + 97));
+    return `//fn(${args.join(", ")}) { ... }`;
+  }
+  return echo$inspectObject(v);
+}
+function echo$inspectBitArray(bitArray) {
+  let endOfAlignedBytes = bitArray.bitOffset + 8 * Math.trunc(bitArray.bitSize / 8);
+  let alignedBytes = bitArraySlice(bitArray, bitArray.bitOffset, endOfAlignedBytes);
+  let remainingUnalignedBits = bitArray.bitSize % 8;
+  if (remainingUnalignedBits > 0) {
+    let remainingBits = bitArraySliceToInt(bitArray, endOfAlignedBytes, bitArray.bitSize, false, false);
+    let alignedBytesArray = Array.from(alignedBytes.rawBuffer);
+    let suffix = `${remainingBits}:size(${remainingUnalignedBits})`;
+    if (alignedBytesArray.length === 0) {
+      return `<<${suffix}>>`;
+    } else {
+      return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}, ${suffix}>>`;
+    }
+  } else {
+    return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}>>`;
+  }
+}
+function echo$isDict(value4) {
+  try {
+    return value4 instanceof Dict;
+  } catch {
+    return false;
   }
 }
 
@@ -8505,9 +8663,10 @@ var DiscussionReference = class extends CustomType {
     this.model = model;
   }
 };
-var UserHoveredDiscussionEntry = class extends CustomType {
-  constructor(line_number, column_number, node_id, topic_id, topic_title, is_reference) {
+var UserSelectedDiscussionEntry = class extends CustomType {
+  constructor(kind, line_number, column_number, node_id, topic_id, topic_title, is_reference) {
     super();
+    this.kind = kind;
     this.line_number = line_number;
     this.column_number = column_number;
     this.node_id = node_id;
@@ -8516,16 +8675,13 @@ var UserHoveredDiscussionEntry = class extends CustomType {
     this.is_reference = is_reference;
   }
 };
-var UserUnhoveredDiscussionEntry = class extends CustomType {
-};
-var UserClickedDiscussionEntry = class extends CustomType {
-  constructor(line_number, column_number) {
+var UserUnselectedDiscussionEntry = class extends CustomType {
+  constructor(kind) {
     super();
-    this.line_number = line_number;
-    this.column_number = column_number;
+    this.kind = kind;
   }
 };
-var UserFocusedDiscussionEntry = class extends CustomType {
+var UserClickedDiscussionEntry = class extends CustomType {
   constructor(line_number, column_number) {
     super();
     this.line_number = line_number;
@@ -8539,6 +8695,10 @@ var UserUpdatedDiscussion = class extends CustomType {
     this.column_number = column_number;
     this.update = update3;
   }
+};
+var Hover = class extends CustomType {
+};
+var Focus = class extends CustomType {
 };
 function map_discussion_msg(msg, selected_discussion) {
   return new UserUpdatedDiscussion(
@@ -8597,7 +8757,8 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
           })()
         ),
         on_mouse_enter(
-          new UserHoveredDiscussionEntry(
+          new UserSelectedDiscussionEntry(
+            new Hover(),
             element_line_number,
             element_column_number,
             new None(),
@@ -8606,13 +8767,19 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
             false
           )
         ),
-        on_mouse_leave(new UserUnhoveredDiscussionEntry()),
+        on_mouse_leave(new UserUnselectedDiscussionEntry(new Hover())),
         on_focus(
-          new UserFocusedDiscussionEntry(
+          new UserSelectedDiscussionEntry(
+            new Focus(),
             element_line_number,
-            element_column_number
+            element_column_number,
+            new None(),
+            topic_id,
+            topic_title,
+            false
           )
-        )
+        ),
+        on_blur(new UserUnselectedDiscussionEntry(new Focus()))
       ]),
       toList([
         span(
@@ -8667,7 +8834,8 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
           })()
         ),
         on_mouse_enter(
-          new UserHoveredDiscussionEntry(
+          new UserSelectedDiscussionEntry(
+            new Hover(),
             element_line_number,
             element_column_number,
             new None(),
@@ -8676,13 +8844,19 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
             false
           )
         ),
-        on_mouse_leave(new UserUnhoveredDiscussionEntry()),
+        on_mouse_leave(new UserUnselectedDiscussionEntry(new Hover())),
         on_focus(
-          new UserFocusedDiscussionEntry(
+          new UserSelectedDiscussionEntry(
+            new Focus(),
             element_line_number,
-            element_column_number
+            element_column_number,
+            new None(),
+            topic_id,
+            topic_title,
+            false
           )
-        )
+        ),
+        on_blur(new UserUnselectedDiscussionEntry(new Focus()))
       ]),
       toList([
         span(
@@ -8733,7 +8907,8 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, el
         })()
       ),
       on_mouse_enter(
-        new UserHoveredDiscussionEntry(
+        new UserSelectedDiscussionEntry(
+          new Hover(),
           element_line_number,
           element_column_number,
           new Some(node_id),
@@ -8742,13 +8917,19 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, el
           false
         )
       ),
-      on_mouse_leave(new UserUnhoveredDiscussionEntry()),
+      on_mouse_leave(new UserUnselectedDiscussionEntry(new Hover())),
       on_focus(
-        new UserFocusedDiscussionEntry(
+        new UserSelectedDiscussionEntry(
+          new Focus(),
           element_line_number,
-          element_column_number
+          element_column_number,
+          new Some(node_id),
+          node_declaration.topic_id,
+          node_declaration.title,
+          false
         )
-      )
+      ),
+      on_blur(new UserUnselectedDiscussionEntry(new Focus()))
     ]),
     toList([
       span(
@@ -8799,22 +8980,29 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
         })()
       ),
       on_mouse_enter(
-        new UserHoveredDiscussionEntry(
+        new UserSelectedDiscussionEntry(
+          new Hover(),
           element_line_number,
           element_column_number,
           new Some(referenced_node_id),
           referenced_node_declaration.topic_id,
           referenced_node_declaration.title,
-          false
+          true
         )
       ),
-      on_mouse_leave(new UserUnhoveredDiscussionEntry()),
+      on_mouse_leave(new UserUnselectedDiscussionEntry(new Hover())),
       on_focus(
-        new UserFocusedDiscussionEntry(
+        new UserSelectedDiscussionEntry(
+          new Focus(),
           element_line_number,
-          element_column_number
+          element_column_number,
+          new Some(referenced_node_id),
+          referenced_node_declaration.topic_id,
+          referenced_node_declaration.title,
+          true
         )
-      )
+      ),
+      on_blur(new UserUnselectedDiscussionEntry(new Focus()))
     ]),
     toList([
       span(
@@ -9495,7 +9683,7 @@ function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
 
 // build/dev/javascript/o11a_client/o11a_client.mjs
 var Model4 = class extends CustomType {
-  constructor(route2, file_tree, audit_metadata, source_files, discussions, discussion_overlay_models, keyboard_model, selected_discussion, selected_node_id) {
+  constructor(route2, file_tree, audit_metadata, source_files, discussions, discussion_overlay_models, keyboard_model, selected_discussion, selected_node_id, focused_discussion) {
     super();
     this.route = route2;
     this.file_tree = file_tree;
@@ -9506,6 +9694,7 @@ var Model4 = class extends CustomType {
     this.keyboard_model = keyboard_model;
     this.selected_discussion = selected_discussion;
     this.selected_node_id = selected_node_id;
+    this.focused_discussion = focused_discussion;
   }
 };
 var O11aHomeRoute = class extends CustomType {
@@ -9562,9 +9751,10 @@ var UserEnteredKey = class extends CustomType {
     this.browser_event = browser_event;
   }
 };
-var UserHoveredDiscussionEntry2 = class extends CustomType {
-  constructor(line_number, column_number, node_id, topic_id, topic_title, is_reference) {
+var UserSelectedDiscussionEntry2 = class extends CustomType {
+  constructor(kind, line_number, column_number, node_id, topic_id, topic_title, is_reference) {
     super();
+    this.kind = kind;
     this.line_number = line_number;
     this.column_number = column_number;
     this.node_id = node_id;
@@ -9573,16 +9763,13 @@ var UserHoveredDiscussionEntry2 = class extends CustomType {
     this.is_reference = is_reference;
   }
 };
-var UserUnhoveredDiscussionEntry2 = class extends CustomType {
-};
-var UserClickedDiscussionEntry2 = class extends CustomType {
-  constructor(line_number, column_number) {
+var UserUnselectedDiscussionEntry2 = class extends CustomType {
+  constructor(kind) {
     super();
-    this.line_number = line_number;
-    this.column_number = column_number;
+    this.kind = kind;
   }
 };
-var UserFocusedDiscussionEntry2 = class extends CustomType {
+var UserClickedDiscussionEntry2 = class extends CustomType {
   constructor(line_number, column_number) {
     super();
     this.line_number = line_number;
@@ -9768,6 +9955,7 @@ function init5(_) {
     new_map(),
     init3(),
     new None(),
+    new None(),
     new None()
   );
   return [
@@ -9791,6 +9979,38 @@ function init5(_) {
     )
   ];
 }
+function submit_note(audit_name, topic_id, note_submission, discussion_model) {
+  return post(
+    "/submit-note/" + audit_name,
+    object2(
+      toList([
+        ["topic_id", string5(topic_id)],
+        ["note_submission", encode_note_submission(note_submission)]
+      ])
+    ),
+    expect_json(
+      field2(
+        "msg",
+        string4,
+        (msg) => {
+          if (msg === "success") {
+            return success(void 0);
+          } else {
+            return failure(void 0, msg);
+          }
+        }
+      ),
+      (response) => {
+        if (response.isOk() && !response[0]) {
+          return new UserSuccessfullySubmittedNote(discussion_model);
+        } else {
+          let e = response[0];
+          return new UserFailedToSubmitNote(e);
+        }
+      }
+    )
+  );
+}
 function update2(model, msg) {
   if (msg instanceof OnRouteChange) {
     let route2 = msg.route;
@@ -9806,7 +10026,8 @@ function update2(model, msg) {
           _record.discussion_overlay_models,
           _record.keyboard_model,
           _record.selected_discussion,
-          _record.selected_node_id
+          _record.selected_node_id,
+          _record.focused_discussion
         );
       })(),
       route_change_effect(model, route2)
@@ -9831,7 +10052,8 @@ function update2(model, msg) {
           _record.discussion_overlay_models,
           _record.keyboard_model,
           _record.selected_discussion,
-          _record.selected_node_id
+          _record.selected_node_id,
+          _record.focused_discussion
         );
       })(),
       none()
@@ -9849,9 +10071,26 @@ function update2(model, msg) {
           insert(model.source_files, page_path, source_files),
           _record.discussions,
           _record.discussion_overlay_models,
-          _record.keyboard_model,
+          (() => {
+            let _record$1 = model.keyboard_model;
+            return new Model2(
+              _record$1.current_line_number,
+              _record$1.current_column_number,
+              _record$1.current_line_column_count,
+              (() => {
+                if (source_files.isOk()) {
+                  let source_files$1 = source_files[0];
+                  return length(source_files$1);
+                } else {
+                  return model.keyboard_model.line_count;
+                }
+              })(),
+              _record$1.is_user_typing
+            );
+          })(),
           _record.selected_discussion,
-          _record.selected_node_id
+          _record.selected_node_id,
+          _record.focused_discussion
         );
       })(),
       none()
@@ -9882,7 +10121,8 @@ function update2(model, msg) {
             _record.discussion_overlay_models,
             _record.keyboard_model,
             _record.selected_discussion,
-            _record.selected_node_id
+            _record.selected_node_id,
+            _record.focused_discussion
           );
         })(),
         none()
@@ -9915,40 +10155,14 @@ function update2(model, msg) {
           _record.discussion_overlay_models,
           keyboard_model,
           _record.selected_discussion,
-          _record.selected_node_id
+          _record.selected_node_id,
+          _record.focused_discussion
         );
       })(),
       effect
     ];
-  } else if (msg instanceof UserFocusedDiscussionEntry2) {
-    let line_number = msg.line_number;
-    let column_number = msg.column_number;
-    return [
-      (() => {
-        let _record = model;
-        return new Model4(
-          _record.route,
-          _record.file_tree,
-          _record.audit_metadata,
-          _record.source_files,
-          _record.discussions,
-          _record.discussion_overlay_models,
-          (() => {
-            let _record$1 = model.keyboard_model;
-            return new Model2(
-              line_number,
-              column_number,
-              _record$1.current_line_column_count,
-              _record$1.is_user_typing
-            );
-          })(),
-          _record.selected_discussion,
-          _record.selected_node_id
-        );
-      })(),
-      none()
-    ];
-  } else if (msg instanceof UserHoveredDiscussionEntry2) {
+  } else if (msg instanceof UserSelectedDiscussionEntry2) {
+    let kind = msg.kind;
     let line_number = msg.line_number;
     let column_number = msg.column_number;
     let node_id = msg.node_id;
@@ -9976,43 +10190,86 @@ function update2(model, msg) {
     })();
     return [
       (() => {
-        let _record = model;
-        return new Model4(
-          _record.route,
-          _record.file_tree,
-          _record.audit_metadata,
-          _record.source_files,
-          _record.discussions,
-          discussion_overlay_models,
-          _record.keyboard_model,
-          new Some(selected_discussion),
-          node_id
-        );
+        if (kind instanceof Hover) {
+          let _record = model;
+          return new Model4(
+            _record.route,
+            _record.file_tree,
+            _record.audit_metadata,
+            _record.source_files,
+            _record.discussions,
+            discussion_overlay_models,
+            _record.keyboard_model,
+            new Some(selected_discussion),
+            node_id,
+            _record.focused_discussion
+          );
+        } else {
+          let _record = model;
+          return new Model4(
+            _record.route,
+            _record.file_tree,
+            _record.audit_metadata,
+            _record.source_files,
+            _record.discussions,
+            discussion_overlay_models,
+            (() => {
+              let _record$1 = model.keyboard_model;
+              return new Model2(
+                line_number,
+                column_number,
+                _record$1.current_line_column_count,
+                _record$1.line_count,
+                _record$1.is_user_typing
+              );
+            })(),
+            _record.selected_discussion,
+            node_id,
+            new Some(selected_discussion)
+          );
+        }
       })(),
       none()
     ];
-  } else if (msg instanceof UserUnhoveredDiscussionEntry2) {
+  } else if (msg instanceof UserUnselectedDiscussionEntry2) {
+    let kind = msg.kind;
     return [
       (() => {
-        let _record = model;
-        return new Model4(
-          _record.route,
-          _record.file_tree,
-          _record.audit_metadata,
-          _record.source_files,
-          _record.discussions,
-          _record.discussion_overlay_models,
-          _record.keyboard_model,
-          new None(),
-          new None()
-        );
+        if (kind instanceof Hover) {
+          let _record = model;
+          return new Model4(
+            _record.route,
+            _record.file_tree,
+            _record.audit_metadata,
+            _record.source_files,
+            _record.discussions,
+            _record.discussion_overlay_models,
+            _record.keyboard_model,
+            new None(),
+            new None(),
+            _record.focused_discussion
+          );
+        } else {
+          let _record = model;
+          return new Model4(
+            _record.route,
+            _record.file_tree,
+            _record.audit_metadata,
+            _record.source_files,
+            _record.discussions,
+            _record.discussion_overlay_models,
+            _record.keyboard_model,
+            _record.selected_discussion,
+            new None(),
+            new None()
+          );
+        }
       })(),
       none()
     ];
   } else if (msg instanceof UserClickedDiscussionEntry2) {
     let line_number = msg.line_number;
     let column_number = msg.column_number;
-    echo("clicked discussion entry", "src/o11a_client.gleam", 338);
     return [
       model,
       from(
@@ -10044,85 +10301,19 @@ function update2(model, msg) {
           let $ = model.route;
           if ($ instanceof AuditPageRoute) {
             let audit_name = $.audit_name;
-            return post(
-              "/submit-note/" + audit_name,
-              object2(
-                toList([
-                  ["topic_id", string5(topic_id)],
-                  [
-                    "note_submission",
-                    encode_note_submission(note_submission)
-                  ]
-                ])
-              ),
-              expect_json(
-                field2(
-                  "msg",
-                  string4,
-                  (msg2) => {
-                    let _pipe = (() => {
-                      if (msg2 === "success") {
-                        return success(void 0);
-                      } else {
-                        return failure(void 0, msg2);
-                      }
-                    })();
-                    return echo(_pipe, "src/o11a_client.gleam", 377);
-                  }
-                ),
-                (response) => {
-                  let _pipe = (() => {
-                    if (response.isOk() && !response[0]) {
-                      return new UserSuccessfullySubmittedNote(discussion_model);
-                    } else {
-                      let e = response[0];
-                      return new UserFailedToSubmitNote(e);
-                    }
-                  })();
-                  return echo(_pipe, "src/o11a_client.gleam", 384);
-                }
-              )
+            return submit_note(
+              audit_name,
+              topic_id,
+              note_submission,
+              discussion_model
             );
           } else if ($ instanceof AuditDashboardRoute) {
             let audit_name = $.audit_name;
-            return post(
-              "/submit-note/" + audit_name,
-              object2(
-                toList([
-                  ["topic_id", string5(topic_id)],
-                  [
-                    "note_submission",
-                    encode_note_submission(note_submission)
-                  ]
-                ])
-              ),
-              expect_json(
-                field2(
-                  "msg",
-                  string4,
-                  (msg2) => {
-                    let _pipe = (() => {
-                      if (msg2 === "success") {
-                        return success(void 0);
-                      } else {
-                        return failure(void 0, msg2);
-                      }
-                    })();
-                    return echo(_pipe, "src/o11a_client.gleam", 377);
-                  }
-                ),
-                (response) => {
-                  let _pipe = (() => {
-                    if (response.isOk() && !response[0]) {
-                      return new UserSuccessfullySubmittedNote(discussion_model);
-                    } else {
-                      let e = response[0];
-                      return new UserFailedToSubmitNote(e);
-                    }
-                  })();
-                  return echo(_pipe, "src/o11a_client.gleam", 384);
-                }
-              )
+            return submit_note(
+              audit_name,
+              topic_id,
+              note_submission,
+              discussion_model
             );
           } else {
             return none();
@@ -10146,7 +10337,8 @@ function update2(model, msg) {
             ),
             _record.keyboard_model,
             _record.selected_discussion,
-            _record.selected_node_id
+            _record.selected_node_id,
+            _record.focused_discussion
           );
         })(),
         none()
@@ -10168,7 +10360,8 @@ function update2(model, msg) {
             ),
             _record.keyboard_model,
             _record.selected_discussion,
-            _record.selected_node_id
+            _record.selected_node_id,
+            _record.focused_discussion
           );
         })(),
         none()
@@ -10190,7 +10383,8 @@ function update2(model, msg) {
             ),
             _record.keyboard_model,
             _record.selected_discussion,
-            _record.selected_node_id
+            _record.selected_node_id,
+            _record.focused_discussion
           );
         })(),
         none()
@@ -10212,7 +10406,8 @@ function update2(model, msg) {
             ),
             _record.keyboard_model,
             _record.selected_discussion,
-            _record.selected_node_id
+            _record.selected_node_id,
+            _record.focused_discussion
           );
         })(),
         none()
@@ -10234,7 +10429,8 @@ function update2(model, msg) {
             ),
             _record.keyboard_model,
             _record.selected_discussion,
-            _record.selected_node_id
+            _record.selected_node_id,
+            _record.focused_discussion
           );
         })(),
         none()
@@ -10258,7 +10454,8 @@ function update2(model, msg) {
           ),
           _record.keyboard_model,
           _record.selected_discussion,
-          _record.selected_node_id
+          _record.selected_node_id,
+          _record.focused_discussion
         );
       })(),
       none()
@@ -10267,6 +10464,45 @@ function update2(model, msg) {
     let error2 = msg.error;
     print("Failed to submit note: " + inspect2(error2));
     return [model, none()];
+  }
+}
+function get_selected_discussion(model) {
+  let $ = model.focused_discussion;
+  let $1 = model.selected_discussion;
+  if ($ instanceof Some) {
+    let discussion = $[0];
+    let _pipe = map_get(model.discussion_overlay_models, discussion);
+    let _pipe$1 = map3(
+      _pipe,
+      (model2) => {
+        return new Some(
+          new DiscussionReference(
+            discussion[0],
+            discussion[1],
+            model2
+          )
+        );
+      }
+    );
+    return unwrap2(_pipe$1, new None());
+  } else if ($1 instanceof Some) {
+    let discussion = $1[0];
+    let _pipe = map_get(model.discussion_overlay_models, discussion);
+    let _pipe$1 = map3(
+      _pipe,
+      (model2) => {
+        return new Some(
+          new DiscussionReference(
+            discussion[0],
+            discussion[1],
+            model2
+          )
+        );
+      }
+    );
+    return unwrap2(_pipe$1, new None());
+  } else {
+    return new None();
   }
 }
 function on_server_updated_discussion(msg) {
@@ -10291,14 +10527,16 @@ function on_server_updated_discussion(msg) {
   );
 }
 function map_audit_page_msg(msg) {
-  if (msg instanceof UserHoveredDiscussionEntry) {
+  if (msg instanceof UserSelectedDiscussionEntry) {
+    let kind = msg.kind;
     let line_number = msg.line_number;
     let column_number = msg.column_number;
     let node_id = msg.node_id;
     let topic_id = msg.topic_id;
     let topic_title = msg.topic_title;
     let is_reference = msg.is_reference;
-    return new UserHoveredDiscussionEntry2(
+    return new UserSelectedDiscussionEntry2(
+      kind,
       line_number,
       column_number,
       node_id,
@@ -10306,21 +10544,18 @@ function map_audit_page_msg(msg) {
       topic_title,
       is_reference
     );
-  } else if (msg instanceof UserUnhoveredDiscussionEntry) {
-    return new UserUnhoveredDiscussionEntry2();
+  } else if (msg instanceof UserUnselectedDiscussionEntry) {
+    let kind = msg.kind;
+    return new UserUnselectedDiscussionEntry2(kind);
   } else if (msg instanceof UserClickedDiscussionEntry) {
     let line_number = msg.line_number;
     let column_number = msg.column_number;
     return new UserClickedDiscussionEntry2(line_number, column_number);
-  } else if (msg instanceof UserUpdatedDiscussion) {
+  } else {
     let line_number = msg.line_number;
     let column_number = msg.column_number;
     let update$1 = msg.update;
     return new UserUpdatedDiscussion2(line_number, column_number, update$1);
-  } else {
-    let line_number = msg.line_number;
-    let column_number = msg.column_number;
-    return new UserFocusedDiscussionEntry2(line_number, column_number);
   }
 }
 function view4(model) {
@@ -10382,31 +10617,7 @@ function view4(model) {
                 let _pipe2 = map_get(model.discussions, audit_name);
                 return unwrap2(_pipe2, new_map());
               })(),
-              (() => {
-                let $1 = model.selected_discussion;
-                if ($1 instanceof Some) {
-                  let selected_discussion = $1[0];
-                  let _pipe2 = map_get(
-                    model.discussion_overlay_models,
-                    selected_discussion
-                  );
-                  let _pipe$1 = map3(
-                    _pipe2,
-                    (model2) => {
-                      return new Some(
-                        new DiscussionReference(
-                          selected_discussion[0],
-                          selected_discussion[1],
-                          model2
-                        )
-                      );
-                    }
-                  );
-                  return unwrap2(_pipe$1, new None());
-                } else {
-                  return new None();
-                }
-              })()
+              get_selected_discussion(model)
             );
             return map6(_pipe, map_audit_page_msg);
           })(),
@@ -10425,150 +10636,6 @@ function main() {
   console_log("Starting client controller");
   let _pipe = application(init5, update2, view4);
   return start2(_pipe, "#app", void 0);
-}
-function echo(value4, file, line2) {
-  const grey = "\x1B[90m";
-  const reset_color = "\x1B[39m";
-  const file_line = `${file}:${line2}`;
-  const string_value = echo$inspect(value4);
-  if (typeof process === "object" && process.stderr?.write) {
-    const string6 = `${grey}${file_line}${reset_color}
-${string_value}
-`;
-    process.stderr.write(string6);
-  } else if (typeof Deno === "object") {
-    const string6 = `${grey}${file_line}${reset_color}
-${string_value}
-`;
-    Deno.stderr.writeSync(new TextEncoder().encode(string6));
-  } else {
-    const string6 = `${file_line}
-${string_value}`;
-    console.log(string6);
-  }
-  return value4;
-}
-function echo$inspectString(str) {
-  let new_str = '"';
-  for (let i = 0; i < str.length; i++) {
-    let char = str[i];
-    if (char == "\n")
-      new_str += "\\n";
-    else if (char == "\r")
-      new_str += "\\r";
-    else if (char == "	")
-      new_str += "\\t";
-    else if (char == "\f")
-      new_str += "\\f";
-    else if (char == "\\")
-      new_str += "\\\\";
-    else if (char == '"')
-      new_str += '\\"';
-    else if (char < " " || char > "~" && char < "\xA0") {
-      new_str += "\\u{" + char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0") + "}";
-    } else {
-      new_str += char;
-    }
-  }
-  new_str += '"';
-  return new_str;
-}
-function echo$inspectDict(map8) {
-  let body2 = "dict.from_list([";
-  let first3 = true;
-  let key_value_pairs = [];
-  map8.forEach((value4, key2) => {
-    key_value_pairs.push([key2, value4]);
-  });
-  key_value_pairs.sort();
-  key_value_pairs.forEach(([key2, value4]) => {
-    if (!first3)
-      body2 = body2 + ", ";
-    body2 = body2 + "#(" + echo$inspect(key2) + ", " + echo$inspect(value4) + ")";
-    first3 = false;
-  });
-  return body2 + "])";
-}
-function echo$inspectCustomType(record) {
-  const props = Object.keys(record).map((label) => {
-    const value4 = echo$inspect(record[label]);
-    return isNaN(parseInt(label)) ? `${label}: ${value4}` : value4;
-  }).join(", ");
-  return props ? `${record.constructor.name}(${props})` : record.constructor.name;
-}
-function echo$inspectObject(v) {
-  const name = Object.getPrototypeOf(v)?.constructor?.name || "Object";
-  const props = [];
-  for (const k of Object.keys(v)) {
-    props.push(`${echo$inspect(k)}: ${echo$inspect(v[k])}`);
-  }
-  const body2 = props.length ? " " + props.join(", ") + " " : "";
-  const head = name === "Object" ? "" : name + " ";
-  return `//js(${head}{${body2}})`;
-}
-function echo$inspect(v) {
-  const t = typeof v;
-  if (v === true)
-    return "True";
-  if (v === false)
-    return "False";
-  if (v === null)
-    return "//js(null)";
-  if (v === void 0)
-    return "Nil";
-  if (t === "string")
-    return echo$inspectString(v);
-  if (t === "bigint" || t === "number")
-    return v.toString();
-  if (Array.isArray(v))
-    return `#(${v.map(echo$inspect).join(", ")})`;
-  if (v instanceof List)
-    return `[${v.toArray().map(echo$inspect).join(", ")}]`;
-  if (v instanceof UtfCodepoint)
-    return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
-  if (v instanceof BitArray)
-    return echo$inspectBitArray(v);
-  if (v instanceof CustomType)
-    return echo$inspectCustomType(v);
-  if (echo$isDict(v))
-    return echo$inspectDict(v);
-  if (v instanceof Set)
-    return `//js(Set(${[...v].map(echo$inspect).join(", ")}))`;
-  if (v instanceof RegExp)
-    return `//js(${v})`;
-  if (v instanceof Date)
-    return `//js(Date("${v.toISOString()}"))`;
-  if (v instanceof Function) {
-    const args = [];
-    for (const i of Array(v.length).keys())
-      args.push(String.fromCharCode(i + 97));
-    return `//fn(${args.join(", ")}) { ... }`;
-  }
-  return echo$inspectObject(v);
-}
-function echo$inspectBitArray(bitArray) {
-  let endOfAlignedBytes = bitArray.bitOffset + 8 * Math.trunc(bitArray.bitSize / 8);
-  let alignedBytes = bitArraySlice(bitArray, bitArray.bitOffset, endOfAlignedBytes);
-  let remainingUnalignedBits = bitArray.bitSize % 8;
-  if (remainingUnalignedBits > 0) {
-    let remainingBits = bitArraySliceToInt(bitArray, endOfAlignedBytes, bitArray.bitSize, false, false);
-    let alignedBytesArray = Array.from(alignedBytes.rawBuffer);
-    let suffix = `${remainingBits}:size(${remainingUnalignedBits})`;
-    if (alignedBytesArray.length === 0) {
-      return `<<${suffix}>>`;
-    } else {
-      return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}, ${suffix}>>`;
-    }
-  } else {
-    return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}>>`;
-  }
-}
-function echo$isDict(value4) {
-  try {
-    return value4 instanceof Dict;
-  } catch {
-    return false;
-  }
 }
 
 // build/.lustre/entry.mjs

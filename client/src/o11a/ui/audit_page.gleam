@@ -38,7 +38,8 @@ pub type Model {
 }
 
 pub type Msg(msg) {
-  UserHoveredDiscussionEntry(
+  UserSelectedDiscussionEntry(
+    kind: DiscussionSelectKind,
     line_number: Int,
     column_number: Int,
     node_id: option.Option(Int),
@@ -46,14 +47,18 @@ pub type Msg(msg) {
     topic_title: String,
     is_reference: Bool,
   )
-  UserUnhoveredDiscussionEntry
+  UserUnselectedDiscussionEntry(kind: DiscussionSelectKind)
   UserClickedDiscussionEntry(line_number: Int, column_number: Int)
-  UserFocusedDiscussionEntry(line_number: Int, column_number: Int)
   UserUpdatedDiscussion(
     line_number: Int,
     column_number: Int,
     update: #(discussion_overlay.Model, discussion_overlay.Effect),
   )
+}
+
+pub type DiscussionSelectKind {
+  Hover
+  Focus
 }
 
 pub fn view(
@@ -202,7 +207,8 @@ fn inline_comment_preview_view(
             element_line_number |> int.to_string,
             element_column_number |> int.to_string,
           ),
-          event.on_mouse_enter(UserHoveredDiscussionEntry(
+          event.on_mouse_enter(UserSelectedDiscussionEntry(
+            kind: Hover,
             line_number: element_line_number,
             column_number: element_column_number,
             node_id: option.None,
@@ -210,11 +216,17 @@ fn inline_comment_preview_view(
             topic_title:,
             is_reference: False,
           )),
-          event.on_mouse_leave(UserUnhoveredDiscussionEntry),
-          event.on_focus(UserFocusedDiscussionEntry(
+          event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: Hover)),
+          event.on_focus(UserSelectedDiscussionEntry(
+            kind: Focus,
             line_number: element_line_number,
             column_number: element_column_number,
+            node_id: option.None,
+            topic_id:,
+            topic_title:,
+            is_reference: False,
           )),
+          event.on_blur(UserUnselectedDiscussionEntry(kind: Focus)),
         ],
         [
           html.span(
@@ -251,7 +263,8 @@ fn inline_comment_preview_view(
             element_line_number |> int.to_string,
             element_column_number |> int.to_string,
           ),
-          event.on_mouse_enter(UserHoveredDiscussionEntry(
+          event.on_mouse_enter(UserSelectedDiscussionEntry(
+            kind: Hover,
             line_number: element_line_number,
             column_number: element_column_number,
             node_id: option.None,
@@ -259,11 +272,17 @@ fn inline_comment_preview_view(
             topic_title:,
             is_reference: False,
           )),
-          event.on_mouse_leave(UserUnhoveredDiscussionEntry),
-          event.on_focus(UserFocusedDiscussionEntry(
+          event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: Hover)),
+          event.on_focus(UserSelectedDiscussionEntry(
+            kind: Focus,
             line_number: element_line_number,
             column_number: element_column_number,
+            node_id: option.None,
+            topic_id:,
+            topic_title:,
+            is_reference: False,
           )),
+          event.on_blur(UserUnselectedDiscussionEntry(kind: Focus)),
         ],
         [
           html.span(
@@ -370,7 +389,8 @@ fn declaration_node_view(
         element_line_number |> int.to_string,
         element_column_number |> int.to_string,
       ),
-      event.on_mouse_enter(UserHoveredDiscussionEntry(
+      event.on_mouse_enter(UserSelectedDiscussionEntry(
+        kind: Hover,
         line_number: element_line_number,
         column_number: element_column_number,
         node_id: option.Some(node_id),
@@ -378,11 +398,17 @@ fn declaration_node_view(
         topic_title: node_declaration.title,
         is_reference: False,
       )),
-      event.on_mouse_leave(UserUnhoveredDiscussionEntry),
-      event.on_focus(UserFocusedDiscussionEntry(
+      event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: Hover)),
+      event.on_focus(UserSelectedDiscussionEntry(
+        kind: Focus,
         line_number: element_line_number,
         column_number: element_column_number,
+        node_id: option.Some(node_id),
+        topic_id: node_declaration.topic_id,
+        topic_title: node_declaration.title,
+        is_reference: False,
       )),
+      event.on_blur(UserUnselectedDiscussionEntry(kind: Focus)),
     ],
     [
       html.span(
@@ -431,19 +457,26 @@ fn reference_node_view(
         element_line_number |> int.to_string,
         element_column_number |> int.to_string,
       ),
-      event.on_mouse_enter(UserHoveredDiscussionEntry(
+      event.on_mouse_enter(UserSelectedDiscussionEntry(
+        kind: Hover,
         line_number: element_line_number,
         column_number: element_column_number,
         node_id: option.Some(referenced_node_id),
         topic_id: referenced_node_declaration.topic_id,
         topic_title: referenced_node_declaration.title,
-        is_reference: False,
+        is_reference: True,
       )),
-      event.on_mouse_leave(UserUnhoveredDiscussionEntry),
-      event.on_focus(UserFocusedDiscussionEntry(
+      event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: Hover)),
+      event.on_focus(UserSelectedDiscussionEntry(
+        kind: Focus,
         line_number: element_line_number,
         column_number: element_column_number,
+        node_id: option.Some(referenced_node_id),
+        topic_id: referenced_node_declaration.topic_id,
+        topic_title: referenced_node_declaration.title,
+        is_reference: True,
       )),
+      event.on_blur(UserUnselectedDiscussionEntry(kind: Focus)),
     ],
     [
       html.span(
