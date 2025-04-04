@@ -4,6 +4,7 @@ import gleam/result
 import lustre/effect
 import o11a/client/attributes as client_attributes
 import o11a/client/selectors
+import o11a/client/storage
 import plinth/browser/element
 import plinth/browser/event
 import snag
@@ -14,7 +15,6 @@ pub type Model {
     current_column_number: Int,
     current_line_column_count: Int,
     line_count: Int,
-    is_user_typing: Bool,
   )
 }
 
@@ -24,28 +24,36 @@ pub fn init() {
     current_column_number: 1,
     current_line_column_count: 16,
     line_count: 16,
-    is_user_typing: False,
   )
 }
 
 /// Prevents the default browser behavior for the given accepted navigation keys
 pub fn prevent_default(event) {
-  case event.key(event) {
-    "ArrowUp"
-    | "ArrowDown"
-    | "ArrowLeft"
-    | "ArrowRight"
-    | "PageUp"
-    | "PageDown"
-    | "Enter"
-    | "e"
-    | "Escape" -> event.prevent_default(event)
-    _ -> Nil
+  case storage.is_user_typing() {
+    True ->
+      case event.ctrl_key(event), event.key(event) {
+        True, "e" -> event.prevent_default(event)
+        _, "Escape" -> event.prevent_default(event)
+        _, _ -> Nil
+      }
+    False ->
+      case event.key(event) {
+        "ArrowUp"
+        | "ArrowDown"
+        | "ArrowLeft"
+        | "ArrowRight"
+        | "PageUp"
+        | "PageDown"
+        | "Enter"
+        | "e"
+        | "Escape" -> event.prevent_default(event)
+        _ -> Nil
+      }
   }
 }
 
 pub fn do_page_navigation(event, model: Model) {
-  let res = case model.is_user_typing {
+  let res = case storage.is_user_typing() {
     True -> {
       use <- handle_expanded_input_focus(event, model)
       use <- handle_input_escape(event, model)
@@ -72,14 +80,13 @@ pub fn do_page_navigation(event, model: Model) {
 fn handle_input_escape(event, model: Model, else_do) {
   case event.key(event) {
     "Escape" ->
-      #(
+      Ok(#(
         model,
         focus_line_discussion(
           line_number: model.current_line_number,
           column_number: model.current_column_number,
         ),
-      )
-      |> Ok
+      ))
 
     _ -> else_do()
   }
@@ -130,15 +137,11 @@ fn handle_keyboard_navigation(event, model, else_do) {
 }
 
 fn move_focus_line(model: Model, by step) {
-  echo "moving focus line by " <> int.to_string(step)
   use #(new_line, column_count) <- result.map(find_next_discussion_line(
     model,
     model.current_line_number,
     step,
   ))
-
-  echo "new line " <> int.to_string(new_line)
-  echo "column count " <> int.to_string(column_count)
 
   #(
     Model(..model, current_line_column_count: column_count),
@@ -166,12 +169,33 @@ fn move_focus_column(model: Model, by step) {
   |> Ok
 }
 
-fn handle_discussion_escape(_event, model, _else_do) {
-  Ok(#(model, effect.none()))
+fn handle_discussion_escape(event, model: Model, else_do) {
+  case event.key(event) {
+    "Escape" ->
+      Ok(#(
+        model,
+        blur_line_discussion(
+          line_number: model.current_line_number,
+          column_number: model.current_column_number,
+        ),
+      ))
+
+    _ -> else_do()
+  }
 }
 
-fn handle_input_focus(_event, model, _else_do) {
-  Ok(#(model, effect.none()))
+fn handle_input_focus(event, model: Model, else_do) {
+  case event.ctrl_key(event), event.key(event) {
+    False, "e" ->
+      Ok(#(
+        model,
+        focus_line_discussion_input(
+          model.current_line_number,
+          model.current_column_number,
+        ),
+      ))
+    _, _ -> else_do()
+  }
 }
 
 fn find_next_discussion_line(
@@ -193,8 +217,7 @@ fn find_next_discussion_line(
     _, _ if step == 0 -> snag.error("Step is zero")
 
     _, _ -> {
-      let next_line =
-        int.max(1, int.min(model.line_count, current_line + step))
+      let next_line = int.max(1, int.min(model.line_count, current_line + step))
 
       // Not all lines have discussions, so if the current line doesn't, then
       // we need to find the next line that does
@@ -238,6 +261,37 @@ fn focus_line_discussion(
       selectors.discussion_entry(line_number:, column_number:)
       |> result.replace_error(snag.new(
         "Failed to find line discussion to focus",
+      ))
+      |> result.map(element.focus)
+    Nil
+  })
+}
+
+fn blur_line_discussion(
+  line_number line_number: Int,
+  column_number column_number: Int,
+) {
+  effect.from(fn(_dispatch) {
+    echo "blurring line discussion"
+    let _ =
+      selectors.discussion_entry(line_number:, column_number:)
+      |> result.replace_error(snag.new(
+        "Failed to find line discussion to focus",
+      ))
+      |> result.map(element.blur)
+    Nil
+  })
+}
+
+fn focus_line_discussion_input(
+  line_number line_number: Int,
+  column_number column_number: Int,
+) {
+  effect.from(fn(_dispatch) {
+    let _ =
+      selectors.discussion_input(line_number:, column_number:)
+      |> result.replace_error(snag.new(
+        "Failed to find line discussion input to focus",
       ))
       |> result.map(element.focus)
     Nil

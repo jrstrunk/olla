@@ -19,6 +19,7 @@ import modem
 import o11a/audit_metadata
 import o11a/client/page_navigation
 import o11a/client/selectors
+import o11a/client/storage
 import o11a/computed_note
 import o11a/events
 import o11a/note
@@ -337,6 +338,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     }
 
     UserUnselectedDiscussionEntry(kind:) -> {
+      echo "Unselecting discussion " <> string.inspect(kind)
       #(
         case kind {
           audit_page.Hover ->
@@ -391,16 +393,39 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           },
         )
 
-        discussion_overlay.FocusDiscussionInput(_line_number, _column_number)
-        | discussion_overlay.FocusExpandedDiscussionInput(
-            _line_number,
-            _column_number,
+        discussion_overlay.FocusDiscussionInput(line_number, column_number) -> {
+          echo "Focusing discussion input, user is typing"
+          storage.set_is_user_typing(True)
+          #(
+            Model(
+              ..model,
+              focused_discussion: option.Some(#(line_number, column_number)),
+            ),
+            effect.none(),
           )
-        | discussion_overlay.UnfocusDiscussionInput(
-            _line_number,
-            _column_number,
+        }
+
+        discussion_overlay.FocusExpandedDiscussionInput(
+          line_number,
+          column_number,
+        ) -> {
+          storage.set_is_user_typing(True)
+          #(
+            Model(
+              ..model,
+              focused_discussion: option.Some(#(line_number, column_number)),
+            ),
+            effect.none(),
           )
-        | discussion_overlay.MaximizeDiscussion(_line_number, _column_number)
+        }
+
+        discussion_overlay.UnfocusDiscussionInput(_line_number, _column_number) -> {
+          echo "Unfocusing discussion input"
+          storage.set_is_user_typing(False)
+          #(Model(..model, focused_discussion: option.None), effect.none())
+        }
+
+        discussion_overlay.MaximizeDiscussion(_line_number, _column_number)
         | discussion_overlay.None -> #(
           Model(
             ..model,
@@ -414,6 +439,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         )
       }
     }
+
     UserSuccessfullySubmittedNote(updated_model) -> #(
       Model(
         ..model,

@@ -3,7 +3,6 @@ import gleam/dict
 import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/int
-import gleam/io
 import gleam/list
 import gleam/option
 import gleam/result
@@ -284,8 +283,6 @@ pub fn view(
   model: Model,
   notes: dict.Dict(String, List(computed_note.ComputedNote)),
 ) {
-  io.println("Rendering line discussion " <> model.topic_title)
-
   let current_thread_notes =
     dict.get(notes, model.current_thread_id)
     |> result.unwrap([])

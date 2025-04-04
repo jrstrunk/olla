@@ -6526,6 +6526,9 @@ function pre_processed_line_decoder() {
 function focus(element2) {
   element2.focus();
 }
+function blur(element2) {
+  element2.blur();
+}
 function datasetGet(el, key2) {
   if (key2 in el.dataset) {
     return new Ok(el.dataset[key2]);
@@ -6755,42 +6758,63 @@ function discussion_input(line_number, column_number) {
   );
 }
 
+// build/dev/javascript/o11a_client/storage.mjs
+var is_user_typing_storage = false;
+function set_is_user_typing(value4) {
+  is_user_typing_storage = value4;
+}
+function is_user_typing() {
+  return is_user_typing_storage;
+}
+
 // build/dev/javascript/o11a_client/o11a/client/page_navigation.mjs
 var Model2 = class extends CustomType {
-  constructor(current_line_number, current_column_number, current_line_column_count, line_count, is_user_typing) {
+  constructor(current_line_number, current_column_number, current_line_column_count, line_count) {
     super();
     this.current_line_number = current_line_number;
     this.current_column_number = current_column_number;
     this.current_line_column_count = current_line_column_count;
     this.line_count = line_count;
-    this.is_user_typing = is_user_typing;
   }
 };
 function init3() {
-  return new Model2(16, 1, 16, 16, false);
+  return new Model2(16, 1, 16, 16);
 }
 function prevent_default2(event3) {
-  let $ = key(event3);
-  if ($ === "ArrowUp") {
-    return preventDefault(event3);
-  } else if ($ === "ArrowDown") {
-    return preventDefault(event3);
-  } else if ($ === "ArrowLeft") {
-    return preventDefault(event3);
-  } else if ($ === "ArrowRight") {
-    return preventDefault(event3);
-  } else if ($ === "PageUp") {
-    return preventDefault(event3);
-  } else if ($ === "PageDown") {
-    return preventDefault(event3);
-  } else if ($ === "Enter") {
-    return preventDefault(event3);
-  } else if ($ === "e") {
-    return preventDefault(event3);
-  } else if ($ === "Escape") {
-    return preventDefault(event3);
+  let $ = is_user_typing();
+  if ($) {
+    let $1 = ctrlKey(event3);
+    let $2 = key(event3);
+    if ($1 && $2 === "e") {
+      return preventDefault(event3);
+    } else if ($2 === "Escape") {
+      return preventDefault(event3);
+    } else {
+      return void 0;
+    }
   } else {
-    return void 0;
+    let $1 = key(event3);
+    if ($1 === "ArrowUp") {
+      return preventDefault(event3);
+    } else if ($1 === "ArrowDown") {
+      return preventDefault(event3);
+    } else if ($1 === "ArrowLeft") {
+      return preventDefault(event3);
+    } else if ($1 === "ArrowRight") {
+      return preventDefault(event3);
+    } else if ($1 === "PageUp") {
+      return preventDefault(event3);
+    } else if ($1 === "PageDown") {
+      return preventDefault(event3);
+    } else if ($1 === "Enter") {
+      return preventDefault(event3);
+    } else if ($1 === "e") {
+      return preventDefault(event3);
+    } else if ($1 === "Escape") {
+      return preventDefault(event3);
+    } else {
+      return void 0;
+    }
   }
 }
 function handle_expanded_input_focus(event3, model, else_do) {
@@ -6801,12 +6825,6 @@ function handle_expanded_input_focus(event3, model, else_do) {
   } else {
     return else_do();
   }
-}
-function handle_discussion_escape(_, model, _1) {
-  return new Ok([model, none()]);
-}
-function handle_input_focus(_, model, _1) {
-  return new Ok([model, none()]);
 }
 function find_next_discussion_line(loop$model, loop$current_line, loop$step) {
   while (true) {
@@ -6873,39 +6891,25 @@ function focus_line_discussion(line_number, column_number) {
 function handle_input_escape(event3, model, else_do) {
   let $ = key(event3);
   if ($ === "Escape") {
-    let _pipe = [
-      model,
-      focus_line_discussion(
-        model.current_line_number,
-        model.current_column_number
-      )
-    ];
-    return new Ok(_pipe);
+    return new Ok(
+      [
+        model,
+        focus_line_discussion(
+          model.current_line_number,
+          model.current_column_number
+        )
+      ]
+    );
   } else {
     return else_do();
   }
 }
 function move_focus_line(model, step) {
-  echo(
-    "moving focus line by " + to_string(step),
-    "src/o11a/client/page_navigation.gleam",
-    133
-  );
   return map3(
     find_next_discussion_line(model, model.current_line_number, step),
     (_use0) => {
       let new_line = _use0[0];
       let column_count = _use0[1];
-      echo(
-        "new line " + to_string(new_line),
-        "src/o11a/client/page_navigation.gleam",
-        140
-      );
-      echo(
-        "column count " + to_string(column_count),
-        "src/o11a/client/page_navigation.gleam",
-        141
-      );
       return [
         (() => {
           let _record = model;
@@ -6913,8 +6917,7 @@ function move_focus_line(model, step) {
             _record.current_line_number,
             _record.current_column_number,
             column_count,
-            _record.line_count,
-            _record.is_user_typing
+            _record.line_count
           );
         })(),
         focus_line_discussion(
@@ -6929,7 +6932,7 @@ function move_focus_column(model, step) {
   echo(
     "moving focus column by " + to_string(step),
     "src/o11a/client/page_navigation.gleam",
-    153
+    156
   );
   let new_column = (() => {
     let _pipe2 = max(1, model.current_column_number + step);
@@ -6938,7 +6941,7 @@ function move_focus_column(model, step) {
   echo(
     "new column " + to_string(new_column),
     "src/o11a/client/page_navigation.gleam",
-    158
+    161
   );
   let _pipe = [
     model,
@@ -6969,9 +6972,77 @@ function handle_keyboard_navigation(event3, model, else_do) {
     return else_do();
   }
 }
+function blur_line_discussion(line_number, column_number) {
+  return from(
+    (_) => {
+      echo(
+        "blurring line discussion",
+        "src/o11a/client/page_navigation.gleam",
+        275
+      );
+      let $ = (() => {
+        let _pipe = discussion_entry2(line_number, column_number);
+        let _pipe$1 = replace_error(
+          _pipe,
+          new$4("Failed to find line discussion to focus")
+        );
+        return map3(_pipe$1, blur);
+      })();
+      return void 0;
+    }
+  );
+}
+function handle_discussion_escape(event3, model, else_do) {
+  let $ = key(event3);
+  if ($ === "Escape") {
+    return new Ok(
+      [
+        model,
+        blur_line_discussion(
+          model.current_line_number,
+          model.current_column_number
+        )
+      ]
+    );
+  } else {
+    return else_do();
+  }
+}
+function focus_line_discussion_input(line_number, column_number) {
+  return from(
+    (_) => {
+      let $ = (() => {
+        let _pipe = discussion_input(line_number, column_number);
+        let _pipe$1 = replace_error(
+          _pipe,
+          new$4("Failed to find line discussion input to focus")
+        );
+        return map3(_pipe$1, focus);
+      })();
+      return void 0;
+    }
+  );
+}
+function handle_input_focus(event3, model, else_do) {
+  let $ = ctrlKey(event3);
+  let $1 = key(event3);
+  if (!$ && $1 === "e") {
+    return new Ok(
+      [
+        model,
+        focus_line_discussion_input(
+          model.current_line_number,
+          model.current_column_number
+        )
+      ]
+    );
+  } else {
+    return else_do();
+  }
+}
 function do_page_navigation(event3, model) {
   let res = (() => {
-    let $ = model.is_user_typing;
+    let $ = is_user_typing();
     if ($) {
       return handle_expanded_input_focus(
         event3,
@@ -8521,7 +8592,6 @@ function new_message_input_view(model, current_thread_notes) {
   );
 }
 function view(model, notes) {
-  console_log("Rendering line discussion " + model.topic_title);
   let current_thread_notes = (() => {
     let _pipe = map_get(notes, model.current_thread_id);
     return unwrap2(_pipe, toList([]));
@@ -10084,8 +10154,7 @@ function update2(model, msg) {
                 } else {
                   return model.keyboard_model.line_count;
                 }
-              })(),
-              _record$1.is_user_typing
+              })()
             );
           })(),
           _record.selected_discussion,
@@ -10219,8 +10288,7 @@ function update2(model, msg) {
                 line_number,
                 column_number,
                 _record$1.current_line_column_count,
-                _record$1.line_count,
-                _record$1.is_user_typing
+                _record$1.line_count
               );
             })(),
             _record.selected_discussion,
@@ -10233,6 +10301,11 @@ function update2(model, msg) {
     ];
   } else if (msg instanceof UserUnselectedDiscussionEntry2) {
     let kind = msg.kind;
+    echo2(
+      "Unselecting discussion " + inspect2(kind),
+      "src/o11a_client.gleam",
+      341
+    );
     return [
       (() => {
         if (kind instanceof Hover) {
@@ -10321,6 +10394,14 @@ function update2(model, msg) {
         })()
       ];
     } else if (discussion_effect instanceof FocusDiscussionInput) {
+      let line_number$1 = discussion_effect.line_number;
+      let column_number$1 = discussion_effect.column_number;
+      echo2(
+        "Focusing discussion input, user is typing",
+        "src/o11a_client.gleam",
+        397
+      );
+      set_is_user_typing(true);
       return [
         (() => {
           let _record = model;
@@ -10330,20 +10411,19 @@ function update2(model, msg) {
             _record.audit_metadata,
             _record.source_files,
             _record.discussions,
-            insert(
-              model.discussion_overlay_models,
-              [line_number, column_number],
-              discussion_model
-            ),
+            _record.discussion_overlay_models,
             _record.keyboard_model,
             _record.selected_discussion,
             _record.selected_node_id,
-            _record.focused_discussion
+            new Some([line_number$1, column_number$1])
           );
         })(),
         none()
       ];
     } else if (discussion_effect instanceof FocusExpandedDiscussionInput) {
+      let line_number$1 = discussion_effect.line_number;
+      let column_number$1 = discussion_effect.column_number;
+      set_is_user_typing(true);
       return [
         (() => {
           let _record = model;
@@ -10353,20 +10433,18 @@ function update2(model, msg) {
             _record.audit_metadata,
             _record.source_files,
             _record.discussions,
-            insert(
-              model.discussion_overlay_models,
-              [line_number, column_number],
-              discussion_model
-            ),
+            _record.discussion_overlay_models,
             _record.keyboard_model,
             _record.selected_discussion,
             _record.selected_node_id,
-            _record.focused_discussion
+            new Some([line_number$1, column_number$1])
           );
         })(),
         none()
       ];
     } else if (discussion_effect instanceof UnfocusDiscussionInput) {
+      echo2("Unfocusing discussion input", "src/o11a_client.gleam", 423);
+      set_is_user_typing(false);
       return [
         (() => {
           let _record = model;
@@ -10376,15 +10454,11 @@ function update2(model, msg) {
             _record.audit_metadata,
             _record.source_files,
             _record.discussions,
-            insert(
-              model.discussion_overlay_models,
-              [line_number, column_number],
-              discussion_model
-            ),
+            _record.discussion_overlay_models,
             _record.keyboard_model,
             _record.selected_discussion,
             _record.selected_node_id,
-            _record.focused_discussion
+            new None()
           );
         })(),
         none()
@@ -10636,6 +10710,150 @@ function main() {
   console_log("Starting client controller");
   let _pipe = application(init5, update2, view4);
   return start2(_pipe, "#app", void 0);
+}
+function echo2(value4, file, line2) {
+  const grey = "\x1B[90m";
+  const reset_color = "\x1B[39m";
+  const file_line = `${file}:${line2}`;
+  const string_value = echo$inspect2(value4);
+  if (typeof process === "object" && process.stderr?.write) {
+    const string6 = `${grey}${file_line}${reset_color}
+${string_value}
+`;
+    process.stderr.write(string6);
+  } else if (typeof Deno === "object") {
+    const string6 = `${grey}${file_line}${reset_color}
+${string_value}
+`;
+    Deno.stderr.writeSync(new TextEncoder().encode(string6));
+  } else {
+    const string6 = `${file_line}
+${string_value}`;
+    console.log(string6);
+  }
+  return value4;
+}
+function echo$inspectString2(str) {
+  let new_str = '"';
+  for (let i = 0; i < str.length; i++) {
+    let char = str[i];
+    if (char == "\n")
+      new_str += "\\n";
+    else if (char == "\r")
+      new_str += "\\r";
+    else if (char == "	")
+      new_str += "\\t";
+    else if (char == "\f")
+      new_str += "\\f";
+    else if (char == "\\")
+      new_str += "\\\\";
+    else if (char == '"')
+      new_str += '\\"';
+    else if (char < " " || char > "~" && char < "\xA0") {
+      new_str += "\\u{" + char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0") + "}";
+    } else {
+      new_str += char;
+    }
+  }
+  new_str += '"';
+  return new_str;
+}
+function echo$inspectDict2(map8) {
+  let body2 = "dict.from_list([";
+  let first3 = true;
+  let key_value_pairs = [];
+  map8.forEach((value4, key2) => {
+    key_value_pairs.push([key2, value4]);
+  });
+  key_value_pairs.sort();
+  key_value_pairs.forEach(([key2, value4]) => {
+    if (!first3)
+      body2 = body2 + ", ";
+    body2 = body2 + "#(" + echo$inspect2(key2) + ", " + echo$inspect2(value4) + ")";
+    first3 = false;
+  });
+  return body2 + "])";
+}
+function echo$inspectCustomType2(record) {
+  const props = Object.keys(record).map((label) => {
+    const value4 = echo$inspect2(record[label]);
+    return isNaN(parseInt(label)) ? `${label}: ${value4}` : value4;
+  }).join(", ");
+  return props ? `${record.constructor.name}(${props})` : record.constructor.name;
+}
+function echo$inspectObject2(v) {
+  const name = Object.getPrototypeOf(v)?.constructor?.name || "Object";
+  const props = [];
+  for (const k of Object.keys(v)) {
+    props.push(`${echo$inspect2(k)}: ${echo$inspect2(v[k])}`);
+  }
+  const body2 = props.length ? " " + props.join(", ") + " " : "";
+  const head = name === "Object" ? "" : name + " ";
+  return `//js(${head}{${body2}})`;
+}
+function echo$inspect2(v) {
+  const t = typeof v;
+  if (v === true)
+    return "True";
+  if (v === false)
+    return "False";
+  if (v === null)
+    return "//js(null)";
+  if (v === void 0)
+    return "Nil";
+  if (t === "string")
+    return echo$inspectString2(v);
+  if (t === "bigint" || t === "number")
+    return v.toString();
+  if (Array.isArray(v))
+    return `#(${v.map(echo$inspect2).join(", ")})`;
+  if (v instanceof List)
+    return `[${v.toArray().map(echo$inspect2).join(", ")}]`;
+  if (v instanceof UtfCodepoint)
+    return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
+  if (v instanceof BitArray)
+    return echo$inspectBitArray2(v);
+  if (v instanceof CustomType)
+    return echo$inspectCustomType2(v);
+  if (echo$isDict2(v))
+    return echo$inspectDict2(v);
+  if (v instanceof Set)
+    return `//js(Set(${[...v].map(echo$inspect2).join(", ")}))`;
+  if (v instanceof RegExp)
+    return `//js(${v})`;
+  if (v instanceof Date)
+    return `//js(Date("${v.toISOString()}"))`;
+  if (v instanceof Function) {
+    const args = [];
+    for (const i of Array(v.length).keys())
+      args.push(String.fromCharCode(i + 97));
+    return `//fn(${args.join(", ")}) { ... }`;
+  }
+  return echo$inspectObject2(v);
+}
+function echo$inspectBitArray2(bitArray) {
+  let endOfAlignedBytes = bitArray.bitOffset + 8 * Math.trunc(bitArray.bitSize / 8);
+  let alignedBytes = bitArraySlice(bitArray, bitArray.bitOffset, endOfAlignedBytes);
+  let remainingUnalignedBits = bitArray.bitSize % 8;
+  if (remainingUnalignedBits > 0) {
+    let remainingBits = bitArraySliceToInt(bitArray, endOfAlignedBytes, bitArray.bitSize, false, false);
+    let alignedBytesArray = Array.from(alignedBytes.rawBuffer);
+    let suffix = `${remainingBits}:size(${remainingUnalignedBits})`;
+    if (alignedBytesArray.length === 0) {
+      return `<<${suffix}>>`;
+    } else {
+      return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}, ${suffix}>>`;
+    }
+  } else {
+    return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}>>`;
+  }
+}
+function echo$isDict2(value4) {
+  try {
+    return value4 instanceof Dict;
+  } catch {
+    return false;
+  }
 }
 
 // build/.lustre/entry.mjs
