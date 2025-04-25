@@ -275,12 +275,12 @@ line-discussion:focus-within {
   user-select: none;
 }
 
-.top-\[1\.4rem\] {
-  top: 1.4rem;
+.top-\[1\.75rem\] {
+  top: 1.75rem;
 }
 
-.bottom-\[1\.4rem\] {
-  bottom: 1.4rem;
+.bottom-\[1\.75rem\] {
+  bottom: 1.75rem;
 }
 
 /* Tree view */

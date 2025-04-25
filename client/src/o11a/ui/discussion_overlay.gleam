@@ -293,9 +293,9 @@ pub fn view(
       ),
       // The line discussion component is too close to the edge of the
       // screen, so we want to show it below the line
-      case model.line_number < 27 {
-        True -> attribute.class("top-[1.4rem]")
-        False -> attribute.class("bottom-[1.4rem]")
+      case model.line_number < 30 {
+        True -> attribute.class("top-[1.75rem]")
+        False -> attribute.class("bottom-[1.75rem]")
       },
     ],
     [

@@ -10250,11 +10250,11 @@ function view(model, notes) {
         "absolute z-[3] w-[30rem] not-italic text-wrap select-text text left-[-.3rem]"
       ),
       (() => {
-        let $ = model.line_number < 27;
+        let $ = model.line_number < 30;
         if ($) {
-          return class$("top-[1.4rem]");
+          return class$("top-[1.75rem]");
         } else {
-          return class$("bottom-[1.4rem]");
+          return class$("bottom-[1.75rem]");
         }
       })()
     ]),
@@ -10474,18 +10474,6 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
             return to_string(_pipe);
           })()
         ),
-        on_mouse_enter(
-          new UserSelectedDiscussionEntry(
-            new Hover(),
-            element_line_number,
-            element_column_number,
-            new None(),
-            topic_id,
-            topic_title,
-            false
-          )
-        ),
-        on_mouse_leave(new UserUnselectedDiscussionEntry(new Hover())),
         on_focus(
           new UserSelectedDiscussionEntry(
             new Focus(),
@@ -10502,6 +10490,20 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
       toList([
         span(
           toList([
+            on_mouse_enter(
+              new UserSelectedDiscussionEntry(
+                new Hover(),
+                element_line_number,
+                element_column_number,
+                new None(),
+                topic_id,
+                topic_title,
+                false
+              )
+            ),
+            on_mouse_leave(
+              new UserUnselectedDiscussionEntry(new Hover())
+            ),
             on_click(
               new UserClickedDiscussionEntry(
                 element_line_number,
@@ -10551,18 +10553,6 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
             return to_string(_pipe);
           })()
         ),
-        on_mouse_enter(
-          new UserSelectedDiscussionEntry(
-            new Hover(),
-            element_line_number,
-            element_column_number,
-            new None(),
-            topic_id,
-            topic_title,
-            false
-          )
-        ),
-        on_mouse_leave(new UserUnselectedDiscussionEntry(new Hover())),
         on_focus(
           new UserSelectedDiscussionEntry(
             new Focus(),
@@ -10579,6 +10569,20 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
       toList([
         span(
           toList([
+            on_mouse_enter(
+              new UserSelectedDiscussionEntry(
+                new Hover(),
+                element_line_number,
+                element_column_number,
+                new None(),
+                topic_id,
+                topic_title,
+                false
+              )
+            ),
+            on_mouse_leave(
+              new UserUnselectedDiscussionEntry(new Hover())
+            ),
             on_click(
               new UserClickedDiscussionEntry(
                 element_line_number,
@@ -10624,18 +10628,6 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, el
           return to_string(_pipe);
         })()
       ),
-      on_mouse_enter(
-        new UserSelectedDiscussionEntry(
-          new Hover(),
-          element_line_number,
-          element_column_number,
-          new Some(node_id),
-          node_declaration.topic_id,
-          node_declaration.title,
-          false
-        )
-      ),
-      on_mouse_leave(new UserUnselectedDiscussionEntry(new Hover())),
       on_focus(
         new UserSelectedDiscussionEntry(
           new Focus(),
@@ -10652,6 +10644,18 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, el
     toList([
       span(
         toList([
+          on_mouse_enter(
+            new UserSelectedDiscussionEntry(
+              new Hover(),
+              element_line_number,
+              element_column_number,
+              new Some(node_id),
+              node_declaration.topic_id,
+              node_declaration.title,
+              false
+            )
+          ),
+          on_mouse_leave(new UserUnselectedDiscussionEntry(new Hover())),
           on_click(
             new UserClickedDiscussionEntry(
               element_line_number,
@@ -10697,18 +10701,6 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
           return to_string(_pipe);
         })()
       ),
-      on_mouse_enter(
-        new UserSelectedDiscussionEntry(
-          new Hover(),
-          element_line_number,
-          element_column_number,
-          new Some(referenced_node_id),
-          referenced_node_declaration.topic_id,
-          referenced_node_declaration.title,
-          true
-        )
-      ),
-      on_mouse_leave(new UserUnselectedDiscussionEntry(new Hover())),
       on_focus(
         new UserSelectedDiscussionEntry(
           new Focus(),
@@ -10725,6 +10717,18 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
     toList([
       span(
         toList([
+          on_mouse_enter(
+            new UserSelectedDiscussionEntry(
+              new Hover(),
+              element_line_number,
+              element_column_number,
+              new Some(referenced_node_id),
+              referenced_node_declaration.topic_id,
+              referenced_node_declaration.title,
+              true
+            )
+          ),
+          on_mouse_leave(new UserUnselectedDiscussionEntry(new Hover())),
           on_click(
             new UserClickedDiscussionEntry(
               element_line_number,
