@@ -1,6 +1,5 @@
 import concurrent_dict
 import filepath
-import gleam/dict
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/pair
@@ -16,7 +15,7 @@ import o11a/computed_note
 import o11a/server/discussion
 
 pub fn app() -> lustre.App(Model, Model, Msg) {
-  lustre.component(init, update, cached_view, dict.new())
+  lustre.component(init, update, cached_view, [])
 }
 
 pub type Msg {
@@ -85,8 +84,6 @@ fn cached_view(model: Model) -> element.Element(Msg) {
 }
 
 fn view(model: Model) -> element.Element(Msg) {
-  let container_styles = [#("margin-left", "2rem")]
-
   let #(
     incomplete_todos,
     unanswered_questions,
@@ -94,9 +91,9 @@ fn view(model: Model) -> element.Element(Msg) {
     confirmed_findings,
   ) = find_open_notes(model.discussion, for: None)
 
-  html.div([attribute.style(container_styles)], [
+  html.div([attribute.style("margin-left", "2rem")], [
     html.style([], style),
-    html.div([attribute.style([#("width", "40rem")])], [
+    html.div([attribute.style("width", "40rem")], [
       elementx.hide_skeleton(),
       html.h1([], [
         html.text(

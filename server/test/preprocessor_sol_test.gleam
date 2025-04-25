@@ -1,6 +1,5 @@
 import gleam/dict
 import gleam/dynamic/decode
-import gleam/io
 import gleam/json
 import gleam/list
 import gleeunit/should
@@ -74,7 +73,7 @@ pub fn preprocess_source_test() {
   let nodes = preprocessor_sol.linearize_nodes(ast)
 
   preprocessor_sol.preprocess_source(src, nodes, dict.new(), "thorwallet", "")
-  |> list.map(io.debug)
+  |> list.map(fn(e) { echo e })
 }
 
 const src = "// SPDX-License-Identifier: MIT

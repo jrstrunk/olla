@@ -14,17 +14,17 @@ target = "javascript"
 # https://gleam.run/writing-gleam/gleam-toml/.
 
 [dependencies]
-gleam_stdlib = ">= 0.44.0 and < 2.0.0"
-lustre = ">= 4.6.4 and < 5.0.0"
 o11a_common = { path = "../common" }
 plinth = { path = "../../plinth" }
-given = ">= 5.0.2 and < 6.0.0"
+gleam_stdlib = ">= 0.59.0 and < 1.0.0"
 gleam_json = ">= 2.3.0 and < 3.0.0"
-gtempo = ">= 7.0.0 and < 8.0.0"
-modem = ">= 2.0.1 and < 3.0.0"
-lustre_http = { path = "../../lustre_http" }
+given = ">= 5.0.4 and < 6.0.0"
+gtempo = ">= 7.1.0 and < 8.0.0"
+lustre = ">= 5.0.2 and < 6.0.0"
+modem = ">= 2.0.2 and < 3.0.0"
 snag = ">= 1.1.0 and < 2.0.0"
-filepath = ">= 1.1.1 and < 2.0.0"
+filepath = ">= 1.1.2 and < 2.0.0"
+lustre_http = { path = "../../lustre_http" }
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"

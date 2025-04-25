@@ -1,6 +1,5 @@
 import given
 import gleam/dict
-import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/int
 import gleam/list
@@ -650,25 +649,13 @@ fn get_message_classification_prefix(
 }
 
 fn on_input_keydown(enter_msg, up_msg) {
-  use event <- event.on("keydown")
-
-  let decoder = {
+  event.on("keydown", {
     use ctrl_key <- decode.field("ctrlKey", decode.bool)
     use key <- decode.field("key", decode.string)
-
-    decode.success(#(ctrl_key, key))
-  }
-
-  let empty_error = [dynamic.DecodeError("", "", [])]
-
-  use #(ctrl_key, key) <- result.try(
-    decode.run(event, decoder)
-    |> result.replace_error(empty_error),
-  )
-
-  case ctrl_key, key {
-    True, "Enter" -> Ok(enter_msg)
-    _, "ArrowUp" -> Ok(up_msg)
-    _, _ -> Error(empty_error)
-  }
+    case ctrl_key, key {
+      True, "Enter" -> decode.success(enter_msg)
+      _, "ArrowUp" -> decode.success(up_msg)
+      _, _ -> decode.failure(enter_msg, "input_keydown")
+    }
+  })
 }

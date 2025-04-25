@@ -1,6 +1,5 @@
 import concurrent_dict
 import gleam/dict
-import gleam/erlang/process
 import gleam/json
 import gleam/list
 import gleam/result
@@ -37,17 +36,12 @@ pub type Gateway {
 }
 
 pub type DashboardGateway =
-  concurrent_dict.ConcurrentDict(
-    String,
-    process.Subject(lustre.Action(audit_dashboard.Msg, lustre.ServerComponent)),
-  )
+  concurrent_dict.ConcurrentDict(String, lustre.Runtime(audit_dashboard.Msg))
 
 pub type DiscussionComponentGateway =
   concurrent_dict.ConcurrentDict(
     String,
-    process.Subject(
-      lustre.Action(discussion_component.Msg, lustre.ServerComponent),
-    ),
+    lustre.Runtime(discussion_component.Msg),
   )
 
 pub type AuditMetaDataGateway =
@@ -84,7 +78,7 @@ pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
       concurrent_dict.insert(discussion_gateway, audit_name, discussion)
 
       use audit_dashboard_actor <- result.try(
-        lustre.start_actor(
+        lustre.start_server_component(
           audit_dashboard.app(),
           audit_dashboard.Model(discussion:, skeletons:),
         )
@@ -98,7 +92,7 @@ pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
       )
 
       use discussion_component_actor <- result.try(
-        lustre.start_actor(
+        lustre.start_server_component(
           discussion_component.app(),
           discussion_component.Model(discussion:, skeletons:),
         )

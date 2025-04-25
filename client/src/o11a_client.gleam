@@ -1,5 +1,4 @@
 import gleam/dict
-import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/io
 import gleam/json
@@ -541,9 +540,10 @@ fn view(model: Model) {
   case model.route {
     AuditDashboardRoute(audit_name:) ->
       html.div([], [
-        server_component.component([
-          server_component.route("/component-discussion/" <> audit_name),
-        ]),
+        server_component.element(
+          [server_component.route("/component-discussion/" <> audit_name)],
+          [],
+        ),
         audit_tree.view(
           html.p([], [html.text("Dashboard")]),
           option.None,
@@ -555,10 +555,13 @@ fn view(model: Model) {
 
     AuditPageRoute(audit_name:, page_path:) ->
       html.div([], [
-        server_component.component([
-          server_component.route("/component-discussion/" <> audit_name),
-          on_server_updated_discussion(ServerUpdatedDiscussion),
-        ]),
+        server_component.element(
+          [
+            server_component.route("/component-discussion/" <> audit_name),
+            on_server_updated_discussion(ServerUpdatedDiscussion),
+          ],
+          [],
+        ),
         audit_tree.view(
           audit_page.view(
             preprocessed_source: dict.get(model.source_files, page_path)
@@ -602,17 +605,11 @@ fn get_selected_discussion(model: Model) {
 }
 
 pub fn on_server_updated_discussion(msg) {
-  use event <- event.on(events.server_updated_discussion)
-
-  let empty_error = [dynamic.DecodeError("", "", [])]
-
-  use audit_name <- result.try(
-    decode.run(event, decode.at(["detail", "audit_name"], decode.string))
-    |> result.replace_error(empty_error),
-  )
-
-  msg(audit_name)
-  |> Ok
+  event.on(events.server_updated_discussion, {
+    echo "Server updated discussion"
+    use audit_name <- decode.subfield(["detail", "audit_name"], decode.string)
+    decode.success(msg(audit_name))
+  })
 }
 
 fn map_audit_page_msg(msg) {

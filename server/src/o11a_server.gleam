@@ -2,6 +2,7 @@ import argv
 import concurrent_dict
 import filepath
 import gleam/dynamic/decode
+import gleam/erlang
 import gleam/erlang/process
 import gleam/http
 import gleam/http/request
@@ -100,8 +101,10 @@ fn handler(req, context: Context) {
     ["styles.css" as stylesheet] | ["line_discussion.min.css" as stylesheet] ->
       serve_css(stylesheet, context.config)
 
-    ["lustre_server_component.mjs" as script]
-    | ["o11a_client.mjs" as script]
+    ["lustre-server-component.mjs"] ->
+      serve_lustre_server_component(context.config)
+
+    ["o11a_client.mjs" as script]
     | ["o11a_client_script.mjs" as script]
     | ["panel_resizer.mjs" as script] -> serve_js(script, context.config)
 
@@ -112,7 +115,7 @@ fn handler(req, context: Context) {
           audit_name,
         )
 
-      server_componentx.get_connection(req, actor)
+      server_componentx.serve_component_connection(req, actor)
     }
 
     // |> wisp.json_response
@@ -247,7 +250,7 @@ fn handle_wisp_request(req, context: Context) {
           html.script(
             [
               attribute.type_("module"),
-              attribute.src("/lustre_server_component.mjs"),
+              attribute.src("/lustre-server-component.mjs"),
             ],
             "",
           ),
@@ -274,7 +277,7 @@ fn handle_wisp_request(req, context: Context) {
         ]),
         html.body([], [html.div([attribute.id("app")], [])]),
       ])
-      |> element.to_document_string_builder
+      |> element.to_document_string_tree
       |> wisp.html_response(200)
     }
   }
@@ -328,4 +331,25 @@ fn serve_favicon(config: config.Config) {
   |> response.prepend_header("content-type", "image/x-icon")
   |> response.set_body(favicon)
   |> response.set_header("cache-control", "max-age=604800, must-revalidate")
+}
+
+pub fn serve_lustre_server_component(config: config.Config) {
+  let assert Ok(lustre_priv) = erlang.priv_directory("lustre")
+  let file_path = lustre_priv <> "/static/lustre-server-component.mjs"
+  let assert Ok(file) = mist.send_file(file_path, offset: 0, limit: None)
+
+  response.new(200)
+  |> response.prepend_header("content-type", "application/javascript")
+  |> response.set_body(file)
+  |> fn(resp) {
+    case config.env {
+      config.Prod ->
+        resp
+        |> response.set_header(
+          "cache-control",
+          "max-age=604800, must-revalidate",
+        )
+      config.Dev -> resp
+    }
+  }
 }

@@ -1,5 +1,4 @@
 import gleam/dict
-import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/int
 import gleam/list
@@ -130,8 +129,8 @@ fn line_container_view(
       client_attributes.encode_column_count_data(column_count),
     ],
     [
-      element.keyed(element.fragment, {
-        use #(note_index_id, note_message), index <- list.index_map(info_notes)
+      element.fragment({
+        use #(_note_index_id, note_message), index <- list.index_map(info_notes)
 
         let child =
           html.p([attribute.class("loc flex")], [
@@ -154,7 +153,7 @@ fn line_container_view(
             ]),
           ])
 
-        #(note_index_id, child)
+        child
       }),
       html.p([attribute.class("loc flex")], [
         html.span([attribute.class("line-number code-extras relative")], [
@@ -351,10 +350,7 @@ fn preprocessed_nodes_view(
       preprocessor.PreProcessedNode(element:)
       | preprocessor.PreProcessedGapNode(element:, ..) -> #(
         index,
-        html.span(
-          [attribute.attribute("dangerous-unescaped-html", element)],
-          [],
-        ),
+        element.unsafe_raw_html("preprocessed-node", "span", [], element),
       )
     }
   })
@@ -605,30 +601,13 @@ fn split_info_comment(
 }
 
 pub fn on_user_submitted_line_note(msg) {
-  use event <- event.on(events.user_submitted_note)
-
-  let empty_error = [dynamic.DecodeError("", "", [])]
-
-  use note <- result.try(
-    decode.run(
-      event,
-      decode.subfield(
-        ["detail", "note"],
-        note.note_submission_decoder(),
-        decode.success,
-      ),
+  event.on(events.user_submitted_note, {
+    use note <- decode.subfield(
+      ["detail", "note"],
+      note.note_submission_decoder(),
     )
-    |> result.replace_error(empty_error),
-  )
+    use topic_id <- decode.subfield(["detail", "topic_id"], decode.string)
 
-  use topic_id <- result.try(
-    decode.run(
-      event,
-      decode.subfield(["detail", "topic_id"], decode.string, decode.success),
-    )
-    |> result.replace_error(empty_error),
-  )
-
-  msg(note, topic_id)
-  |> Ok
+    decode.success(msg(note, topic_id))
+  })
 }

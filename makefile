@@ -10,7 +10,7 @@ run:
 	@(cd client \
 	&& gleam run -m lustre/dev build app --outdir="../server/priv/static" \
 	&& cd ../server \
-	add && gleam run dev)
+	&& gleam run dev)
 
 .PHONY: clean-skeleton
 clean-skeleton:

@@ -6,7 +6,6 @@
 //// discussion every time there is an update.
 
 import concurrent_dict
-import gleam/dict
 import gleam/json
 import lustre
 import lustre/effect
@@ -17,7 +16,7 @@ import o11a/events
 import o11a/server/discussion
 
 pub fn app() -> lustre.App(Model, Model, Msg) {
-  lustre.component(init, update, view, dict.new())
+  lustre.component(init, update, view, [])
 }
 
 pub type Msg {
@@ -45,6 +44,7 @@ pub fn init(init_model: Model) -> #(Model, effect.Effect(Msg)) {
 pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
     ServerUpdatedDiscussion -> {
+      echo "Emitting server updated discussion"
       #(
         model,
         server_component.emit(

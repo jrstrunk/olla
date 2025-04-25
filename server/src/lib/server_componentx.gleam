@@ -1,5 +1,5 @@
 import gleam/erlang/process
-import gleam/int
+import gleam/function
 import gleam/json
 import gleam/option
 import gleam/otp/actor
@@ -7,89 +7,70 @@ import lustre
 import lustre/server_component
 import mist
 
-pub fn get_connection(
-  request,
-  actor: process.Subject(lustre.Action(msg, lustre.ServerComponent)),
-) {
+pub fn serve_component_connection(request, component) {
   mist.websocket(
     request:,
-    on_init: socket_init(_, actor),
-    on_close: socket_close,
-    handler: socket_update,
+    on_init: init_whiteboard_socket(_, component),
+    handler: loop_whiteboard_socket,
+    on_close: close_whiteboard_socket,
   )
 }
 
-pub type ServerComponentState(msg) {
-  ServerComponentState(
-    server_component_actor: process.Subject(
-      lustre.Action(msg, lustre.ServerComponent),
-    ),
-    connection_id: String,
+type ComponentSocket(msg) {
+  ComponentSocket(
+    component: lustre.Runtime(msg),
+    self: process.Subject(server_component.ClientMessage(msg)),
   )
 }
 
-pub type ServerComponentActor(msg) =
-  process.Subject(lustre.Action(msg, lustre.ServerComponent))
-
-fn socket_init(
-  _conn: mist.WebsocketConnection,
-  server_component_actor: ServerComponentActor(msg),
-) -> #(
-  ServerComponentState(msg),
-  option.Option(process.Selector(lustre.Patch(msg))),
-) {
+fn init_whiteboard_socket(_, component) {
   let self = process.new_subject()
-  let selector = process.selecting(process.new_selector(), self, fn(a) { a })
+  let selector =
+    process.new_selector()
+    |> process.selecting(self, function.identity)
 
-  let connection_id = int.random(1_000_000) |> int.to_string
+  server_component.register_subject(self)
+  |> lustre.send(to: component)
 
-  process.send(
-    server_component_actor,
-    server_component.subscribe(connection_id, process.send(self, _)),
-  )
-
-  #(
-    ServerComponentState(server_component_actor:, connection_id:),
-    option.Some(selector),
-  )
+  #(ComponentSocket(component:, self:), option.Some(selector))
 }
 
-fn socket_update(
-  state: ServerComponentState(msg),
-  conn: mist.WebsocketConnection,
-  msg: mist.WebsocketMessage(lustre.Patch(msg)),
+fn loop_whiteboard_socket(
+  state: ComponentSocket(msg),
+  connection: mist.WebsocketConnection,
+  message,
 ) {
-  case msg {
+  case message {
     mist.Text(json) -> {
-      // we attempt to decode the incoming text as an action to send to our
-      // server component runtime.
-      let action = json.decode(json, server_component.decode_action)
-
-      case action {
-        Ok(action) -> process.send(state.server_component_actor, action)
+      case json.parse(json, server_component.runtime_message_decoder()) {
+        Ok(runtime_message) -> lustre.send(state.component, runtime_message)
         Error(_) -> Nil
       }
 
       actor.continue(state)
     }
 
-    mist.Binary(_) -> actor.continue(state)
-    mist.Custom(patch) -> {
-      let assert Ok(_) =
-        patch
-        |> server_component.encode_patch
-        |> json.to_string
-        |> mist.send_text_frame(conn, _)
+    mist.Binary(_) -> {
+      actor.continue(state)
+    }
+
+    mist.Custom(client_message) -> {
+      let json = server_component.client_message_to_json(client_message)
+      let assert Ok(_) = mist.send_text_frame(connection, json.to_string(json))
 
       actor.continue(state)
     }
-    mist.Closed | mist.Shutdown -> actor.Stop(process.Normal)
+
+    mist.Closed | mist.Shutdown -> {
+      server_component.deregister_subject(state.self)
+      |> lustre.send(to: state.component)
+
+      actor.Stop(process.Normal)
+    }
   }
 }
 
-fn socket_close(state: ServerComponentState(msg)) {
-  process.send(
-    state.server_component_actor,
-    server_component.unsubscribe(state.connection_id),
-  )
+fn close_whiteboard_socket(state: ComponentSocket(msg)) -> Nil {
+  server_component.deregister_subject(state.self)
+  |> lustre.send(to: state.component)
 }

@@ -1,5 +1,4 @@
 import concurrent_dict
-import gleam/dict
 import gleam/list
 import gleam/option.{Some}
 import gleam/pair
@@ -16,7 +15,7 @@ import o11a/server/discussion
 import o11a/ui/audit_dashboard as dashboard
 
 pub fn app() -> lustre.App(Model, Model, Msg) {
-  lustre.component(init, update, cached_view, dict.new())
+  lustre.component(init, update, cached_view, [])
 }
 
 pub type Msg {

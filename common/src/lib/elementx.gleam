@@ -14,29 +14,9 @@ pub fn server_component_with_skeleton(
   )
 }
 
-pub fn server_component_with_prerendered_skeleton(
-  name: String,
-  id: String,
-  skeleton: String,
-) {
-  element.element(
-    "lustre-server-component",
-    [attribute.id(id), server_component.route("/" <> name)],
-    [
-      html.div(
-        [
-          attribute.attribute("slot", "skeleton"),
-          attribute.attribute("dangerous-unescaped-html", skeleton),
-        ],
-        [],
-      ),
-    ],
-  )
-}
-
 pub fn hide_skeleton() {
-  html.slot([
-    attribute.name("skeleton"),
-    attribute.style([#("display", "none")]),
-  ])
+  html.slot(
+    [attribute.name("skeleton"), attribute.style("display", "none")],
+    [],
+  )
 }

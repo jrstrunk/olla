@@ -15,10 +15,7 @@ document.getElementById('"
 
 pub fn view(md_doc_contents) {
   html.div(
-    [
-      attribute.id("readme-container"),
-      attribute.style([#("margin-left", "2rem")]),
-    ],
+    [attribute.id("readme-container"), attribute.style("margin-left", "2rem")],
     [
       html.script(
         [attribute.type_("module")],
