@@ -1,5 +1,6 @@
 import gleam/dict
 import gleam/dynamic/decode
+import gleam/int
 import gleam/io
 import gleam/json
 import gleam/list
@@ -553,8 +554,20 @@ fn view(model: Model) {
         ),
       ])
 
-    AuditPageRoute(audit_name:, page_path:) ->
+    AuditPageRoute(audit_name:, page_path:) -> {
+      let selected_discussion = get_selected_discussion(model)
+
       html.div([], [
+        case model.selected_node_id {
+          option.Some(selected_node_id) ->
+            html.style(
+              [],
+              ".N"
+                <> int.to_string(selected_node_id)
+                <> " { background-color: var(--highlight-color); border-radius: 0.15rem; }",
+            )
+          option.None -> element.fragment([])
+        },
         server_component.element(
           [
             server_component.route("/component-discussion/" <> audit_name),
@@ -574,7 +587,7 @@ fn view(model: Model) {
               |> result.unwrap([]),
             discussion: dict.get(model.discussions, audit_name)
               |> result.unwrap(dict.new()),
-            selected_discussion: get_selected_discussion(model),
+            selected_discussion:,
           )
             |> element.map(map_audit_page_msg),
           option.None,
@@ -583,7 +596,7 @@ fn view(model: Model) {
           page_path,
         ),
       ])
-
+    }
     O11aHomeRoute -> html.p([], [html.text("Home")])
   }
 }

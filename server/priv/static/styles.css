@@ -19,6 +19,7 @@
   --constant-color: #d19a66;
   /* --global-variable-color: #e06a74; */
   --global-variable-color: #d19a66;
+  --highlight-color: rgb(84, 82, 90);
 }
 
 html,

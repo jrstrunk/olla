@@ -68,7 +68,6 @@ pub fn main() {
     )
   <- result.map(
     gateway.start_gateway(skeletons)
-    |> echo
     |> result.map_error(fn(e) { snag.pretty_print(e) |> io.println }),
   )
 
@@ -118,7 +117,6 @@ fn handler(req, context: Context) {
       server_componentx.serve_component_connection(req, actor)
     }
 
-    // |> wisp.json_response
     _ -> wisp_mist.handler(handle_wisp_request(_, context), "secret")(req)
   }
 }
@@ -330,7 +328,17 @@ fn serve_favicon(config: config.Config) {
   response.new(200)
   |> response.prepend_header("content-type", "image/x-icon")
   |> response.set_body(favicon)
-  |> response.set_header("cache-control", "max-age=604800, must-revalidate")
+  |> fn(resp) {
+    case config.env {
+      config.Prod ->
+        resp
+        |> response.set_header(
+          "cache-control",
+          "max-age=604800, must-revalidate",
+        )
+      config.Dev -> resp
+    }
+  }
 }
 
 pub fn serve_lustre_server_component(config: config.Config) {

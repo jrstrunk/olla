@@ -836,14 +836,14 @@ function filter_loop(loop$list, loop$fun, loop$acc) {
     } else {
       let first$1 = list4.head;
       let rest$1 = list4.tail;
-      let new_acc = (() => {
-        let $ = fun(first$1);
-        if ($) {
-          return prepend(first$1, acc);
-        } else {
-          return acc;
-        }
-      })();
+      let _block;
+      let $ = fun(first$1);
+      if ($) {
+        _block = prepend(first$1, acc);
+      } else {
+        _block = acc;
+      }
+      let new_acc = _block;
       loop$list = rest$1;
       loop$fun = fun;
       loop$acc = new_acc;
@@ -863,15 +863,15 @@ function filter_map_loop(loop$list, loop$fun, loop$acc) {
     } else {
       let first$1 = list4.head;
       let rest$1 = list4.tail;
-      let new_acc = (() => {
-        let $ = fun(first$1);
-        if ($.isOk()) {
-          let first$2 = $[0];
-          return prepend(first$2, acc);
-        } else {
-          return acc;
-        }
-      })();
+      let _block;
+      let $ = fun(first$1);
+      if ($.isOk()) {
+        let first$2 = $[0];
+        _block = prepend(first$2, acc);
+      } else {
+        _block = acc;
+      }
+      let new_acc = _block;
       loop$list = rest$1;
       loop$fun = fun;
       loop$acc = new_acc;
@@ -1128,28 +1128,28 @@ function sequences(loop$list, loop$compare, loop$growing, loop$direction, loop$p
         loop$prev = new$1;
         loop$acc = acc;
       } else if ($ instanceof Gt && direction instanceof Ascending) {
-        let acc$1 = (() => {
-          if (direction instanceof Ascending) {
-            return prepend(reverse(growing$1), acc);
-          } else {
-            return prepend(growing$1, acc);
-          }
-        })();
+        let _block;
+        if (direction instanceof Ascending) {
+          _block = prepend(reverse(growing$1), acc);
+        } else {
+          _block = prepend(growing$1, acc);
+        }
+        let acc$1 = _block;
         if (rest$1.hasLength(0)) {
           return prepend(toList([new$1]), acc$1);
         } else {
           let next = rest$1.head;
           let rest$2 = rest$1.tail;
-          let direction$1 = (() => {
-            let $1 = compare5(new$1, next);
-            if ($1 instanceof Lt) {
-              return new Ascending();
-            } else if ($1 instanceof Eq) {
-              return new Ascending();
-            } else {
-              return new Descending();
-            }
-          })();
+          let _block$1;
+          let $1 = compare5(new$1, next);
+          if ($1 instanceof Lt) {
+            _block$1 = new Ascending();
+          } else if ($1 instanceof Eq) {
+            _block$1 = new Ascending();
+          } else {
+            _block$1 = new Descending();
+          }
+          let direction$1 = _block$1;
           loop$list = rest$2;
           loop$compare = compare5;
           loop$growing = toList([new$1]);
@@ -1158,28 +1158,28 @@ function sequences(loop$list, loop$compare, loop$growing, loop$direction, loop$p
           loop$acc = acc$1;
         }
       } else if ($ instanceof Lt && direction instanceof Descending) {
-        let acc$1 = (() => {
-          if (direction instanceof Ascending) {
-            return prepend(reverse(growing$1), acc);
-          } else {
-            return prepend(growing$1, acc);
-          }
-        })();
+        let _block;
+        if (direction instanceof Ascending) {
+          _block = prepend(reverse(growing$1), acc);
+        } else {
+          _block = prepend(growing$1, acc);
+        }
+        let acc$1 = _block;
         if (rest$1.hasLength(0)) {
           return prepend(toList([new$1]), acc$1);
         } else {
           let next = rest$1.head;
           let rest$2 = rest$1.tail;
-          let direction$1 = (() => {
-            let $1 = compare5(new$1, next);
-            if ($1 instanceof Lt) {
-              return new Ascending();
-            } else if ($1 instanceof Eq) {
-              return new Ascending();
-            } else {
-              return new Descending();
-            }
-          })();
+          let _block$1;
+          let $1 = compare5(new$1, next);
+          if ($1 instanceof Lt) {
+            _block$1 = new Ascending();
+          } else if ($1 instanceof Eq) {
+            _block$1 = new Ascending();
+          } else {
+            _block$1 = new Descending();
+          }
+          let direction$1 = _block$1;
           loop$list = rest$2;
           loop$compare = compare5;
           loop$growing = toList([new$1]);
@@ -1188,28 +1188,28 @@ function sequences(loop$list, loop$compare, loop$growing, loop$direction, loop$p
           loop$acc = acc$1;
         }
       } else {
-        let acc$1 = (() => {
-          if (direction instanceof Ascending) {
-            return prepend(reverse(growing$1), acc);
-          } else {
-            return prepend(growing$1, acc);
-          }
-        })();
+        let _block;
+        if (direction instanceof Ascending) {
+          _block = prepend(reverse(growing$1), acc);
+        } else {
+          _block = prepend(growing$1, acc);
+        }
+        let acc$1 = _block;
         if (rest$1.hasLength(0)) {
           return prepend(toList([new$1]), acc$1);
         } else {
           let next = rest$1.head;
           let rest$2 = rest$1.tail;
-          let direction$1 = (() => {
-            let $1 = compare5(new$1, next);
-            if ($1 instanceof Lt) {
-              return new Ascending();
-            } else if ($1 instanceof Eq) {
-              return new Ascending();
-            } else {
-              return new Descending();
-            }
-          })();
+          let _block$1;
+          let $1 = compare5(new$1, next);
+          if ($1 instanceof Lt) {
+            _block$1 = new Ascending();
+          } else if ($1 instanceof Eq) {
+            _block$1 = new Ascending();
+          } else {
+            _block$1 = new Descending();
+          }
+          let direction$1 = _block$1;
           loop$list = rest$2;
           loop$compare = compare5;
           loop$growing = toList([new$1]);
@@ -1383,16 +1383,16 @@ function sort(list4, compare5) {
     let x2 = list4.head;
     let y = list4.tail.head;
     let rest$1 = list4.tail.tail;
-    let direction = (() => {
-      let $ = compare5(x2, y);
-      if ($ instanceof Lt) {
-        return new Ascending();
-      } else if ($ instanceof Eq) {
-        return new Ascending();
-      } else {
-        return new Descending();
-      }
-    })();
+    let _block;
+    let $ = compare5(x2, y);
+    if ($ instanceof Lt) {
+      _block = new Ascending();
+    } else if ($ instanceof Eq) {
+      _block = new Ascending();
+    } else {
+      _block = new Descending();
+    }
+    let direction = _block;
     let sequences$1 = sequences(
       rest$1,
       compare5,
@@ -3287,18 +3287,18 @@ function parse_query_with_question_mark_loop(loop$original, loop$uri_string, loo
     } else if (uri_string.startsWith("#")) {
       let rest = uri_string.slice(1);
       let query = string_codeunit_slice(original, 0, size2);
-      let pieces$1 = (() => {
-        let _record = pieces;
-        return new Uri(
-          _record.scheme,
-          _record.userinfo,
-          _record.host,
-          _record.port,
-          _record.path,
-          new Some(query),
-          _record.fragment
-        );
-      })();
+      let _block;
+      let _record = pieces;
+      _block = new Uri(
+        _record.scheme,
+        _record.userinfo,
+        _record.host,
+        _record.port,
+        _record.path,
+        new Some(query),
+        _record.fragment
+      );
+      let pieces$1 = _block;
       return parse_fragment(rest, pieces$1);
     } else if (uri_string === "") {
       return new Ok(
@@ -3337,34 +3337,34 @@ function parse_path_loop(loop$original, loop$uri_string, loop$pieces, loop$size)
     if (uri_string.startsWith("?")) {
       let rest = uri_string.slice(1);
       let path2 = string_codeunit_slice(original, 0, size2);
-      let pieces$1 = (() => {
-        let _record = pieces;
-        return new Uri(
-          _record.scheme,
-          _record.userinfo,
-          _record.host,
-          _record.port,
-          path2,
-          _record.query,
-          _record.fragment
-        );
-      })();
+      let _block;
+      let _record = pieces;
+      _block = new Uri(
+        _record.scheme,
+        _record.userinfo,
+        _record.host,
+        _record.port,
+        path2,
+        _record.query,
+        _record.fragment
+      );
+      let pieces$1 = _block;
       return parse_query_with_question_mark(rest, pieces$1);
     } else if (uri_string.startsWith("#")) {
       let rest = uri_string.slice(1);
       let path2 = string_codeunit_slice(original, 0, size2);
-      let pieces$1 = (() => {
-        let _record = pieces;
-        return new Uri(
-          _record.scheme,
-          _record.userinfo,
-          _record.host,
-          _record.port,
-          path2,
-          _record.query,
-          _record.fragment
-        );
-      })();
+      let _block;
+      let _record = pieces;
+      _block = new Uri(
+        _record.scheme,
+        _record.userinfo,
+        _record.host,
+        _record.port,
+        path2,
+        _record.query,
+        _record.fragment
+      );
+      let pieces$1 = _block;
       return parse_fragment(rest, pieces$1);
     } else if (uri_string === "") {
       return new Ok(
@@ -3451,47 +3451,47 @@ function parse_port_loop(loop$uri_string, loop$pieces, loop$port) {
       loop$port = port * 10 + 9;
     } else if (uri_string.startsWith("?")) {
       let rest = uri_string.slice(1);
-      let pieces$1 = (() => {
-        let _record = pieces;
-        return new Uri(
-          _record.scheme,
-          _record.userinfo,
-          _record.host,
-          new Some(port),
-          _record.path,
-          _record.query,
-          _record.fragment
-        );
-      })();
+      let _block;
+      let _record = pieces;
+      _block = new Uri(
+        _record.scheme,
+        _record.userinfo,
+        _record.host,
+        new Some(port),
+        _record.path,
+        _record.query,
+        _record.fragment
+      );
+      let pieces$1 = _block;
       return parse_query_with_question_mark(rest, pieces$1);
     } else if (uri_string.startsWith("#")) {
       let rest = uri_string.slice(1);
-      let pieces$1 = (() => {
-        let _record = pieces;
-        return new Uri(
-          _record.scheme,
-          _record.userinfo,
-          _record.host,
-          new Some(port),
-          _record.path,
-          _record.query,
-          _record.fragment
-        );
-      })();
+      let _block;
+      let _record = pieces;
+      _block = new Uri(
+        _record.scheme,
+        _record.userinfo,
+        _record.host,
+        new Some(port),
+        _record.path,
+        _record.query,
+        _record.fragment
+      );
+      let pieces$1 = _block;
       return parse_fragment(rest, pieces$1);
     } else if (uri_string.startsWith("/")) {
-      let pieces$1 = (() => {
-        let _record = pieces;
-        return new Uri(
-          _record.scheme,
-          _record.userinfo,
-          _record.host,
-          new Some(port),
-          _record.path,
-          _record.query,
-          _record.fragment
-        );
-      })();
+      let _block;
+      let _record = pieces;
+      _block = new Uri(
+        _record.scheme,
+        _record.userinfo,
+        _record.host,
+        new Some(port),
+        _record.path,
+        _record.query,
+        _record.fragment
+      );
+      let pieces$1 = _block;
       return parse_path(uri_string, pieces$1);
     } else if (uri_string === "") {
       return new Ok(
@@ -3583,65 +3583,65 @@ function parse_host_outside_of_brackets_loop(loop$original, loop$uri_string, loo
       );
     } else if (uri_string.startsWith(":")) {
       let host = string_codeunit_slice(original, 0, size2);
-      let pieces$1 = (() => {
-        let _record = pieces;
-        return new Uri(
-          _record.scheme,
-          _record.userinfo,
-          new Some(host),
-          _record.port,
-          _record.path,
-          _record.query,
-          _record.fragment
-        );
-      })();
+      let _block;
+      let _record = pieces;
+      _block = new Uri(
+        _record.scheme,
+        _record.userinfo,
+        new Some(host),
+        _record.port,
+        _record.path,
+        _record.query,
+        _record.fragment
+      );
+      let pieces$1 = _block;
       return parse_port(uri_string, pieces$1);
     } else if (uri_string.startsWith("/")) {
       let host = string_codeunit_slice(original, 0, size2);
-      let pieces$1 = (() => {
-        let _record = pieces;
-        return new Uri(
-          _record.scheme,
-          _record.userinfo,
-          new Some(host),
-          _record.port,
-          _record.path,
-          _record.query,
-          _record.fragment
-        );
-      })();
+      let _block;
+      let _record = pieces;
+      _block = new Uri(
+        _record.scheme,
+        _record.userinfo,
+        new Some(host),
+        _record.port,
+        _record.path,
+        _record.query,
+        _record.fragment
+      );
+      let pieces$1 = _block;
       return parse_path(uri_string, pieces$1);
     } else if (uri_string.startsWith("?")) {
       let rest = uri_string.slice(1);
       let host = string_codeunit_slice(original, 0, size2);
-      let pieces$1 = (() => {
-        let _record = pieces;
-        return new Uri(
-          _record.scheme,
-          _record.userinfo,
-          new Some(host),
-          _record.port,
-          _record.path,
-          _record.query,
-          _record.fragment
-        );
-      })();
+      let _block;
+      let _record = pieces;
+      _block = new Uri(
+        _record.scheme,
+        _record.userinfo,
+        new Some(host),
+        _record.port,
+        _record.path,
+        _record.query,
+        _record.fragment
+      );
+      let pieces$1 = _block;
       return parse_query_with_question_mark(rest, pieces$1);
     } else if (uri_string.startsWith("#")) {
       let rest = uri_string.slice(1);
       let host = string_codeunit_slice(original, 0, size2);
-      let pieces$1 = (() => {
-        let _record = pieces;
-        return new Uri(
-          _record.scheme,
-          _record.userinfo,
-          new Some(host),
-          _record.port,
-          _record.path,
-          _record.query,
-          _record.fragment
-        );
-      })();
+      let _block;
+      let _record = pieces;
+      _block = new Uri(
+        _record.scheme,
+        _record.userinfo,
+        new Some(host),
+        _record.port,
+        _record.path,
+        _record.query,
+        _record.fragment
+      );
+      let pieces$1 = _block;
       return parse_fragment(rest, pieces$1);
     } else {
       let $ = pop_codeunit(uri_string);
@@ -3680,35 +3680,35 @@ function parse_host_within_brackets_loop(loop$original, loop$uri_string, loop$pi
     } else if (uri_string.startsWith("]")) {
       let rest = uri_string.slice(1);
       let host = string_codeunit_slice(original, 0, size2 + 1);
-      let pieces$1 = (() => {
-        let _record = pieces;
-        return new Uri(
-          _record.scheme,
-          _record.userinfo,
-          new Some(host),
-          _record.port,
-          _record.path,
-          _record.query,
-          _record.fragment
-        );
-      })();
+      let _block;
+      let _record = pieces;
+      _block = new Uri(
+        _record.scheme,
+        _record.userinfo,
+        new Some(host),
+        _record.port,
+        _record.path,
+        _record.query,
+        _record.fragment
+      );
+      let pieces$1 = _block;
       return parse_port(rest, pieces$1);
     } else if (uri_string.startsWith("/") && size2 === 0) {
       return parse_path(uri_string, pieces);
     } else if (uri_string.startsWith("/")) {
       let host = string_codeunit_slice(original, 0, size2);
-      let pieces$1 = (() => {
-        let _record = pieces;
-        return new Uri(
-          _record.scheme,
-          _record.userinfo,
-          new Some(host),
-          _record.port,
-          _record.path,
-          _record.query,
-          _record.fragment
-        );
-      })();
+      let _block;
+      let _record = pieces;
+      _block = new Uri(
+        _record.scheme,
+        _record.userinfo,
+        new Some(host),
+        _record.port,
+        _record.path,
+        _record.query,
+        _record.fragment
+      );
+      let pieces$1 = _block;
       return parse_path(uri_string, pieces$1);
     } else if (uri_string.startsWith("?") && size2 === 0) {
       let rest = uri_string.slice(1);
@@ -3716,18 +3716,18 @@ function parse_host_within_brackets_loop(loop$original, loop$uri_string, loop$pi
     } else if (uri_string.startsWith("?")) {
       let rest = uri_string.slice(1);
       let host = string_codeunit_slice(original, 0, size2);
-      let pieces$1 = (() => {
-        let _record = pieces;
-        return new Uri(
-          _record.scheme,
-          _record.userinfo,
-          new Some(host),
-          _record.port,
-          _record.path,
-          _record.query,
-          _record.fragment
-        );
-      })();
+      let _block;
+      let _record = pieces;
+      _block = new Uri(
+        _record.scheme,
+        _record.userinfo,
+        new Some(host),
+        _record.port,
+        _record.path,
+        _record.query,
+        _record.fragment
+      );
+      let pieces$1 = _block;
       return parse_query_with_question_mark(rest, pieces$1);
     } else if (uri_string.startsWith("#") && size2 === 0) {
       let rest = uri_string.slice(1);
@@ -3735,18 +3735,18 @@ function parse_host_within_brackets_loop(loop$original, loop$uri_string, loop$pi
     } else if (uri_string.startsWith("#")) {
       let rest = uri_string.slice(1);
       let host = string_codeunit_slice(original, 0, size2);
-      let pieces$1 = (() => {
-        let _record = pieces;
-        return new Uri(
-          _record.scheme,
-          _record.userinfo,
-          new Some(host),
-          _record.port,
-          _record.path,
-          _record.query,
-          _record.fragment
-        );
-      })();
+      let _block;
+      let _record = pieces;
+      _block = new Uri(
+        _record.scheme,
+        _record.userinfo,
+        new Some(host),
+        _record.port,
+        _record.path,
+        _record.query,
+        _record.fragment
+      );
+      let pieces$1 = _block;
       return parse_fragment(rest, pieces$1);
     } else {
       let $ = pop_codeunit(uri_string);
@@ -3779,18 +3779,18 @@ function parse_host(uri_string, pieces) {
   if (uri_string.startsWith("[")) {
     return parse_host_within_brackets(uri_string, pieces);
   } else if (uri_string.startsWith(":")) {
-    let pieces$1 = (() => {
-      let _record = pieces;
-      return new Uri(
-        _record.scheme,
-        _record.userinfo,
-        new Some(""),
-        _record.port,
-        _record.path,
-        _record.query,
-        _record.fragment
-      );
-    })();
+    let _block;
+    let _record = pieces;
+    _block = new Uri(
+      _record.scheme,
+      _record.userinfo,
+      new Some(""),
+      _record.port,
+      _record.path,
+      _record.query,
+      _record.fragment
+    );
+    let pieces$1 = _block;
     return parse_port(uri_string, pieces$1);
   } else if (uri_string === "") {
     return new Ok(
@@ -3823,18 +3823,18 @@ function parse_userinfo_loop(loop$original, loop$uri_string, loop$pieces, loop$s
     } else if (uri_string.startsWith("@")) {
       let rest = uri_string.slice(1);
       let userinfo = string_codeunit_slice(original, 0, size2);
-      let pieces$1 = (() => {
-        let _record = pieces;
-        return new Uri(
-          _record.scheme,
-          new Some(userinfo),
-          _record.host,
-          _record.port,
-          _record.path,
-          _record.query,
-          _record.fragment
-        );
-      })();
+      let _block;
+      let _record = pieces;
+      _block = new Uri(
+        _record.scheme,
+        new Some(userinfo),
+        _record.host,
+        _record.port,
+        _record.path,
+        _record.query,
+        _record.fragment
+      );
+      let pieces$1 = _block;
       return parse_host(rest, pieces$1);
     } else if (uri_string === "") {
       return parse_host(original, pieces);
@@ -3890,18 +3890,18 @@ function parse_scheme_loop(loop$original, loop$uri_string, loop$pieces, loop$siz
       return parse_authority_with_slashes(uri_string, pieces);
     } else if (uri_string.startsWith("/")) {
       let scheme = string_codeunit_slice(original, 0, size2);
-      let pieces$1 = (() => {
-        let _record = pieces;
-        return new Uri(
-          new Some(lowercase(scheme)),
-          _record.userinfo,
-          _record.host,
-          _record.port,
-          _record.path,
-          _record.query,
-          _record.fragment
-        );
-      })();
+      let _block;
+      let _record = pieces;
+      _block = new Uri(
+        new Some(lowercase(scheme)),
+        _record.userinfo,
+        _record.host,
+        _record.port,
+        _record.path,
+        _record.query,
+        _record.fragment
+      );
+      let pieces$1 = _block;
       return parse_authority_with_slashes(uri_string, pieces$1);
     } else if (uri_string.startsWith("?") && size2 === 0) {
       let rest = uri_string.slice(1);
@@ -3909,18 +3909,18 @@ function parse_scheme_loop(loop$original, loop$uri_string, loop$pieces, loop$siz
     } else if (uri_string.startsWith("?")) {
       let rest = uri_string.slice(1);
       let scheme = string_codeunit_slice(original, 0, size2);
-      let pieces$1 = (() => {
-        let _record = pieces;
-        return new Uri(
-          new Some(lowercase(scheme)),
-          _record.userinfo,
-          _record.host,
-          _record.port,
-          _record.path,
-          _record.query,
-          _record.fragment
-        );
-      })();
+      let _block;
+      let _record = pieces;
+      _block = new Uri(
+        new Some(lowercase(scheme)),
+        _record.userinfo,
+        _record.host,
+        _record.port,
+        _record.path,
+        _record.query,
+        _record.fragment
+      );
+      let pieces$1 = _block;
       return parse_query_with_question_mark(rest, pieces$1);
     } else if (uri_string.startsWith("#") && size2 === 0) {
       let rest = uri_string.slice(1);
@@ -3928,36 +3928,36 @@ function parse_scheme_loop(loop$original, loop$uri_string, loop$pieces, loop$siz
     } else if (uri_string.startsWith("#")) {
       let rest = uri_string.slice(1);
       let scheme = string_codeunit_slice(original, 0, size2);
-      let pieces$1 = (() => {
-        let _record = pieces;
-        return new Uri(
-          new Some(lowercase(scheme)),
-          _record.userinfo,
-          _record.host,
-          _record.port,
-          _record.path,
-          _record.query,
-          _record.fragment
-        );
-      })();
+      let _block;
+      let _record = pieces;
+      _block = new Uri(
+        new Some(lowercase(scheme)),
+        _record.userinfo,
+        _record.host,
+        _record.port,
+        _record.path,
+        _record.query,
+        _record.fragment
+      );
+      let pieces$1 = _block;
       return parse_fragment(rest, pieces$1);
     } else if (uri_string.startsWith(":") && size2 === 0) {
       return new Error(void 0);
     } else if (uri_string.startsWith(":")) {
       let rest = uri_string.slice(1);
       let scheme = string_codeunit_slice(original, 0, size2);
-      let pieces$1 = (() => {
-        let _record = pieces;
-        return new Uri(
-          new Some(lowercase(scheme)),
-          _record.userinfo,
-          _record.host,
-          _record.port,
-          _record.path,
-          _record.query,
-          _record.fragment
-        );
-      })();
+      let _block;
+      let _record = pieces;
+      _block = new Uri(
+        new Some(lowercase(scheme)),
+        _record.userinfo,
+        _record.host,
+        _record.port,
+        _record.path,
+        _record.query,
+        _record.fragment
+      );
+      let pieces$1 = _block;
       return parse_authority_with_slashes(rest, pieces$1);
     } else if (uri_string === "") {
       return new Ok(
@@ -3993,24 +3993,24 @@ function remove_dot_segments_loop(loop$input, loop$accumulator) {
     } else {
       let segment = input2.head;
       let rest = input2.tail;
-      let accumulator$1 = (() => {
-        if (segment === "") {
-          let accumulator$12 = accumulator;
-          return accumulator$12;
-        } else if (segment === ".") {
-          let accumulator$12 = accumulator;
-          return accumulator$12;
-        } else if (segment === ".." && accumulator.hasLength(0)) {
-          return toList([]);
-        } else if (segment === ".." && accumulator.atLeastLength(1)) {
-          let accumulator$12 = accumulator.tail;
-          return accumulator$12;
-        } else {
-          let segment$1 = segment;
-          let accumulator$12 = accumulator;
-          return prepend(segment$1, accumulator$12);
-        }
-      })();
+      let _block;
+      if (segment === "") {
+        let accumulator$12 = accumulator;
+        _block = accumulator$12;
+      } else if (segment === ".") {
+        let accumulator$12 = accumulator;
+        _block = accumulator$12;
+      } else if (segment === ".." && accumulator.hasLength(0)) {
+        _block = toList([]);
+      } else if (segment === ".." && accumulator.atLeastLength(1)) {
+        let accumulator$12 = accumulator.tail;
+        _block = accumulator$12;
+      } else {
+        let segment$1 = segment;
+        let accumulator$12 = accumulator;
+        _block = prepend(segment$1, accumulator$12);
+      }
+      let accumulator$1 = _block;
       loop$input = rest;
       loop$accumulator = accumulator$1;
     }
@@ -4023,77 +4023,77 @@ function path_segments(path2) {
   return remove_dot_segments(split2(path2, "/"));
 }
 function to_string3(uri) {
-  let parts = (() => {
-    let $ = uri.fragment;
-    if ($ instanceof Some) {
-      let fragment3 = $[0];
-      return toList(["#", fragment3]);
-    } else {
-      return toList([]);
-    }
-  })();
-  let parts$1 = (() => {
-    let $ = uri.query;
-    if ($ instanceof Some) {
-      let query = $[0];
-      return prepend("?", prepend(query, parts));
-    } else {
-      return parts;
-    }
-  })();
+  let _block;
+  let $ = uri.fragment;
+  if ($ instanceof Some) {
+    let fragment3 = $[0];
+    _block = toList(["#", fragment3]);
+  } else {
+    _block = toList([]);
+  }
+  let parts = _block;
+  let _block$1;
+  let $1 = uri.query;
+  if ($1 instanceof Some) {
+    let query = $1[0];
+    _block$1 = prepend("?", prepend(query, parts));
+  } else {
+    _block$1 = parts;
+  }
+  let parts$1 = _block$1;
   let parts$2 = prepend(uri.path, parts$1);
-  let parts$3 = (() => {
-    let $ = uri.host;
-    let $1 = starts_with(uri.path, "/");
-    if ($ instanceof Some && !$1 && $[0] !== "") {
-      let host = $[0];
-      return prepend("/", parts$2);
-    } else {
-      return parts$2;
-    }
-  })();
-  let parts$4 = (() => {
-    let $ = uri.host;
-    let $1 = uri.port;
-    if ($ instanceof Some && $1 instanceof Some) {
-      let port = $1[0];
-      return prepend(":", prepend(to_string(port), parts$3));
-    } else {
-      return parts$3;
-    }
-  })();
-  let parts$5 = (() => {
-    let $ = uri.scheme;
-    let $1 = uri.userinfo;
-    let $2 = uri.host;
-    if ($ instanceof Some && $1 instanceof Some && $2 instanceof Some) {
-      let s = $[0];
-      let u = $1[0];
-      let h = $2[0];
-      return prepend(
-        s,
-        prepend(
-          "://",
-          prepend(u, prepend("@", prepend(h, parts$4)))
-        )
-      );
-    } else if ($ instanceof Some && $1 instanceof None && $2 instanceof Some) {
-      let s = $[0];
-      let h = $2[0];
-      return prepend(s, prepend("://", prepend(h, parts$4)));
-    } else if ($ instanceof Some && $1 instanceof Some && $2 instanceof None) {
-      let s = $[0];
-      return prepend(s, prepend(":", parts$4));
-    } else if ($ instanceof Some && $1 instanceof None && $2 instanceof None) {
-      let s = $[0];
-      return prepend(s, prepend(":", parts$4));
-    } else if ($ instanceof None && $1 instanceof None && $2 instanceof Some) {
-      let h = $2[0];
-      return prepend("//", prepend(h, parts$4));
-    } else {
-      return parts$4;
-    }
-  })();
+  let _block$2;
+  let $2 = uri.host;
+  let $3 = starts_with(uri.path, "/");
+  if ($2 instanceof Some && !$3 && $2[0] !== "") {
+    let host = $2[0];
+    _block$2 = prepend("/", parts$2);
+  } else {
+    _block$2 = parts$2;
+  }
+  let parts$3 = _block$2;
+  let _block$3;
+  let $4 = uri.host;
+  let $5 = uri.port;
+  if ($4 instanceof Some && $5 instanceof Some) {
+    let port = $5[0];
+    _block$3 = prepend(":", prepend(to_string(port), parts$3));
+  } else {
+    _block$3 = parts$3;
+  }
+  let parts$4 = _block$3;
+  let _block$4;
+  let $6 = uri.scheme;
+  let $7 = uri.userinfo;
+  let $8 = uri.host;
+  if ($6 instanceof Some && $7 instanceof Some && $8 instanceof Some) {
+    let s = $6[0];
+    let u = $7[0];
+    let h = $8[0];
+    _block$4 = prepend(
+      s,
+      prepend(
+        "://",
+        prepend(u, prepend("@", prepend(h, parts$4)))
+      )
+    );
+  } else if ($6 instanceof Some && $7 instanceof None && $8 instanceof Some) {
+    let s = $6[0];
+    let h = $8[0];
+    _block$4 = prepend(s, prepend("://", prepend(h, parts$4)));
+  } else if ($6 instanceof Some && $7 instanceof Some && $8 instanceof None) {
+    let s = $6[0];
+    _block$4 = prepend(s, prepend(":", parts$4));
+  } else if ($6 instanceof Some && $7 instanceof None && $8 instanceof None) {
+    let s = $6[0];
+    _block$4 = prepend(s, prepend(":", parts$4));
+  } else if ($6 instanceof None && $7 instanceof None && $8 instanceof Some) {
+    let h = $8[0];
+    _block$4 = prepend("//", prepend(h, parts$4));
+  } else {
+    _block$4 = parts$4;
+  }
+  let parts$5 = _block$4;
   return concat2(parts$5);
 }
 var empty = /* @__PURE__ */ new Uri(
@@ -4643,17 +4643,17 @@ function set_fragment_key(loop$key, loop$children, loop$index, loop$new_children
       );
       let node_children = $[0];
       let node_keyed_children = $[1];
-      let new_node = (() => {
-        let _record = node;
-        return new Fragment(
-          _record.kind,
-          _record.key,
-          _record.mapper,
-          node_children,
-          node_keyed_children,
-          _record.children_count
-        );
-      })();
+      let _block;
+      let _record = node;
+      _block = new Fragment(
+        _record.kind,
+        _record.key,
+        _record.mapper,
+        node_children,
+        node_keyed_children,
+        _record.children_count
+      );
+      let new_node = _block;
       let new_children$1 = prepend(new_node, new_children);
       let index$1 = index5 + 1;
       loop$key = key2;
@@ -4952,25 +4952,25 @@ function diff_attributes(loop$controlled, loop$path, loop$mapper, loop$events, l
       let remaining_new = new$10.tail;
       let $ = compare3(prev, next);
       if (prev instanceof Attribute && $ instanceof Eq && next instanceof Attribute) {
-        let has_changes = (() => {
-          let $1 = next.name;
-          if ($1 === "value") {
-            return controlled || prev.value !== next.value;
-          } else if ($1 === "checked") {
-            return controlled || prev.value !== next.value;
-          } else if ($1 === "selected") {
-            return controlled || prev.value !== next.value;
-          } else {
-            return prev.value !== next.value;
-          }
-        })();
-        let added$1 = (() => {
-          if (has_changes) {
-            return prepend(next, added);
-          } else {
-            return added;
-          }
-        })();
+        let _block;
+        let $1 = next.name;
+        if ($1 === "value") {
+          _block = controlled || prev.value !== next.value;
+        } else if ($1 === "checked") {
+          _block = controlled || prev.value !== next.value;
+        } else if ($1 === "selected") {
+          _block = controlled || prev.value !== next.value;
+        } else {
+          _block = prev.value !== next.value;
+        }
+        let has_changes = _block;
+        let _block$1;
+        if (has_changes) {
+          _block$1 = prepend(next, added);
+        } else {
+          _block$1 = added;
+        }
+        let added$1 = _block$1;
         loop$controlled = controlled;
         loop$path = path2;
         loop$mapper = mapper;
@@ -4980,29 +4980,29 @@ function diff_attributes(loop$controlled, loop$path, loop$mapper, loop$events, l
         loop$added = added$1;
         loop$removed = removed;
       } else if (prev instanceof Property && $ instanceof Eq && next instanceof Property) {
-        let has_changes = (() => {
-          let $1 = next.name;
-          if ($1 === "scrollLeft") {
-            return true;
-          } else if ($1 === "scrollRight") {
-            return true;
-          } else if ($1 === "value") {
-            return controlled || !isEqual(prev.value, next.value);
-          } else if ($1 === "checked") {
-            return controlled || !isEqual(prev.value, next.value);
-          } else if ($1 === "selected") {
-            return controlled || !isEqual(prev.value, next.value);
-          } else {
-            return !isEqual(prev.value, next.value);
-          }
-        })();
-        let added$1 = (() => {
-          if (has_changes) {
-            return prepend(next, added);
-          } else {
-            return added;
-          }
-        })();
+        let _block;
+        let $1 = next.name;
+        if ($1 === "scrollLeft") {
+          _block = true;
+        } else if ($1 === "scrollRight") {
+          _block = true;
+        } else if ($1 === "value") {
+          _block = controlled || !isEqual(prev.value, next.value);
+        } else if ($1 === "checked") {
+          _block = controlled || !isEqual(prev.value, next.value);
+        } else if ($1 === "selected") {
+          _block = controlled || !isEqual(prev.value, next.value);
+        } else {
+          _block = !isEqual(prev.value, next.value);
+        }
+        let has_changes = _block;
+        let _block$1;
+        if (has_changes) {
+          _block$1 = prepend(next, added);
+        } else {
+          _block$1 = added;
+        }
+        let added$1 = _block$1;
         loop$controlled = controlled;
         loop$path = path2;
         loop$mapper = mapper;
@@ -5018,13 +5018,13 @@ function diff_attributes(loop$controlled, loop$path, loop$mapper, loop$events, l
           prev.limit,
           next.limit
         );
-        let added$1 = (() => {
-          if (has_changes) {
-            return prepend(next, added);
-          } else {
-            return added;
-          }
-        })();
+        let _block;
+        if (has_changes) {
+          _block = prepend(next, added);
+        } else {
+          _block = added;
+        }
+        let added$1 = _block;
         let events$1 = add_event(events, mapper, path2, name, handler);
         loop$controlled = controlled;
         loop$path = path2;
@@ -5145,14 +5145,14 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
     } else if (old.atLeastLength(1) && new$10.hasLength(0)) {
       let prev = old.head;
       let old$1 = old.tail;
-      let removed$1 = (() => {
-        let $ = prev.key === "" || !contains2(moved, prev.key);
-        if ($) {
-          return removed + advance(prev);
-        } else {
-          return removed;
-        }
-      })();
+      let _block;
+      let $ = prev.key === "" || !contains2(moved, prev.key);
+      if ($) {
+        _block = removed + advance(prev);
+      } else {
+        _block = removed;
+      }
+      let removed$1 = _block;
       let events$1 = remove_child(events, path2, node_index, prev);
       loop$old = old$1;
       loop$old_keyed = old_keyed;
@@ -5271,11 +5271,11 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
         let prev_count = advance(prev);
         let next_count = advance(next);
         let change = replace2(node_index - moved_offset, prev_count, next);
-        let events$1 = (() => {
-          let _pipe = events;
-          let _pipe$1 = remove_child(_pipe, path2, node_index, prev);
-          return add_child(_pipe$1, mapper, path2, node_index, next);
-        })();
+        let _block;
+        let _pipe = events;
+        let _pipe$1 = remove_child(_pipe, path2, node_index, prev);
+        _block = add_child(_pipe$1, mapper, path2, node_index, next);
+        let events$1 = _block;
         loop$old = old_remaining;
         loop$old_keyed = old_keyed;
         loop$new = new_remaining;
@@ -5316,16 +5316,16 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
         composed_mapper,
         events
       );
-      let changes$1 = (() => {
-        let $ = child.patch.removed > 0;
-        if ($) {
-          let remove_from = node_index$1 + next_count - moved_offset;
-          let patch = remove2(remove_from, child.patch.removed);
-          return append(child.patch.changes, prepend(patch, changes));
-        } else {
-          return append(child.patch.changes, changes);
-        }
-      })();
+      let _block;
+      let $ = child.patch.removed > 0;
+      if ($) {
+        let remove_from = node_index$1 + next_count - moved_offset;
+        let patch = remove2(remove_from, child.patch.removed);
+        _block = append(child.patch.changes, prepend(patch, changes));
+      } else {
+        _block = append(child.patch.changes, changes);
+      }
+      let changes$1 = _block;
       loop$old = old$1;
       loop$old_keyed = old_keyed;
       loop$new = new$1;
@@ -5366,13 +5366,13 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
       let added_attrs = $.added;
       let removed_attrs = $.removed;
       let events$1 = $.events;
-      let initial_child_changes = (() => {
-        if (added_attrs.hasLength(0) && removed_attrs.hasLength(0)) {
-          return empty_list;
-        } else {
-          return toList([update(added_attrs, removed_attrs)]);
-        }
-      })();
+      let _block;
+      if (added_attrs.hasLength(0) && removed_attrs.hasLength(0)) {
+        _block = empty_list;
+      } else {
+        _block = toList([update(added_attrs, removed_attrs)]);
+      }
+      let initial_child_changes = _block;
       let child = do_diff(
         prev.children,
         prev.keyed_children,
@@ -5389,14 +5389,14 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
         composed_mapper,
         events$1
       );
-      let children$1 = (() => {
-        let $1 = child.patch;
-        if ($1 instanceof Patch && $1.removed === 0 && $1.changes.hasLength(0) && $1.children.hasLength(0)) {
-          return children;
-        } else {
-          return prepend(child.patch, children);
-        }
-      })();
+      let _block$1;
+      let $1 = child.patch;
+      if ($1 instanceof Patch && $1.removed === 0 && $1.changes.hasLength(0) && $1.children.hasLength(0)) {
+        _block$1 = children;
+      } else {
+        _block$1 = prepend(child.patch, children);
+      }
+      let children$1 = _block$1;
       loop$old = old$1;
       loop$old_keyed = old_keyed;
       loop$new = new$1;
@@ -5474,34 +5474,34 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
       let added_attrs = $.added;
       let removed_attrs = $.removed;
       let events$1 = $.events;
-      let child_changes = (() => {
-        if (added_attrs.hasLength(0) && removed_attrs.hasLength(0)) {
-          return empty_list;
-        } else {
-          return toList([update(added_attrs, removed_attrs)]);
-        }
-      })();
-      let child_changes$1 = (() => {
-        let $1 = prev.inner_html === next.inner_html;
-        if ($1) {
-          return child_changes;
-        } else {
-          return prepend(
-            replace_inner_html(next.inner_html),
-            child_changes
-          );
-        }
-      })();
-      let children$1 = (() => {
-        if (child_changes$1.hasLength(0)) {
-          return children;
-        } else {
-          return prepend(
-            new$4(node_index, 0, child_changes$1, toList([])),
-            children
-          );
-        }
-      })();
+      let _block;
+      if (added_attrs.hasLength(0) && removed_attrs.hasLength(0)) {
+        _block = empty_list;
+      } else {
+        _block = toList([update(added_attrs, removed_attrs)]);
+      }
+      let child_changes = _block;
+      let _block$1;
+      let $1 = prev.inner_html === next.inner_html;
+      if ($1) {
+        _block$1 = child_changes;
+      } else {
+        _block$1 = prepend(
+          replace_inner_html(next.inner_html),
+          child_changes
+        );
+      }
+      let child_changes$1 = _block$1;
+      let _block$2;
+      if (child_changes$1.hasLength(0)) {
+        _block$2 = children;
+      } else {
+        _block$2 = prepend(
+          new$4(node_index, 0, child_changes$1, toList([])),
+          children
+        );
+      }
+      let children$1 = _block$2;
       loop$old = old$1;
       loop$old_keyed = old_keyed;
       loop$new = new$1;
@@ -5524,11 +5524,11 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
       let prev_count = advance(prev);
       let next_count = advance(next);
       let change = replace2(node_index - moved_offset, prev_count, next);
-      let events$1 = (() => {
-        let _pipe = events;
-        let _pipe$1 = remove_child(_pipe, path2, node_index, prev);
-        return add_child(_pipe$1, mapper, path2, node_index, next);
-      })();
+      let _block;
+      let _pipe = events;
+      let _pipe$1 = remove_child(_pipe, path2, node_index, prev);
+      _block = add_child(_pipe$1, mapper, path2, node_index, next);
+      let events$1 = _block;
       loop$old = old_remaining;
       loop$old_keyed = old_keyed;
       loop$new = new_remaining;
@@ -6248,14 +6248,14 @@ function remove_attributes(handlers, path2, attributes) {
 }
 function handle(events, path2, name, event4) {
   let next_dispatched_paths = prepend(path2, events.next_dispatched_paths);
-  let events$1 = (() => {
-    let _record = events;
-    return new Events(
-      _record.handlers,
-      _record.dispatched_paths,
-      next_dispatched_paths
-    );
-  })();
+  let _block;
+  let _record = events;
+  _block = new Events(
+    _record.handlers,
+    _record.dispatched_paths,
+    next_dispatched_paths
+  );
+  let events$1 = _block;
   let $ = get(
     events$1.handlers,
     path2 + separator_event + name
@@ -6559,6 +6559,9 @@ function map5(element4, f) {
 // build/dev/javascript/lustre/lustre/element/html.mjs
 function text3(content) {
   return text2(content);
+}
+function style(attrs, css) {
+  return unsafe_raw_html("", "style", attrs, css);
 }
 function h3(attrs, children) {
   return element2("h3", attrs, children);
@@ -7117,43 +7120,43 @@ function form_request(url) {
           return parse2(_pipe);
         })(),
         (window_location) => {
-          let window_location$1 = (() => {
-            let _record = window_location;
-            return new Uri(
-              _record.scheme,
-              _record.userinfo,
-              _record.host,
-              _record.port,
-              _record.path,
-              new None(),
-              new None()
+          let _block;
+          let _record = window_location;
+          _block = new Uri(
+            _record.scheme,
+            _record.userinfo,
+            _record.host,
+            _record.port,
+            _record.path,
+            new None(),
+            new None()
+          );
+          let window_location$1 = _block;
+          let _block$1;
+          if (url.startsWith("/")) {
+            let _record$1 = window_location$1;
+            _block$1 = new Uri(
+              _record$1.scheme,
+              _record$1.userinfo,
+              _record$1.host,
+              _record$1.port,
+              url,
+              _record$1.query,
+              _record$1.fragment
             );
-          })();
-          let full_request_uri = (() => {
-            if (url.startsWith("/")) {
-              let _record = window_location$1;
-              return new Uri(
-                _record.scheme,
-                _record.userinfo,
-                _record.host,
-                _record.port,
-                url,
-                _record.query,
-                _record.fragment
-              );
-            } else {
-              let _record = window_location$1;
-              return new Uri(
-                _record.scheme,
-                _record.userinfo,
-                _record.host,
-                _record.port,
-                window_location$1.path + "/" + url,
-                _record.query,
-                _record.fragment
-              );
-            }
-          })();
+          } else {
+            let _record$1 = window_location$1;
+            _block$1 = new Uri(
+              _record$1.scheme,
+              _record$1.userinfo,
+              _record$1.host,
+              _record$1.port,
+              window_location$1.path + "/" + url,
+              _record$1.query,
+              _record$1.fragment
+            );
+          }
+          let full_request_uri = _block$1;
           return from_uri(full_request_uri);
         }
       );
@@ -8173,10 +8176,10 @@ function pre_processed_line_decoder() {
                         "c",
                         int2,
                         (columns) => {
-                          let line_number_text = (() => {
-                            let _pipe = line_number;
-                            return to_string(_pipe);
-                          })();
+                          let _block;
+                          let _pipe = line_number;
+                          _block = to_string(_pipe);
+                          let line_number_text = _block;
                           return success(
                             new PreProcessedLine(
                               significance,
@@ -8557,14 +8560,14 @@ function find_next_discussion_line(loop$model, loop$current_line, loop$step) {
 function focus_line_discussion(line_number, column_number) {
   return from(
     (_) => {
-      let $ = (() => {
-        let _pipe = discussion_entry2(line_number, column_number);
-        let _pipe$1 = replace_error(
-          _pipe,
-          new$9("Failed to find line discussion to focus")
-        );
-        return map3(_pipe$1, focus);
-      })();
+      let _block;
+      let _pipe = discussion_entry2(line_number, column_number);
+      let _pipe$1 = replace_error(
+        _pipe,
+        new$9("Failed to find line discussion to focus")
+      );
+      _block = map3(_pipe$1, focus);
+      let $ = _block;
       return void 0;
     }
   );
@@ -8615,20 +8618,20 @@ function move_focus_column(model, step) {
     "src/o11a/client/page_navigation.gleam",
     156
   );
-  let new_column = (() => {
-    let _pipe2 = max(1, model.current_column_number + step);
-    return min(_pipe2, model.current_line_column_count);
-  })();
+  let _block;
+  let _pipe = max(1, model.current_column_number + step);
+  _block = min(_pipe, model.current_line_column_count);
+  let new_column = _block;
   echo(
     "new column " + to_string(new_column),
     "src/o11a/client/page_navigation.gleam",
     161
   );
-  let _pipe = [
+  let _pipe$1 = [
     model,
     focus_line_discussion(model.current_line_number, new_column)
   ];
-  return new Ok(_pipe);
+  return new Ok(_pipe$1);
 }
 function handle_keyboard_navigation(event4, model, else_do) {
   let $ = shiftKey(event4);
@@ -8661,14 +8664,14 @@ function blur_line_discussion(line_number, column_number) {
         "src/o11a/client/page_navigation.gleam",
         275
       );
-      let $ = (() => {
-        let _pipe = discussion_entry2(line_number, column_number);
-        let _pipe$1 = replace_error(
-          _pipe,
-          new$9("Failed to find line discussion to focus")
-        );
-        return map3(_pipe$1, blur);
-      })();
+      let _block;
+      let _pipe = discussion_entry2(line_number, column_number);
+      let _pipe$1 = replace_error(
+        _pipe,
+        new$9("Failed to find line discussion to focus")
+      );
+      _block = map3(_pipe$1, blur);
+      let $ = _block;
       return void 0;
     }
   );
@@ -8692,14 +8695,14 @@ function handle_discussion_escape(event4, model, else_do) {
 function focus_line_discussion_input(line_number, column_number) {
   return from(
     (_) => {
-      let $ = (() => {
-        let _pipe = discussion_input(line_number, column_number);
-        let _pipe$1 = replace_error(
-          _pipe,
-          new$9("Failed to find line discussion input to focus")
-        );
-        return map3(_pipe$1, focus);
-      })();
+      let _block;
+      let _pipe = discussion_input(line_number, column_number);
+      let _pipe$1 = replace_error(
+        _pipe,
+        new$9("Failed to find line discussion input to focus")
+      );
+      _block = map3(_pipe$1, focus);
+      let $ = _block;
       return void 0;
     }
   );
@@ -8722,50 +8725,50 @@ function handle_input_focus(event4, model, else_do) {
   }
 }
 function do_page_navigation(event4, model) {
-  let res = (() => {
-    let $ = is_user_typing();
-    if ($) {
-      return handle_expanded_input_focus(
-        event4,
-        model,
-        () => {
-          return handle_input_escape(
-            event4,
-            model,
-            () => {
-              return new Ok([model, none()]);
-            }
-          );
-        }
-      );
-    } else {
-      return handle_keyboard_navigation(
-        event4,
-        model,
-        () => {
-          return handle_input_focus(
-            event4,
-            model,
-            () => {
-              return handle_expanded_input_focus(
-                event4,
-                model,
-                () => {
-                  return handle_discussion_escape(
-                    event4,
-                    model,
-                    () => {
-                      return new Ok([model, none()]);
-                    }
-                  );
-                }
-              );
-            }
-          );
-        }
-      );
-    }
-  })();
+  let _block;
+  let $ = is_user_typing();
+  if ($) {
+    _block = handle_expanded_input_focus(
+      event4,
+      model,
+      () => {
+        return handle_input_escape(
+          event4,
+          model,
+          () => {
+            return new Ok([model, none()]);
+          }
+        );
+      }
+    );
+  } else {
+    _block = handle_keyboard_navigation(
+      event4,
+      model,
+      () => {
+        return handle_input_focus(
+          event4,
+          model,
+          () => {
+            return handle_expanded_input_focus(
+              event4,
+              model,
+              () => {
+                return handle_discussion_escape(
+                  event4,
+                  model,
+                  () => {
+                    return new Ok([model, none()]);
+                  }
+                );
+              }
+            );
+          }
+        );
+      }
+    );
+  }
+  let res = _block;
   if (res.isOk()) {
     let model_effect = res[0];
     return model_effect;
@@ -8780,20 +8783,20 @@ function echo(value3, file, line2) {
   const reset_color = "\x1B[39m";
   const file_line = `${file}:${line2}`;
   const string_value = echo$inspect(value3);
-  if (typeof process === "object" && process.stderr?.write) {
+  if (globalThis.process?.stderr?.write) {
     const string6 = `${grey}${file_line}${reset_color}
 ${string_value}
 `;
     process.stderr.write(string6);
-  } else if (typeof Deno === "object") {
+  } else if (globalThis.Deno) {
     const string6 = `${grey}${file_line}${reset_color}
 ${string_value}
 `;
-    Deno.stderr.writeSync(new TextEncoder().encode(string6));
+    globalThis.Deno.stderr.writeSync(new TextEncoder().encode(string6));
   } else {
     const string6 = `${file_line}
 ${string_value}`;
-    console.log(string6);
+    globalThis.console.log(string6);
   }
   return value3;
 }
@@ -8832,7 +8835,7 @@ function echo$inspectDict(map7) {
   return body2 + "])";
 }
 function echo$inspectCustomType(record) {
-  const props = Object.keys(record).map((label) => {
+  const props = globalThis.Object.keys(record).map((label) => {
     const value3 = echo$inspect(record[label]);
     return isNaN(parseInt(label)) ? `${label}: ${value3}` : value3;
   }).join(", ");
@@ -8856,28 +8859,43 @@ function echo$inspect(v) {
   if (v === void 0) return "Nil";
   if (t === "string") return echo$inspectString(v);
   if (t === "bigint" || t === "number") return v.toString();
-  if (Array.isArray(v)) return `#(${v.map(echo$inspect).join(", ")})`;
-  if (v instanceof List) return `[${v.toArray().map(echo$inspect).join(", ")}]`;
-  if (v instanceof UtfCodepoint) return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
+  if (globalThis.Array.isArray(v))
+    return `#(${v.map(echo$inspect).join(", ")})`;
+  if (v instanceof List)
+    return `[${v.toArray().map(echo$inspect).join(", ")}]`;
+  if (v instanceof UtfCodepoint)
+    return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
   if (v instanceof BitArray) return echo$inspectBitArray(v);
   if (v instanceof CustomType) return echo$inspectCustomType(v);
   if (echo$isDict(v)) return echo$inspectDict(v);
-  if (v instanceof Set) return `//js(Set(${[...v].map(echo$inspect).join(", ")}))`;
+  if (v instanceof Set)
+    return `//js(Set(${[...v].map(echo$inspect).join(", ")}))`;
   if (v instanceof RegExp) return `//js(${v})`;
   if (v instanceof Date) return `//js(Date("${v.toISOString()}"))`;
   if (v instanceof Function) {
     const args = [];
-    for (const i of Array(v.length).keys()) args.push(String.fromCharCode(i + 97));
+    for (const i of Array(v.length).keys())
+      args.push(String.fromCharCode(i + 97));
     return `//fn(${args.join(", ")}) { ... }`;
   }
   return echo$inspectObject(v);
 }
 function echo$inspectBitArray(bitArray) {
   let endOfAlignedBytes = bitArray.bitOffset + 8 * Math.trunc(bitArray.bitSize / 8);
-  let alignedBytes = bitArraySlice(bitArray, bitArray.bitOffset, endOfAlignedBytes);
+  let alignedBytes = bitArraySlice(
+    bitArray,
+    bitArray.bitOffset,
+    endOfAlignedBytes
+  );
   let remainingUnalignedBits = bitArray.bitSize % 8;
   if (remainingUnalignedBits > 0) {
-    let remainingBits = bitArraySliceToInt(bitArray, endOfAlignedBytes, bitArray.bitSize, false, false);
+    let remainingBits = bitArraySliceToInt(
+      bitArray,
+      endOfAlignedBytes,
+      bitArray.bitSize,
+      false,
+      false
+    );
     let alignedBytesArray = Array.from(alignedBytes.rawBuffer);
     let suffix = `${remainingBits}:size(${remainingUnalignedBits})`;
     if (alignedBytesArray.length === 0) {
@@ -9794,29 +9812,29 @@ function update2(model, msg) {
         return [model, new None3()];
       },
       () => {
-        let $1 = (() => {
-          let $2 = model.editing_note;
-          if ($2 instanceof Some) {
-            let note2 = $2[0];
-            return [new Edit(), note2.note_id];
-          } else {
-            return [new None2(), model.current_thread_id];
-          }
-        })();
+        let _block;
+        let $2 = model.editing_note;
+        if ($2 instanceof Some) {
+          let note2 = $2[0];
+          _block = [new Edit(), note2.note_id];
+        } else {
+          _block = [new None2(), model.current_thread_id];
+        }
+        let $1 = _block;
         let modifier = $1[0];
         let parent_id = $1[1];
-        let expanded_message = (() => {
-          let $2 = (() => {
-            let _pipe = model.current_expanded_message_draft;
-            return map(_pipe, trim);
-          })();
-          if ($2 instanceof Some && $2[0] === "") {
-            return new None();
-          } else {
-            let msg$1 = $2;
-            return msg$1;
-          }
+        let _block$1;
+        let $3 = (() => {
+          let _pipe = model.current_expanded_message_draft;
+          return map(_pipe, trim);
         })();
+        if ($3 instanceof Some && $3[0] === "") {
+          _block$1 = new None();
+        } else {
+          let msg$1 = $3;
+          _block$1 = msg$1;
+        }
+        let expanded_message = _block$1;
         let note = new NoteSubmission(
           parent_id,
           significance,
@@ -9885,25 +9903,25 @@ function update2(model, msg) {
       new None3()
     ];
   } else if (msg instanceof UserClosedThread) {
-    let new_active_thread = (() => {
-      let _pipe = model.active_thread;
-      let _pipe$1 = map(
-        _pipe,
-        (thread) => {
-          return thread.prior_thread;
-        }
-      );
-      return flatten(_pipe$1);
-    })();
-    let new_current_thread_id = (() => {
-      let _pipe = map(
-        new_active_thread,
-        (thread) => {
-          return thread.current_thread_id;
-        }
-      );
-      return unwrap(_pipe, model.topic_id);
-    })();
+    let _block;
+    let _pipe = model.active_thread;
+    let _pipe$1 = map(
+      _pipe,
+      (thread) => {
+        return thread.prior_thread;
+      }
+    );
+    _block = flatten(_pipe$1);
+    let new_active_thread = _block;
+    let _block$1;
+    let _pipe$2 = map(
+      new_active_thread,
+      (thread) => {
+        return thread.current_thread_id;
+      }
+    );
+    _block$1 = unwrap(_pipe$2, model.topic_id);
+    let new_current_thread_id = _block$1;
     return [
       (() => {
         let _record = model;
@@ -10222,10 +10240,10 @@ function new_message_input_view(model, current_thread_notes) {
   );
 }
 function view(model, notes) {
-  let current_thread_notes = (() => {
-    let _pipe = map_get(notes, model.current_thread_id);
-    return unwrap2(_pipe, toList([]));
-  })();
+  let _block;
+  let _pipe = map_get(notes, model.current_thread_id);
+  _block = unwrap2(_pipe, toList([]));
+  let current_thread_notes = _block;
   return div(
     toList([
       class$(
@@ -10806,17 +10824,17 @@ function split_info_comment(comment, contains_expanded_message, leading_spaces) 
       })()
     ]);
   } else {
-    let backwards = (() => {
-      let _pipe = slice(comment, 0, columns_remaining);
-      return reverse3(_pipe);
-    })();
-    let in_limit_comment_length = (() => {
-      let _pipe = backwards;
-      let _pipe$1 = split_once(_pipe, " ");
-      let _pipe$2 = unwrap2(_pipe$1, ["", backwards]);
-      let _pipe$3 = second(_pipe$2);
-      return string_length(_pipe$3);
-    })();
+    let _block;
+    let _pipe = slice(comment, 0, columns_remaining);
+    _block = reverse3(_pipe);
+    let backwards = _block;
+    let _block$1;
+    let _pipe$1 = backwards;
+    let _pipe$2 = split_once(_pipe$1, " ");
+    let _pipe$3 = unwrap2(_pipe$2, ["", backwards]);
+    let _pipe$4 = second(_pipe$3);
+    _block$1 = string_length(_pipe$4);
+    let in_limit_comment_length = _block$1;
     let rest = slice(
       comment,
       in_limit_comment_length + 1,
@@ -10843,40 +10861,40 @@ function split_info_note(note, leading_spaces) {
   );
 }
 function get_notes(discussion, leading_spaces, topic_id) {
-  let parent_notes = (() => {
-    let _pipe = map_get(discussion, topic_id);
-    let _pipe$1 = unwrap2(_pipe, toList([]));
-    return filter_map(
-      _pipe$1,
-      (note) => {
-        let $ = note.parent_id === topic_id;
-        if ($) {
-          return new Ok(note);
-        } else {
-          return new Error(void 0);
-        }
+  let _block;
+  let _pipe = map_get(discussion, topic_id);
+  let _pipe$1 = unwrap2(_pipe, toList([]));
+  _block = filter_map(
+    _pipe$1,
+    (note) => {
+      let $ = note.parent_id === topic_id;
+      if ($) {
+        return new Ok(note);
+      } else {
+        return new Error(void 0);
       }
-    );
-  })();
-  let info_notes = (() => {
-    let _pipe = parent_notes;
-    let _pipe$1 = filter(
-      _pipe,
-      (computed_note) => {
-        return isEqual(
-          computed_note.significance,
-          new Informational2()
-        );
-      }
-    );
-    let _pipe$2 = map2(
-      _pipe$1,
-      (_capture) => {
-        return split_info_note(_capture, leading_spaces);
-      }
-    );
-    return flatten2(_pipe$2);
-  })();
+    }
+  );
+  let parent_notes = _block;
+  let _block$1;
+  let _pipe$2 = parent_notes;
+  let _pipe$3 = filter(
+    _pipe$2,
+    (computed_note) => {
+      return isEqual(
+        computed_note.significance,
+        new Informational2()
+      );
+    }
+  );
+  let _pipe$4 = map2(
+    _pipe$3,
+    (_capture) => {
+      return split_info_note(_capture, leading_spaces);
+    }
+  );
+  _block$1 = flatten2(_pipe$4);
+  let info_notes = _block$1;
   return [parent_notes, info_notes];
 }
 function line_container_view(discussion, loc, line_topic_id, line_topic_title, selected_discussion) {
@@ -11021,18 +11039,18 @@ function is_windows() {
 
 // build/dev/javascript/filepath/filepath.mjs
 function split_unix(path2) {
-  let _pipe = (() => {
-    let $ = split2(path2, "/");
-    if ($.hasLength(1) && $.head === "") {
-      return toList([]);
-    } else if ($.atLeastLength(1) && $.head === "") {
-      let rest = $.tail;
-      return prepend("/", rest);
-    } else {
-      let rest = $;
-      return rest;
-    }
-  })();
+  let _block;
+  let $ = split2(path2, "/");
+  if ($.hasLength(1) && $.head === "") {
+    _block = toList([]);
+  } else if ($.atLeastLength(1) && $.head === "") {
+    let rest = $.tail;
+    _block = prepend("/", rest);
+  } else {
+    let rest = $;
+    _block = rest;
+  }
+  let _pipe = _block;
   return filter(_pipe, (x2) => {
     return x2 !== "";
   });
@@ -11057,23 +11075,23 @@ function split_windows(path2) {
   let $ = pop_windows_drive_specifier(path2);
   let drive = $[0];
   let path$1 = $[1];
-  let segments = (() => {
-    let _pipe = split2(path$1, "/");
-    return flat_map(
-      _pipe,
-      (_capture) => {
-        return split2(_capture, "\\");
-      }
-    );
-  })();
-  let segments$1 = (() => {
-    if (drive instanceof Some) {
-      let drive$1 = drive[0];
-      return prepend(drive$1, segments);
-    } else {
-      return segments;
+  let _block;
+  let _pipe = split2(path$1, "/");
+  _block = flat_map(
+    _pipe,
+    (_capture) => {
+      return split2(_capture, "\\");
     }
-  })();
+  );
+  let segments = _block;
+  let _block$1;
+  if (drive instanceof Some) {
+    let drive$1 = drive[0];
+    _block$1 = prepend(drive$1, segments);
+  } else {
+    _block$1 = segments;
+  }
+  let segments$1 = _block$1;
   if (segments$1.hasLength(1) && segments$1.head === "") {
     return toList([]);
   } else if (segments$1.atLeastLength(1) && segments$1.head === "") {
@@ -11107,10 +11125,10 @@ function base_name(path2) {
 
 // build/dev/javascript/o11a_client/o11a/ui/audit_tree.mjs
 function sub_file_tree_view(dir_name, current_file_path, all_audit_files) {
-  let $ = (() => {
-    let _pipe = map_get(all_audit_files, dir_name);
-    return unwrap2(_pipe, [toList([]), toList([])]);
-  })();
+  let _block;
+  let _pipe = map_get(all_audit_files, dir_name);
+  _block = unwrap2(_pipe, [toList([]), toList([])]);
+  let $ = _block;
   let subdirs = $[0];
   let direct_files = $[1];
   return div(
@@ -11121,8 +11139,8 @@ function sub_file_tree_view(dir_name, current_file_path, all_audit_files) {
         toList([
           text3(
             (() => {
-              let _pipe = dir_name;
-              return base_name(_pipe);
+              let _pipe$1 = dir_name;
+              return base_name(_pipe$1);
             })()
           )
         ])
@@ -11169,8 +11187,8 @@ function sub_file_tree_view(dir_name, current_file_path, all_audit_files) {
               toList([
                 text3(
                   (() => {
-                    let _pipe = file;
-                    return base_name(_pipe);
+                    let _pipe$1 = file;
+                    return base_name(_pipe$1);
                   })()
                 )
               ])
@@ -11182,10 +11200,10 @@ function sub_file_tree_view(dir_name, current_file_path, all_audit_files) {
   );
 }
 function audit_file_tree_view(grouped_files, audit_name, current_file_path) {
-  let $ = (() => {
-    let _pipe = map_get(grouped_files, audit_name);
-    return unwrap2(_pipe, [toList([]), toList([])]);
-  })();
+  let _block;
+  let _pipe = map_get(grouped_files, audit_name);
+  _block = unwrap2(_pipe, [toList([]), toList([])]);
+  let $ = _block;
   let subdirs = $[0];
   let direct_files = $[1];
   return div(
@@ -11214,8 +11232,8 @@ function audit_file_tree_view(grouped_files, audit_name, current_file_path) {
               toList([
                 text3(
                   (() => {
-                    let _pipe = file;
-                    return base_name(_pipe);
+                    let _pipe$1 = file;
+                    return base_name(_pipe$1);
                   })()
                 )
               ])
@@ -11291,10 +11309,10 @@ function get_all_parents(path2) {
       if (i === 0) {
         return prepend(segment, acc);
       } else {
-        let prev = (() => {
-          let _pipe$32 = first(acc);
-          return unwrap2(_pipe$32, "");
-        })();
+        let _block;
+        let _pipe$32 = first(acc);
+        _block = unwrap2(_pipe$32, "");
+        let prev = _block;
         return prepend(prev + "/" + segment, acc);
       }
     }
@@ -11306,81 +11324,81 @@ function dashboard_path(audit_name) {
 }
 function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
   let dashboard_path$1 = dashboard_path(audit_name);
-  let in_scope_files$1 = (() => {
-    let $ = current_file_path === dashboard_path$1;
-    if ($) {
-      return prepend(current_file_path, in_scope_files);
+  let _block;
+  let $ = current_file_path === dashboard_path$1;
+  if ($) {
+    _block = prepend(current_file_path, in_scope_files);
+  } else {
+    let $12 = contains(in_scope_files, current_file_path);
+    if ($12) {
+      _block = prepend(dashboard_path$1, in_scope_files);
     } else {
-      let $1 = contains(in_scope_files, current_file_path);
-      if ($1) {
-        return prepend(dashboard_path$1, in_scope_files);
-      } else {
-        return prepend(
-          current_file_path,
-          prepend(dashboard_path$1, in_scope_files)
-        );
-      }
+      _block = prepend(
+        current_file_path,
+        prepend(dashboard_path$1, in_scope_files)
+      );
     }
-  })();
-  let in_scope_files$2 = (() => {
-    let $ = contains(in_scope_files$1, dashboard_path$1);
-    if ($) {
-      return in_scope_files$1;
-    } else {
-      return prepend(dashboard_path$1, in_scope_files$1);
-    }
-  })();
-  let parents = (() => {
-    let _pipe2 = in_scope_files$2;
-    let _pipe$12 = flat_map(_pipe2, get_all_parents);
-    return unique(_pipe$12);
-  })();
-  let _pipe = parents;
-  let _pipe$1 = map2(
-    _pipe,
+  }
+  let in_scope_files$1 = _block;
+  let _block$1;
+  let $1 = contains(in_scope_files$1, dashboard_path$1);
+  if ($1) {
+    _block$1 = in_scope_files$1;
+  } else {
+    _block$1 = prepend(dashboard_path$1, in_scope_files$1);
+  }
+  let in_scope_files$2 = _block$1;
+  let _block$2;
+  let _pipe = in_scope_files$2;
+  let _pipe$1 = flat_map(_pipe, get_all_parents);
+  _block$2 = unique(_pipe$1);
+  let parents = _block$2;
+  let _pipe$2 = parents;
+  let _pipe$3 = map2(
+    _pipe$2,
     (parent) => {
       let parent_prefix = parent + "/";
-      let items = (() => {
-        let _pipe$12 = in_scope_files$2;
-        return filter(
-          _pipe$12,
-          (path2) => {
-            return starts_with(path2, parent_prefix);
-          }
-        );
-      })();
-      let $ = (() => {
-        let _pipe$12 = items;
-        return partition(
-          _pipe$12,
-          (path2) => {
-            let relative = replace(path2, parent_prefix, "");
-            return contains_string(relative, "/");
-          }
-        );
-      })();
-      let dirs = $[0];
-      let direct_files = $[1];
-      let subdirs = (() => {
-        let _pipe$12 = dirs;
-        let _pipe$2 = map2(
-          _pipe$12,
-          (dir) => {
-            let relative = replace(dir, parent_prefix, "");
-            let first_dir = (() => {
-              let _pipe$22 = split2(relative, "/");
-              let _pipe$3 = first(_pipe$22);
-              return unwrap2(_pipe$3, "");
-            })();
-            return parent_prefix + first_dir;
-          }
-        );
-        return unique(_pipe$2);
-      })();
+      let _block$3;
+      let _pipe$32 = in_scope_files$2;
+      _block$3 = filter(
+        _pipe$32,
+        (path2) => {
+          return starts_with(path2, parent_prefix);
+        }
+      );
+      let items = _block$3;
+      let _block$4;
+      let _pipe$4 = items;
+      _block$4 = partition(
+        _pipe$4,
+        (path2) => {
+          let relative = replace(path2, parent_prefix, "");
+          return contains_string(relative, "/");
+        }
+      );
+      let $2 = _block$4;
+      let dirs = $2[0];
+      let direct_files = $2[1];
+      let _block$5;
+      let _pipe$5 = dirs;
+      let _pipe$6 = map2(
+        _pipe$5,
+        (dir) => {
+          let relative = replace(dir, parent_prefix, "");
+          let _block$6;
+          let _pipe$62 = split2(relative, "/");
+          let _pipe$7 = first(_pipe$62);
+          _block$6 = unwrap2(_pipe$7, "");
+          let first_dir = _block$6;
+          return parent_prefix + first_dir;
+        }
+      );
+      _block$5 = unique(_pipe$6);
+      let subdirs = _block$5;
       return [parent, [subdirs, direct_files]];
     }
   );
-  return from_list(_pipe$1);
+  return from_list(_pipe$3);
 }
 
 // build/dev/javascript/o11a_client/o11a_client.mjs
@@ -11530,21 +11548,21 @@ function file_tree_from_route(route2, audit_metadata) {
     return new_map();
   } else if (route2 instanceof AuditDashboardRoute) {
     let audit_name = route2.audit_name;
-    let in_scope_files = (() => {
-      let _pipe = map_get(audit_metadata, audit_name);
-      let _pipe$1 = map3(
-        _pipe,
-        (audit_metadata2) => {
-          if (audit_metadata2.isOk()) {
-            let audit_metadata$1 = audit_metadata2[0];
-            return audit_metadata$1.in_scope_files;
-          } else {
-            return toList([]);
-          }
+    let _block;
+    let _pipe = map_get(audit_metadata, audit_name);
+    let _pipe$1 = map3(
+      _pipe,
+      (audit_metadata2) => {
+        if (audit_metadata2.isOk()) {
+          let audit_metadata$1 = audit_metadata2[0];
+          return audit_metadata$1.in_scope_files;
+        } else {
+          return toList([]);
         }
-      );
-      return unwrap2(_pipe$1, toList([]));
-    })();
+      }
+    );
+    _block = unwrap2(_pipe$1, toList([]));
+    let in_scope_files = _block;
     return group_files_by_parent(
       in_scope_files,
       dashboard_path(audit_name),
@@ -11553,21 +11571,21 @@ function file_tree_from_route(route2, audit_metadata) {
   } else {
     let audit_name = route2.audit_name;
     let current_file_path = route2.page_path;
-    let in_scope_files = (() => {
-      let _pipe = map_get(audit_metadata, audit_name);
-      let _pipe$1 = map3(
-        _pipe,
-        (audit_metadata2) => {
-          if (audit_metadata2.isOk()) {
-            let audit_metadata$1 = audit_metadata2[0];
-            return audit_metadata$1.in_scope_files;
-          } else {
-            return toList([]);
-          }
+    let _block;
+    let _pipe = map_get(audit_metadata, audit_name);
+    let _pipe$1 = map3(
+      _pipe,
+      (audit_metadata2) => {
+        if (audit_metadata2.isOk()) {
+          let audit_metadata$1 = audit_metadata2[0];
+          return audit_metadata$1.in_scope_files;
+        } else {
+          return toList([]);
         }
-      );
-      return unwrap2(_pipe$1, toList([]));
-    })();
+      }
+    );
+    _block = unwrap2(_pipe$1, toList([]));
+    let in_scope_files = _block;
     return group_files_by_parent(
       in_scope_files,
       current_file_path,
@@ -11639,15 +11657,15 @@ function route_change_effect(model, route2) {
   }
 }
 function init4(_) {
-  let route2 = (() => {
-    let $ = do_initial_uri();
-    if ($.isOk()) {
-      let uri = $[0];
-      return parse_route(uri);
-    } else {
-      return new O11aHomeRoute();
-    }
-  })();
+  let _block;
+  let $ = do_initial_uri();
+  if ($.isOk()) {
+    let uri = $[0];
+    _block = parse_route(uri);
+  } else {
+    _block = new O11aHomeRoute();
+  }
+  let route2 = _block;
   let init_model = new Model3(
     route2,
     new_map(),
@@ -11871,24 +11889,24 @@ function update3(model, msg) {
     let topic_title = msg.topic_title;
     let is_reference = msg.is_reference;
     let selected_discussion = [line_number, column_number];
-    let discussion_overlay_models = (() => {
-      let $ = map_get(model.discussion_overlay_models, selected_discussion);
-      if ($.isOk()) {
-        return model.discussion_overlay_models;
-      } else {
-        return insert(
-          model.discussion_overlay_models,
-          selected_discussion,
-          init3(
-            line_number,
-            column_number,
-            topic_id,
-            topic_title,
-            is_reference
-          )
-        );
-      }
-    })();
+    let _block;
+    let $ = map_get(model.discussion_overlay_models, selected_discussion);
+    if ($.isOk()) {
+      _block = model.discussion_overlay_models;
+    } else {
+      _block = insert(
+        model.discussion_overlay_models,
+        selected_discussion,
+        init3(
+          line_number,
+          column_number,
+          topic_id,
+          topic_title,
+          is_reference
+        )
+      );
+    }
+    let discussion_overlay_models = _block;
     return [
       (() => {
         if (kind instanceof Hover) {
@@ -11936,7 +11954,7 @@ function update3(model, msg) {
     echo2(
       "Unselecting discussion " + inspect2(kind),
       "src/o11a_client.gleam",
-      340
+      341
     );
     return [
       (() => {
@@ -11979,10 +11997,10 @@ function update3(model, msg) {
       model,
       from(
         (_) => {
-          let res = (() => {
-            let _pipe = discussion_input(line_number, column_number);
-            return map3(_pipe, focus);
-          })();
+          let _block;
+          let _pipe = discussion_input(line_number, column_number);
+          _block = map3(_pipe, focus);
+          let res = _block;
           if (res.isOk() && !res[0]) {
             return void 0;
           } else {
@@ -12031,7 +12049,7 @@ function update3(model, msg) {
       echo2(
         "Focusing discussion input, user is typing",
         "src/o11a_client.gleam",
-        396
+        397
       );
       set_is_user_typing(true);
       return [
@@ -12075,7 +12093,7 @@ function update3(model, msg) {
         none()
       ];
     } else if (discussion_effect instanceof UnfocusDiscussionInput) {
-      echo2("Unfocusing discussion input", "src/o11a_client.gleam", 422);
+      echo2("Unfocusing discussion input", "src/o11a_client.gleam", 423);
       set_is_user_typing(false);
       return [
         (() => {
@@ -12215,7 +12233,7 @@ function on_server_updated_discussion(msg) {
   return on(
     server_updated_discussion,
     (() => {
-      echo2("Server updated discussion", "src/o11a_client.gleam", 609);
+      echo2("Server updated discussion", "src/o11a_client.gleam", 622);
       return subfield(
         toList(["detail", "audit_name"]),
         string3,
@@ -12283,9 +12301,22 @@ function view4(model) {
   } else if ($ instanceof AuditPageRoute) {
     let audit_name = $.audit_name;
     let page_path = $.page_path;
+    let selected_discussion = get_selected_discussion(model);
     return div(
       toList([]),
       toList([
+        (() => {
+          let $1 = model.selected_node_id;
+          if ($1 instanceof Some) {
+            let selected_node_id = $1[0];
+            return style(
+              toList([]),
+              ".N" + to_string(selected_node_id) + " { background-color: var(--highlight-color); border-radius: 0.15rem; }"
+            );
+          } else {
+            return fragment2(toList([]));
+          }
+        })(),
         element3(
           toList([
             route("/component-discussion/" + audit_name),
@@ -12319,7 +12350,7 @@ function view4(model) {
                 let _pipe2 = map_get(model.discussions, audit_name);
                 return unwrap2(_pipe2, new_map());
               })(),
-              get_selected_discussion(model)
+              selected_discussion
             );
             return map5(_pipe, map_audit_page_msg);
           })(),
@@ -12344,20 +12375,20 @@ function echo2(value3, file, line2) {
   const reset_color = "\x1B[39m";
   const file_line = `${file}:${line2}`;
   const string_value = echo$inspect2(value3);
-  if (typeof process === "object" && process.stderr?.write) {
+  if (globalThis.process?.stderr?.write) {
     const string6 = `${grey}${file_line}${reset_color}
 ${string_value}
 `;
     process.stderr.write(string6);
-  } else if (typeof Deno === "object") {
+  } else if (globalThis.Deno) {
     const string6 = `${grey}${file_line}${reset_color}
 ${string_value}
 `;
-    Deno.stderr.writeSync(new TextEncoder().encode(string6));
+    globalThis.Deno.stderr.writeSync(new TextEncoder().encode(string6));
   } else {
     const string6 = `${file_line}
 ${string_value}`;
-    console.log(string6);
+    globalThis.console.log(string6);
   }
   return value3;
 }
@@ -12396,7 +12427,7 @@ function echo$inspectDict2(map7) {
   return body2 + "])";
 }
 function echo$inspectCustomType2(record) {
-  const props = Object.keys(record).map((label) => {
+  const props = globalThis.Object.keys(record).map((label) => {
     const value3 = echo$inspect2(record[label]);
     return isNaN(parseInt(label)) ? `${label}: ${value3}` : value3;
   }).join(", ");
@@ -12420,28 +12451,43 @@ function echo$inspect2(v) {
   if (v === void 0) return "Nil";
   if (t === "string") return echo$inspectString2(v);
   if (t === "bigint" || t === "number") return v.toString();
-  if (Array.isArray(v)) return `#(${v.map(echo$inspect2).join(", ")})`;
-  if (v instanceof List) return `[${v.toArray().map(echo$inspect2).join(", ")}]`;
-  if (v instanceof UtfCodepoint) return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
+  if (globalThis.Array.isArray(v))
+    return `#(${v.map(echo$inspect2).join(", ")})`;
+  if (v instanceof List)
+    return `[${v.toArray().map(echo$inspect2).join(", ")}]`;
+  if (v instanceof UtfCodepoint)
+    return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
   if (v instanceof BitArray) return echo$inspectBitArray2(v);
   if (v instanceof CustomType) return echo$inspectCustomType2(v);
   if (echo$isDict2(v)) return echo$inspectDict2(v);
-  if (v instanceof Set) return `//js(Set(${[...v].map(echo$inspect2).join(", ")}))`;
+  if (v instanceof Set)
+    return `//js(Set(${[...v].map(echo$inspect2).join(", ")}))`;
   if (v instanceof RegExp) return `//js(${v})`;
   if (v instanceof Date) return `//js(Date("${v.toISOString()}"))`;
   if (v instanceof Function) {
     const args = [];
-    for (const i of Array(v.length).keys()) args.push(String.fromCharCode(i + 97));
+    for (const i of Array(v.length).keys())
+      args.push(String.fromCharCode(i + 97));
     return `//fn(${args.join(", ")}) { ... }`;
   }
   return echo$inspectObject2(v);
 }
 function echo$inspectBitArray2(bitArray) {
   let endOfAlignedBytes = bitArray.bitOffset + 8 * Math.trunc(bitArray.bitSize / 8);
-  let alignedBytes = bitArraySlice(bitArray, bitArray.bitOffset, endOfAlignedBytes);
+  let alignedBytes = bitArraySlice(
+    bitArray,
+    bitArray.bitOffset,
+    endOfAlignedBytes
+  );
   let remainingUnalignedBits = bitArray.bitSize % 8;
   if (remainingUnalignedBits > 0) {
-    let remainingBits = bitArraySliceToInt(bitArray, endOfAlignedBytes, bitArray.bitSize, false, false);
+    let remainingBits = bitArraySliceToInt(
+      bitArray,
+      endOfAlignedBytes,
+      bitArray.bitSize,
+      false,
+      false
+    );
     let alignedBytesArray = Array.from(alignedBytes.rawBuffer);
     let suffix = `${remainingBits}:size(${remainingUnalignedBits})`;
     if (alignedBytesArray.length === 0) {
