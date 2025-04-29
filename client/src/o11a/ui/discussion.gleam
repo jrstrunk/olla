@@ -278,7 +278,7 @@ pub fn update(model: Model, msg: Msg) {
   }
 }
 
-pub fn view(
+pub fn overlay_view(
   model: Model,
   notes: dict.Dict(String, List(computed_note.ComputedNote)),
 ) {
@@ -301,54 +301,8 @@ pub fn view(
     [
       case model.is_reference && !model.show_reference_discussion {
         True ->
-          element.fragment([
-            html.div([attribute.class("overlay p-[.5rem]")], [
-              html.div(
-                [
-                  attribute.class(
-                    "flex items-start justify-between width-full mb-[.5rem]",
-                  ),
-                ],
-                [
-                  html.span([attribute.class("pt-[.1rem] underline")], [
-                    html.a([attribute.href("/" <> model.topic_id)], [
-                      html.text(model.topic_title),
-                    ]),
-                  ]),
-                  html.button(
-                    [
-                      event.on_click(UserToggledReferenceDiscussion),
-                      attribute.class("icon-button p-[.3rem]"),
-                    ],
-                    [lucide.messages_square([])],
-                  ),
-                ],
-              ),
-              html.div(
-                [
-                  attribute.class(
-                    "flex flex-col overflow-auto max-h-[30rem] gap-[.5rem]",
-                  ),
-                ],
-                list.filter_map(current_thread_notes, fn(note) {
-                  case note.significance == computed_note.Informational {
-                    True ->
-                      Ok(
-                        html.p([], [
-                          html.text(
-                            note.message
-                            <> case option.is_some(note.expanded_message) {
-                              True -> "^"
-                              False -> ""
-                            },
-                          ),
-                        ]),
-                      )
-                    False -> Error(Nil)
-                  }
-                }),
-              ),
-            ]),
+          html.div([attribute.class("overlay p-[.5rem]")], [
+            reference_header_view(model, current_thread_notes),
           ])
         False ->
           element.fragment([
@@ -358,16 +312,7 @@ pub fn view(
                 option.is_some(model.active_thread)
                 || list.length(current_thread_notes) > 0
               {
-                True ->
-                  html.div(
-                    [
-                      attribute.id("comment-list"),
-                      attribute.class(
-                        "flex flex-col-reverse overflow-auto max-h-[30rem] gap-[.5rem] mb-[.5rem]",
-                      ),
-                    ],
-                    comments_view(model, current_thread_notes),
-                  )
+                True -> comments_view(model, current_thread_notes)
                 False -> element.fragment([])
               },
               new_message_input_view(model, current_thread_notes),
@@ -377,6 +322,81 @@ pub fn view(
       },
     ],
   )
+}
+
+pub fn panel_view(model: Model, notes) {
+  let current_thread_notes =
+    dict.get(notes, model.current_thread_id)
+    |> result.unwrap([])
+
+  html.div([attribute.style("padding", ".5rem")], [
+    case model.is_reference {
+      True -> reference_header_view(model, current_thread_notes)
+      False -> element.fragment([])
+    },
+    thread_header_view(model),
+    case
+      option.is_some(model.active_thread)
+      || list.length(current_thread_notes) > 0
+    {
+      True -> comments_view(model, current_thread_notes)
+      False -> element.fragment([])
+    },
+    new_message_input_view(model, current_thread_notes),
+    case model.show_expanded_message_box {
+      True -> expand_message_input_view(model)
+      False -> element.fragment([])
+    },
+  ])
+}
+
+fn reference_header_view(model: Model, current_thread_notes) {
+  element.fragment([
+    html.div(
+      [
+        attribute.class(
+          "flex items-start justify-between width-full mb-[.5rem]",
+        ),
+      ],
+      [
+        html.span([attribute.class("pt-[.1rem] underline")], [
+          html.a([attribute.href("/" <> model.topic_id)], [
+            html.text(model.topic_title),
+          ]),
+        ]),
+        html.button(
+          [
+            event.on_click(UserToggledReferenceDiscussion),
+            attribute.class("icon-button p-[.3rem]"),
+          ],
+          [lucide.messages_square([])],
+        ),
+      ],
+    ),
+    html.div(
+      [attribute.class("flex flex-col overflow-auto max-h-[30rem] gap-[.5rem]")],
+      list.filter_map(
+        current_thread_notes,
+        fn(note: computed_note.ComputedNote) {
+          case note.significance == computed_note.Informational {
+            True ->
+              Ok(
+                html.p([], [
+                  html.text(
+                    note.message
+                    <> case option.is_some(note.expanded_message) {
+                      True -> "^"
+                      False -> ""
+                    },
+                  ),
+                ]),
+              )
+            False -> Error(Nil)
+          }
+        },
+      ),
+    ),
+  ])
 }
 
 fn thread_header_view(model: Model) {
@@ -451,63 +471,70 @@ fn comments_view(
   model: Model,
   current_thread_notes: List(computed_note.ComputedNote),
 ) {
-  list.map(current_thread_notes, fn(note) {
-    html.div([attribute.class("line-discussion-item")], [
-      // Comment header
-      html.div([attribute.class("flex justify-between mb-[.2rem]")], [
-        html.div([attribute.class("flex gap-[.5rem] items-start")], [
-          html.p([], [html.text(note.user_name)]),
-          significance_badge_view(note.significance),
+  html.div(
+    [
+      attribute.class(
+        "flex flex-col-reverse overflow-auto max-h-[30rem] gap-[.5rem] mb-[.5rem]",
+      ),
+    ],
+    list.map(current_thread_notes, fn(note) {
+      html.div([attribute.class("line-discussion-item")], [
+        // Comment header
+        html.div([attribute.class("flex justify-between mb-[.2rem]")], [
+          html.div([attribute.class("flex gap-[.5rem] items-start")], [
+            html.p([], [html.text(note.user_name)]),
+            significance_badge_view(note.significance),
+          ]),
+          html.div([attribute.class("flex gap-[.5rem]")], [
+            html.button(
+              [
+                attribute.id("edit-message-button"),
+                attribute.class("icon-button p-[.3rem]"),
+                event.on_click(UserEditedNote(Ok(note))),
+              ],
+              [lucide.pencil([])],
+            ),
+            case note.expanded_message {
+              option.Some(_) ->
+                html.button(
+                  [
+                    attribute.id("expand-message-button"),
+                    attribute.class("icon-button p-[.3rem]"),
+                    event.on_click(UserToggledExpandedMessage(note.note_id)),
+                  ],
+                  [lucide.list_collapse([])],
+                )
+              option.None -> element.fragment([])
+            },
+            case computed_note.is_significance_threadable(note.significance) {
+              True ->
+                html.button(
+                  [
+                    attribute.id("switch-thread-button"),
+                    attribute.class("icon-button p-[.3rem]"),
+                    event.on_click(UserSwitchedToThread(note.note_id, note)),
+                  ],
+                  [lucide.messages_square([])],
+                )
+              False -> element.fragment([])
+            },
+          ]),
         ]),
-        html.div([attribute.class("flex gap-[.5rem]")], [
-          html.button(
-            [
-              attribute.id("edit-message-button"),
-              attribute.class("icon-button p-[.3rem]"),
-              event.on_click(UserEditedNote(Ok(note))),
-            ],
-            [lucide.pencil([])],
-          ),
-          case note.expanded_message {
-            option.Some(_) ->
-              html.button(
-                [
-                  attribute.id("expand-message-button"),
-                  attribute.class("icon-button p-[.3rem]"),
-                  event.on_click(UserToggledExpandedMessage(note.note_id)),
-                ],
-                [lucide.list_collapse([])],
-              )
-            option.None -> element.fragment([])
-          },
-          case computed_note.is_significance_threadable(note.significance) {
-            True ->
-              html.button(
-                [
-                  attribute.id("switch-thread-button"),
-                  attribute.class("icon-button p-[.3rem]"),
-                  event.on_click(UserSwitchedToThread(note.note_id, note)),
-                ],
-                [lucide.messages_square([])],
-              )
-            False -> element.fragment([])
-          },
-        ]),
-      ]),
-      // Comment main text
-      html.p([], [html.text(note.message)]),
-      // Comment expanded text
-      case set.contains(model.expanded_messages, note.note_id) {
-        True ->
-          html.div([attribute.class("mt-[.5rem]")], [
-            html.p([], [html.text(note.expanded_message |> option.unwrap(""))]),
-          ])
-        False -> element.fragment([])
-      },
-      // Comment divider
-      html.hr([attribute.class("mt-[.5rem]")]),
-    ])
-  })
+        // Comment main text
+        html.p([], [html.text(note.message)]),
+        // Comment expanded text
+        case set.contains(model.expanded_messages, note.note_id) {
+          True ->
+            html.div([attribute.class("mt-[.5rem]")], [
+              html.p([], [html.text(note.expanded_message |> option.unwrap(""))]),
+            ])
+          False -> element.fragment([])
+        },
+        // Comment divider
+        html.hr([attribute.class("mt-[.5rem]")]),
+      ])
+    }),
+  )
 }
 
 fn significance_badge_view(sig: computed_note.ComputedNoteSignificance) {
@@ -567,8 +594,6 @@ fn expanded_message_view(model: Model) {
   let expanded_message_style =
     "absolute overlay p-[.5rem] flex w-[100%] h-60 mt-2"
 
-  let textarea_style = "grow text-[.95rem] resize-none p-[.3rem]"
-
   html.div(
     [
       attribute.id("expanded-message"),
@@ -577,20 +602,22 @@ fn expanded_message_view(model: Model) {
         False -> attribute.class(expanded_message_style)
       },
     ],
+    [expand_message_input_view(model)],
+  )
+}
+
+fn expand_message_input_view(model: Model) {
+  html.textarea(
     [
-      html.textarea(
-        [
-          attribute.id("expanded-message-box"),
-          attribute.class(textarea_style),
-          attribute.placeholder("Write an expanded message body"),
-          event.on_input(UserWroteExpandedMessage),
-          event.on_focus(UserFocusedExpandedInput),
-          event.on_blur(UserUnfocusedInput),
-          eventx.on_ctrl_enter(UserSubmittedNote),
-        ],
-        model.current_expanded_message_draft |> option.unwrap(""),
-      ),
+      attribute.id("expanded-message-box"),
+      attribute.class("grow text-[.95rem] resize-none p-[.3rem]"),
+      attribute.placeholder("Write an expanded message body"),
+      event.on_input(UserWroteExpandedMessage),
+      event.on_focus(UserFocusedExpandedInput),
+      event.on_blur(UserUnfocusedInput),
+      eventx.on_ctrl_enter(UserSubmittedNote),
     ],
+    model.current_expanded_message_draft |> option.unwrap(""),
   )
 }
 

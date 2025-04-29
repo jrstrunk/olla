@@ -18,13 +18,13 @@ import o11a/computed_note
 import o11a/events
 import o11a/note
 import o11a/preprocessor
-import o11a/ui/discussion_overlay
+import o11a/ui/discussion
 
 pub type DiscussionReference {
   DiscussionReference(
     line_number: Int,
     column_number: Int,
-    model: discussion_overlay.Model,
+    model: discussion.Model,
   )
 }
 
@@ -51,7 +51,7 @@ pub type Msg(msg) {
   UserUpdatedDiscussion(
     line_number: Int,
     column_number: Int,
-    update: #(discussion_overlay.Model, discussion_overlay.Effect),
+    update: #(discussion.Model, discussion.Effect),
   )
 }
 
@@ -507,7 +507,7 @@ fn discussion_view(
         && element_column_number == selected_discussion.column_number
       {
         True ->
-          discussion_overlay.view(selected_discussion.model, discussion)
+          discussion.overlay_view(selected_discussion.model, discussion)
           |> element.map(map_discussion_msg(_, selected_discussion))
         False -> element.fragment([])
       }
@@ -519,7 +519,7 @@ fn map_discussion_msg(msg, selected_discussion: DiscussionReference) {
   UserUpdatedDiscussion(
     line_number: selected_discussion.line_number,
     column_number: selected_discussion.column_number,
-    update: discussion_overlay.update(selected_discussion.model, msg),
+    update: discussion.update(selected_discussion.model, msg),
   )
 }
 

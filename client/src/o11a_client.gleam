@@ -26,7 +26,7 @@ import o11a/note
 import o11a/preprocessor
 import o11a/ui/audit_page
 import o11a/ui/audit_tree
-import o11a/ui/discussion_overlay
+import o11a/ui/discussion
 import plinth/browser/element as browser_element
 import plinth/browser/event as browser_event
 import plinth/browser/window
@@ -53,7 +53,7 @@ pub type Model {
       String,
       dict.Dict(String, List(computed_note.ComputedNote)),
     ),
-    discussion_overlay_models: dict.Dict(#(Int, Int), discussion_overlay.Model),
+    discussion_models: dict.Dict(#(Int, Int), discussion.Model),
     keyboard_model: page_navigation.Model,
     selected_discussion: option.Option(#(Int, Int)),
     selected_node_id: option.Option(Int),
@@ -80,7 +80,7 @@ fn init(_) -> #(Model, Effect(Msg)) {
       audit_metadata: dict.new(),
       source_files: dict.new(),
       discussions: dict.new(),
-      discussion_overlay_models: dict.new(),
+      discussion_models: dict.new(),
       keyboard_model: page_navigation.init(),
       selected_discussion: option.None,
       selected_node_id: option.None,
@@ -206,9 +206,9 @@ pub type Msg {
   UserUpdatedDiscussion(
     line_number: Int,
     column_number: Int,
-    update: #(discussion_overlay.Model, discussion_overlay.Effect),
+    update: #(discussion.Model, discussion.Effect),
   )
-  UserSuccessfullySubmittedNote(updated_model: discussion_overlay.Model)
+  UserSuccessfullySubmittedNote(updated_model: discussion.Model)
   UserFailedToSubmitNote(error: lustre_http.HttpError)
 }
 
@@ -293,15 +293,15 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     ) -> {
       let selected_discussion = #(line_number, column_number)
 
-      let discussion_overlay_models = case
-        dict.get(model.discussion_overlay_models, selected_discussion)
+      let discussion_models = case
+        dict.get(model.discussion_models, selected_discussion)
       {
-        Ok(..) -> model.discussion_overlay_models
+        Ok(..) -> model.discussion_models
         Error(Nil) ->
           dict.insert(
-            model.discussion_overlay_models,
+            model.discussion_models,
             selected_discussion,
-            discussion_overlay.init(
+            discussion.init(
               line_number:,
               column_number:,
               topic_id:,
@@ -317,14 +317,14 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             Model(
               ..model,
               selected_discussion: option.Some(selected_discussion),
-              discussion_overlay_models:,
+              discussion_models:,
               selected_node_id: node_id,
             )
           audit_page.Focus ->
             Model(
               ..model,
               focused_discussion: option.Some(selected_discussion),
-              discussion_overlay_models:,
+              discussion_models:,
               selected_node_id: node_id,
               keyboard_model: page_navigation.Model(
                 ..model.keyboard_model,
@@ -378,7 +378,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       let #(discussion_model, discussion_effect) = update
 
       case discussion_effect {
-        discussion_overlay.SubmitNote(note_submission, topic_id) -> #(
+        discussion.SubmitNote(note_submission, topic_id) -> #(
           model,
           case model.route {
             AuditPageRoute(audit_name:, ..) | AuditDashboardRoute(audit_name:) -> {
@@ -393,7 +393,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           },
         )
 
-        discussion_overlay.FocusDiscussionInput(line_number, column_number) -> {
+        discussion.FocusDiscussionInput(line_number, column_number) -> {
           echo "Focusing discussion input, user is typing"
           storage.set_is_user_typing(True)
           #(
@@ -405,10 +405,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
         }
 
-        discussion_overlay.FocusExpandedDiscussionInput(
-          line_number,
-          column_number,
-        ) -> {
+        discussion.FocusExpandedDiscussionInput(line_number, column_number) -> {
           storage.set_is_user_typing(True)
           #(
             Model(
@@ -419,18 +416,18 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
         }
 
-        discussion_overlay.UnfocusDiscussionInput(_line_number, _column_number) -> {
+        discussion.UnfocusDiscussionInput(_line_number, _column_number) -> {
           echo "Unfocusing discussion input"
           storage.set_is_user_typing(False)
           #(Model(..model, focused_discussion: option.None), effect.none())
         }
 
-        discussion_overlay.MaximizeDiscussion(_line_number, _column_number)
-        | discussion_overlay.None -> #(
+        discussion.MaximizeDiscussion(_line_number, _column_number)
+        | discussion.None -> #(
           Model(
             ..model,
-            discussion_overlay_models: dict.insert(
-              model.discussion_overlay_models,
+            discussion_models: dict.insert(
+              model.discussion_models,
               #(line_number, column_number),
               discussion_model,
             ),
@@ -443,8 +440,8 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     UserSuccessfullySubmittedNote(updated_model) -> #(
       Model(
         ..model,
-        discussion_overlay_models: dict.insert(
-          model.discussion_overlay_models,
+        discussion_models: dict.insert(
+          model.discussion_models,
           #(updated_model.line_number, updated_model.column_number),
           updated_model,
         ),
@@ -557,6 +554,20 @@ fn view(model: Model) {
     AuditPageRoute(audit_name:, page_path:) -> {
       let selected_discussion = get_selected_discussion(model)
 
+      let discussion =
+        dict.get(model.discussions, audit_name)
+        |> result.unwrap(dict.new())
+
+      let preprocessed_source =
+        dict.get(model.source_files, page_path)
+        |> result.map(fn(source_files) {
+          case source_files {
+            Ok(source_files) -> source_files
+            Error(..) -> []
+          }
+        })
+        |> result.unwrap([])
+
       html.div([], [
         case model.selected_node_id {
           option.Some(selected_node_id) ->
@@ -577,20 +588,15 @@ fn view(model: Model) {
         ),
         audit_tree.view(
           audit_page.view(
-            preprocessed_source: dict.get(model.source_files, page_path)
-              |> result.map(fn(source_files) {
-                case source_files {
-                  Ok(source_files) -> source_files
-                  Error(..) -> []
-                }
-              })
-              |> result.unwrap([]),
-            discussion: dict.get(model.discussions, audit_name)
-              |> result.unwrap(dict.new()),
+            preprocessed_source:,
+            discussion:,
             selected_discussion:,
           )
             |> element.map(map_audit_page_msg),
-          option.None,
+          option.map(selected_discussion, fn(selected_discussion) {
+            discussion.panel_view(selected_discussion.model, discussion)
+            |> element.map(map_discussion_msg(_, selected_discussion))
+          }),
           model.file_tree,
           audit_name,
           page_path,
@@ -604,7 +610,7 @@ fn view(model: Model) {
 fn get_selected_discussion(model: Model) {
   case model.focused_discussion, model.selected_discussion {
     option.Some(discussion), _ | _, option.Some(discussion) ->
-      dict.get(model.discussion_overlay_models, discussion)
+      dict.get(model.discussion_models, discussion)
       |> result.map(fn(model) {
         option.Some(audit_page.DiscussionReference(
           line_number: discussion.0,
@@ -652,4 +658,12 @@ fn map_audit_page_msg(msg) {
     audit_page.UserUpdatedDiscussion(line_number:, column_number:, update:) ->
       UserUpdatedDiscussion(line_number:, column_number:, update:)
   }
+}
+
+fn map_discussion_msg(msg, selected_discussion: audit_page.DiscussionReference) {
+  UserUpdatedDiscussion(
+    line_number: selected_discussion.line_number,
+    column_number: selected_discussion.column_number,
+    update: discussion.update(selected_discussion.model, msg),
+  )
 }
