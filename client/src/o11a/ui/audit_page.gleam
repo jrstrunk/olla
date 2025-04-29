@@ -53,6 +53,7 @@ pub type Msg(msg) {
     column_number: Int,
     update: #(discussion.Model, discussion.Effect),
   )
+  UserClickedInsideDiscussion(line_number: Int, column_number: Int)
 }
 
 pub type DiscussionSelectKind {
@@ -247,6 +248,13 @@ fn inline_comment_preview_view(
             ],
           ),
           discussion_view(
+            [
+              event.on_click(UserClickedInsideDiscussion(
+                element_line_number,
+                element_column_number,
+              ))
+              |> event.stop_propagation,
+            ],
             element_line_number:,
             element_column_number:,
             selected_discussion:,
@@ -302,6 +310,13 @@ fn inline_comment_preview_view(
             [html.text("Start new thread")],
           ),
           discussion_view(
+            [
+              event.on_click(UserClickedInsideDiscussion(
+                element_line_number,
+                element_column_number,
+              ))
+              |> event.stop_propagation,
+            ],
             element_line_number:,
             element_column_number:,
             selected_discussion:,
@@ -425,6 +440,13 @@ fn declaration_node_view(
         [html.text(tokens)],
       ),
       discussion_view(
+        [
+          event.on_click(UserClickedInsideDiscussion(
+            element_line_number,
+            element_column_number,
+          ))
+          |> event.stop_propagation,
+        ],
         element_line_number:,
         element_column_number:,
         selected_discussion:,
@@ -495,6 +517,13 @@ fn reference_node_view(
         [html.text(tokens)],
       ),
       discussion_view(
+        [
+          event.on_click(UserClickedInsideDiscussion(
+            element_line_number,
+            element_column_number,
+          ))
+          |> event.stop_propagation,
+        ],
         discussion:,
         element_line_number:,
         element_column_number:,
@@ -505,6 +534,7 @@ fn reference_node_view(
 }
 
 fn discussion_view(
+  attrs,
   discussion discussion,
   element_line_number element_line_number,
   element_column_number element_column_number,
@@ -517,8 +547,10 @@ fn discussion_view(
         && element_column_number == selected_discussion.column_number
       {
         True ->
-          discussion.overlay_view(selected_discussion.model, discussion)
-          |> element.map(map_discussion_msg(_, selected_discussion))
+          html.div(attrs, [
+            discussion.overlay_view(selected_discussion.model, discussion)
+            |> element.map(map_discussion_msg(_, selected_discussion)),
+          ])
         False -> element.fragment([])
       }
     option.None -> element.fragment([])

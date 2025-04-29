@@ -10621,6 +10621,13 @@ var UserUpdatedDiscussion = class extends CustomType {
     this.update = update4;
   }
 };
+var UserClickedInsideDiscussion = class extends CustomType {
+  constructor(line_number, column_number) {
+    super();
+    this.line_number = line_number;
+    this.column_number = column_number;
+  }
+};
 var EntryHover = class extends CustomType {
 };
 var EntryFocus = class extends CustomType {
@@ -10632,20 +10639,27 @@ function map_discussion_msg(msg, selected_discussion) {
     update2(selected_discussion.model, msg)
   );
 }
-function discussion_view(discussion, element_line_number, element_column_number, selected_discussion) {
+function discussion_view(attrs, discussion, element_line_number, element_column_number, selected_discussion) {
   if (selected_discussion instanceof Some) {
     let selected_discussion$1 = selected_discussion[0];
     let $ = element_line_number === selected_discussion$1.line_number && element_column_number === selected_discussion$1.column_number;
     if ($) {
-      let _pipe = overlay_view(
-        selected_discussion$1.model,
-        discussion
-      );
-      return map5(
-        _pipe,
-        (_capture) => {
-          return map_discussion_msg(_capture, selected_discussion$1);
-        }
+      return div(
+        attrs,
+        toList([
+          (() => {
+            let _pipe = overlay_view(
+              selected_discussion$1.model,
+              discussion
+            );
+            return map5(
+              _pipe,
+              (_capture) => {
+                return map_discussion_msg(_capture, selected_discussion$1);
+              }
+            );
+          })()
+        ])
       );
     } else {
       return fragment2(toList([]));
@@ -10740,6 +10754,17 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
           ])
         ),
         discussion_view(
+          toList([
+            (() => {
+              let _pipe = on_click(
+                new UserClickedInsideDiscussion(
+                  element_line_number,
+                  element_column_number
+                )
+              );
+              return stop_propagation(_pipe);
+            })()
+          ]),
           discussion,
           element_line_number,
           element_column_number,
@@ -10808,6 +10833,17 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
           toList([text3("Start new thread")])
         ),
         discussion_view(
+          toList([
+            (() => {
+              let _pipe = on_click(
+                new UserClickedInsideDiscussion(
+                  element_line_number,
+                  element_column_number
+                )
+              );
+              return stop_propagation(_pipe);
+            })()
+          ]),
           discussion,
           element_line_number,
           element_column_number,
@@ -10885,6 +10921,17 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, el
         toList([text3(tokens)])
       ),
       discussion_view(
+        toList([
+          (() => {
+            let _pipe = on_click(
+              new UserClickedInsideDiscussion(
+                element_line_number,
+                element_column_number
+              )
+            );
+            return stop_propagation(_pipe);
+          })()
+        ]),
         discussion,
         element_line_number,
         element_column_number,
@@ -10964,6 +11011,17 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
         toList([text3(tokens)])
       ),
       discussion_view(
+        toList([
+          (() => {
+            let _pipe = on_click(
+              new UserClickedInsideDiscussion(
+                element_line_number,
+                element_column_number
+              )
+            );
+            return stop_propagation(_pipe);
+          })()
+        ]),
         discussion,
         element_line_number,
         element_column_number,
@@ -11632,7 +11690,7 @@ function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
 
 // build/dev/javascript/o11a_client/o11a_client.mjs
 var Model3 = class extends CustomType {
-  constructor(route2, file_tree, audit_metadata, source_files, discussions, discussion_models, keyboard_model, selected_discussion, selected_node_id, focused_discussion) {
+  constructor(route2, file_tree, audit_metadata, source_files, discussions, discussion_models, keyboard_model, selected_discussion, selected_node_id, focused_discussion, clicked_discussion) {
     super();
     this.route = route2;
     this.file_tree = file_tree;
@@ -11644,6 +11702,7 @@ var Model3 = class extends CustomType {
     this.selected_discussion = selected_discussion;
     this.selected_node_id = selected_node_id;
     this.focused_discussion = focused_discussion;
+    this.clicked_discussion = clicked_discussion;
   }
 };
 var O11aHomeRoute = class extends CustomType {
@@ -11725,6 +11784,13 @@ var UserClickedDiscussionEntry2 = class extends CustomType {
     this.column_number = column_number;
   }
 };
+var UserClickedInsideDiscussion2 = class extends CustomType {
+  constructor(line_number, column_number) {
+    super();
+    this.line_number = line_number;
+    this.column_number = column_number;
+  }
+};
 var UserClickedOutsideDiscussion = class extends CustomType {
 };
 var UserUpdatedDiscussion2 = class extends CustomType {
@@ -11771,8 +11837,8 @@ function parse_route(uri) {
   }
 }
 function on_url_change(uri) {
-  echo3("on_url_change", "src/o11a_client.gleam", 106);
-  echo3(uri, "src/o11a_client.gleam", 107);
+  echo3("on_url_change", "src/o11a_client.gleam", 108);
+  echo3(uri, "src/o11a_client.gleam", 109);
   let _pipe = parse_route(uri);
   return new OnRouteChange(_pipe);
 }
@@ -11909,6 +11975,7 @@ function init4(_) {
     init2(),
     new None(),
     new None(),
+    new None(),
     new None()
   );
   return [
@@ -11980,7 +12047,8 @@ function update3(model, msg) {
           _record.keyboard_model,
           _record.selected_discussion,
           _record.selected_node_id,
-          _record.focused_discussion
+          _record.focused_discussion,
+          _record.clicked_discussion
         );
       })(),
       route_change_effect(model, route2)
@@ -12006,7 +12074,8 @@ function update3(model, msg) {
           _record.keyboard_model,
           _record.selected_discussion,
           _record.selected_node_id,
-          _record.focused_discussion
+          _record.focused_discussion,
+          _record.clicked_discussion
         );
       })(),
       none()
@@ -12042,7 +12111,8 @@ function update3(model, msg) {
           })(),
           _record.selected_discussion,
           _record.selected_node_id,
-          _record.focused_discussion
+          _record.focused_discussion,
+          _record.clicked_discussion
         );
       })(),
       none()
@@ -12074,7 +12144,8 @@ function update3(model, msg) {
             _record.keyboard_model,
             _record.selected_discussion,
             _record.selected_node_id,
-            _record.focused_discussion
+            _record.focused_discussion,
+            _record.clicked_discussion
           );
         })(),
         none()
@@ -12108,7 +12179,8 @@ function update3(model, msg) {
           keyboard_model,
           _record.selected_discussion,
           _record.selected_node_id,
-          _record.focused_discussion
+          _record.focused_discussion,
+          _record.clicked_discussion
         );
       })(),
       effect
@@ -12154,7 +12226,8 @@ function update3(model, msg) {
             _record.keyboard_model,
             new Some(selected_discussion),
             node_id,
-            _record.focused_discussion
+            _record.focused_discussion,
+            _record.clicked_discussion
           );
         } else {
           let _record = model;
@@ -12176,7 +12249,8 @@ function update3(model, msg) {
             })(),
             _record.selected_discussion,
             node_id,
-            new Some(selected_discussion)
+            new Some(selected_discussion),
+            _record.clicked_discussion
           );
         }
       })(),
@@ -12187,7 +12261,7 @@ function update3(model, msg) {
     echo3(
       "Unselecting discussion " + inspect2(kind),
       "src/o11a_client.gleam",
-      344
+      347
     );
     return [
       (() => {
@@ -12203,7 +12277,8 @@ function update3(model, msg) {
             _record.keyboard_model,
             new None(),
             new None(),
-            _record.focused_discussion
+            _record.focused_discussion,
+            _record.clicked_discussion
           );
         } else {
           let _record = model;
@@ -12217,7 +12292,8 @@ function update3(model, msg) {
             _record.keyboard_model,
             _record.selected_discussion,
             new None(),
-            new None()
+            new None(),
+            _record.clicked_discussion
           );
         }
       })(),
@@ -12227,7 +12303,22 @@ function update3(model, msg) {
     let line_number = msg.line_number;
     let column_number = msg.column_number;
     return [
-      model,
+      (() => {
+        let _record = model;
+        return new Model3(
+          _record.route,
+          _record.file_tree,
+          _record.audit_metadata,
+          _record.source_files,
+          _record.discussions,
+          _record.discussion_models,
+          _record.keyboard_model,
+          _record.selected_discussion,
+          _record.selected_node_id,
+          _record.focused_discussion,
+          new Some([line_number, column_number])
+        );
+      })(),
       from(
         (_) => {
           let _block;
@@ -12237,18 +12328,109 @@ function update3(model, msg) {
           if (res.isOk() && !res[0]) {
             return void 0;
           } else {
-            return console_log(
-              "Failed to focus discussion input l" + to_string(
-                line_number
-              ) + " c" + to_string(column_number)
-            );
+            return console_log("Failed to focus discussion input");
           }
         }
       )
     ];
+  } else if (msg instanceof UserClickedInsideDiscussion2) {
+    let line_number = msg.line_number;
+    let column_number = msg.column_number;
+    echo3("User clicked inside discussion", "src/o11a_client.gleam", 387);
+    let _block;
+    let $ = !isEqual(
+      model.selected_discussion,
+      new Some([line_number, column_number])
+    );
+    if ($) {
+      let _record = model;
+      _block = new Model3(
+        _record.route,
+        _record.file_tree,
+        _record.audit_metadata,
+        _record.source_files,
+        _record.discussions,
+        _record.discussion_models,
+        _record.keyboard_model,
+        new None(),
+        _record.selected_node_id,
+        _record.focused_discussion,
+        _record.clicked_discussion
+      );
+    } else {
+      _block = model;
+    }
+    let model$1 = _block;
+    let _block$1;
+    let $1 = !isEqual(
+      model$1.focused_discussion,
+      new Some([line_number, column_number])
+    );
+    if ($1) {
+      let _record = model$1;
+      _block$1 = new Model3(
+        _record.route,
+        _record.file_tree,
+        _record.audit_metadata,
+        _record.source_files,
+        _record.discussions,
+        _record.discussion_models,
+        _record.keyboard_model,
+        _record.selected_discussion,
+        _record.selected_node_id,
+        new None(),
+        _record.clicked_discussion
+      );
+    } else {
+      _block$1 = model$1;
+    }
+    let model$2 = _block$1;
+    let _block$2;
+    let $2 = !isEqual(
+      model$2.clicked_discussion,
+      new Some([line_number, column_number])
+    );
+    if ($2) {
+      let _record = model$2;
+      _block$2 = new Model3(
+        _record.route,
+        _record.file_tree,
+        _record.audit_metadata,
+        _record.source_files,
+        _record.discussions,
+        _record.discussion_models,
+        _record.keyboard_model,
+        _record.selected_discussion,
+        _record.selected_node_id,
+        _record.focused_discussion,
+        new None()
+      );
+    } else {
+      _block$2 = model$2;
+    }
+    let model$3 = _block$2;
+    return [model$3, none()];
   } else if (msg instanceof UserClickedOutsideDiscussion) {
-    echo3("User clicked outside discussion", "src/o11a_client.gleam", 387);
-    return [model, none()];
+    echo3("User clicked outside discussion", "src/o11a_client.gleam", 413);
+    return [
+      (() => {
+        let _record = model;
+        return new Model3(
+          _record.route,
+          _record.file_tree,
+          _record.audit_metadata,
+          _record.source_files,
+          _record.discussions,
+          _record.discussion_models,
+          _record.keyboard_model,
+          new None(),
+          _record.selected_node_id,
+          new None(),
+          new None()
+        );
+      })(),
+      none()
+    ];
   } else if (msg instanceof UserUpdatedDiscussion2) {
     let line_number = msg.line_number;
     let column_number = msg.column_number;
@@ -12289,7 +12471,7 @@ function update3(model, msg) {
       echo3(
         "Focusing discussion input, user is typing",
         "src/o11a_client.gleam",
-        411
+        445
       );
       set_is_user_typing(true);
       return [
@@ -12305,7 +12487,8 @@ function update3(model, msg) {
             _record.keyboard_model,
             _record.selected_discussion,
             _record.selected_node_id,
-            new Some([line_number$1, column_number$1])
+            new Some([line_number$1, column_number$1]),
+            _record.clicked_discussion
           );
         })(),
         none()
@@ -12327,32 +12510,16 @@ function update3(model, msg) {
             _record.keyboard_model,
             _record.selected_discussion,
             _record.selected_node_id,
-            new Some([line_number$1, column_number$1])
+            new Some([line_number$1, column_number$1]),
+            _record.clicked_discussion
           );
         })(),
         none()
       ];
     } else if (discussion_effect instanceof UnfocusDiscussionInput) {
-      echo3("Unfocusing discussion input", "src/o11a_client.gleam", 434);
+      echo3("Unfocusing discussion input", "src/o11a_client.gleam", 468);
       set_is_user_typing(false);
-      return [
-        (() => {
-          let _record = model;
-          return new Model3(
-            _record.route,
-            _record.file_tree,
-            _record.audit_metadata,
-            _record.source_files,
-            _record.discussions,
-            _record.discussion_models,
-            _record.keyboard_model,
-            _record.selected_discussion,
-            _record.selected_node_id,
-            new None()
-          );
-        })(),
-        none()
-      ];
+      return [model, none()];
     } else if (discussion_effect instanceof MaximizeDiscussion) {
       return [
         (() => {
@@ -12371,7 +12538,8 @@ function update3(model, msg) {
             _record.keyboard_model,
             _record.selected_discussion,
             _record.selected_node_id,
-            _record.focused_discussion
+            _record.focused_discussion,
+            _record.clicked_discussion
           );
         })(),
         none()
@@ -12394,7 +12562,8 @@ function update3(model, msg) {
             _record.keyboard_model,
             _record.selected_discussion,
             _record.selected_node_id,
-            _record.focused_discussion
+            _record.focused_discussion,
+            _record.clicked_discussion
           );
         })(),
         none()
@@ -12419,7 +12588,8 @@ function update3(model, msg) {
           _record.keyboard_model,
           _record.selected_discussion,
           _record.selected_node_id,
-          _record.focused_discussion
+          _record.focused_discussion,
+          _record.clicked_discussion
         );
       })(),
       none()
@@ -12432,7 +12602,8 @@ function update3(model, msg) {
 }
 function get_selected_discussion(model) {
   let $ = model.focused_discussion;
-  let $1 = model.selected_discussion;
+  let $1 = model.clicked_discussion;
+  let $2 = model.selected_discussion;
   if ($ instanceof Some) {
     let discussion = $[0];
     let _pipe = map_get(model.discussion_models, discussion);
@@ -12465,6 +12636,22 @@ function get_selected_discussion(model) {
       }
     );
     return unwrap2(_pipe$1, new None());
+  } else if ($2 instanceof Some) {
+    let discussion = $2[0];
+    let _pipe = map_get(model.discussion_models, discussion);
+    let _pipe$1 = map3(
+      _pipe,
+      (model2) => {
+        return new Some(
+          new DiscussionReference(
+            discussion[0],
+            discussion[1],
+            model2
+          )
+        );
+      }
+    );
+    return unwrap2(_pipe$1, new None());
   } else {
     return new None();
   }
@@ -12472,16 +12659,13 @@ function get_selected_discussion(model) {
 function on_server_updated_discussion(msg) {
   return on(
     server_updated_discussion,
-    (() => {
-      echo3("Server updated discussion", "src/o11a_client.gleam", 642);
-      return subfield(
-        toList(["detail", "audit_name"]),
-        string3,
-        (audit_name) => {
-          return success(msg(audit_name));
-        }
-      );
-    })()
+    subfield(
+      toList(["detail", "audit_name"]),
+      string3,
+      (audit_name) => {
+        return success(msg(audit_name));
+      }
+    )
   );
 }
 function map_audit_page_msg(msg) {
@@ -12509,11 +12693,15 @@ function map_audit_page_msg(msg) {
     let line_number = msg.line_number;
     let column_number = msg.column_number;
     return new UserClickedDiscussionEntry2(line_number, column_number);
-  } else {
+  } else if (msg instanceof UserUpdatedDiscussion) {
     let line_number = msg.line_number;
     let column_number = msg.column_number;
     let update$1 = msg.update;
     return new UserUpdatedDiscussion2(line_number, column_number, update$1);
+  } else {
+    let line_number = msg.line_number;
+    let column_number = msg.column_number;
+    return new UserClickedInsideDiscussion2(line_number, column_number);
   }
 }
 function map_discussion_msg2(msg, selected_discussion) {

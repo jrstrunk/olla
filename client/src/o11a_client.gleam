@@ -58,6 +58,7 @@ pub type Model {
     selected_discussion: option.Option(#(Int, Int)),
     selected_node_id: option.Option(Int),
     focused_discussion: option.Option(#(Int, Int)),
+    clicked_discussion: option.Option(#(Int, Int)),
   )
 }
 
@@ -85,6 +86,7 @@ fn init(_) -> #(Model, Effect(Msg)) {
       selected_discussion: option.None,
       selected_node_id: option.None,
       focused_discussion: option.None,
+      clicked_discussion: option.None,
     )
 
   #(
@@ -205,6 +207,7 @@ pub type Msg {
   )
   UserUnselectedDiscussionEntry(kind: audit_page.DiscussionSelectKind)
   UserClickedDiscussionEntry(line_number: Int, column_number: Int)
+  UserClickedInsideDiscussion(line_number: Int, column_number: Int)
   UserClickedOutsideDiscussion
   UserUpdatedDiscussion(
     line_number: Int,
@@ -363,7 +366,10 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
     UserClickedDiscussionEntry(line_number:, column_number:) -> {
       #(
-        model,
+        Model(
+          ..model,
+          clicked_discussion: option.Some(#(line_number, column_number)),
+        ),
         effect.from(fn(_dispatch) {
           let res =
             selectors.discussion_input(line_number:, column_number:)
@@ -371,21 +377,49 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
           case res {
             Ok(Nil) -> Nil
-            Error(Nil) ->
-              io.println(
-                "Failed to focus discussion input l"
-                <> int.to_string(line_number)
-                <> " c"
-                <> int.to_string(column_number),
-              )
+            Error(Nil) -> io.println("Failed to focus discussion input")
           }
         }),
       )
     }
 
+    UserClickedInsideDiscussion(line_number:, column_number:) -> {
+      echo "User clicked inside discussion"
+      let model = case
+        model.selected_discussion != option.Some(#(line_number, column_number))
+      {
+        True -> Model(..model, selected_discussion: option.None)
+        False -> model
+      }
+
+      let model = case
+        model.focused_discussion != option.Some(#(line_number, column_number))
+      {
+        True -> Model(..model, focused_discussion: option.None)
+        False -> model
+      }
+
+      let model = case
+        model.clicked_discussion != option.Some(#(line_number, column_number))
+      {
+        True -> Model(..model, clicked_discussion: option.None)
+        False -> model
+      }
+
+      #(model, effect.none())
+    }
+
     UserClickedOutsideDiscussion -> {
       echo "User clicked outside discussion"
-      #(model, effect.none())
+      #(
+        Model(
+          ..model,
+          selected_discussion: option.None,
+          focused_discussion: option.None,
+          clicked_discussion: option.None,
+        ),
+        effect.none(),
+      )
     }
 
     UserUpdatedDiscussion(line_number:, column_number:, update:) -> {
@@ -433,7 +467,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         discussion.UnfocusDiscussionInput(_line_number, _column_number) -> {
           echo "Unfocusing discussion input"
           storage.set_is_user_typing(False)
-          #(Model(..model, focused_discussion: option.None), effect.none())
+          #(model, effect.none())
         }
 
         discussion.MaximizeDiscussion(_line_number, _column_number)
@@ -622,8 +656,15 @@ fn view(model: Model) {
 }
 
 fn get_selected_discussion(model: Model) {
-  case model.focused_discussion, model.selected_discussion {
-    option.Some(discussion), _ | _, option.Some(discussion) ->
+  case
+    model.focused_discussion,
+    model.clicked_discussion,
+    model.selected_discussion
+  {
+    option.Some(discussion), _, _
+    | _, option.Some(discussion), _
+    | _, _, option.Some(discussion)
+    ->
       dict.get(model.discussion_models, discussion)
       |> result.map(fn(model) {
         option.Some(audit_page.DiscussionReference(
@@ -633,13 +674,13 @@ fn get_selected_discussion(model: Model) {
         ))
       })
       |> result.unwrap(option.None)
-    option.None, option.None -> option.None
+    option.None, option.None, option.None -> option.None
   }
 }
 
 pub fn on_server_updated_discussion(msg) {
   event.on(events.server_updated_discussion, {
-    echo "Server updated discussion"
+    // echo "Server updated discussion"
     use audit_name <- decode.subfield(["detail", "audit_name"], decode.string)
     decode.success(msg(audit_name))
   })
@@ -671,6 +712,8 @@ fn map_audit_page_msg(msg) {
       UserClickedDiscussionEntry(line_number:, column_number:)
     audit_page.UserUpdatedDiscussion(line_number:, column_number:, update:) ->
       UserUpdatedDiscussion(line_number:, column_number:, update:)
+    audit_page.UserClickedInsideDiscussion(line_number:, column_number:) ->
+      UserClickedInsideDiscussion(line_number:, column_number:)
   }
 }
 
