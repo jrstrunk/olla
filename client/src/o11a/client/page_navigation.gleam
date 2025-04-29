@@ -257,12 +257,14 @@ fn focus_line_discussion(
   column_number column_number: Int,
 ) {
   effect.from(fn(_dispatch) {
+    echo "focus line discussion"
     let _ =
       selectors.discussion_entry(line_number:, column_number:)
       |> result.replace_error(snag.new(
         "Failed to find line discussion to focus",
       ))
       |> result.map(element.focus)
+      |> echo
     Nil
   })
 }

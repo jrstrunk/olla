@@ -4198,14 +4198,14 @@ var Property = class extends CustomType {
   }
 };
 var Event2 = class extends CustomType {
-  constructor(kind, name, handler, include, prevent_default2, stop_propagation, immediate2, limit) {
+  constructor(kind, name, handler, include, prevent_default2, stop_propagation2, immediate2, limit) {
     super();
     this.kind = kind;
     this.name = name;
     this.handler = handler;
     this.include = include;
     this.prevent_default = prevent_default2;
-    this.stop_propagation = stop_propagation;
+    this.stop_propagation = stop_propagation2;
     this.immediate = immediate2;
     this.limit = limit;
   }
@@ -4296,14 +4296,14 @@ function attribute(name, value3) {
 }
 var property_kind = 1;
 var event_kind = 2;
-function event(name, handler, include, prevent_default2, stop_propagation, immediate2, limit) {
+function event(name, handler, include, prevent_default2, stop_propagation2, immediate2, limit) {
   return new Event2(
     event_kind,
     name,
     handler,
     include,
     prevent_default2,
-    stop_propagation,
+    stop_propagation2,
     immediate2,
     limit
   );
@@ -6748,6 +6748,23 @@ function on(name, handler) {
     new NoLimit(0)
   );
 }
+function stop_propagation(event4) {
+  if (event4 instanceof Event2) {
+    let _record = event4;
+    return new Event2(
+      _record.kind,
+      _record.name,
+      _record.handler,
+      _record.include,
+      _record.prevent_default,
+      true,
+      _record.immediate,
+      _record.limit
+    );
+  } else {
+    return event4;
+  }
+}
 function on_click(msg) {
   return on("click", success(msg));
 }
@@ -8438,8 +8455,12 @@ function non_empty_line(line_number) {
 }
 function discussion_entry2(line_number, column_number) {
   return querySelector(
-    ".dl" + to_string(line_number) + ".dc" + to_string(
-      column_number
+    echo(
+      ".dl" + to_string(line_number) + ".dc" + to_string(
+        column_number
+      ) + " ." + discussion_entry,
+      "src/o11a/client/selectors.gleam",
+      17
     )
   );
 }
@@ -8449,343 +8470,6 @@ function discussion_input(line_number, column_number) {
       column_number
     ) + " input"
   );
-}
-
-// build/dev/javascript/o11a_client/storage.mjs
-var is_user_typing_storage = false;
-function set_is_user_typing(value3) {
-  is_user_typing_storage = value3;
-}
-function is_user_typing() {
-  return is_user_typing_storage;
-}
-
-// build/dev/javascript/o11a_client/o11a/client/page_navigation.mjs
-var Model = class extends CustomType {
-  constructor(current_line_number, current_column_number, current_line_column_count, line_count) {
-    super();
-    this.current_line_number = current_line_number;
-    this.current_column_number = current_column_number;
-    this.current_line_column_count = current_line_column_count;
-    this.line_count = line_count;
-  }
-};
-function init2() {
-  return new Model(16, 1, 16, 16);
-}
-function prevent_default(event4) {
-  let $ = is_user_typing();
-  if ($) {
-    let $1 = ctrlKey(event4);
-    let $2 = key(event4);
-    if ($1 && $2 === "e") {
-      return preventDefault(event4);
-    } else if ($2 === "Escape") {
-      return preventDefault(event4);
-    } else {
-      return void 0;
-    }
-  } else {
-    let $1 = key(event4);
-    if ($1 === "ArrowUp") {
-      return preventDefault(event4);
-    } else if ($1 === "ArrowDown") {
-      return preventDefault(event4);
-    } else if ($1 === "ArrowLeft") {
-      return preventDefault(event4);
-    } else if ($1 === "ArrowRight") {
-      return preventDefault(event4);
-    } else if ($1 === "PageUp") {
-      return preventDefault(event4);
-    } else if ($1 === "PageDown") {
-      return preventDefault(event4);
-    } else if ($1 === "Enter") {
-      return preventDefault(event4);
-    } else if ($1 === "e") {
-      return preventDefault(event4);
-    } else if ($1 === "Escape") {
-      return preventDefault(event4);
-    } else {
-      return void 0;
-    }
-  }
-}
-function handle_expanded_input_focus(event4, model, else_do) {
-  let $ = ctrlKey(event4);
-  let $1 = key(event4);
-  if ($ && $1 === "e") {
-    return new Ok([model, none()]);
-  } else {
-    return else_do();
-  }
-}
-function find_next_discussion_line(loop$model, loop$current_line, loop$step) {
-  while (true) {
-    let model = loop$model;
-    let current_line = loop$current_line;
-    let step = loop$step;
-    if (step > 0 && current_line === model.line_count) {
-      return error(
-        "Line is " + to_string(model.line_count) + ", cannot go further down"
-      );
-    } else if (step < 0 && current_line === 1) {
-      return error("Line is 1, cannot go further up");
-    } else if (step === 0) {
-      return error("Step is zero");
-    } else {
-      let next_line = max(
-        1,
-        min(model.line_count, current_line + step)
-      );
-      let $ = non_empty_line(next_line);
-      if ($.isOk()) {
-        let line2 = $[0];
-        return map3(
-          read_column_count_data(line2),
-          (column_count) => {
-            return [next_line, column_count];
-          }
-        );
-      } else {
-        loop$model = model;
-        loop$current_line = next_line;
-        loop$step = (() => {
-          if (step > 0 && next_line === model.line_count) {
-            return -1;
-          } else if (step > 0) {
-            return 1;
-          } else if (step < 0 && next_line === 1) {
-            return 1;
-          } else if (step < 0) {
-            return -1;
-          } else {
-            return 0;
-          }
-        })();
-      }
-    }
-  }
-}
-function focus_line_discussion(line_number, column_number) {
-  return from(
-    (_) => {
-      let _block;
-      let _pipe = discussion_entry2(line_number, column_number);
-      let _pipe$1 = replace_error(
-        _pipe,
-        new$9("Failed to find line discussion to focus")
-      );
-      _block = map3(_pipe$1, focus);
-      let $ = _block;
-      return void 0;
-    }
-  );
-}
-function handle_input_escape(event4, model, else_do) {
-  let $ = key(event4);
-  if ($ === "Escape") {
-    return new Ok(
-      [
-        model,
-        focus_line_discussion(
-          model.current_line_number,
-          model.current_column_number
-        )
-      ]
-    );
-  } else {
-    return else_do();
-  }
-}
-function move_focus_line(model, step) {
-  return map3(
-    find_next_discussion_line(model, model.current_line_number, step),
-    (_use0) => {
-      let new_line = _use0[0];
-      let column_count = _use0[1];
-      return [
-        (() => {
-          let _record = model;
-          return new Model(
-            _record.current_line_number,
-            _record.current_column_number,
-            column_count,
-            _record.line_count
-          );
-        })(),
-        focus_line_discussion(
-          new_line,
-          min(column_count, model.current_column_number)
-        )
-      ];
-    }
-  );
-}
-function move_focus_column(model, step) {
-  echo(
-    "moving focus column by " + to_string(step),
-    "src/o11a/client/page_navigation.gleam",
-    156
-  );
-  let _block;
-  let _pipe = max(1, model.current_column_number + step);
-  _block = min(_pipe, model.current_line_column_count);
-  let new_column = _block;
-  echo(
-    "new column " + to_string(new_column),
-    "src/o11a/client/page_navigation.gleam",
-    161
-  );
-  let _pipe$1 = [
-    model,
-    focus_line_discussion(model.current_line_number, new_column)
-  ];
-  return new Ok(_pipe$1);
-}
-function handle_keyboard_navigation(event4, model, else_do) {
-  let $ = shiftKey(event4);
-  let $1 = key(event4);
-  if (!$ && $1 === "ArrowUp") {
-    return move_focus_line(model, -1);
-  } else if (!$ && $1 === "ArrowDown") {
-    return move_focus_line(model, 1);
-  } else if ($ && $1 === "ArrowUp") {
-    return move_focus_line(model, -5);
-  } else if ($ && $1 === "ArrowDown") {
-    return move_focus_line(model, 5);
-  } else if ($1 === "PageUp") {
-    return move_focus_line(model, -20);
-  } else if ($1 === "PageDown") {
-    return move_focus_line(model, 20);
-  } else if ($1 === "ArrowLeft") {
-    return move_focus_column(model, -1);
-  } else if ($1 === "ArrowRight") {
-    return move_focus_column(model, 1);
-  } else {
-    return else_do();
-  }
-}
-function blur_line_discussion(line_number, column_number) {
-  return from(
-    (_) => {
-      echo(
-        "blurring line discussion",
-        "src/o11a/client/page_navigation.gleam",
-        275
-      );
-      let _block;
-      let _pipe = discussion_entry2(line_number, column_number);
-      let _pipe$1 = replace_error(
-        _pipe,
-        new$9("Failed to find line discussion to focus")
-      );
-      _block = map3(_pipe$1, blur);
-      let $ = _block;
-      return void 0;
-    }
-  );
-}
-function handle_discussion_escape(event4, model, else_do) {
-  let $ = key(event4);
-  if ($ === "Escape") {
-    return new Ok(
-      [
-        model,
-        blur_line_discussion(
-          model.current_line_number,
-          model.current_column_number
-        )
-      ]
-    );
-  } else {
-    return else_do();
-  }
-}
-function focus_line_discussion_input(line_number, column_number) {
-  return from(
-    (_) => {
-      let _block;
-      let _pipe = discussion_input(line_number, column_number);
-      let _pipe$1 = replace_error(
-        _pipe,
-        new$9("Failed to find line discussion input to focus")
-      );
-      _block = map3(_pipe$1, focus);
-      let $ = _block;
-      return void 0;
-    }
-  );
-}
-function handle_input_focus(event4, model, else_do) {
-  let $ = ctrlKey(event4);
-  let $1 = key(event4);
-  if (!$ && $1 === "e") {
-    return new Ok(
-      [
-        model,
-        focus_line_discussion_input(
-          model.current_line_number,
-          model.current_column_number
-        )
-      ]
-    );
-  } else {
-    return else_do();
-  }
-}
-function do_page_navigation(event4, model) {
-  let _block;
-  let $ = is_user_typing();
-  if ($) {
-    _block = handle_expanded_input_focus(
-      event4,
-      model,
-      () => {
-        return handle_input_escape(
-          event4,
-          model,
-          () => {
-            return new Ok([model, none()]);
-          }
-        );
-      }
-    );
-  } else {
-    _block = handle_keyboard_navigation(
-      event4,
-      model,
-      () => {
-        return handle_input_focus(
-          event4,
-          model,
-          () => {
-            return handle_expanded_input_focus(
-              event4,
-              model,
-              () => {
-                return handle_discussion_escape(
-                  event4,
-                  model,
-                  () => {
-                    return new Ok([model, none()]);
-                  }
-                );
-              }
-            );
-          }
-        );
-      }
-    );
-  }
-  let res = _block;
-  if (res.isOk()) {
-    let model_effect = res[0];
-    return model_effect;
-  } else {
-    let e = res[0];
-    console_log(line_print(e));
-    return [model, none()];
-  }
 }
 function echo(value3, file, line2) {
   const grey = "\x1B[90m";
@@ -8917,6 +8601,485 @@ function echo$inspectBitArray(bitArray) {
   }
 }
 function echo$isDict(value3) {
+  try {
+    return value3 instanceof Dict;
+  } catch {
+    return false;
+  }
+}
+
+// build/dev/javascript/o11a_client/storage.mjs
+var is_user_typing_storage = false;
+function set_is_user_typing(value3) {
+  is_user_typing_storage = value3;
+}
+function is_user_typing() {
+  return is_user_typing_storage;
+}
+
+// build/dev/javascript/o11a_client/o11a/client/page_navigation.mjs
+var Model = class extends CustomType {
+  constructor(current_line_number, current_column_number, current_line_column_count, line_count) {
+    super();
+    this.current_line_number = current_line_number;
+    this.current_column_number = current_column_number;
+    this.current_line_column_count = current_line_column_count;
+    this.line_count = line_count;
+  }
+};
+function init2() {
+  return new Model(16, 1, 16, 16);
+}
+function prevent_default(event4) {
+  let $ = is_user_typing();
+  if ($) {
+    let $1 = ctrlKey(event4);
+    let $2 = key(event4);
+    if ($1 && $2 === "e") {
+      return preventDefault(event4);
+    } else if ($2 === "Escape") {
+      return preventDefault(event4);
+    } else {
+      return void 0;
+    }
+  } else {
+    let $1 = key(event4);
+    if ($1 === "ArrowUp") {
+      return preventDefault(event4);
+    } else if ($1 === "ArrowDown") {
+      return preventDefault(event4);
+    } else if ($1 === "ArrowLeft") {
+      return preventDefault(event4);
+    } else if ($1 === "ArrowRight") {
+      return preventDefault(event4);
+    } else if ($1 === "PageUp") {
+      return preventDefault(event4);
+    } else if ($1 === "PageDown") {
+      return preventDefault(event4);
+    } else if ($1 === "Enter") {
+      return preventDefault(event4);
+    } else if ($1 === "e") {
+      return preventDefault(event4);
+    } else if ($1 === "Escape") {
+      return preventDefault(event4);
+    } else {
+      return void 0;
+    }
+  }
+}
+function handle_expanded_input_focus(event4, model, else_do) {
+  let $ = ctrlKey(event4);
+  let $1 = key(event4);
+  if ($ && $1 === "e") {
+    return new Ok([model, none()]);
+  } else {
+    return else_do();
+  }
+}
+function find_next_discussion_line(loop$model, loop$current_line, loop$step) {
+  while (true) {
+    let model = loop$model;
+    let current_line = loop$current_line;
+    let step = loop$step;
+    if (step > 0 && current_line === model.line_count) {
+      return error(
+        "Line is " + to_string(model.line_count) + ", cannot go further down"
+      );
+    } else if (step < 0 && current_line === 1) {
+      return error("Line is 1, cannot go further up");
+    } else if (step === 0) {
+      return error("Step is zero");
+    } else {
+      let next_line = max(
+        1,
+        min(model.line_count, current_line + step)
+      );
+      let $ = non_empty_line(next_line);
+      if ($.isOk()) {
+        let line2 = $[0];
+        return map3(
+          read_column_count_data(line2),
+          (column_count) => {
+            return [next_line, column_count];
+          }
+        );
+      } else {
+        loop$model = model;
+        loop$current_line = next_line;
+        loop$step = (() => {
+          if (step > 0 && next_line === model.line_count) {
+            return -1;
+          } else if (step > 0) {
+            return 1;
+          } else if (step < 0 && next_line === 1) {
+            return 1;
+          } else if (step < 0) {
+            return -1;
+          } else {
+            return 0;
+          }
+        })();
+      }
+    }
+  }
+}
+function focus_line_discussion(line_number, column_number) {
+  return from(
+    (_) => {
+      echo2(
+        "focus line discussion",
+        "src/o11a/client/page_navigation.gleam",
+        260
+      );
+      let _block;
+      let _pipe = discussion_entry2(line_number, column_number);
+      let _pipe$1 = replace_error(
+        _pipe,
+        new$9("Failed to find line discussion to focus")
+      );
+      let _pipe$2 = map3(_pipe$1, focus);
+      _block = echo2(_pipe$2, "src/o11a/client/page_navigation.gleam", 267);
+      let $ = _block;
+      return void 0;
+    }
+  );
+}
+function handle_input_escape(event4, model, else_do) {
+  let $ = key(event4);
+  if ($ === "Escape") {
+    return new Ok(
+      [
+        model,
+        focus_line_discussion(
+          model.current_line_number,
+          model.current_column_number
+        )
+      ]
+    );
+  } else {
+    return else_do();
+  }
+}
+function move_focus_line(model, step) {
+  return map3(
+    find_next_discussion_line(model, model.current_line_number, step),
+    (_use0) => {
+      let new_line = _use0[0];
+      let column_count = _use0[1];
+      return [
+        (() => {
+          let _record = model;
+          return new Model(
+            _record.current_line_number,
+            _record.current_column_number,
+            column_count,
+            _record.line_count
+          );
+        })(),
+        focus_line_discussion(
+          new_line,
+          min(column_count, model.current_column_number)
+        )
+      ];
+    }
+  );
+}
+function move_focus_column(model, step) {
+  echo2(
+    "moving focus column by " + to_string(step),
+    "src/o11a/client/page_navigation.gleam",
+    156
+  );
+  let _block;
+  let _pipe = max(1, model.current_column_number + step);
+  _block = min(_pipe, model.current_line_column_count);
+  let new_column = _block;
+  echo2(
+    "new column " + to_string(new_column),
+    "src/o11a/client/page_navigation.gleam",
+    161
+  );
+  let _pipe$1 = [
+    model,
+    focus_line_discussion(model.current_line_number, new_column)
+  ];
+  return new Ok(_pipe$1);
+}
+function handle_keyboard_navigation(event4, model, else_do) {
+  let $ = shiftKey(event4);
+  let $1 = key(event4);
+  if (!$ && $1 === "ArrowUp") {
+    return move_focus_line(model, -1);
+  } else if (!$ && $1 === "ArrowDown") {
+    return move_focus_line(model, 1);
+  } else if ($ && $1 === "ArrowUp") {
+    return move_focus_line(model, -5);
+  } else if ($ && $1 === "ArrowDown") {
+    return move_focus_line(model, 5);
+  } else if ($1 === "PageUp") {
+    return move_focus_line(model, -20);
+  } else if ($1 === "PageDown") {
+    return move_focus_line(model, 20);
+  } else if ($1 === "ArrowLeft") {
+    return move_focus_column(model, -1);
+  } else if ($1 === "ArrowRight") {
+    return move_focus_column(model, 1);
+  } else {
+    return else_do();
+  }
+}
+function blur_line_discussion(line_number, column_number) {
+  return from(
+    (_) => {
+      echo2(
+        "blurring line discussion",
+        "src/o11a/client/page_navigation.gleam",
+        277
+      );
+      let _block;
+      let _pipe = discussion_entry2(line_number, column_number);
+      let _pipe$1 = replace_error(
+        _pipe,
+        new$9("Failed to find line discussion to focus")
+      );
+      _block = map3(_pipe$1, blur);
+      let $ = _block;
+      return void 0;
+    }
+  );
+}
+function handle_discussion_escape(event4, model, else_do) {
+  let $ = key(event4);
+  if ($ === "Escape") {
+    return new Ok(
+      [
+        model,
+        blur_line_discussion(
+          model.current_line_number,
+          model.current_column_number
+        )
+      ]
+    );
+  } else {
+    return else_do();
+  }
+}
+function focus_line_discussion_input(line_number, column_number) {
+  return from(
+    (_) => {
+      let _block;
+      let _pipe = discussion_input(line_number, column_number);
+      let _pipe$1 = replace_error(
+        _pipe,
+        new$9("Failed to find line discussion input to focus")
+      );
+      _block = map3(_pipe$1, focus);
+      let $ = _block;
+      return void 0;
+    }
+  );
+}
+function handle_input_focus(event4, model, else_do) {
+  let $ = ctrlKey(event4);
+  let $1 = key(event4);
+  if (!$ && $1 === "e") {
+    return new Ok(
+      [
+        model,
+        focus_line_discussion_input(
+          model.current_line_number,
+          model.current_column_number
+        )
+      ]
+    );
+  } else {
+    return else_do();
+  }
+}
+function do_page_navigation(event4, model) {
+  let _block;
+  let $ = is_user_typing();
+  if ($) {
+    _block = handle_expanded_input_focus(
+      event4,
+      model,
+      () => {
+        return handle_input_escape(
+          event4,
+          model,
+          () => {
+            return new Ok([model, none()]);
+          }
+        );
+      }
+    );
+  } else {
+    _block = handle_keyboard_navigation(
+      event4,
+      model,
+      () => {
+        return handle_input_focus(
+          event4,
+          model,
+          () => {
+            return handle_expanded_input_focus(
+              event4,
+              model,
+              () => {
+                return handle_discussion_escape(
+                  event4,
+                  model,
+                  () => {
+                    return new Ok([model, none()]);
+                  }
+                );
+              }
+            );
+          }
+        );
+      }
+    );
+  }
+  let res = _block;
+  if (res.isOk()) {
+    let model_effect = res[0];
+    return model_effect;
+  } else {
+    let e = res[0];
+    console_log(line_print(e));
+    return [model, none()];
+  }
+}
+function echo2(value3, file, line2) {
+  const grey = "\x1B[90m";
+  const reset_color = "\x1B[39m";
+  const file_line = `${file}:${line2}`;
+  const string_value = echo$inspect2(value3);
+  if (globalThis.process?.stderr?.write) {
+    const string6 = `${grey}${file_line}${reset_color}
+${string_value}
+`;
+    process.stderr.write(string6);
+  } else if (globalThis.Deno) {
+    const string6 = `${grey}${file_line}${reset_color}
+${string_value}
+`;
+    globalThis.Deno.stderr.writeSync(new TextEncoder().encode(string6));
+  } else {
+    const string6 = `${file_line}
+${string_value}`;
+    globalThis.console.log(string6);
+  }
+  return value3;
+}
+function echo$inspectString2(str) {
+  let new_str = '"';
+  for (let i = 0; i < str.length; i++) {
+    let char = str[i];
+    if (char == "\n") new_str += "\\n";
+    else if (char == "\r") new_str += "\\r";
+    else if (char == "	") new_str += "\\t";
+    else if (char == "\f") new_str += "\\f";
+    else if (char == "\\") new_str += "\\\\";
+    else if (char == '"') new_str += '\\"';
+    else if (char < " " || char > "~" && char < "\xA0") {
+      new_str += "\\u{" + char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0") + "}";
+    } else {
+      new_str += char;
+    }
+  }
+  new_str += '"';
+  return new_str;
+}
+function echo$inspectDict2(map7) {
+  let body2 = "dict.from_list([";
+  let first2 = true;
+  let key_value_pairs = [];
+  map7.forEach((value3, key2) => {
+    key_value_pairs.push([key2, value3]);
+  });
+  key_value_pairs.sort();
+  key_value_pairs.forEach(([key2, value3]) => {
+    if (!first2) body2 = body2 + ", ";
+    body2 = body2 + "#(" + echo$inspect2(key2) + ", " + echo$inspect2(value3) + ")";
+    first2 = false;
+  });
+  return body2 + "])";
+}
+function echo$inspectCustomType2(record) {
+  const props = globalThis.Object.keys(record).map((label) => {
+    const value3 = echo$inspect2(record[label]);
+    return isNaN(parseInt(label)) ? `${label}: ${value3}` : value3;
+  }).join(", ");
+  return props ? `${record.constructor.name}(${props})` : record.constructor.name;
+}
+function echo$inspectObject2(v) {
+  const name = Object.getPrototypeOf(v)?.constructor?.name || "Object";
+  const props = [];
+  for (const k of Object.keys(v)) {
+    props.push(`${echo$inspect2(k)}: ${echo$inspect2(v[k])}`);
+  }
+  const body2 = props.length ? " " + props.join(", ") + " " : "";
+  const head = name === "Object" ? "" : name + " ";
+  return `//js(${head}{${body2}})`;
+}
+function echo$inspect2(v) {
+  const t = typeof v;
+  if (v === true) return "True";
+  if (v === false) return "False";
+  if (v === null) return "//js(null)";
+  if (v === void 0) return "Nil";
+  if (t === "string") return echo$inspectString2(v);
+  if (t === "bigint" || t === "number") return v.toString();
+  if (globalThis.Array.isArray(v))
+    return `#(${v.map(echo$inspect2).join(", ")})`;
+  if (v instanceof List)
+    return `[${v.toArray().map(echo$inspect2).join(", ")}]`;
+  if (v instanceof UtfCodepoint)
+    return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
+  if (v instanceof BitArray) return echo$inspectBitArray2(v);
+  if (v instanceof CustomType) return echo$inspectCustomType2(v);
+  if (echo$isDict2(v)) return echo$inspectDict2(v);
+  if (v instanceof Set)
+    return `//js(Set(${[...v].map(echo$inspect2).join(", ")}))`;
+  if (v instanceof RegExp) return `//js(${v})`;
+  if (v instanceof Date) return `//js(Date("${v.toISOString()}"))`;
+  if (v instanceof Function) {
+    const args = [];
+    for (const i of Array(v.length).keys())
+      args.push(String.fromCharCode(i + 97));
+    return `//fn(${args.join(", ")}) { ... }`;
+  }
+  return echo$inspectObject2(v);
+}
+function echo$inspectBitArray2(bitArray) {
+  let endOfAlignedBytes = bitArray.bitOffset + 8 * Math.trunc(bitArray.bitSize / 8);
+  let alignedBytes = bitArraySlice(
+    bitArray,
+    bitArray.bitOffset,
+    endOfAlignedBytes
+  );
+  let remainingUnalignedBits = bitArray.bitSize % 8;
+  if (remainingUnalignedBits > 0) {
+    let remainingBits = bitArraySliceToInt(
+      bitArray,
+      endOfAlignedBytes,
+      bitArray.bitSize,
+      false,
+      false
+    );
+    let alignedBytesArray = Array.from(alignedBytes.rawBuffer);
+    let suffix = `${remainingBits}:size(${remainingUnalignedBits})`;
+    if (alignedBytesArray.length === 0) {
+      return `<<${suffix}>>`;
+    } else {
+      return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}, ${suffix}>>`;
+    }
+  } else {
+    return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}>>`;
+  }
+}
+function echo$isDict2(value3) {
   try {
     return value3 instanceof Dict;
   } catch {
@@ -10458,9 +10621,9 @@ var UserUpdatedDiscussion = class extends CustomType {
     this.update = update4;
   }
 };
-var Hover = class extends CustomType {
+var EntryHover = class extends CustomType {
 };
-var Focus = class extends CustomType {
+var EntryFocus = class extends CustomType {
 };
 function map_discussion_msg(msg, selected_discussion) {
   return new UserUpdatedDiscussion(
@@ -10502,12 +10665,7 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
     let note = note_result[0];
     return span(
       toList([
-        class$(
-          "inline-comment font-code code-extras font-code fade-in relative"
-        ),
-        class$("comment-preview"),
-        class$(discussion_entry),
-        attribute2("tabindex", "0"),
+        class$("relative"),
         encode_grid_location_data(
           (() => {
             let _pipe = element_line_number;
@@ -10517,26 +10675,32 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
             let _pipe = element_column_number;
             return to_string(_pipe);
           })()
-        ),
-        on_focus(
-          new UserSelectedDiscussionEntry(
-            new Focus(),
-            element_line_number,
-            element_column_number,
-            new None(),
-            topic_id,
-            topic_title,
-            false
-          )
-        ),
-        on_blur(new UserUnselectedDiscussionEntry(new Focus()))
+        )
       ]),
       toList([
         span(
           toList([
+            class$(
+              "inline-comment font-code code-extras font-code fade-in"
+            ),
+            class$("comment-preview"),
+            class$(discussion_entry),
+            attribute2("tabindex", "0"),
+            on_focus(
+              new UserSelectedDiscussionEntry(
+                new EntryFocus(),
+                element_line_number,
+                element_column_number,
+                new None(),
+                topic_id,
+                topic_title,
+                false
+              )
+            ),
+            on_blur(new UserUnselectedDiscussionEntry(new EntryFocus())),
             on_mouse_enter(
               new UserSelectedDiscussionEntry(
-                new Hover(),
+                new EntryHover(),
                 element_line_number,
                 element_column_number,
                 new None(),
@@ -10546,14 +10710,17 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
               )
             ),
             on_mouse_leave(
-              new UserUnselectedDiscussionEntry(new Hover())
+              new UserUnselectedDiscussionEntry(new EntryHover())
             ),
-            on_click(
-              new UserClickedDiscussionEntry(
-                element_line_number,
-                element_column_number
-              )
-            )
+            (() => {
+              let _pipe = on_click(
+                new UserClickedDiscussionEntry(
+                  element_line_number,
+                  element_column_number
+                )
+              );
+              return stop_propagation(_pipe);
+            })()
           ]),
           toList([
             text3(
@@ -10583,10 +10750,7 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
   } else {
     return span(
       toList([
-        class$("inline-comment font-code code-extras relative"),
-        class$("new-thread-preview"),
-        class$(discussion_entry),
-        attribute2("tabindex", "0"),
+        class$("relative"),
         encode_grid_location_data(
           (() => {
             let _pipe = element_line_number;
@@ -10596,26 +10760,30 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
             let _pipe = element_column_number;
             return to_string(_pipe);
           })()
-        ),
-        on_focus(
-          new UserSelectedDiscussionEntry(
-            new Focus(),
-            element_line_number,
-            element_column_number,
-            new None(),
-            topic_id,
-            topic_title,
-            false
-          )
-        ),
-        on_blur(new UserUnselectedDiscussionEntry(new Focus()))
+        )
       ]),
       toList([
         span(
           toList([
+            class$("inline-comment font-code code-extras"),
+            class$("new-thread-preview"),
+            class$(discussion_entry),
+            attribute2("tabindex", "0"),
+            on_focus(
+              new UserSelectedDiscussionEntry(
+                new EntryFocus(),
+                element_line_number,
+                element_column_number,
+                new None(),
+                topic_id,
+                topic_title,
+                false
+              )
+            ),
+            on_blur(new UserUnselectedDiscussionEntry(new EntryFocus())),
             on_mouse_enter(
               new UserSelectedDiscussionEntry(
-                new Hover(),
+                new EntryHover(),
                 element_line_number,
                 element_column_number,
                 new None(),
@@ -10625,14 +10793,17 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
               )
             ),
             on_mouse_leave(
-              new UserUnselectedDiscussionEntry(new Hover())
+              new UserUnselectedDiscussionEntry(new EntryHover())
             ),
-            on_click(
-              new UserClickedDiscussionEntry(
-                element_line_number,
-                element_column_number
-              )
-            )
+            (() => {
+              let _pipe = on_click(
+                new UserClickedDiscussionEntry(
+                  element_line_number,
+                  element_column_number
+                )
+              );
+              return stop_propagation(_pipe);
+            })()
           ]),
           toList([text3("Start new thread")])
         ),
@@ -10649,19 +10820,7 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
 function declaration_node_view(node_id, node_declaration, tokens, discussion, element_line_number, element_column_number, selected_discussion) {
   return span(
     toList([
-      id(node_declaration.topic_id),
-      class$(
-        node_declaration_kind_to_string(node_declaration.kind)
-      ),
-      class$(
-        "declaration-preview relative N" + to_string(node_id)
-      ),
-      class$(discussion_entry),
-      class$(discussion_entry_hover),
-      attribute2("tabindex", "0"),
-      encode_topic_id_data(node_declaration.topic_id),
-      encode_topic_title_data(node_declaration.title),
-      encode_is_reference_data(false),
+      class$("relative"),
       encode_grid_location_data(
         (() => {
           let _pipe = element_line_number;
@@ -10671,26 +10830,25 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, el
           let _pipe = element_column_number;
           return to_string(_pipe);
         })()
-      ),
-      on_focus(
-        new UserSelectedDiscussionEntry(
-          new Focus(),
-          element_line_number,
-          element_column_number,
-          new Some(node_id),
-          node_declaration.topic_id,
-          node_declaration.title,
-          false
-        )
-      ),
-      on_blur(new UserUnselectedDiscussionEntry(new Focus()))
+      )
     ]),
     toList([
       span(
         toList([
-          on_mouse_enter(
+          id(node_declaration.topic_id),
+          class$(
+            node_declaration_kind_to_string(node_declaration.kind)
+          ),
+          class$("declaration-preview N" + to_string(node_id)),
+          class$(discussion_entry),
+          class$(discussion_entry_hover),
+          attribute2("tabindex", "0"),
+          encode_topic_id_data(node_declaration.topic_id),
+          encode_topic_title_data(node_declaration.title),
+          encode_is_reference_data(false),
+          on_focus(
             new UserSelectedDiscussionEntry(
-              new Hover(),
+              new EntryFocus(),
               element_line_number,
               element_column_number,
               new Some(node_id),
@@ -10699,13 +10857,30 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, el
               false
             )
           ),
-          on_mouse_leave(new UserUnselectedDiscussionEntry(new Hover())),
-          on_click(
-            new UserClickedDiscussionEntry(
+          on_blur(new UserUnselectedDiscussionEntry(new EntryFocus())),
+          on_mouse_enter(
+            new UserSelectedDiscussionEntry(
+              new EntryHover(),
               element_line_number,
-              element_column_number
+              element_column_number,
+              new Some(node_id),
+              node_declaration.topic_id,
+              node_declaration.title,
+              false
             )
-          )
+          ),
+          on_mouse_leave(
+            new UserUnselectedDiscussionEntry(new EntryHover())
+          ),
+          (() => {
+            let _pipe = on_click(
+              new UserClickedDiscussionEntry(
+                element_line_number,
+                element_column_number
+              )
+            );
+            return stop_propagation(_pipe);
+          })()
         ]),
         toList([text3(tokens)])
       ),
@@ -10721,20 +10896,7 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, el
 function reference_node_view(referenced_node_id, referenced_node_declaration, tokens, discussion, element_line_number, element_column_number, selected_discussion) {
   return span(
     toList([
-      class$(
-        node_declaration_kind_to_string(
-          referenced_node_declaration.kind
-        )
-      ),
-      class$(
-        "reference-preview relative N" + to_string(referenced_node_id)
-      ),
-      class$(discussion_entry),
-      class$(discussion_entry_hover),
-      attribute2("tabindex", "0"),
-      encode_topic_id_data(referenced_node_declaration.topic_id),
-      encode_topic_title_data(referenced_node_declaration.title),
-      encode_is_reference_data(true),
+      class$("relative"),
       encode_grid_location_data(
         (() => {
           let _pipe = element_line_number;
@@ -10744,26 +10906,28 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
           let _pipe = element_column_number;
           return to_string(_pipe);
         })()
-      ),
-      on_focus(
-        new UserSelectedDiscussionEntry(
-          new Focus(),
-          element_line_number,
-          element_column_number,
-          new Some(referenced_node_id),
-          referenced_node_declaration.topic_id,
-          referenced_node_declaration.title,
-          true
-        )
-      ),
-      on_blur(new UserUnselectedDiscussionEntry(new Focus()))
+      )
     ]),
     toList([
       span(
         toList([
-          on_mouse_enter(
+          class$(
+            node_declaration_kind_to_string(
+              referenced_node_declaration.kind
+            )
+          ),
+          class$(
+            "reference-preview N" + to_string(referenced_node_id)
+          ),
+          class$(discussion_entry),
+          class$(discussion_entry_hover),
+          attribute2("tabindex", "0"),
+          encode_topic_id_data(referenced_node_declaration.topic_id),
+          encode_topic_title_data(referenced_node_declaration.title),
+          encode_is_reference_data(true),
+          on_focus(
             new UserSelectedDiscussionEntry(
-              new Hover(),
+              new EntryFocus(),
               element_line_number,
               element_column_number,
               new Some(referenced_node_id),
@@ -10772,13 +10936,30 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
               true
             )
           ),
-          on_mouse_leave(new UserUnselectedDiscussionEntry(new Hover())),
-          on_click(
-            new UserClickedDiscussionEntry(
+          on_blur(new UserUnselectedDiscussionEntry(new EntryFocus())),
+          on_mouse_enter(
+            new UserSelectedDiscussionEntry(
+              new EntryHover(),
               element_line_number,
-              element_column_number
+              element_column_number,
+              new Some(referenced_node_id),
+              referenced_node_declaration.topic_id,
+              referenced_node_declaration.title,
+              true
             )
-          )
+          ),
+          on_mouse_leave(
+            new UserUnselectedDiscussionEntry(new EntryHover())
+          ),
+          (() => {
+            let _pipe = on_click(
+              new UserClickedDiscussionEntry(
+                element_line_number,
+                element_column_number
+              )
+            );
+            return stop_propagation(_pipe);
+          })()
         ]),
         toList([text3(tokens)])
       ),
@@ -11544,6 +11725,8 @@ var UserClickedDiscussionEntry2 = class extends CustomType {
     this.column_number = column_number;
   }
 };
+var UserClickedOutsideDiscussion = class extends CustomType {
+};
 var UserUpdatedDiscussion2 = class extends CustomType {
   constructor(line_number, column_number, update4) {
     super();
@@ -11588,6 +11771,8 @@ function parse_route(uri) {
   }
 }
 function on_url_change(uri) {
+  echo3("on_url_change", "src/o11a_client.gleam", 106);
+  echo3(uri, "src/o11a_client.gleam", 107);
   let _pipe = parse_route(uri);
   return new OnRouteChange(_pipe);
 }
@@ -11957,7 +12142,7 @@ function update3(model, msg) {
     let discussion_models = _block;
     return [
       (() => {
-        if (kind instanceof Hover) {
+        if (kind instanceof EntryHover) {
           let _record = model;
           return new Model3(
             _record.route,
@@ -11999,14 +12184,14 @@ function update3(model, msg) {
     ];
   } else if (msg instanceof UserUnselectedDiscussionEntry2) {
     let kind = msg.kind;
-    echo2(
+    echo3(
       "Unselecting discussion " + inspect2(kind),
       "src/o11a_client.gleam",
-      341
+      344
     );
     return [
       (() => {
-        if (kind instanceof Hover) {
+        if (kind instanceof EntryHover) {
           let _record = model;
           return new Model3(
             _record.route,
@@ -12052,11 +12237,18 @@ function update3(model, msg) {
           if (res.isOk() && !res[0]) {
             return void 0;
           } else {
-            return console_log("Failed to focus discussion input");
+            return console_log(
+              "Failed to focus discussion input l" + to_string(
+                line_number
+              ) + " c" + to_string(column_number)
+            );
           }
         }
       )
     ];
+  } else if (msg instanceof UserClickedOutsideDiscussion) {
+    echo3("User clicked outside discussion", "src/o11a_client.gleam", 387);
+    return [model, none()];
   } else if (msg instanceof UserUpdatedDiscussion2) {
     let line_number = msg.line_number;
     let column_number = msg.column_number;
@@ -12094,10 +12286,10 @@ function update3(model, msg) {
     } else if (discussion_effect instanceof FocusDiscussionInput) {
       let line_number$1 = discussion_effect.line_number;
       let column_number$1 = discussion_effect.column_number;
-      echo2(
+      echo3(
         "Focusing discussion input, user is typing",
         "src/o11a_client.gleam",
-        397
+        411
       );
       set_is_user_typing(true);
       return [
@@ -12141,7 +12333,7 @@ function update3(model, msg) {
         none()
       ];
     } else if (discussion_effect instanceof UnfocusDiscussionInput) {
-      echo2("Unfocusing discussion input", "src/o11a_client.gleam", 420);
+      echo3("Unfocusing discussion input", "src/o11a_client.gleam", 434);
       set_is_user_typing(false);
       return [
         (() => {
@@ -12281,7 +12473,7 @@ function on_server_updated_discussion(msg) {
   return on(
     server_updated_discussion,
     (() => {
-      echo2("Server updated discussion", "src/o11a_client.gleam", 628);
+      echo3("Server updated discussion", "src/o11a_client.gleam", 642);
       return subfield(
         toList(["detail", "audit_name"]),
         string3,
@@ -12377,7 +12569,7 @@ function view3(model) {
     _block$1 = unwrap2(_pipe$2, toList([]));
     let preprocessed_source = _block$1;
     return div(
-      toList([]),
+      toList([on_click(new UserClickedOutsideDiscussion())]),
       toList([
         (() => {
           let $1 = model.selected_node_id;
@@ -12441,11 +12633,11 @@ function main() {
   let _pipe = application(init4, update3, view3);
   return start3(_pipe, "#app", void 0);
 }
-function echo2(value3, file, line2) {
+function echo3(value3, file, line2) {
   const grey = "\x1B[90m";
   const reset_color = "\x1B[39m";
   const file_line = `${file}:${line2}`;
-  const string_value = echo$inspect2(value3);
+  const string_value = echo$inspect3(value3);
   if (globalThis.process?.stderr?.write) {
     const string6 = `${grey}${file_line}${reset_color}
 ${string_value}
@@ -12463,7 +12655,7 @@ ${string_value}`;
   }
   return value3;
 }
-function echo$inspectString2(str) {
+function echo$inspectString3(str) {
   let new_str = '"';
   for (let i = 0; i < str.length; i++) {
     let char = str[i];
@@ -12482,7 +12674,7 @@ function echo$inspectString2(str) {
   new_str += '"';
   return new_str;
 }
-function echo$inspectDict2(map7) {
+function echo$inspectDict3(map7) {
   let body2 = "dict.from_list([";
   let first2 = true;
   let key_value_pairs = [];
@@ -12492,47 +12684,47 @@ function echo$inspectDict2(map7) {
   key_value_pairs.sort();
   key_value_pairs.forEach(([key2, value3]) => {
     if (!first2) body2 = body2 + ", ";
-    body2 = body2 + "#(" + echo$inspect2(key2) + ", " + echo$inspect2(value3) + ")";
+    body2 = body2 + "#(" + echo$inspect3(key2) + ", " + echo$inspect3(value3) + ")";
     first2 = false;
   });
   return body2 + "])";
 }
-function echo$inspectCustomType2(record) {
+function echo$inspectCustomType3(record) {
   const props = globalThis.Object.keys(record).map((label) => {
-    const value3 = echo$inspect2(record[label]);
+    const value3 = echo$inspect3(record[label]);
     return isNaN(parseInt(label)) ? `${label}: ${value3}` : value3;
   }).join(", ");
   return props ? `${record.constructor.name}(${props})` : record.constructor.name;
 }
-function echo$inspectObject2(v) {
+function echo$inspectObject3(v) {
   const name = Object.getPrototypeOf(v)?.constructor?.name || "Object";
   const props = [];
   for (const k of Object.keys(v)) {
-    props.push(`${echo$inspect2(k)}: ${echo$inspect2(v[k])}`);
+    props.push(`${echo$inspect3(k)}: ${echo$inspect3(v[k])}`);
   }
   const body2 = props.length ? " " + props.join(", ") + " " : "";
   const head = name === "Object" ? "" : name + " ";
   return `//js(${head}{${body2}})`;
 }
-function echo$inspect2(v) {
+function echo$inspect3(v) {
   const t = typeof v;
   if (v === true) return "True";
   if (v === false) return "False";
   if (v === null) return "//js(null)";
   if (v === void 0) return "Nil";
-  if (t === "string") return echo$inspectString2(v);
+  if (t === "string") return echo$inspectString3(v);
   if (t === "bigint" || t === "number") return v.toString();
   if (globalThis.Array.isArray(v))
-    return `#(${v.map(echo$inspect2).join(", ")})`;
+    return `#(${v.map(echo$inspect3).join(", ")})`;
   if (v instanceof List)
-    return `[${v.toArray().map(echo$inspect2).join(", ")}]`;
+    return `[${v.toArray().map(echo$inspect3).join(", ")}]`;
   if (v instanceof UtfCodepoint)
     return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
-  if (v instanceof BitArray) return echo$inspectBitArray2(v);
-  if (v instanceof CustomType) return echo$inspectCustomType2(v);
-  if (echo$isDict2(v)) return echo$inspectDict2(v);
+  if (v instanceof BitArray) return echo$inspectBitArray3(v);
+  if (v instanceof CustomType) return echo$inspectCustomType3(v);
+  if (echo$isDict3(v)) return echo$inspectDict3(v);
   if (v instanceof Set)
-    return `//js(Set(${[...v].map(echo$inspect2).join(", ")}))`;
+    return `//js(Set(${[...v].map(echo$inspect3).join(", ")}))`;
   if (v instanceof RegExp) return `//js(${v})`;
   if (v instanceof Date) return `//js(Date("${v.toISOString()}"))`;
   if (v instanceof Function) {
@@ -12541,9 +12733,9 @@ function echo$inspect2(v) {
       args.push(String.fromCharCode(i + 97));
     return `//fn(${args.join(", ")}) { ... }`;
   }
-  return echo$inspectObject2(v);
+  return echo$inspectObject3(v);
 }
-function echo$inspectBitArray2(bitArray) {
+function echo$inspectBitArray3(bitArray) {
   let endOfAlignedBytes = bitArray.bitOffset + 8 * Math.trunc(bitArray.bitSize / 8);
   let alignedBytes = bitArraySlice(
     bitArray,
@@ -12570,7 +12762,7 @@ function echo$inspectBitArray2(bitArray) {
     return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}>>`;
   }
 }
-function echo$isDict2(value3) {
+function echo$isDict3(value3) {
   try {
     return value3 instanceof Dict;
   } catch {

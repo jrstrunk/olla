@@ -103,6 +103,8 @@ fn init(_) -> #(Model, Effect(Msg)) {
 }
 
 fn on_url_change(uri: Uri) -> Msg {
+  echo "on_url_change"
+  echo uri
   parse_route(uri) |> OnRouteChange
 }
 
@@ -203,6 +205,7 @@ pub type Msg {
   )
   UserUnselectedDiscussionEntry(kind: audit_page.DiscussionSelectKind)
   UserClickedDiscussionEntry(line_number: Int, column_number: Int)
+  UserClickedOutsideDiscussion
   UserUpdatedDiscussion(
     line_number: Int,
     column_number: Int,
@@ -313,14 +316,14 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
       #(
         case kind {
-          audit_page.Hover ->
+          audit_page.EntryHover ->
             Model(
               ..model,
               selected_discussion: option.Some(selected_discussion),
               discussion_models:,
               selected_node_id: node_id,
             )
-          audit_page.Focus ->
+          audit_page.EntryFocus ->
             Model(
               ..model,
               focused_discussion: option.Some(selected_discussion),
@@ -341,13 +344,13 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       echo "Unselecting discussion " <> string.inspect(kind)
       #(
         case kind {
-          audit_page.Hover ->
+          audit_page.EntryHover ->
             Model(
               ..model,
               selected_discussion: option.None,
               selected_node_id: option.None,
             )
-          audit_page.Focus ->
+          audit_page.EntryFocus ->
             Model(
               ..model,
               focused_discussion: option.None,
@@ -368,10 +371,21 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
           case res {
             Ok(Nil) -> Nil
-            Error(Nil) -> io.println("Failed to focus discussion input")
+            Error(Nil) ->
+              io.println(
+                "Failed to focus discussion input l"
+                <> int.to_string(line_number)
+                <> " c"
+                <> int.to_string(column_number),
+              )
           }
         }),
       )
+    }
+
+    UserClickedOutsideDiscussion -> {
+      echo "User clicked outside discussion"
+      #(model, effect.none())
     }
 
     UserUpdatedDiscussion(line_number:, column_number:, update:) -> {
@@ -568,7 +582,7 @@ fn view(model: Model) {
         })
         |> result.unwrap([])
 
-      html.div([], [
+      html.div([event.on_click(UserClickedOutsideDiscussion)], [
         case model.selected_node_id {
           option.Some(selected_node_id) ->
             html.style(

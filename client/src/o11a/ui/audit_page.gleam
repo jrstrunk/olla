@@ -56,8 +56,8 @@ pub type Msg(msg) {
 }
 
 pub type DiscussionSelectKind {
-  Hover
-  Focus
+  EntryHover
+  EntryFocus
 }
 
 pub fn view(
@@ -196,32 +196,23 @@ fn inline_comment_preview_view(
     Ok(note) ->
       html.span(
         [
-          attribute.class(
-            "inline-comment font-code code-extras font-code fade-in relative",
-          ),
-          attribute.class("comment-preview"),
-          attribute.class(classes.discussion_entry),
-          attribute.attribute("tabindex", "0"),
+          attribute.class("relative"),
           attributes.encode_grid_location_data(
             element_line_number |> int.to_string,
             element_column_number |> int.to_string,
           ),
-          event.on_focus(UserSelectedDiscussionEntry(
-            kind: Focus,
-            line_number: element_line_number,
-            column_number: element_column_number,
-            node_id: option.None,
-            topic_id:,
-            topic_title:,
-            is_reference: False,
-          )),
-          event.on_blur(UserUnselectedDiscussionEntry(kind: Focus)),
         ],
         [
           html.span(
             [
-              event.on_mouse_enter(UserSelectedDiscussionEntry(
-                kind: Hover,
+              attribute.class(
+                "inline-comment font-code code-extras font-code fade-in",
+              ),
+              attribute.class("comment-preview"),
+              attribute.class(classes.discussion_entry),
+              attribute.attribute("tabindex", "0"),
+              event.on_focus(UserSelectedDiscussionEntry(
+                kind: EntryFocus,
                 line_number: element_line_number,
                 column_number: element_column_number,
                 node_id: option.None,
@@ -229,11 +220,24 @@ fn inline_comment_preview_view(
                 topic_title:,
                 is_reference: False,
               )),
-              event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: Hover)),
+              event.on_blur(UserUnselectedDiscussionEntry(kind: EntryFocus)),
+              event.on_mouse_enter(UserSelectedDiscussionEntry(
+                kind: EntryHover,
+                line_number: element_line_number,
+                column_number: element_column_number,
+                node_id: option.None,
+                topic_id:,
+                topic_title:,
+                is_reference: False,
+              )),
+              event.on_mouse_leave(UserUnselectedDiscussionEntry(
+                kind: EntryHover,
+              )),
               event.on_click(UserClickedDiscussionEntry(
                 line_number: element_line_number,
                 column_number: element_column_number,
-              )),
+              ))
+                |> event.stop_propagation,
             ],
             [
               html.text(case string.length(note.message) > 40 {
@@ -254,30 +258,21 @@ fn inline_comment_preview_view(
     Error(Nil) ->
       html.span(
         [
-          attribute.class("inline-comment font-code code-extras relative"),
-          attribute.class("new-thread-preview"),
-          attribute.class(classes.discussion_entry),
-          attribute.attribute("tabindex", "0"),
+          attribute.class("relative"),
           attributes.encode_grid_location_data(
             element_line_number |> int.to_string,
             element_column_number |> int.to_string,
           ),
-          event.on_focus(UserSelectedDiscussionEntry(
-            kind: Focus,
-            line_number: element_line_number,
-            column_number: element_column_number,
-            node_id: option.None,
-            topic_id:,
-            topic_title:,
-            is_reference: False,
-          )),
-          event.on_blur(UserUnselectedDiscussionEntry(kind: Focus)),
         ],
         [
           html.span(
             [
-              event.on_mouse_enter(UserSelectedDiscussionEntry(
-                kind: Hover,
+              attribute.class("inline-comment font-code code-extras"),
+              attribute.class("new-thread-preview"),
+              attribute.class(classes.discussion_entry),
+              attribute.attribute("tabindex", "0"),
+              event.on_focus(UserSelectedDiscussionEntry(
+                kind: EntryFocus,
                 line_number: element_line_number,
                 column_number: element_column_number,
                 node_id: option.None,
@@ -285,11 +280,24 @@ fn inline_comment_preview_view(
                 topic_title:,
                 is_reference: False,
               )),
-              event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: Hover)),
+              event.on_blur(UserUnselectedDiscussionEntry(kind: EntryFocus)),
+              event.on_mouse_enter(UserSelectedDiscussionEntry(
+                kind: EntryHover,
+                line_number: element_line_number,
+                column_number: element_column_number,
+                node_id: option.None,
+                topic_id:,
+                topic_title:,
+                is_reference: False,
+              )),
+              event.on_mouse_leave(UserUnselectedDiscussionEntry(
+                kind: EntryHover,
+              )),
               event.on_click(UserClickedDiscussionEntry(
                 line_number: element_line_number,
                 column_number: element_column_number,
-              )),
+              ))
+                |> event.stop_propagation,
             ],
             [html.text("Start new thread")],
           ),
@@ -368,39 +376,28 @@ fn declaration_node_view(
 ) {
   html.span(
     [
-      attribute.id(node_declaration.topic_id),
-      attribute.class(preprocessor.node_declaration_kind_to_string(
-        node_declaration.kind,
-      )),
-      attribute.class(
-        "declaration-preview relative N" <> int.to_string(node_id),
-      ),
-      attribute.class(classes.discussion_entry),
-      attribute.class(classes.discussion_entry_hover),
-      attribute.attribute("tabindex", "0"),
-      attributes.encode_topic_id_data(node_declaration.topic_id),
-      attributes.encode_topic_title_data(node_declaration.title),
-      attributes.encode_is_reference_data(False),
+      attribute.class("relative"),
       attributes.encode_grid_location_data(
         element_line_number |> int.to_string,
         element_column_number |> int.to_string,
       ),
-      event.on_focus(UserSelectedDiscussionEntry(
-        kind: Focus,
-        line_number: element_line_number,
-        column_number: element_column_number,
-        node_id: option.Some(node_id),
-        topic_id: node_declaration.topic_id,
-        topic_title: node_declaration.title,
-        is_reference: False,
-      )),
-      event.on_blur(UserUnselectedDiscussionEntry(kind: Focus)),
     ],
     [
       html.span(
         [
-          event.on_mouse_enter(UserSelectedDiscussionEntry(
-            kind: Hover,
+          attribute.id(node_declaration.topic_id),
+          attribute.class(preprocessor.node_declaration_kind_to_string(
+            node_declaration.kind,
+          )),
+          attribute.class("declaration-preview N" <> int.to_string(node_id)),
+          attribute.class(classes.discussion_entry),
+          attribute.class(classes.discussion_entry_hover),
+          attribute.attribute("tabindex", "0"),
+          attributes.encode_topic_id_data(node_declaration.topic_id),
+          attributes.encode_topic_title_data(node_declaration.title),
+          attributes.encode_is_reference_data(False),
+          event.on_focus(UserSelectedDiscussionEntry(
+            kind: EntryFocus,
             line_number: element_line_number,
             column_number: element_column_number,
             node_id: option.Some(node_id),
@@ -408,11 +405,22 @@ fn declaration_node_view(
             topic_title: node_declaration.title,
             is_reference: False,
           )),
-          event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: Hover)),
+          event.on_blur(UserUnselectedDiscussionEntry(kind: EntryFocus)),
+          event.on_mouse_enter(UserSelectedDiscussionEntry(
+            kind: EntryHover,
+            line_number: element_line_number,
+            column_number: element_column_number,
+            node_id: option.Some(node_id),
+            topic_id: node_declaration.topic_id,
+            topic_title: node_declaration.title,
+            is_reference: False,
+          )),
+          event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: EntryHover)),
           event.on_click(UserClickedDiscussionEntry(
             line_number: element_line_number,
             column_number: element_column_number,
-          )),
+          ))
+            |> event.stop_propagation,
         ],
         [html.text(tokens)],
       ),
@@ -437,38 +445,29 @@ fn reference_node_view(
 ) {
   html.span(
     [
-      attribute.class(preprocessor.node_declaration_kind_to_string(
-        referenced_node_declaration.kind,
-      )),
-      attribute.class(
-        "reference-preview relative N" <> int.to_string(referenced_node_id),
-      ),
-      attribute.class(classes.discussion_entry),
-      attribute.class(classes.discussion_entry_hover),
-      attribute.attribute("tabindex", "0"),
-      attributes.encode_topic_id_data(referenced_node_declaration.topic_id),
-      attributes.encode_topic_title_data(referenced_node_declaration.title),
-      attributes.encode_is_reference_data(True),
+      attribute.class("relative"),
       attributes.encode_grid_location_data(
         element_line_number |> int.to_string,
         element_column_number |> int.to_string,
       ),
-      event.on_focus(UserSelectedDiscussionEntry(
-        kind: Focus,
-        line_number: element_line_number,
-        column_number: element_column_number,
-        node_id: option.Some(referenced_node_id),
-        topic_id: referenced_node_declaration.topic_id,
-        topic_title: referenced_node_declaration.title,
-        is_reference: True,
-      )),
-      event.on_blur(UserUnselectedDiscussionEntry(kind: Focus)),
     ],
     [
       html.span(
         [
-          event.on_mouse_enter(UserSelectedDiscussionEntry(
-            kind: Hover,
+          attribute.class(preprocessor.node_declaration_kind_to_string(
+            referenced_node_declaration.kind,
+          )),
+          attribute.class(
+            "reference-preview N" <> int.to_string(referenced_node_id),
+          ),
+          attribute.class(classes.discussion_entry),
+          attribute.class(classes.discussion_entry_hover),
+          attribute.attribute("tabindex", "0"),
+          attributes.encode_topic_id_data(referenced_node_declaration.topic_id),
+          attributes.encode_topic_title_data(referenced_node_declaration.title),
+          attributes.encode_is_reference_data(True),
+          event.on_focus(UserSelectedDiscussionEntry(
+            kind: EntryFocus,
             line_number: element_line_number,
             column_number: element_column_number,
             node_id: option.Some(referenced_node_id),
@@ -476,11 +475,22 @@ fn reference_node_view(
             topic_title: referenced_node_declaration.title,
             is_reference: True,
           )),
-          event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: Hover)),
+          event.on_blur(UserUnselectedDiscussionEntry(kind: EntryFocus)),
+          event.on_mouse_enter(UserSelectedDiscussionEntry(
+            kind: EntryHover,
+            line_number: element_line_number,
+            column_number: element_column_number,
+            node_id: option.Some(referenced_node_id),
+            topic_id: referenced_node_declaration.topic_id,
+            topic_title: referenced_node_declaration.title,
+            is_reference: True,
+          )),
+          event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: EntryHover)),
           event.on_click(UserClickedDiscussionEntry(
             line_number: element_line_number,
             column_number: element_column_number,
-          )),
+          ))
+            |> event.stop_propagation,
         ],
         [html.text(tokens)],
       ),

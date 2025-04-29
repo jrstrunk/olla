@@ -14,7 +14,14 @@ pub fn non_empty_line(line_number) {
 
 pub fn discussion_entry(line_number line_number, column_number column_number) {
   document.query_selector(
-    ".dl" <> int.to_string(line_number) <> ".dc" <> int.to_string(column_number),
+    echo {
+      ".dl"
+      <> int.to_string(line_number)
+      <> ".dc"
+      <> int.to_string(column_number)
+      <> " ."
+      <> classes.discussion_entry
+    },
   )
 }
 
