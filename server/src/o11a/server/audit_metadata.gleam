@@ -5,30 +5,32 @@ import gleam/result
 import gleam/string
 import o11a/audit_metadata
 import o11a/config
-import o11a/server/preprocessor_sol
+
 import simplifile
 
 pub fn gather_metadata(for audit_name) {
   let in_scope_files = get_files_in_scope(for: audit_name)
 
-  use ast_data <- result.map(preprocessor_sol.read_asts(for: audit_name))
+  // I am not sure if we'll need to gather metadata from the ASTs here, but
+  // this is how we used to do it
+  // use ast_data <- result.map(preprocessor_sol.read_asts(for: audit_name))
 
-  let asts = list.map(ast_data, fn(ast) { ast.1 })
+  // let asts = list.map(ast_data, fn(ast) { ast.1 })
 
-  let _declarations =
-    dict.new()
-    |> list.fold(asts, _, fn(declarations, ast) {
-      preprocessor_sol.enumerate_declarations(declarations, ast)
-    })
-    |> list.fold(asts, _, fn(declarations, ast) {
-      preprocessor_sol.count_references(declarations, ast)
-    })
+  // let _declarations =
+  //   dict.new()
+  //   |> list.fold(asts, _, fn(declarations, ast) {
+  //     preprocessor_sol.enumerate_declarations(declarations, ast)
+  //   })
+  //   |> list.fold(asts, _, fn(declarations, ast) {
+  //     preprocessor_sol.count_references(declarations, ast)
+  //   })
 
-  audit_metadata.AuditMetaData(
+  Ok(audit_metadata.AuditMetaData(
     audit_name:,
     audit_formatted_name: audit_name,
     in_scope_files:,
-  )
+  ))
 }
 
 fn get_files_in_scope(for audit_name) {

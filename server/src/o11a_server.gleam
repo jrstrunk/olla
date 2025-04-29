@@ -20,6 +20,7 @@ import lustre/element/html
 import mist
 import o11a/config
 import o11a/note
+import o11a/server/audit_source_files
 import o11a/server/discussion
 import o11a/ui/gateway
 import snag
@@ -36,7 +37,7 @@ type Context {
       discussion.Discussion,
     ),
     discussion_component_gateway: gateway.DiscussionComponentGateway,
-    source_files: concurrent_dict.ConcurrentDict(String, string_tree.StringTree),
+    source_files: audit_source_files.AuditSourceFiles,
     audit_metadata: concurrent_dict.ConcurrentDict(
       String,
       string_tree.StringTree,
@@ -123,7 +124,7 @@ fn handle_wisp_request(req, context: Context) {
       |> wisp.json_response(200)
 
     ["source-file", ..page_path] ->
-      gateway.get_source_file(
+      audit_source_files.get_source_file(
         context.source_files,
         for: page_path |> list.fold("", filepath.join),
       )

@@ -23,9 +23,7 @@ pub type Msg {
 }
 
 pub type Model {
-  Model(
-    discussion: discussion.Discussion,
-  )
+  Model(discussion: discussion.Discussion)
 }
 
 pub fn init(init_model: Model) -> #(Model, effect.Effect(Msg)) {
