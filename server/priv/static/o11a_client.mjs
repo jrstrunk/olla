@@ -263,14 +263,14 @@ var UtfCodepoint = class {
   }
 };
 var isBitArrayDeprecationMessagePrinted = {};
-function bitArrayPrintDeprecationWarning(name, message) {
-  if (isBitArrayDeprecationMessagePrinted[name]) {
+function bitArrayPrintDeprecationWarning(name2, message) {
+  if (isBitArrayDeprecationMessagePrinted[name2]) {
     return;
   }
   console.warn(
-    `Deprecated BitArray.${name} property used in JavaScript FFI code. ${message}.`
+    `Deprecated BitArray.${name2} property used in JavaScript FFI code. ${message}.`
   );
-  isBitArrayDeprecationMessagePrinted[name] = true;
+  isBitArrayDeprecationMessagePrinted[name2] = true;
 }
 function bitArraySlice(bitArray, start4, end) {
   end ??= bitArray.bitSize;
@@ -2357,6 +2357,9 @@ function pop_codeunit(str) {
 function lowercase(string6) {
   return string6.toLowerCase();
 }
+function uppercase(string6) {
+  return string6.toUpperCase();
+}
 function split(xs, pattern) {
   return List.fromArray(xs.split(pattern));
 }
@@ -2475,6 +2478,9 @@ function utf_codepoint_to_int(utf_codepoint) {
 function new_map() {
   return Dict.new();
 }
+function map_to_list(map7) {
+  return List.fromArray(map7.entries());
+}
 function map_remove(key2, map7) {
   return map7.delete(key2);
 }
@@ -2587,13 +2593,13 @@ function inspectDict(map7) {
   return body2 + "])";
 }
 function inspectObject(v) {
-  const name = Object.getPrototypeOf(v)?.constructor?.name || "Object";
+  const name2 = Object.getPrototypeOf(v)?.constructor?.name || "Object";
   const props = [];
   for (const k of Object.keys(v)) {
     props.push(`${inspect(k)}: ${inspect(v[k])}`);
   }
   const body2 = props.length ? " " + props.join(", ") + " " : "";
-  const head = name === "Object" ? "" : name + " ";
+  const head = name2 === "Object" ? "" : name2 + " ";
   return `//js(${head}{${body2}})`;
 }
 function inspectCustomType(record) {
@@ -2782,6 +2788,16 @@ function do_to_utf_codepoints(string6) {
 function to_utf_codepoints(string6) {
   return do_to_utf_codepoints(string6);
 }
+function capitalise(string6) {
+  let $ = pop_grapheme(string6);
+  if ($.isOk()) {
+    let first$1 = $[0][0];
+    let rest = $[0][1];
+    return append2(uppercase(first$1), lowercase(rest));
+  } else {
+    return "";
+  }
+}
 function inspect2(term) {
   let _pipe = inspect(term);
   return identity(_pipe);
@@ -2937,7 +2953,7 @@ function decode_error(expected, found) {
     new DecodeError2(expected, classify_dynamic(found), toList([]))
   ]);
 }
-function run_dynamic_function(data2, name, f) {
+function run_dynamic_function(data2, name2, f) {
   let $ = f(data2);
   if ($.isOk()) {
     let data$1 = $[0];
@@ -2946,7 +2962,7 @@ function run_dynamic_function(data2, name, f) {
     let zero = $[0];
     return [
       zero,
-      toList([new DecodeError2(name, classify_dynamic(data2), toList([]))])
+      toList([new DecodeError2(name2, classify_dynamic(data2), toList([]))])
     ];
   }
 }
@@ -4182,26 +4198,26 @@ function compare3(a2, b) {
 
 // build/dev/javascript/lustre/lustre/vdom/vattr.mjs
 var Attribute = class extends CustomType {
-  constructor(kind, name, value3) {
+  constructor(kind, name2, value3) {
     super();
     this.kind = kind;
-    this.name = name;
+    this.name = name2;
     this.value = value3;
   }
 };
 var Property = class extends CustomType {
-  constructor(kind, name, value3) {
+  constructor(kind, name2, value3) {
     super();
     this.kind = kind;
-    this.name = name;
+    this.name = name2;
     this.value = value3;
   }
 };
 var Event2 = class extends CustomType {
-  constructor(kind, name, handler, include, prevent_default2, stop_propagation2, immediate2, limit) {
+  constructor(kind, name2, handler, include, prevent_default2, stop_propagation2, immediate2, limit) {
     super();
     this.kind = kind;
-    this.name = name;
+    this.name = name2;
     this.handler = handler;
     this.include = include;
     this.prevent_default = prevent_default2;
@@ -4291,15 +4307,15 @@ function prepare(attributes) {
   }
 }
 var attribute_kind = 0;
-function attribute(name, value3) {
-  return new Attribute(attribute_kind, name, value3);
+function attribute(name2, value3) {
+  return new Attribute(attribute_kind, name2, value3);
 }
 var property_kind = 1;
 var event_kind = 2;
-function event(name, handler, include, prevent_default2, stop_propagation2, immediate2, limit) {
+function event(name2, handler, include, prevent_default2, stop_propagation2, immediate2, limit) {
   return new Event2(
     event_kind,
-    name,
+    name2,
     handler,
     include,
     prevent_default2,
@@ -4312,11 +4328,11 @@ var debounce_kind = 1;
 var throttle_kind = 2;
 
 // build/dev/javascript/lustre/lustre/attribute.mjs
-function attribute2(name, value3) {
-  return attribute(name, value3);
+function attribute2(name2, value3) {
+  return attribute(name2, value3);
 }
-function class$(name) {
-  return attribute2("class", name);
+function class$(name2) {
+  return attribute2("class", name2);
 }
 function data(key2, value3) {
   return attribute2("data-" + key2, value3);
@@ -4338,6 +4354,9 @@ function href(url) {
 }
 function rel(value3) {
   return attribute2("rel", value3);
+}
+function name(element_name) {
+  return attribute2("name", element_name);
 }
 function placeholder(text4) {
   return attribute2("placeholder", text4);
@@ -4903,10 +4922,10 @@ function diff_attributes(loop$controlled, loop$path, loop$mapper, loop$events, l
       return new AttributeChange(added, removed, events);
     } else if (old.atLeastLength(1) && old.head instanceof Event2 && new$10.hasLength(0)) {
       let prev = old.head;
-      let name = old.head.name;
+      let name2 = old.head.name;
       let old$1 = old.tail;
       let removed$1 = prepend(prev, removed);
-      let events$1 = remove_event(events, path2, name);
+      let events$1 = remove_event(events, path2, name2);
       loop$controlled = controlled;
       loop$path = path2;
       loop$mapper = mapper;
@@ -4929,11 +4948,11 @@ function diff_attributes(loop$controlled, loop$path, loop$mapper, loop$events, l
       loop$removed = removed$1;
     } else if (old.hasLength(0) && new$10.atLeastLength(1) && new$10.head instanceof Event2) {
       let next = new$10.head;
-      let name = new$10.head.name;
+      let name2 = new$10.head.name;
       let handler = new$10.head.handler;
       let new$1 = new$10.tail;
       let added$1 = prepend(next, added);
-      let events$1 = add_event(events, mapper, path2, name, handler);
+      let events$1 = add_event(events, mapper, path2, name2, handler);
       loop$controlled = controlled;
       loop$path = path2;
       loop$mapper = mapper;
@@ -5021,7 +5040,7 @@ function diff_attributes(loop$controlled, loop$path, loop$mapper, loop$events, l
         loop$added = added$1;
         loop$removed = removed;
       } else if (prev instanceof Event2 && $ instanceof Eq && next instanceof Event2) {
-        let name = next.name;
+        let name2 = next.name;
         let handler = next.handler;
         let has_changes = prev.prevent_default !== next.prevent_default || prev.stop_propagation !== next.stop_propagation || prev.immediate !== next.immediate || !limit_equals(
           prev.limit,
@@ -5034,7 +5053,7 @@ function diff_attributes(loop$controlled, loop$path, loop$mapper, loop$events, l
           _block = added;
         }
         let added$1 = _block;
-        let events$1 = add_event(events, mapper, path2, name, handler);
+        let events$1 = add_event(events, mapper, path2, name2, handler);
         loop$controlled = controlled;
         loop$path = path2;
         loop$mapper = mapper;
@@ -5044,10 +5063,10 @@ function diff_attributes(loop$controlled, loop$path, loop$mapper, loop$events, l
         loop$added = added$1;
         loop$removed = removed;
       } else if (prev instanceof Event2 && $ instanceof Eq) {
-        let name = prev.name;
+        let name2 = prev.name;
         let added$1 = prepend(next, added);
         let removed$1 = prepend(prev, removed);
-        let events$1 = remove_event(events, path2, name);
+        let events$1 = remove_event(events, path2, name2);
         loop$controlled = controlled;
         loop$path = path2;
         loop$mapper = mapper;
@@ -5057,11 +5076,11 @@ function diff_attributes(loop$controlled, loop$path, loop$mapper, loop$events, l
         loop$added = added$1;
         loop$removed = removed$1;
       } else if ($ instanceof Eq && next instanceof Event2) {
-        let name = next.name;
+        let name2 = next.name;
         let handler = next.handler;
         let added$1 = prepend(next, added);
         let removed$1 = prepend(prev, removed);
-        let events$1 = add_event(events, mapper, path2, name, handler);
+        let events$1 = add_event(events, mapper, path2, name2, handler);
         loop$controlled = controlled;
         loop$path = path2;
         loop$mapper = mapper;
@@ -5082,10 +5101,10 @@ function diff_attributes(loop$controlled, loop$path, loop$mapper, loop$events, l
         loop$added = added$1;
         loop$removed = removed$1;
       } else if ($ instanceof Gt && next instanceof Event2) {
-        let name = next.name;
+        let name2 = next.name;
         let handler = next.handler;
         let added$1 = prepend(next, added);
-        let events$1 = add_event(events, mapper, path2, name, handler);
+        let events$1 = add_event(events, mapper, path2, name2, handler);
         loop$controlled = controlled;
         loop$path = path2;
         loop$mapper = mapper;
@@ -5105,9 +5124,9 @@ function diff_attributes(loop$controlled, loop$path, loop$mapper, loop$events, l
         loop$added = added$1;
         loop$removed = removed;
       } else if (prev instanceof Event2 && $ instanceof Lt) {
-        let name = prev.name;
+        let name2 = prev.name;
         let removed$1 = prepend(prev, removed);
-        let events$1 = remove_event(events, path2, name);
+        let events$1 = remove_event(events, path2, name2);
         loop$controlled = controlled;
         loop$path = path2;
         loop$mapper = mapper;
@@ -5714,20 +5733,20 @@ var Reconciler = class {
   }
   #update(node, added, removed) {
     iterate(removed, (attribute3) => {
-      const name = attribute3.name;
-      if (node[meta].handlers.has(name)) {
-        node.removeEventListener(name, handleEvent);
-        node[meta].handlers.delete(name);
-        if (node[meta].throttles.has(name)) {
-          node[meta].throttles.delete(name);
+      const name2 = attribute3.name;
+      if (node[meta].handlers.has(name2)) {
+        node.removeEventListener(name2, handleEvent);
+        node[meta].handlers.delete(name2);
+        if (node[meta].throttles.has(name2)) {
+          node[meta].throttles.delete(name2);
         }
-        if (node[meta].debouncers.has(name)) {
-          clearTimeout(node[meta].debouncers.get(name).timeout);
-          node[meta].debouncers.delete(name);
+        if (node[meta].debouncers.has(name2)) {
+          clearTimeout(node[meta].debouncers.get(name2).timeout);
+          node[meta].debouncers.delete(name2);
         }
       } else {
-        node.removeAttribute(name);
-        ATTRIBUTE_HOOKS[name]?.removed?.(node, name);
+        node.removeAttribute(name2);
+        ATTRIBUTE_HOOKS[name2]?.removed?.(node, name2);
       }
     });
     iterate(added, (attribute3) => {
@@ -5773,12 +5792,12 @@ var Reconciler = class {
     const nodeMeta = node[meta];
     switch (attribute3.kind) {
       case attribute_kind: {
-        const name = attribute3.name;
+        const name2 = attribute3.name;
         const value3 = attribute3.value ?? "";
-        if (value3 !== node.getAttribute(name)) {
-          node.setAttribute(name, value3);
+        if (value3 !== node.getAttribute(name2)) {
+          node.setAttribute(name2, value3);
         }
-        ATTRIBUTE_HOOKS[name]?.added?.(node, value3);
+        ATTRIBUTE_HOOKS[name2]?.added?.(node, value3);
         break;
       }
       case property_kind:
@@ -5938,20 +5957,20 @@ var createServerEvent = (event4, include = []) => {
   }
   return data2;
 };
-var syncedBooleanAttribute = (name) => {
+var syncedBooleanAttribute = (name2) => {
   return {
     added(node) {
-      node[name] = true;
+      node[name2] = true;
     },
     removed(node) {
-      node[name] = false;
+      node[name2] = false;
     }
   };
 };
-var syncedAttribute = (name) => {
+var syncedAttribute = (name2) => {
   return {
     added(node, value3) {
-      node[name] = value3;
+      node[name2] = value3;
     }
   };
 };
@@ -6068,22 +6087,22 @@ var virtualise_attributes = (node) => {
   return attributes;
 };
 var virtualise_attribute = (attr) => {
-  const name = attr.localName;
+  const name2 = attr.localName;
   const value3 = attr.value;
-  return attribute2(name, value3);
+  return attribute2(name2, value3);
 };
 
 // build/dev/javascript/lustre/lustre/runtime/client/runtime.ffi.mjs
 var is_browser = () => !!document2;
 var is_reference_equal = (a2, b) => a2 === b;
 var Runtime = class {
-  constructor(root3, [model, effects], view4, update4) {
+  constructor(root3, [model, effects], view6, update4) {
     this.root = root3;
     this.#model = model;
-    this.#view = view4;
+    this.#view = view6;
     this.#update = update4;
-    this.#reconciler = new Reconciler(this.root, (event4, path2, name) => {
-      const [events, msg] = handle(this.#events, path2, name, event4);
+    this.#reconciler = new Reconciler(this.root, (event4, path2, name2) => {
+      const [events, msg] = handle(this.#events, path2, name2, event4);
       this.#events = events;
       if (msg.isOk()) {
         this.dispatch(msg[0], false);
@@ -6229,11 +6248,11 @@ function tick(events) {
     empty_list
   );
 }
-function do_remove_event(handlers, path2, name) {
-  return remove(handlers, event2(path2, name));
+function do_remove_event(handlers, path2, name2) {
+  return remove(handlers, event2(path2, name2));
 }
-function remove_event(events, path2, name) {
-  let handlers = do_remove_event(events.handlers, path2, name);
+function remove_event(events, path2, name2) {
+  let handlers = do_remove_event(events.handlers, path2, name2);
   let _record = events;
   return new Events(
     handlers,
@@ -6247,15 +6266,15 @@ function remove_attributes(handlers, path2, attributes) {
     handlers,
     (events, attribute3) => {
       if (attribute3 instanceof Event2) {
-        let name = attribute3.name;
-        return do_remove_event(events, path2, name);
+        let name2 = attribute3.name;
+        return do_remove_event(events, path2, name2);
       } else {
         return events;
       }
     }
   );
 }
-function handle(events, path2, name, event4) {
+function handle(events, path2, name2, event4) {
   let next_dispatched_paths = prepend(path2, events.next_dispatched_paths);
   let _block;
   let _record = events;
@@ -6267,7 +6286,7 @@ function handle(events, path2, name, event4) {
   let events$1 = _block;
   let $ = get(
     events$1.handlers,
-    path2 + separator_event + name
+    path2 + separator_event + name2
   );
   if ($.isOk()) {
     let handler = $[0];
@@ -6279,15 +6298,15 @@ function handle(events, path2, name, event4) {
 function has_dispatched_events(events, path2) {
   return matches(path2, events.dispatched_paths);
 }
-function do_add_event(handlers, mapper, path2, name, handler) {
+function do_add_event(handlers, mapper, path2, name2, handler) {
   return insert3(
     handlers,
-    event2(path2, name),
+    event2(path2, name2),
     map4(handler, identity3(mapper))
   );
 }
-function add_event(events, mapper, path2, name, handler) {
-  let handlers = do_add_event(events.handlers, mapper, path2, name, handler);
+function add_event(events, mapper, path2, name2, handler) {
+  let handlers = do_add_event(events.handlers, mapper, path2, name2, handler);
   let _record = events;
   return new Events(
     handlers,
@@ -6301,9 +6320,9 @@ function add_attributes(handlers, mapper, path2, attributes) {
     handlers,
     (events, attribute3) => {
       if (attribute3 instanceof Event2) {
-        let name = attribute3.name;
+        let name2 = attribute3.name;
         let handler = attribute3.handler;
-        return do_add_event(events, mapper, path2, name, handler);
+        return do_add_event(events, mapper, path2, name2, handler);
       } else {
         return events;
       }
@@ -6572,6 +6591,12 @@ function text3(content) {
 function style2(attrs, css) {
   return unsafe_raw_html("", "style", attrs, css);
 }
+function h1(attrs, children) {
+  return element2("h1", attrs, children);
+}
+function h2(attrs, children) {
+  return element2("h2", attrs, children);
+}
 function h3(attrs, children) {
   return element2("h3", attrs, children);
 }
@@ -6581,8 +6606,14 @@ function div(attrs, children) {
 function hr(attrs) {
   return element2("hr", attrs, empty_list);
 }
+function li(attrs, children) {
+  return element2("li", attrs, children);
+}
 function p(attrs, children) {
   return element2("p", attrs, children);
+}
+function ul(attrs, children) {
+  return element2("ul", attrs, children);
 }
 function a(attrs, children) {
   return element2("a", attrs, children);
@@ -6599,6 +6630,9 @@ function input(attrs) {
 function textarea(attrs, content) {
   return element2("textarea", attrs, toList([text2(content)]));
 }
+function slot(attrs, fallback) {
+  return element2("slot", attrs, fallback);
+}
 
 // build/dev/javascript/lustre/lustre/runtime/server/runtime.mjs
 var EffectDispatchedMessage = class extends CustomType {
@@ -6608,9 +6642,9 @@ var EffectDispatchedMessage = class extends CustomType {
   }
 };
 var EffectEmitEvent = class extends CustomType {
-  constructor(name, data2) {
+  constructor(name2, data2) {
     super();
-    this.name = name;
+    this.name = name2;
     this.data = data2;
   }
 };
@@ -6653,15 +6687,15 @@ function new$6(options) {
 
 // build/dev/javascript/lustre/lustre/runtime/client/spa.ffi.mjs
 var Spa = class _Spa {
-  static start({ init: init5, update: update4, view: view4 }, selector, flags) {
+  static start({ init: init5, update: update4, view: view6 }, selector, flags) {
     if (!is_browser()) return new Error(new NotABrowser());
     const root3 = selector instanceof HTMLElement ? selector : document2.querySelector(selector);
     if (!root3) return new Error(new ElementNotFound(selector));
-    return new Ok(new _Spa(root3, init5(flags), update4, view4));
+    return new Ok(new _Spa(root3, init5(flags), update4, view6));
   }
   #runtime;
-  constructor(root3, [init5, effects], update4, view4) {
-    this.#runtime = new Runtime(root3, [init5, effects], view4, update4);
+  constructor(root3, [init5, effects], update4, view6) {
+    this.#runtime = new Runtime(root3, [init5, effects], view6, update4);
   }
   send(message) {
     switch (message.constructor) {
@@ -6688,11 +6722,11 @@ var start = Spa.start;
 
 // build/dev/javascript/lustre/lustre.mjs
 var App = class extends CustomType {
-  constructor(init5, update4, view4, config) {
+  constructor(init5, update4, view6, config) {
     super();
     this.init = init5;
     this.update = update4;
-    this.view = view4;
+    this.view = view6;
     this.config = config;
   }
 };
@@ -6704,8 +6738,8 @@ var ElementNotFound = class extends CustomType {
 };
 var NotABrowser = class extends CustomType {
 };
-function application(init5, update4, view4) {
-  return new App(init5, update4, view4, new$6(empty_list));
+function application(init5, update4, view6) {
+  return new App(init5, update4, view6, new$6(empty_list));
 }
 function start3(app, selector, start_args) {
   return guard(
@@ -6718,33 +6752,33 @@ function start3(app, selector, start_args) {
 }
 
 // build/dev/javascript/lustre/lustre/event.mjs
-function is_immediate_event(name) {
-  if (name === "input") {
+function is_immediate_event(name2) {
+  if (name2 === "input") {
     return true;
-  } else if (name === "change") {
+  } else if (name2 === "change") {
     return true;
-  } else if (name === "focus") {
+  } else if (name2 === "focus") {
     return true;
-  } else if (name === "focusin") {
+  } else if (name2 === "focusin") {
     return true;
-  } else if (name === "focusout") {
+  } else if (name2 === "focusout") {
     return true;
-  } else if (name === "blur") {
+  } else if (name2 === "blur") {
     return true;
-  } else if (name === "select") {
+  } else if (name2 === "select") {
     return true;
   } else {
     return false;
   }
 }
-function on(name, handler) {
+function on(name2, handler) {
   return event(
-    name,
+    name2,
     handler,
     empty_list,
     false,
     false,
-    is_immediate_event(name),
+    is_immediate_event(name2),
     new NoLimit(0)
   );
 }
@@ -8535,13 +8569,13 @@ function echo$inspectCustomType(record) {
   return props ? `${record.constructor.name}(${props})` : record.constructor.name;
 }
 function echo$inspectObject(v) {
-  const name = Object.getPrototypeOf(v)?.constructor?.name || "Object";
+  const name2 = Object.getPrototypeOf(v)?.constructor?.name || "Object";
   const props = [];
   for (const k of Object.keys(v)) {
     props.push(`${echo$inspect(k)}: ${echo$inspect(v[k])}`);
   }
   const body2 = props.length ? " " + props.join(", ") + " " : "";
-  const head = name === "Object" ? "" : name + " ";
+  const head = name2 === "Object" ? "" : name2 + " ";
   return `//js(${head}{${body2}})`;
 }
 function echo$inspect(v) {
@@ -9014,13 +9048,13 @@ function echo$inspectCustomType2(record) {
   return props ? `${record.constructor.name}(${props})` : record.constructor.name;
 }
 function echo$inspectObject2(v) {
-  const name = Object.getPrototypeOf(v)?.constructor?.name || "Object";
+  const name2 = Object.getPrototypeOf(v)?.constructor?.name || "Object";
   const props = [];
   for (const k of Object.keys(v)) {
     props.push(`${echo$inspect2(k)}: ${echo$inspect2(v[k])}`);
   }
   const body2 = props.length ? " " + props.join(", ") + " " : "";
-  const head = name === "Object" ? "" : name + " ";
+  const head = name2 === "Object" ? "" : name2 + " ";
   return `//js(${head}{${body2}})`;
 }
 function echo$inspect2(v) {
@@ -9085,6 +9119,264 @@ function echo$isDict2(value3) {
   } catch {
     return false;
   }
+}
+
+// build/dev/javascript/filepath/filepath_ffi.mjs
+function is_windows() {
+  return globalThis?.process?.platform === "win32" || globalThis?.Deno?.build?.os === "windows";
+}
+
+// build/dev/javascript/filepath/filepath.mjs
+function split_unix(path2) {
+  let _block;
+  let $ = split2(path2, "/");
+  if ($.hasLength(1) && $.head === "") {
+    _block = toList([]);
+  } else if ($.atLeastLength(1) && $.head === "") {
+    let rest = $.tail;
+    _block = prepend("/", rest);
+  } else {
+    let rest = $;
+    _block = rest;
+  }
+  let _pipe = _block;
+  return filter(_pipe, (x2) => {
+    return x2 !== "";
+  });
+}
+function pop_windows_drive_specifier(path2) {
+  let start4 = slice(path2, 0, 3);
+  let codepoints = to_utf_codepoints(start4);
+  let $ = map2(codepoints, utf_codepoint_to_int);
+  if ($.hasLength(3) && (($.tail.tail.head === 47 || $.tail.tail.head === 92) && $.tail.head === 58 && ($.head >= 65 && $.head <= 90 || $.head >= 97 && $.head <= 122))) {
+    let drive = $.head;
+    let colon = $.tail.head;
+    let slash = $.tail.tail.head;
+    let drive_letter = slice(path2, 0, 1);
+    let drive$1 = lowercase(drive_letter) + ":/";
+    let path$1 = drop_start(path2, 3);
+    return [new Some(drive$1), path$1];
+  } else {
+    return [new None(), path2];
+  }
+}
+function split_windows(path2) {
+  let $ = pop_windows_drive_specifier(path2);
+  let drive = $[0];
+  let path$1 = $[1];
+  let _block;
+  let _pipe = split2(path$1, "/");
+  _block = flat_map(
+    _pipe,
+    (_capture) => {
+      return split2(_capture, "\\");
+    }
+  );
+  let segments = _block;
+  let _block$1;
+  if (drive instanceof Some) {
+    let drive$1 = drive[0];
+    _block$1 = prepend(drive$1, segments);
+  } else {
+    _block$1 = segments;
+  }
+  let segments$1 = _block$1;
+  if (segments$1.hasLength(1) && segments$1.head === "") {
+    return toList([]);
+  } else if (segments$1.atLeastLength(1) && segments$1.head === "") {
+    let rest = segments$1.tail;
+    return prepend("/", rest);
+  } else {
+    let rest = segments$1;
+    return rest;
+  }
+}
+function split4(path2) {
+  let $ = is_windows();
+  if ($) {
+    return split_windows(path2);
+  } else {
+    return split_unix(path2);
+  }
+}
+function base_name(path2) {
+  return guard(
+    path2 === "/",
+    "",
+    () => {
+      let _pipe = path2;
+      let _pipe$1 = split4(_pipe);
+      let _pipe$2 = last(_pipe$1);
+      return unwrap2(_pipe$2, "");
+    }
+  );
+}
+
+// build/dev/javascript/o11a_client/o11a/ui/audit_dashboard.mjs
+function notes_view(notes) {
+  return ul(
+    toList([]),
+    map2(
+      notes,
+      (note) => {
+        return li(
+          toList([]),
+          toList([
+            a(
+              toList([
+                href("/" + note.parent_id),
+                class$("dashboard-link")
+              ]),
+              toList([
+                text3(
+                  (() => {
+                    let _pipe = note.parent_id;
+                    return base_name(_pipe);
+                  })()
+                )
+              ])
+            ),
+            text3(" - " + note.message)
+          ])
+        );
+      }
+    )
+  );
+}
+function find_open_notes(notes, page_path) {
+  let _block$1;
+  if (page_path instanceof Some) {
+    let page_path$1 = page_path[0];
+    let _pipe2 = map_to_list(notes);
+    _block$1 = filter_map(
+      _pipe2,
+      (note_data) => {
+        let $2 = starts_with(note_data[0], page_path$1);
+        if ($2) {
+          return new Ok(note_data[1]);
+        } else {
+          return new Error(void 0);
+        }
+      }
+    );
+  } else {
+    let _pipe2 = map_to_list(notes);
+    _block$1 = map2(_pipe2, second);
+  }
+  let _block;
+  let _pipe = _block$1;
+  _block = flatten2(_pipe);
+  let all_notes = _block;
+  let incomplete_todos = filter(
+    all_notes,
+    (note) => {
+      let $2 = note.significance;
+      if ($2 instanceof IncompleteToDo) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  );
+  let $ = filter(
+    all_notes,
+    (note) => {
+      let $12 = note.significance;
+      if ($12 instanceof CompleteToDo) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  );
+  let unanswered_questions = filter(
+    all_notes,
+    (note) => {
+      let $12 = note.significance;
+      if ($12 instanceof UnansweredQuestion) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  );
+  let $1 = filter(
+    all_notes,
+    (note) => {
+      let $2 = note.significance;
+      if ($2 instanceof AnsweredQuestion) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  );
+  let unconfirmed_findings = filter(
+    all_notes,
+    (note) => {
+      let $2 = note.significance;
+      if ($2 instanceof UnconfirmedFinding) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  );
+  let confirmed_findings = filter(
+    all_notes,
+    (note) => {
+      let $2 = note.significance;
+      if ($2 instanceof ConfirmedFinding) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  );
+  return [
+    incomplete_todos,
+    unanswered_questions,
+    unconfirmed_findings,
+    confirmed_findings
+  ];
+}
+var style3 = "\n.dashboard-link {\n  text-decoration: none;\n  color: var(--text-color);\n}\n\n.dashboard-link:hover {\n  text-decoration: underline;\n}\n\nh1 {\n  font-size: 2rem;\n  font-weight: bold;\n  margin-top: 1rem;\n  margin-bottom: 1rem;\n}\n\nh2 {\n  font-size: 1.5rem;\n  font-weight: bold;\n  margin-top: 1rem;\n  margin-bottom: 1rem;\n}\n";
+function view(notes, audit_name) {
+  let $ = find_open_notes(notes, new None());
+  let incomplete_todos = $[0];
+  let unanswered_questions = $[1];
+  let unconfirmed_findings = $[2];
+  let confirmed_findings = $[3];
+  return div(
+    toList([style("margin-left", "2rem")]),
+    toList([
+      style2(toList([]), style3),
+      div(
+        toList([style("width", "40rem")]),
+        toList([
+          h1(
+            toList([]),
+            toList([
+              text3(
+                (() => {
+                  let _pipe = audit_name;
+                  return capitalise(_pipe);
+                })() + " audit dashboard"
+              )
+            ])
+          ),
+          h2(toList([]), toList([text3("Incomplete todos")])),
+          notes_view(incomplete_todos),
+          h2(toList([]), toList([text3("Unanswered questions")])),
+          notes_view(unanswered_questions),
+          h2(toList([]), toList([text3("Unconfirmed findings")])),
+          notes_view(unconfirmed_findings),
+          h2(toList([]), toList([text3("Confirmed findings")])),
+          notes_view(confirmed_findings)
+        ])
+      )
+    ])
+  );
 }
 
 // build/dev/javascript/o11a_common/lib/enumerate.mjs
@@ -11296,7 +11588,7 @@ function loc_view(discussion, loc, selected_discussion) {
     );
   }
 }
-function view(preprocessed_source, discussion, selected_discussion) {
+function view2(preprocessed_source, discussion, selected_discussion) {
   return div(
     toList([
       id("audit-page"),
@@ -11319,94 +11611,77 @@ function view(preprocessed_source, discussion, selected_discussion) {
   );
 }
 
-// build/dev/javascript/filepath/filepath_ffi.mjs
-function is_windows() {
-  return globalThis?.process?.platform === "win32" || globalThis?.Deno?.build?.os === "windows";
+// build/dev/javascript/o11a_common/lib/elementx.mjs
+function hide_skeleton() {
+  return slot(
+    toList([name("skeleton"), style("display", "none")]),
+    toList([])
+  );
 }
 
-// build/dev/javascript/filepath/filepath.mjs
-function split_unix(path2) {
-  let _block;
-  let $ = split2(path2, "/");
-  if ($.hasLength(1) && $.head === "") {
-    _block = toList([]);
-  } else if ($.atLeastLength(1) && $.head === "") {
-    let rest = $.tail;
-    _block = prepend("/", rest);
-  } else {
-    let rest = $;
-    _block = rest;
-  }
-  let _pipe = _block;
-  return filter(_pipe, (x2) => {
-    return x2 !== "";
-  });
-}
-function pop_windows_drive_specifier(path2) {
-  let start4 = slice(path2, 0, 3);
-  let codepoints = to_utf_codepoints(start4);
-  let $ = map2(codepoints, utf_codepoint_to_int);
-  if ($.hasLength(3) && (($.tail.tail.head === 47 || $.tail.tail.head === 92) && $.tail.head === 58 && ($.head >= 65 && $.head <= 90 || $.head >= 97 && $.head <= 122))) {
-    let drive = $.head;
-    let colon = $.tail.head;
-    let slash = $.tail.tail.head;
-    let drive_letter = slice(path2, 0, 1);
-    let drive$1 = lowercase(drive_letter) + ":/";
-    let path$1 = drop_start(path2, 3);
-    return [new Some(drive$1), path$1];
-  } else {
-    return [new None(), path2];
-  }
-}
-function split_windows(path2) {
-  let $ = pop_windows_drive_specifier(path2);
-  let drive = $[0];
-  let path$1 = $[1];
-  let _block;
-  let _pipe = split2(path$1, "/");
-  _block = flat_map(
-    _pipe,
-    (_capture) => {
-      return split2(_capture, "\\");
-    }
+// build/dev/javascript/o11a_client/o11a/ui/audit_page_dashboard.mjs
+function notes_view2(notes) {
+  return ul(
+    toList([class$("mb-[2rem] text-[.9rem]")]),
+    (() => {
+      if (notes.hasLength(0)) {
+        return toList([li(toList([]), toList([text3("none")]))]);
+      } else {
+        return map2(
+          notes,
+          (note) => {
+            let _block;
+            let _pipe = note.parent_id;
+            let _pipe$1 = split_once(_pipe, "#");
+            let _pipe$2 = unwrap2(_pipe$1, ["", ""]);
+            _block = second(_pipe$2);
+            let line_number = _block;
+            return li(
+              toList([]),
+              toList([text3("(" + line_number + ") " + note.message)])
+            );
+          }
+        );
+      }
+    })()
   );
-  let segments = _block;
-  let _block$1;
-  if (drive instanceof Some) {
-    let drive$1 = drive[0];
-    _block$1 = prepend(drive$1, segments);
-  } else {
-    _block$1 = segments;
-  }
-  let segments$1 = _block$1;
-  if (segments$1.hasLength(1) && segments$1.head === "") {
-    return toList([]);
-  } else if (segments$1.atLeastLength(1) && segments$1.head === "") {
-    let rest = segments$1.tail;
-    return prepend("/", rest);
-  } else {
-    let rest = segments$1;
-    return rest;
-  }
 }
-function split4(path2) {
-  let $ = is_windows();
-  if ($) {
-    return split_windows(path2);
-  } else {
-    return split_unix(path2);
-  }
-}
-function base_name(path2) {
-  return guard(
-    path2 === "/",
-    "",
-    () => {
-      let _pipe = path2;
-      let _pipe$1 = split4(_pipe);
-      let _pipe$2 = last(_pipe$1);
-      return unwrap2(_pipe$2, "");
-    }
+function view3(notes, page_path) {
+  let $ = find_open_notes(notes, new Some(page_path));
+  let incomplete_todos = $[0];
+  let unanswered_questions = $[1];
+  let unconfirmed_findings = $[2];
+  let confirmed_findings = $[3];
+  return div(
+    toList([]),
+    toList([
+      div(
+        toList([class$("p-[.5rem]")]),
+        toList([
+          hide_skeleton(),
+          h2(
+            toList([class$("mb-[.5rem]")]),
+            toList([text3("incomplete todos")])
+          ),
+          notes_view2(incomplete_todos),
+          h2(
+            toList([class$("mb-[.5rem]")]),
+            toList([text3("unanswered questions")])
+          ),
+          notes_view2(unanswered_questions),
+          h2(
+            toList([class$("mb-[.5rem]")]),
+            toList([text3("unconfirmed findings")])
+          ),
+          notes_view2(unconfirmed_findings),
+          h2(
+            toList([class$("mb-[.5rem]")]),
+            toList([text3("confirmed findings")])
+          ),
+          notes_view2(confirmed_findings)
+        ])
+      )
+    ])
   );
 }
 
@@ -11544,7 +11819,7 @@ function audit_file_tree_view(grouped_files, audit_name, current_file_path) {
     ])
   );
 }
-function view2(file_contents, side_panel, grouped_files, audit_name, current_file_path) {
+function view4(file_contents, side_panel, grouped_files, audit_name, current_file_path) {
   return div(
     toList([id("tree-grid")]),
     toList([
@@ -11837,8 +12112,8 @@ function parse_route(uri) {
   }
 }
 function on_url_change(uri) {
-  echo3("on_url_change", "src/o11a_client.gleam", 108);
-  echo3(uri, "src/o11a_client.gleam", 109);
+  echo3("on_url_change", "src/o11a_client.gleam", 110);
+  echo3(uri, "src/o11a_client.gleam", 111);
   let _pipe = parse_route(uri);
   return new OnRouteChange(_pipe);
 }
@@ -12261,7 +12536,7 @@ function update3(model, msg) {
     echo3(
       "Unselecting discussion " + inspect2(kind),
       "src/o11a_client.gleam",
-      347
+      349
     );
     return [
       (() => {
@@ -12336,7 +12611,7 @@ function update3(model, msg) {
   } else if (msg instanceof UserClickedInsideDiscussion2) {
     let line_number = msg.line_number;
     let column_number = msg.column_number;
-    echo3("User clicked inside discussion", "src/o11a_client.gleam", 387);
+    echo3("User clicked inside discussion", "src/o11a_client.gleam", 389);
     let _block;
     let $ = !isEqual(
       model.selected_discussion,
@@ -12411,7 +12686,7 @@ function update3(model, msg) {
     let model$3 = _block$2;
     return [model$3, none()];
   } else if (msg instanceof UserClickedOutsideDiscussion) {
-    echo3("User clicked outside discussion", "src/o11a_client.gleam", 413);
+    echo3("User clicked outside discussion", "src/o11a_client.gleam", 415);
     return [
       (() => {
         let _record = model;
@@ -12471,7 +12746,7 @@ function update3(model, msg) {
       echo3(
         "Focusing discussion input, user is typing",
         "src/o11a_client.gleam",
-        445
+        447
       );
       set_is_user_typing(true);
       return [
@@ -12517,7 +12792,7 @@ function update3(model, msg) {
         none()
       ];
     } else if (discussion_effect instanceof UnfocusDiscussionInput) {
-      echo3("Unfocusing discussion input", "src/o11a_client.gleam", 468);
+      echo3("Unfocusing discussion input", "src/o11a_client.gleam", 470);
       set_is_user_typing(false);
       return [model, none()];
     } else if (discussion_effect instanceof MaximizeDiscussion) {
@@ -12711,10 +12986,14 @@ function map_discussion_msg2(msg, selected_discussion) {
     update2(selected_discussion.model, msg)
   );
 }
-function view3(model) {
+function view5(model) {
   let $ = model.route;
   if ($ instanceof AuditDashboardRoute) {
     let audit_name = $.audit_name;
+    let _block;
+    let _pipe = map_get(model.discussions, audit_name);
+    _block = unwrap2(_pipe, new_map());
+    let discussion = _block;
     return div(
       toList([]),
       toList([
@@ -12724,8 +13003,8 @@ function view3(model) {
           ]),
           toList([])
         ),
-        view2(
-          p(toList([]), toList([text3("Dashboard")])),
+        view4(
+          view(discussion, audit_name),
           new None(),
           model.file_tree,
           audit_name,
@@ -12782,30 +13061,34 @@ function view3(model) {
           ]),
           toList([])
         ),
-        view2(
+        view4(
           (() => {
-            let _pipe$3 = view(
+            let _pipe$3 = view2(
               preprocessed_source,
               discussion,
               selected_discussion
             );
             return map5(_pipe$3, map_audit_page_msg);
           })(),
-          map(
-            selected_discussion,
-            (selected_discussion2) => {
+          (() => {
+            if (selected_discussion instanceof Some) {
+              let selected_discussion$1 = selected_discussion[0];
               let _pipe$3 = panel_view(
-                selected_discussion2.model,
+                selected_discussion$1.model,
                 discussion
               );
-              return map5(
+              let _pipe$4 = map5(
                 _pipe$3,
                 (_capture) => {
-                  return map_discussion_msg2(_capture, selected_discussion2);
+                  return map_discussion_msg2(_capture, selected_discussion$1);
                 }
               );
+              return new Some(_pipe$4);
+            } else {
+              let _pipe$3 = view3(discussion, page_path);
+              return new Some(_pipe$3);
             }
-          ),
+          })(),
           model.file_tree,
           audit_name,
           page_path
@@ -12818,7 +13101,7 @@ function view3(model) {
 }
 function main() {
   console_log("Starting client controller");
-  let _pipe = application(init4, update3, view3);
+  let _pipe = application(init4, update3, view5);
   return start3(_pipe, "#app", void 0);
 }
 function echo3(value3, file, line2) {
@@ -12885,13 +13168,13 @@ function echo$inspectCustomType3(record) {
   return props ? `${record.constructor.name}(${props})` : record.constructor.name;
 }
 function echo$inspectObject3(v) {
-  const name = Object.getPrototypeOf(v)?.constructor?.name || "Object";
+  const name2 = Object.getPrototypeOf(v)?.constructor?.name || "Object";
   const props = [];
   for (const k of Object.keys(v)) {
     props.push(`${echo$inspect3(k)}: ${echo$inspect3(v[k])}`);
   }
   const body2 = props.length ? " " + props.join(", ") + " " : "";
-  const head = name === "Object" ? "" : name + " ";
+  const head = name2 === "Object" ? "" : name2 + " ";
   return `//js(${head}{${body2}})`;
 }
 function echo$inspect3(v) {

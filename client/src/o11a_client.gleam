@@ -24,7 +24,9 @@ import o11a/computed_note
 import o11a/events
 import o11a/note
 import o11a/preprocessor
+import o11a/ui/audit_dashboard
 import o11a/ui/audit_page
+import o11a/ui/audit_page_dashboard
 import o11a/ui/audit_tree
 import o11a/ui/discussion
 import plinth/browser/element as browser_element
@@ -584,20 +586,25 @@ fn submit_note(audit_name, topic_id, note_submission, discussion_model) {
 
 fn view(model: Model) {
   case model.route {
-    AuditDashboardRoute(audit_name:) ->
+    AuditDashboardRoute(audit_name:) -> {
+      let discussion =
+        dict.get(model.discussions, audit_name)
+        |> result.unwrap(dict.new())
+
       html.div([], [
         server_component.element(
           [server_component.route("/component-discussion/" <> audit_name)],
           [],
         ),
         audit_tree.view(
-          html.p([], [html.text("Dashboard")]),
+          audit_dashboard.view(discussion, audit_name),
           option.None,
           model.file_tree,
           audit_name,
           audit_tree.dashboard_path(for: audit_name),
         ),
       ])
+    }
 
     AuditPageRoute(audit_name:, page_path:) -> {
       let selected_discussion = get_selected_discussion(model)
@@ -641,10 +648,16 @@ fn view(model: Model) {
             selected_discussion:,
           )
             |> element.map(map_audit_page_msg),
-          option.map(selected_discussion, fn(selected_discussion) {
-            discussion.panel_view(selected_discussion.model, discussion)
-            |> element.map(map_discussion_msg(_, selected_discussion))
-          }),
+          case selected_discussion {
+            option.Some(selected_discussion) -> {
+              discussion.panel_view(selected_discussion.model, discussion)
+              |> element.map(map_discussion_msg(_, selected_discussion))
+              |> option.Some
+            }
+            option.None ->
+              audit_page_dashboard.view(discussion, page_path)
+              |> option.Some
+          },
           model.file_tree,
           audit_name,
           page_path,
