@@ -13,14 +13,12 @@ import o11a/preprocessor
 import o11a/server/audit_metadata as server_audit_metadata
 import o11a/server/discussion
 import o11a/server/preprocessor_sol
-import o11a/ui/audit_dashboard
 import o11a/ui/discussion_component
 import simplifile
 import snag
 
 pub type Gateway {
   Gateway(
-    dashboard_gateway: DashboardGateway,
     audit_metadata_gateway: AuditMetaDataGateway,
     discussion_component_gateway: DiscussionComponentGateway,
     discussion_gateway: concurrent_dict.ConcurrentDict(
@@ -35,9 +33,6 @@ pub type Gateway {
   )
 }
 
-pub type DashboardGateway =
-  concurrent_dict.ConcurrentDict(String, lustre.Runtime(audit_dashboard.Msg))
-
 pub type DiscussionComponentGateway =
   concurrent_dict.ConcurrentDict(
     String,
@@ -47,8 +42,7 @@ pub type DiscussionComponentGateway =
 pub type AuditMetaDataGateway =
   concurrent_dict.ConcurrentDict(String, audit_metadata.AuditMetaData)
 
-pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
-  let dashboard_gateway = concurrent_dict.new()
+pub fn start_gateway() -> Result(Gateway, snag.Snag) {
   let audit_metadata_gateway = concurrent_dict.new()
   let discussion_gateway = concurrent_dict.new()
 
@@ -77,24 +71,10 @@ pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
 
       concurrent_dict.insert(discussion_gateway, audit_name, discussion)
 
-      use audit_dashboard_actor <- result.try(
-        lustre.start_server_component(
-          audit_dashboard.app(),
-          audit_dashboard.Model(discussion:, skeletons:),
-        )
-        |> snag.map_error(string.inspect),
-      )
-
-      concurrent_dict.insert(
-        dashboard_gateway,
-        audit_name,
-        audit_dashboard_actor,
-      )
-
       use discussion_component_actor <- result.try(
         lustre.start_server_component(
           discussion_component.app(),
-          discussion_component.Model(discussion:, skeletons:),
+          discussion_component.Model(discussion:),
         )
         |> snag.map_error(string.inspect),
       )
@@ -172,17 +152,12 @@ pub fn start_gateway(skeletons) -> Result(Gateway, snag.Snag) {
   )
 
   Gateway(
-    dashboard_gateway:,
     audit_metadata_gateway:,
     discussion_gateway:,
     discussion_component_gateway:,
     source_files:,
     audit_metadata: audit_metadatas,
   )
-}
-
-pub fn get_dashboard_actor(discussion_gateway: DashboardGateway, for audit_name) {
-  concurrent_dict.get(discussion_gateway, audit_name)
 }
 
 pub fn get_audit_metadata_gateway(

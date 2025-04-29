@@ -30,7 +30,6 @@ import wisp/wisp_mist
 type Context {
   Context(
     config: config.Config,
-    dashboard_gateway: gateway.DashboardGateway,
     audit_metadata_gateway: gateway.AuditMetaDataGateway,
     discussion_gateway: concurrent_dict.ConcurrentDict(
       String,
@@ -42,7 +41,6 @@ type Context {
       String,
       string_tree.StringTree,
     ),
-    skeletons: concurrent_dict.ConcurrentDict(String, String),
   )
 }
 
@@ -55,11 +53,8 @@ pub fn main() {
 
   io.println("o11a is starting!")
 
-  let skeletons = concurrent_dict.new()
-
   use
     gateway.Gateway(
-      dashboard_gateway:,
       audit_metadata_gateway:,
       discussion_gateway:,
       discussion_component_gateway:,
@@ -67,18 +62,16 @@ pub fn main() {
       audit_metadata:,
     )
   <- result.map(
-    gateway.start_gateway(skeletons)
+    gateway.start_gateway()
     |> result.map_error(fn(e) { snag.pretty_print(e) |> io.println }),
   )
 
   let context =
     Context(
       config:,
-      dashboard_gateway:,
       audit_metadata_gateway:,
       discussion_gateway:,
       discussion_component_gateway:,
-      skeletons:,
       source_files:,
       audit_metadata:,
     )

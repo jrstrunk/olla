@@ -5,7 +5,6 @@
 //// server component, where only updates are streamed instead of the whole
 //// discussion every time there is an update.
 
-import concurrent_dict
 import gleam/json
 import lustre
 import lustre/effect
@@ -26,7 +25,6 @@ pub type Msg {
 pub type Model {
   Model(
     discussion: discussion.Discussion,
-    skeletons: concurrent_dict.ConcurrentDict(String, String),
   )
 }
 
