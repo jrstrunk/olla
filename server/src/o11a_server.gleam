@@ -124,12 +124,15 @@ fn handle_wisp_request(req, context: Context) {
       |> wisp.json_response(200)
 
     ["source-file", ..page_path] ->
+      // If the source file was not initially found in the in-memory cache, then
+      // this will try to get it from disk and reprocess the audit
       audit_source_files.get_source_file(
         context.source_files,
         for: page_path |> list.fold("", filepath.join),
       )
-      // TODO: try_recover to get the source file from disk
-      |> result.unwrap(string_tree.from_string("<p>Source not found</p>"))
+      |> result.unwrap(string_tree.from_string(
+        "{\"error\": \"Source not found\"}",
+      ))
       |> wisp.json_response(200)
 
     ["audit-discussion", audit_name] -> {

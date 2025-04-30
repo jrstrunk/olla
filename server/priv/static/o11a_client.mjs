@@ -11819,7 +11819,7 @@ function audit_file_tree_view(grouped_files, audit_name, current_file_path) {
     ])
   );
 }
-function view4(file_contents, side_panel, grouped_files, audit_name, current_file_path) {
+function view4(file_contents, wrap_contents, side_panel, grouped_files, audit_name, current_file_path) {
   return div(
     toList([id("tree-grid")]),
     toList([
@@ -11835,7 +11835,18 @@ function view4(file_contents, side_panel, grouped_files, audit_name, current_fil
       ),
       div(toList([id("tree-resizer")]), toList([])),
       div(
-        toList([id("file-contents")]),
+        toList([
+          id("file-contents"),
+          class$(
+            (() => {
+              if (wrap_contents) {
+                return "wrap";
+              } else {
+                return "nowrap";
+              }
+            })()
+          )
+        ]),
         toList([file_contents])
       ),
       (() => {
@@ -13005,6 +13016,7 @@ function view5(model) {
         ),
         view4(
           view(discussion, audit_name),
+          true,
           new None(),
           model.file_tree,
           audit_name,
@@ -13070,6 +13082,7 @@ function view5(model) {
             );
             return map5(_pipe$3, map_audit_page_msg);
           })(),
+          true,
           (() => {
             if (selected_discussion instanceof Some) {
               let selected_discussion$1 = selected_discussion[0];

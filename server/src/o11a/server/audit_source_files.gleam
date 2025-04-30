@@ -1,3 +1,4 @@
+import filepath
 import gleam/dict
 import gleam/function
 import gleam/io
@@ -5,11 +6,13 @@ import gleam/json
 import gleam/list
 import gleam/option
 import gleam/result
+import gleam/string
 import gleam/string_tree
 import lib/snagx
 import o11a/config
 import o11a/preprocessor
 import o11a/server/preprocessor_sol
+import o11a/server/preprocessor_text
 import persistent_concurrent_dict as pcd
 import simplifile
 import snag
@@ -21,13 +24,19 @@ pub opaque type AuditSourceFiles {
 }
 
 pub fn build() {
-  use pcd <- result.map(pcd.build(
-    config.get_persist_path(for: "audit_preprocessed_source_files"),
-    key_encoder: function.identity,
-    key_decoder: function.identity,
-    val_encoder: string_tree.to_string,
-    val_decoder: string_tree.from_string,
-  ))
+  use pcd <- result.map(
+    pcd.build(
+      config.get_persist_path(for: "audit_preprocessed_source_files"),
+      key_encoder: function.identity,
+      key_decoder: function.identity,
+      val_encoder: fn(val) {
+        val |> string_tree.to_string |> string.replace("'", "''")
+      },
+      val_decoder: fn(val) {
+        val |> string.replace("''", "'") |> string_tree.from_string
+      },
+    ),
+  )
 
   AuditSourceFiles(pcd:)
 }
@@ -58,6 +67,7 @@ pub fn get_source_file(audit_source_files: AuditSourceFiles, for page_path) {
 
           pcd.get(audit_source_files.pcd, page_path)
         }
+
         Error(error) -> {
           io.println(
             error
@@ -96,11 +106,13 @@ fn preprocess_audit_source(for audit_name) {
   |> result.unwrap([])
   |> list.map(fn(page_path) {
     case
-      config.get_full_page_path(for: page_path)
-      |> simplifile.read,
+      filepath.extension(page_path) == Ok("md")
+      || filepath.extension(page_path) == Ok("txt"),
+      config.get_full_page_path(for: page_path) |> simplifile.read,
       dict.get(file_to_ast, page_path)
     {
-      Ok(source), Ok(nodes) -> {
+      // Source file with an AST
+      _, Ok(source), Ok(nodes) -> {
         let nodes = preprocessor_sol.linearize_nodes(nodes)
 
         let preprocessed_source_json =
@@ -117,13 +129,26 @@ fn preprocess_audit_source(for audit_name) {
         Ok(option.Some(#(page_path, preprocessed_source_json)))
       }
 
-      Ok(_source), Error(Nil) -> Ok(option.None)
+      // Text file 
+      True, Ok(text), Error(Nil) -> {
+        let preprocessed_source_json =
+          preprocessor_text.preprocess_source(source: text, page_path:)
+          |> json.array(preprocessor.encode_pre_processed_line)
+          |> json.to_string_tree
+
+        Ok(option.Some(#(page_path, preprocessed_source_json)))
+      }
+
+      // Source file without an AST (unused project dependencies)
+      False, Ok(_source), Error(Nil) -> {
+        Ok(option.None)
+      }
 
       // If we get a non-text file, just ignore it. Eventually we could 
       // handle image files
-      Error(simplifile.NotUtf8), _ -> Ok(option.None)
+      _, Error(simplifile.NotUtf8), _ -> Ok(option.None)
 
-      Error(msg), _ ->
+      _, Error(msg), _ ->
         snag.error(msg |> simplifile.describe_error)
         |> snag.context("Failed to preprocess page source for " <> page_path)
     }

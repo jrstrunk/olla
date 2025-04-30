@@ -19,6 +19,7 @@ pub type Model {
 
 pub fn view(
   file_contents,
+  wrap_contents,
   side_panel,
   grouped_files,
   audit_name,
@@ -32,7 +33,16 @@ pub fn view(
       audit_file_tree_view(grouped_files, audit_name, current_file_path),
     ]),
     html.div([attribute.id("tree-resizer")], []),
-    html.div([attribute.id("file-contents")], [file_contents]),
+    html.div(
+      [
+        attribute.id("file-contents"),
+        attribute.class(case wrap_contents {
+          True -> "wrap"
+          False -> "nowrap"
+        }),
+      ],
+      [file_contents],
+    ),
     case option.is_some(side_panel) {
       True -> html.div([attribute.id("panel-resizer")], [])
       False -> element.fragment([])

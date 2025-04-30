@@ -598,6 +598,7 @@ fn view(model: Model) {
         ),
         audit_tree.view(
           audit_dashboard.view(discussion, audit_name),
+          True,
           option.None,
           model.file_tree,
           audit_name,
@@ -648,6 +649,7 @@ fn view(model: Model) {
             selected_discussion:,
           )
             |> element.map(map_audit_page_msg),
+          True,
           case selected_discussion {
             option.Some(selected_discussion) -> {
               discussion.panel_view(selected_discussion.model, discussion)
