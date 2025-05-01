@@ -210,6 +210,7 @@ pub type Msg {
   )
   UserUnselectedDiscussionEntry(kind: audit_page.DiscussionSelectKind)
   UserClickedDiscussionEntry(line_number: Int, column_number: Int)
+  UserCtrlClickedNode(uri: String)
   UserClickedInsideDiscussion(line_number: Int, column_number: Int)
   UserClickedOutsideDiscussion
   UserUpdatedDiscussion(
@@ -398,6 +399,26 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           }
         }),
       )
+    }
+
+    UserCtrlClickedNode(uri) -> {
+      let #(path, fragment) = case string.split_once(uri, "#") {
+        Ok(#(uri, fragment)) -> #(uri, option.Some(fragment))
+        Error(..) -> #(uri, option.None)
+      }
+      let path = "/" <> path
+
+      io.println(
+        "User clicked node "
+        <> path
+        <> " # "
+        <> case fragment {
+          option.Some(fragment) -> fragment
+          option.None -> ""
+        },
+      )
+
+      #(model, modem.push(path, option.None, fragment))
     }
 
     UserClickedInsideDiscussion(line_number:, column_number:) -> {
@@ -744,6 +765,7 @@ fn map_audit_page_msg(msg) {
       UserUpdatedDiscussion(line_number:, column_number:, update:)
     audit_page.UserClickedInsideDiscussion(line_number:, column_number:) ->
       UserClickedInsideDiscussion(line_number:, column_number:)
+    audit_page.UserCtrlClickedNode(uri:) -> UserCtrlClickedNode(uri:)
   }
 }
 

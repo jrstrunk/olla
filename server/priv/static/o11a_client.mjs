@@ -7394,6 +7394,15 @@ var do_init = (dispatch, options = defaults) => {
     dispatch(detail);
   });
 };
+var do_push = (uri) => {
+  window.history.pushState({}, "", to_string3(uri));
+  window.requestAnimationFrame(() => {
+    if (uri.fragment[0]) {
+      document.getElementById(uri.fragment[0])?.scrollIntoView();
+    }
+  });
+  window.dispatchEvent(new CustomEvent("modem-push", { detail: uri }));
+};
 var find_anchor = (el) => {
   if (!el || el.tagName === "BODY") {
     return null;
@@ -7436,6 +7445,41 @@ function init(handler) {
               let _pipe$1 = handler(_pipe);
               return dispatch(_pipe$1);
             }
+          );
+        }
+      );
+    }
+  );
+}
+var relative = /* @__PURE__ */ new Uri(
+  /* @__PURE__ */ new None(),
+  /* @__PURE__ */ new None(),
+  /* @__PURE__ */ new None(),
+  /* @__PURE__ */ new None(),
+  "",
+  /* @__PURE__ */ new None(),
+  /* @__PURE__ */ new None()
+);
+function push(path2, query, fragment3) {
+  return from(
+    (_) => {
+      return guard(
+        !is_browser(),
+        void 0,
+        () => {
+          return do_push(
+            (() => {
+              let _record = relative;
+              return new Uri(
+                _record.scheme,
+                _record.userinfo,
+                _record.host,
+                _record.port,
+                path2,
+                query,
+                fragment3
+              );
+            })()
           );
         }
       );
@@ -9537,6 +9581,67 @@ function encode_is_reference_data(is_reference) {
   );
 }
 
+// build/dev/javascript/o11a_client/lib/eventx.mjs
+function on_ctrl_click(ctrl_click, non_ctrl_click) {
+  return on(
+    "click",
+    field(
+      "ctrlKey",
+      bool,
+      (ctrl_key) => {
+        if (ctrl_key) {
+          return success(ctrl_click);
+        } else {
+          if (non_ctrl_click instanceof Some) {
+            let non_ctrl_click$1 = non_ctrl_click[0];
+            return success(non_ctrl_click$1);
+          } else {
+            return failure(ctrl_click, "ctrl_click");
+          }
+        }
+      }
+    )
+  );
+}
+function on_non_ctrl_click(msg) {
+  return on(
+    "click",
+    field(
+      "ctrlKey",
+      bool,
+      (ctrl_key) => {
+        if (!ctrl_key) {
+          return success(msg);
+        } else {
+          return failure(msg, "non_ctrl_click");
+        }
+      }
+    )
+  );
+}
+function on_ctrl_enter(msg) {
+  return on(
+    "keydown",
+    field(
+      "ctrlKey",
+      bool,
+      (ctrl_key) => {
+        return field(
+          "key",
+          string3,
+          (key2) => {
+            if (ctrl_key && key2 === "Enter") {
+              return success(msg);
+            } else {
+              return failure(msg, "ctrl_enter");
+            }
+          }
+        );
+      }
+    )
+  );
+}
+
 // build/dev/javascript/given/given.mjs
 function that(requirement, consequence, alternative) {
   if (requirement) {
@@ -9802,30 +9907,6 @@ function pencil(attributes) {
       ),
       path(toList([attribute2("d", "m15 5 4 4")]))
     ])
-  );
-}
-
-// build/dev/javascript/o11a_client/lib/eventx.mjs
-function on_ctrl_enter(msg) {
-  return on(
-    "keydown",
-    field(
-      "ctrlKey",
-      bool,
-      (ctrl_key) => {
-        return field(
-          "key",
-          string3,
-          (key2) => {
-            if (ctrl_key && key2 === "Enter") {
-              return success(msg);
-            } else {
-              return failure(msg, "ctrl_enter");
-            }
-          }
-        );
-      }
-    )
   );
 }
 
@@ -11051,6 +11132,12 @@ var UserClickedDiscussionEntry = class extends CustomType {
     this.column_number = column_number;
   }
 };
+var UserCtrlClickedNode = class extends CustomType {
+  constructor(uri) {
+    super();
+    this.uri = uri;
+  }
+};
 var UserUpdatedDiscussion = class extends CustomType {
   constructor(line_number, column_number, update4) {
     super();
@@ -11167,7 +11254,7 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, refere
               new UserUnselectedDiscussionEntry(new EntryHover())
             ),
             (() => {
-              let _pipe = on_click(
+              let _pipe = on_non_ctrl_click(
                 new UserClickedDiscussionEntry(
                   element_line_number,
                   element_column_number
@@ -11263,7 +11350,7 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, refere
               new UserUnselectedDiscussionEntry(new EntryHover())
             ),
             (() => {
-              let _pipe = on_click(
+              let _pipe = on_non_ctrl_click(
                 new UserClickedDiscussionEntry(
                   element_line_number,
                   element_column_number
@@ -11363,10 +11450,13 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, el
             new UserUnselectedDiscussionEntry(new EntryHover())
           ),
           (() => {
-            let _pipe = on_click(
-              new UserClickedDiscussionEntry(
-                element_line_number,
-                element_column_number
+            let _pipe = on_ctrl_click(
+              new UserCtrlClickedNode(node_declaration.topic_id),
+              new Some(
+                new UserClickedDiscussionEntry(
+                  element_line_number,
+                  element_column_number
+                )
               )
             );
             return stop_propagation(_pipe);
@@ -11455,10 +11545,13 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
             new UserUnselectedDiscussionEntry(new EntryHover())
           ),
           (() => {
-            let _pipe = on_click(
-              new UserClickedDiscussionEntry(
-                element_line_number,
-                element_column_number
+            let _pipe = on_ctrl_click(
+              new UserCtrlClickedNode(referenced_node_declaration.topic_id),
+              new Some(
+                new UserClickedDiscussionEntry(
+                  element_line_number,
+                  element_column_number
+                )
               )
             );
             return stop_propagation(_pipe);
@@ -12100,8 +12193,8 @@ function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
       _block$4 = partition(
         _pipe$4,
         (path2) => {
-          let relative = replace(path2, parent_prefix, "");
-          return contains_string(relative, "/");
+          let relative2 = replace(path2, parent_prefix, "");
+          return contains_string(relative2, "/");
         }
       );
       let $2 = _block$4;
@@ -12112,9 +12205,9 @@ function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
       let _pipe$6 = map2(
         _pipe$5,
         (dir) => {
-          let relative = replace(dir, parent_prefix, "");
+          let relative2 = replace(dir, parent_prefix, "");
           let _block$6;
-          let _pipe$62 = split2(relative, "/");
+          let _pipe$62 = split2(relative2, "/");
           let _pipe$7 = first(_pipe$62);
           _block$6 = unwrap2(_pipe$7, "");
           let first_dir = _block$6;
@@ -12224,6 +12317,12 @@ var UserClickedDiscussionEntry2 = class extends CustomType {
     super();
     this.line_number = line_number;
     this.column_number = column_number;
+  }
+};
+var UserCtrlClickedNode2 = class extends CustomType {
+  constructor(uri) {
+    super();
+    this.uri = uri;
   }
 };
 var UserClickedInsideDiscussion2 = class extends CustomType {
@@ -12715,7 +12814,7 @@ function update3(model, msg) {
     echo3(
       "Unselecting discussion " + inspect2(kind),
       "src/o11a_client.gleam",
-      364
+      365
     );
     return [
       (() => {
@@ -12787,10 +12886,36 @@ function update3(model, msg) {
         }
       )
     ];
+  } else if (msg instanceof UserCtrlClickedNode2) {
+    let uri = msg.uri;
+    let _block;
+    let $1 = split_once(uri, "#");
+    if ($1.isOk()) {
+      let uri$1 = $1[0][0];
+      let fragment4 = $1[0][1];
+      _block = [uri$1, new Some(fragment4)];
+    } else {
+      _block = [uri, new None()];
+    }
+    let $ = _block;
+    let path2 = $[0];
+    let fragment3 = $[1];
+    let path$1 = "/" + path2;
+    console_log(
+      "User clicked node " + path$1 + " # " + (() => {
+        if (fragment3 instanceof Some) {
+          let fragment$1 = fragment3[0];
+          return fragment$1;
+        } else {
+          return "";
+        }
+      })()
+    );
+    return [model, push(path$1, new None(), fragment3)];
   } else if (msg instanceof UserClickedInsideDiscussion2) {
     let line_number = msg.line_number;
     let column_number = msg.column_number;
-    echo3("User clicked inside discussion", "src/o11a_client.gleam", 404);
+    echo3("User clicked inside discussion", "src/o11a_client.gleam", 425);
     let _block;
     let $ = !isEqual(
       model.selected_discussion,
@@ -12865,7 +12990,7 @@ function update3(model, msg) {
     let model$3 = _block$2;
     return [model$3, none()];
   } else if (msg instanceof UserClickedOutsideDiscussion) {
-    echo3("User clicked outside discussion", "src/o11a_client.gleam", 430);
+    echo3("User clicked outside discussion", "src/o11a_client.gleam", 451);
     return [
       (() => {
         let _record = model;
@@ -12925,7 +13050,7 @@ function update3(model, msg) {
       echo3(
         "Focusing discussion input, user is typing",
         "src/o11a_client.gleam",
-        462
+        483
       );
       set_is_user_typing(true);
       return [
@@ -12971,7 +13096,7 @@ function update3(model, msg) {
         none()
       ];
     } else if (discussion_effect instanceof UnfocusDiscussionInput) {
-      echo3("Unfocusing discussion input", "src/o11a_client.gleam", 485);
+      echo3("Unfocusing discussion input", "src/o11a_client.gleam", 506);
       set_is_user_typing(false);
       return [model, none()];
     } else if (discussion_effect instanceof MaximizeDiscussion) {
@@ -13154,10 +13279,13 @@ function map_audit_page_msg(msg) {
     let column_number = msg.column_number;
     let update$1 = msg.update;
     return new UserUpdatedDiscussion2(line_number, column_number, update$1);
-  } else {
+  } else if (msg instanceof UserClickedInsideDiscussion) {
     let line_number = msg.line_number;
     let column_number = msg.column_number;
     return new UserClickedInsideDiscussion2(line_number, column_number);
+  } else {
+    let uri = msg.uri;
+    return new UserCtrlClickedNode2(uri);
   }
 }
 function map_discussion_msg2(msg, selected_discussion) {

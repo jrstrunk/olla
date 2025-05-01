@@ -7,6 +7,7 @@ import gleam/pair
 import gleam/result
 import gleam/string
 import lib/enumerate
+import lib/eventx
 import lustre/attribute
 import lustre/element
 import lustre/element/html
@@ -49,6 +50,7 @@ pub type Msg(msg) {
   )
   UserUnselectedDiscussionEntry(kind: DiscussionSelectKind)
   UserClickedDiscussionEntry(line_number: Int, column_number: Int)
+  UserCtrlClickedNode(uri: String)
   UserUpdatedDiscussion(
     line_number: Int,
     column_number: Int,
@@ -242,7 +244,7 @@ fn inline_comment_preview_view(
               event.on_mouse_leave(UserUnselectedDiscussionEntry(
                 kind: EntryHover,
               )),
-              event.on_click(UserClickedDiscussionEntry(
+              eventx.on_non_ctrl_click(UserClickedDiscussionEntry(
                 line_number: element_line_number,
                 column_number: element_column_number,
               ))
@@ -311,7 +313,7 @@ fn inline_comment_preview_view(
               event.on_mouse_leave(UserUnselectedDiscussionEntry(
                 kind: EntryHover,
               )),
-              event.on_click(UserClickedDiscussionEntry(
+              eventx.on_non_ctrl_click(UserClickedDiscussionEntry(
                 line_number: element_line_number,
                 column_number: element_column_number,
               ))
@@ -446,10 +448,13 @@ fn declaration_node_view(
             is_reference: False,
           )),
           event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: EntryHover)),
-          event.on_click(UserClickedDiscussionEntry(
-            line_number: element_line_number,
-            column_number: element_column_number,
-          ))
+          eventx.on_ctrl_click(
+            ctrl_click: UserCtrlClickedNode(uri: node_declaration.topic_id),
+            non_ctrl_click: option.Some(UserClickedDiscussionEntry(
+              line_number: element_line_number,
+              column_number: element_column_number,
+            )),
+          )
             |> event.stop_propagation,
         ],
         [html.text(tokens)],
@@ -525,10 +530,15 @@ fn reference_node_view(
             is_reference: True,
           )),
           event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: EntryHover)),
-          event.on_click(UserClickedDiscussionEntry(
-            line_number: element_line_number,
-            column_number: element_column_number,
-          ))
+          eventx.on_ctrl_click(
+            ctrl_click: UserCtrlClickedNode(
+              uri: referenced_node_declaration.topic_id,
+            ),
+            non_ctrl_click: option.Some(UserClickedDiscussionEntry(
+              line_number: element_line_number,
+              column_number: element_column_number,
+            )),
+          )
             |> event.stop_propagation,
         ],
         [html.text(tokens)],
