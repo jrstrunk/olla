@@ -410,7 +410,10 @@ fn declaration_node_view(
     [
       html.span(
         [
-          attribute.id(node_declaration.topic_id),
+          attribute.id(case string.split_once(node_declaration.topic_id, "#") {
+            Ok(#(_page_path, page_id)) -> page_id
+            Error(..) -> node_declaration.topic_id
+          }),
           attribute.class(preprocessor.node_declaration_kind_to_string(
             node_declaration.kind,
           )),

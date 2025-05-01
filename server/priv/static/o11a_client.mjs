@@ -11313,7 +11313,17 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, el
     toList([
       span(
         toList([
-          id(node_declaration.topic_id),
+          id(
+            (() => {
+              let $ = split_once(node_declaration.topic_id, "#");
+              if ($.isOk()) {
+                let page_id = $[0][1];
+                return page_id;
+              } else {
+                return node_declaration.topic_id;
+              }
+            })()
+          ),
           class$(
             node_declaration_kind_to_string(node_declaration.kind)
           ),
