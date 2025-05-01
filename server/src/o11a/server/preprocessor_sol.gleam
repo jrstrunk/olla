@@ -1047,9 +1047,8 @@ fn do_count_node_references(
     | EnumValue(..)
     | Literal(..) -> declarations
 
-    ContractDefinitionNode(nodes:, base_contracts:, name:, contract_kind:, ..) -> {
-      let title =
-        audit_metadata.contract_kind_to_string(contract_kind) <> " " <> name
+    ContractDefinitionNode(nodes:, base_contracts:, name:, ..) -> {
+      let title = name
       let contract_id = parent_id <> "#" <> name
 
       do_count_node_references_multi(declarations, nodes, title, contract_id)
@@ -1067,10 +1066,10 @@ fn do_count_node_references(
       ..,
     ) -> {
       let title = case function_kind {
-        audit_metadata.Function -> "function " <> name
-        audit_metadata.Constructor -> "constructor"
-        audit_metadata.Fallback -> "fallback function"
-        audit_metadata.Receive -> "receive function"
+        audit_metadata.Function -> parent_title <> "." <> name
+        audit_metadata.Constructor -> parent_title <> " constructor"
+        audit_metadata.Fallback -> parent_title <> "fallback function"
+        audit_metadata.Receive -> parent_title <> "receive function"
       }
       let function_id =
         parent_id
