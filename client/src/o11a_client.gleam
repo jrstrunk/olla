@@ -206,6 +206,7 @@ pub type Msg {
     topic_id: String,
     topic_title: String,
     is_reference: Bool,
+    references: List(preprocessor.NodeReference),
   )
   UserUnselectedDiscussionEntry(kind: audit_page.DiscussionSelectKind)
   UserClickedDiscussionEntry(line_number: Int, column_number: Int)
@@ -244,20 +245,32 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       )
     }
 
-    ClientFetchedSourceFile(page_path, source_files) -> #(
-      Model(
-        ..model,
-        source_files: dict.insert(model.source_files, page_path, source_files),
-        keyboard_model: page_navigation.Model(
-          ..model.keyboard_model,
-          line_count: case source_files {
-            Ok(source_files) -> list.length(source_files)
-            Error(..) -> model.keyboard_model.line_count
-          },
+    ClientFetchedSourceFile(page_path, source_files) -> {
+      case source_files {
+        Ok(..) -> io.println("Successfully fetched source file " <> page_path)
+        Error(e) ->
+          io.println(
+            "Failed to fetch source file "
+            <> page_path
+            <> ": "
+            <> string.inspect(e),
+          )
+      }
+      #(
+        Model(
+          ..model,
+          source_files: dict.insert(model.source_files, page_path, source_files),
+          keyboard_model: page_navigation.Model(
+            ..model.keyboard_model,
+            line_count: case source_files {
+              Ok(source_files) -> list.length(source_files)
+              Error(..) -> model.keyboard_model.line_count
+            },
+          ),
         ),
-      ),
-      effect.none(),
-    )
+        effect.none(),
+      )
+    }
 
     ClientFetchedDiscussion(audit_name:, discussion:) ->
       case discussion {
@@ -298,6 +311,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       topic_id:,
       topic_title:,
       is_reference:,
+      references:,
     ) -> {
       let selected_discussion = #(line_number, column_number)
 
@@ -315,6 +329,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               topic_id:,
               topic_title:,
               is_reference:,
+              references:,
             ),
           )
       }
@@ -598,7 +613,6 @@ fn view(model: Model) {
         ),
         audit_tree.view(
           audit_dashboard.view(discussion, audit_name),
-          True,
           option.None,
           model.file_tree,
           audit_name,
@@ -649,7 +663,6 @@ fn view(model: Model) {
             selected_discussion:,
           )
             |> element.map(map_audit_page_msg),
-          True,
           case selected_discussion {
             option.Some(selected_discussion) -> {
               discussion.panel_view(selected_discussion.model, discussion)
@@ -711,6 +724,7 @@ fn map_audit_page_msg(msg) {
       topic_id:,
       topic_title:,
       is_reference:,
+      references:,
     ) ->
       UserSelectedDiscussionEntry(
         kind:,
@@ -720,6 +734,7 @@ fn map_audit_page_msg(msg) {
         topic_id:,
         topic_title:,
         is_reference:,
+        references:,
       )
     audit_page.UserUnselectedDiscussionEntry(kind:) ->
       UserUnselectedDiscussionEntry(kind:)

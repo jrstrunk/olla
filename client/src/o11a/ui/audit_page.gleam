@@ -45,6 +45,7 @@ pub type Msg(msg) {
     topic_id: String,
     topic_title: String,
     is_reference: Bool,
+    references: List(preprocessor.NodeReference),
   )
   UserUnselectedDiscussionEntry(kind: DiscussionSelectKind)
   UserClickedDiscussionEntry(line_number: Int, column_number: Int)
@@ -91,12 +92,13 @@ fn loc_view(
       ])
     }
 
-    preprocessor.SingleDeclarationLine(topic_id:, topic_title:) ->
+    preprocessor.SingleDeclarationLine(node_declaration:) ->
       line_container_view(
         discussion:,
         loc:,
-        line_topic_id: topic_id,
-        line_topic_title: topic_title,
+        line_topic_id: node_declaration.topic_id,
+        line_topic_title: node_declaration.title,
+        line_references: node_declaration.references,
         selected_discussion:,
       )
 
@@ -106,6 +108,7 @@ fn loc_view(
         loc:,
         line_topic_id: loc.line_id,
         line_topic_title: loc.line_tag,
+        line_references: [],
         selected_discussion:,
       )
   }
@@ -116,6 +119,7 @@ fn line_container_view(
   loc loc: preprocessor.PreProcessedLine,
   line_topic_id line_topic_id: String,
   line_topic_title line_topic_title: String,
+  line_references line_references,
   selected_discussion selected_discussion: option.Option(DiscussionReference),
 ) {
   let #(parent_notes, info_notes) =
@@ -169,6 +173,7 @@ fn line_container_view(
           parent_notes,
           topic_id: line_topic_id,
           topic_title: line_topic_title,
+          references: line_references,
           element_line_number: loc.line_number,
           element_column_number: column_count,
           selected_discussion:,
@@ -183,6 +188,7 @@ fn inline_comment_preview_view(
   parent_notes: List(computed_note.ComputedNote),
   topic_id topic_id: String,
   topic_title topic_title: String,
+  references references,
   element_line_number element_line_number,
   element_column_number element_column_number,
   selected_discussion selected_discussion: option.Option(DiscussionReference),
@@ -219,6 +225,7 @@ fn inline_comment_preview_view(
                 node_id: option.None,
                 topic_id:,
                 topic_title:,
+                references:,
                 is_reference: False,
               )),
               event.on_blur(UserUnselectedDiscussionEntry(kind: EntryFocus)),
@@ -229,6 +236,7 @@ fn inline_comment_preview_view(
                 node_id: option.None,
                 topic_id:,
                 topic_title:,
+                references:,
                 is_reference: False,
               )),
               event.on_mouse_leave(UserUnselectedDiscussionEntry(
@@ -286,6 +294,7 @@ fn inline_comment_preview_view(
                 node_id: option.None,
                 topic_id:,
                 topic_title:,
+                references:,
                 is_reference: False,
               )),
               event.on_blur(UserUnselectedDiscussionEntry(kind: EntryFocus)),
@@ -296,6 +305,7 @@ fn inline_comment_preview_view(
                 node_id: option.None,
                 topic_id:,
                 topic_title:,
+                references:,
                 is_reference: False,
               )),
               event.on_mouse_leave(UserUnselectedDiscussionEntry(
@@ -418,6 +428,7 @@ fn declaration_node_view(
             node_id: option.Some(node_id),
             topic_id: node_declaration.topic_id,
             topic_title: node_declaration.title,
+            references: node_declaration.references,
             is_reference: False,
           )),
           event.on_blur(UserUnselectedDiscussionEntry(kind: EntryFocus)),
@@ -428,6 +439,7 @@ fn declaration_node_view(
             node_id: option.Some(node_id),
             topic_id: node_declaration.topic_id,
             topic_title: node_declaration.title,
+            references: node_declaration.references,
             is_reference: False,
           )),
           event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: EntryHover)),
@@ -495,6 +507,7 @@ fn reference_node_view(
             node_id: option.Some(referenced_node_id),
             topic_id: referenced_node_declaration.topic_id,
             topic_title: referenced_node_declaration.title,
+            references: referenced_node_declaration.references,
             is_reference: True,
           )),
           event.on_blur(UserUnselectedDiscussionEntry(kind: EntryFocus)),
@@ -505,6 +518,7 @@ fn reference_node_view(
             node_id: option.Some(referenced_node_id),
             topic_id: referenced_node_declaration.topic_id,
             topic_title: referenced_node_declaration.title,
+            references: referenced_node_declaration.references,
             is_reference: True,
           )),
           event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: EntryHover)),

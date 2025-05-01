@@ -15,6 +15,7 @@ import lustre/element/html
 import lustre/event
 import o11a/computed_note
 import o11a/note
+import o11a/preprocessor
 
 pub type Model {
   Model(
@@ -25,6 +26,7 @@ pub type Model {
     column_number: Int,
     topic_id: String,
     topic_title: String,
+    references: List(preprocessor.NodeReference),
     current_note_draft: String,
     current_thread_id: String,
     active_thread: option.Option(ActiveThread),
@@ -50,6 +52,7 @@ pub fn init(
   topic_id topic_id,
   topic_title topic_title,
   is_reference is_reference,
+  references references,
 ) {
   Model(
     is_reference:,
@@ -59,6 +62,7 @@ pub fn init(
     column_number:,
     topic_id:,
     topic_title:,
+    references:,
     current_note_draft: "",
     current_thread_id: topic_id,
     active_thread: option.None,
@@ -426,44 +430,64 @@ fn thread_header_view(model: Model) {
         html.hr([attribute.class("mt-[.5rem]")]),
       ])
     option.None ->
-      html.div(
-        [
-          attribute.class(
-            "flex items-start justify-between width-full mb-[.5rem]",
-          ),
-        ],
-        [
-          html.span([attribute.class("pt-[.1rem] underline")], [
-            case model.is_reference {
-              True ->
-                html.a([attribute.href("/" <> model.topic_id)], [
-                  html.text(model.topic_title),
-                ])
-              False -> html.text(model.topic_title)
-            },
-          ]),
-          html.div([], [
-            case model.is_reference {
-              True ->
-                html.button(
-                  [
-                    event.on_click(UserToggledReferenceDiscussion),
-                    attribute.class("icon-button p-[.3rem] mr-[.5rem]"),
-                  ],
-                  [lucide.x([])],
-                )
-              False -> element.fragment([])
-            },
-            html.button(
-              [
-                event.on_click(UserMaximizeThread),
-                attribute.class("icon-button p-[.3rem] "),
-              ],
-              [lucide.maximize_2([])],
+      html.div([], [
+        html.div(
+          [
+            attribute.class(
+              "flex items-start justify-between width-full mb-[.5rem]",
             ),
-          ]),
-        ],
-      )
+          ],
+          [
+            html.span([attribute.class("pt-[.1rem] underline")], [
+              case model.is_reference {
+                True ->
+                  html.a([attribute.href("/" <> model.topic_id)], [
+                    html.text(model.topic_title),
+                  ])
+                False -> html.text(model.topic_title)
+              },
+            ]),
+            html.div([], [
+              case model.is_reference {
+                True ->
+                  html.button(
+                    [
+                      event.on_click(UserToggledReferenceDiscussion),
+                      attribute.class("icon-button p-[.3rem] mr-[.5rem]"),
+                    ],
+                    [lucide.x([])],
+                  )
+                False -> element.fragment([])
+              },
+              html.button(
+                [
+                  event.on_click(UserMaximizeThread),
+                  attribute.class("icon-button p-[.3rem] "),
+                ],
+                [lucide.maximize_2([])],
+              ),
+            ]),
+          ],
+        ),
+        references_view(model.references),
+      ])
+  }
+}
+
+fn references_view(references) {
+  case list.length(references) > 0 {
+    True ->
+      html.div([attribute.class("mb-[.5rem]")], [
+        html.p([], [html.text("References: ")]),
+        ..list.map(references, fn(reference: preprocessor.NodeReference) {
+          html.p([], [
+            html.a([attribute.href("/" <> reference.topic_id)], [
+              html.text(reference.title),
+            ]),
+          ])
+        })
+      ])
+    False -> element.fragment([])
   }
 }
 

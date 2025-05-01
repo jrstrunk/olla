@@ -72,10 +72,7 @@ pub fn preprocess_source(
           }
         })
 
-      preprocessor.SingleDeclarationLine(
-        topic_id: node_declaration.topic_id,
-        topic_title: node_declaration.title,
-      )
+      preprocessor.SingleDeclarationLine(node_declaration:)
     }
     0, 0 -> preprocessor.EmptyLine
     _, _ -> preprocessor.NonEmptyLine

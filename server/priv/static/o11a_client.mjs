@@ -7897,10 +7897,9 @@ var PreProcessedLine = class extends CustomType {
   }
 };
 var SingleDeclarationLine = class extends CustomType {
-  constructor(topic_id, topic_title) {
+  constructor(node_declaration) {
     super();
-    this.topic_id = topic_id;
-    this.topic_title = topic_title;
+    this.node_declaration = node_declaration;
   }
 };
 var NonEmptyLine = class extends CustomType {
@@ -7980,37 +7979,6 @@ var NodeReference = class extends CustomType {
     this.topic_id = topic_id;
   }
 };
-function pre_processed_line_significance_decoder() {
-  return field(
-    "type",
-    string3,
-    (variant) => {
-      if (variant === "single_declaration_line") {
-        return field(
-          "topic_id",
-          string3,
-          (topic_id) => {
-            return field(
-              "topic_title",
-              string3,
-              (topic_title) => {
-                return success(
-                  new SingleDeclarationLine(topic_id, topic_title)
-                );
-              }
-            );
-          }
-        );
-      } else if (variant === "non_empty_line") {
-        return success(new NonEmptyLine());
-      } else if (variant === "empty_line") {
-        return success(new EmptyLine());
-      } else {
-        return failure(new EmptyLine(), "PreProcessedLineSignificance");
-      }
-    }
-  );
-}
 function node_declaration_kind_to_string(kind) {
   if (kind instanceof ContractDeclaration) {
     return "contract";
@@ -8077,11 +8045,11 @@ function node_declaration_kind_from_string(kind) {
 }
 function node_reference_decoder() {
   return field(
-    "title",
+    "t",
     string3,
     (title2) => {
       return field(
-        "topic_id",
+        "i",
         string3,
         (topic_id) => {
           return success(new NodeReference(title2, topic_id));
@@ -8092,19 +8060,19 @@ function node_reference_decoder() {
 }
 function node_declaration_decoder() {
   return field(
-    "title",
+    "t",
     string3,
     (title2) => {
       return field(
-        "topic_id",
+        "i",
         string3,
         (topic_id) => {
           return field(
-            "kind",
+            "k",
             string3,
             (kind) => {
               return field(
-                "references",
+                "r",
                 list2(node_reference_decoder()),
                 (references) => {
                   return success(
@@ -8124,22 +8092,45 @@ function node_declaration_decoder() {
     }
   );
 }
-function pre_processed_node_decoder() {
+function pre_processed_line_significance_decoder() {
   return field(
-    "type",
+    "v",
     string3,
     (variant) => {
-      if (variant === "pre_processed_declaration") {
+      if (variant === "sdl") {
         return field(
-          "node_id",
+          "n",
+          node_declaration_decoder(),
+          (node_declaration) => {
+            return success(new SingleDeclarationLine(node_declaration));
+          }
+        );
+      } else if (variant === "nel") {
+        return success(new NonEmptyLine());
+      } else if (variant === "el") {
+        return success(new EmptyLine());
+      } else {
+        return failure(new EmptyLine(), "PreProcessedLineSignificance");
+      }
+    }
+  );
+}
+function pre_processed_node_decoder() {
+  return field(
+    "v",
+    string3,
+    (variant) => {
+      if (variant === "ppd") {
+        return field(
+          "i",
           int2,
           (node_id) => {
             return field(
-              "node_declaration",
+              "d",
               node_declaration_decoder(),
               (node_declaration) => {
                 return field(
-                  "tokens",
+                  "t",
                   string3,
                   (tokens) => {
                     return success(
@@ -8155,17 +8146,17 @@ function pre_processed_node_decoder() {
             );
           }
         );
-      } else if (variant === "pre_processed_reference") {
+      } else if (variant === "ppr") {
         return field(
-          "referenced_node_id",
+          "i",
           int2,
           (referenced_node_id) => {
             return field(
-              "referenced_node_declaration",
+              "d",
               node_declaration_decoder(),
               (referenced_node_declaration) => {
                 return field(
-                  "tokens",
+                  "t",
                   string3,
                   (tokens) => {
                     return success(
@@ -8181,21 +8172,21 @@ function pre_processed_node_decoder() {
             );
           }
         );
-      } else if (variant === "pre_processed_node") {
+      } else if (variant === "ppn") {
         return field(
-          "element",
+          "e",
           string3,
           (element4) => {
             return success(new PreProcessedNode(element4));
           }
         );
-      } else if (variant === "pre_processed_gap_node") {
+      } else if (variant === "ppgn") {
         return field(
-          "element",
+          "e",
           string3,
           (element4) => {
             return field(
-              "leading_spaces",
+              "s",
               int2,
               (leading_spaces) => {
                 return success(
@@ -9766,7 +9757,7 @@ function on_ctrl_enter(msg) {
 
 // build/dev/javascript/o11a_client/o11a/ui/discussion.mjs
 var Model2 = class extends CustomType {
-  constructor(is_reference, show_reference_discussion, user_name, line_number, column_number, topic_id, topic_title, current_note_draft, current_thread_id, active_thread, show_expanded_message_box, current_expanded_message_draft, expanded_messages, editing_note) {
+  constructor(is_reference, show_reference_discussion, user_name, line_number, column_number, topic_id, topic_title, references, current_note_draft, current_thread_id, active_thread, show_expanded_message_box, current_expanded_message_draft, expanded_messages, editing_note) {
     super();
     this.is_reference = is_reference;
     this.show_reference_discussion = show_reference_discussion;
@@ -9775,6 +9766,7 @@ var Model2 = class extends CustomType {
     this.column_number = column_number;
     this.topic_id = topic_id;
     this.topic_title = topic_title;
+    this.references = references;
     this.current_note_draft = current_note_draft;
     this.current_thread_id = current_thread_id;
     this.active_thread = active_thread;
@@ -9883,7 +9875,7 @@ var MaximizeDiscussion = class extends CustomType {
 };
 var None3 = class extends CustomType {
 };
-function init3(line_number, column_number, topic_id, topic_title, is_reference) {
+function init3(line_number, column_number, topic_id, topic_title, is_reference, references) {
   return new Model2(
     is_reference,
     false,
@@ -9892,6 +9884,7 @@ function init3(line_number, column_number, topic_id, topic_title, is_reference) 
     column_number,
     topic_id,
     topic_title,
+    references,
     "",
     topic_id,
     new None(),
@@ -9969,6 +9962,33 @@ function reference_header_view(model, current_thread_notes) {
     ])
   );
 }
+function references_view(references) {
+  let $ = length(references) > 0;
+  if ($) {
+    return div(
+      toList([class$("mb-[.5rem]")]),
+      prepend(
+        p(toList([]), toList([text3("References: ")])),
+        map2(
+          references,
+          (reference) => {
+            return p(
+              toList([]),
+              toList([
+                a(
+                  toList([href("/" + reference.topic_id)]),
+                  toList([text3(reference.title)])
+                )
+              ])
+            );
+          }
+        )
+      )
+    );
+  } else {
+    return fragment2(toList([]));
+  }
+}
 function thread_header_view(model) {
   let $ = model.active_thread;
   if ($ instanceof Some) {
@@ -10011,54 +10031,60 @@ function thread_header_view(model) {
     );
   } else {
     return div(
+      toList([]),
       toList([
-        class$(
-          "flex items-start justify-between width-full mb-[.5rem]"
-        )
-      ]),
-      toList([
-        span(
-          toList([class$("pt-[.1rem] underline")]),
-          toList([
-            (() => {
-              let $1 = model.is_reference;
-              if ($1) {
-                return a(
-                  toList([href("/" + model.topic_id)]),
-                  toList([text3(model.topic_title)])
-                );
-              } else {
-                return text3(model.topic_title);
-              }
-            })()
-          ])
-        ),
         div(
-          toList([]),
           toList([
-            (() => {
-              let $1 = model.is_reference;
-              if ($1) {
-                return button(
-                  toList([
-                    on_click(new UserToggledReferenceDiscussion()),
-                    class$("icon-button p-[.3rem] mr-[.5rem]")
-                  ]),
-                  toList([x(toList([]))])
-                );
-              } else {
-                return fragment2(toList([]));
-              }
-            })(),
-            button(
+            class$(
+              "flex items-start justify-between width-full mb-[.5rem]"
+            )
+          ]),
+          toList([
+            span(
+              toList([class$("pt-[.1rem] underline")]),
               toList([
-                on_click(new UserMaximizeThread()),
-                class$("icon-button p-[.3rem] ")
-              ]),
-              toList([maximize_2(toList([]))])
+                (() => {
+                  let $1 = model.is_reference;
+                  if ($1) {
+                    return a(
+                      toList([href("/" + model.topic_id)]),
+                      toList([text3(model.topic_title)])
+                    );
+                  } else {
+                    return text3(model.topic_title);
+                  }
+                })()
+              ])
+            ),
+            div(
+              toList([]),
+              toList([
+                (() => {
+                  let $1 = model.is_reference;
+                  if ($1) {
+                    return button(
+                      toList([
+                        on_click(new UserToggledReferenceDiscussion()),
+                        class$("icon-button p-[.3rem] mr-[.5rem]")
+                      ]),
+                      toList([x(toList([]))])
+                    );
+                  } else {
+                    return fragment2(toList([]));
+                  }
+                })(),
+                button(
+                  toList([
+                    on_click(new UserMaximizeThread()),
+                    class$("icon-button p-[.3rem] ")
+                  ]),
+                  toList([maximize_2(toList([]))])
+                )
+              ])
             )
           ])
-        )
+        ),
+        references_view(model.references)
       ])
     );
   }
@@ -10322,6 +10348,7 @@ function update2(model, msg) {
           _record.column_number,
           _record.topic_id,
           _record.topic_title,
+          _record.references,
           draft,
           _record.current_thread_id,
           _record.active_thread,
@@ -10394,6 +10421,7 @@ function update2(model, msg) {
               _record.column_number,
               _record.topic_id,
               _record.topic_title,
+              _record.references,
               "",
               _record.current_thread_id,
               _record.active_thread,
@@ -10421,6 +10449,7 @@ function update2(model, msg) {
           _record.column_number,
           _record.topic_id,
           _record.topic_title,
+          _record.references,
           _record.current_note_draft,
           new_thread_id,
           new Some(
@@ -10470,6 +10499,7 @@ function update2(model, msg) {
           _record.column_number,
           _record.topic_id,
           _record.topic_title,
+          _record.references,
           _record.current_note_draft,
           new_current_thread_id,
           new_active_thread,
@@ -10494,6 +10524,7 @@ function update2(model, msg) {
           _record.column_number,
           _record.topic_id,
           _record.topic_title,
+          _record.references,
           _record.current_note_draft,
           _record.current_thread_id,
           _record.active_thread,
@@ -10518,6 +10549,7 @@ function update2(model, msg) {
           _record.column_number,
           _record.topic_id,
           _record.topic_title,
+          _record.references,
           _record.current_note_draft,
           _record.current_thread_id,
           _record.active_thread,
@@ -10544,6 +10576,7 @@ function update2(model, msg) {
             _record.column_number,
             _record.topic_id,
             _record.topic_title,
+            _record.references,
             _record.current_note_draft,
             _record.current_thread_id,
             _record.active_thread,
@@ -10567,6 +10600,7 @@ function update2(model, msg) {
             _record.column_number,
             _record.topic_id,
             _record.topic_title,
+            _record.references,
             _record.current_note_draft,
             _record.current_thread_id,
             _record.active_thread,
@@ -10596,6 +10630,7 @@ function update2(model, msg) {
           _record.column_number,
           _record.topic_id,
           _record.topic_title,
+          _record.references,
           _record.current_note_draft,
           _record.current_thread_id,
           _record.active_thread,
@@ -10632,6 +10667,7 @@ function update2(model, msg) {
             _record.column_number,
             _record.topic_id,
             _record.topic_title,
+            _record.references,
             get_message_classification_prefix(note$1.significance) + note$1.message,
             _record.current_thread_id,
             _record.active_thread,
@@ -10665,6 +10701,7 @@ function update2(model, msg) {
           _record.column_number,
           _record.topic_id,
           _record.topic_title,
+          _record.references,
           "",
           _record.current_thread_id,
           _record.active_thread,
@@ -10688,6 +10725,7 @@ function update2(model, msg) {
           _record.column_number,
           _record.topic_id,
           _record.topic_title,
+          _record.references,
           _record.current_note_draft,
           _record.current_thread_id,
           _record.active_thread,
@@ -10881,7 +10919,7 @@ var DiscussionReference = class extends CustomType {
   }
 };
 var UserSelectedDiscussionEntry = class extends CustomType {
-  constructor(kind, line_number, column_number, node_id, topic_id, topic_title, is_reference) {
+  constructor(kind, line_number, column_number, node_id, topic_id, topic_title, is_reference, references) {
     super();
     this.kind = kind;
     this.line_number = line_number;
@@ -10890,6 +10928,7 @@ var UserSelectedDiscussionEntry = class extends CustomType {
     this.topic_id = topic_id;
     this.topic_title = topic_title;
     this.is_reference = is_reference;
+    this.references = references;
   }
 };
 var UserUnselectedDiscussionEntry = class extends CustomType {
@@ -10960,7 +10999,7 @@ function discussion_view(attrs, discussion, element_line_number, element_column_
     return fragment2(toList([]));
   }
 }
-function inline_comment_preview_view(parent_notes, topic_id, topic_title, element_line_number, element_column_number, selected_discussion, discussion) {
+function inline_comment_preview_view(parent_notes, topic_id, topic_title, references, element_line_number, element_column_number, selected_discussion, discussion) {
   let note_result = find(
     parent_notes,
     (note) => {
@@ -11000,7 +11039,8 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
                 new None(),
                 topic_id,
                 topic_title,
-                false
+                false,
+                references
               )
             ),
             on_blur(new UserUnselectedDiscussionEntry(new EntryFocus())),
@@ -11012,7 +11052,8 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
                 new None(),
                 topic_id,
                 topic_title,
-                false
+                false,
+                references
               )
             ),
             on_mouse_leave(
@@ -11094,7 +11135,8 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
                 new None(),
                 topic_id,
                 topic_title,
-                false
+                false,
+                references
               )
             ),
             on_blur(new UserUnselectedDiscussionEntry(new EntryFocus())),
@@ -11106,7 +11148,8 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, elemen
                 new None(),
                 topic_id,
                 topic_title,
-                false
+                false,
+                references
               )
             ),
             on_mouse_leave(
@@ -11182,7 +11225,8 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, el
               new Some(node_id),
               node_declaration.topic_id,
               node_declaration.title,
-              false
+              false,
+              node_declaration.references
             )
           ),
           on_blur(new UserUnselectedDiscussionEntry(new EntryFocus())),
@@ -11194,7 +11238,8 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, el
               new Some(node_id),
               node_declaration.topic_id,
               node_declaration.title,
-              false
+              false,
+              node_declaration.references
             )
           ),
           on_mouse_leave(
@@ -11272,7 +11317,8 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
               new Some(referenced_node_id),
               referenced_node_declaration.topic_id,
               referenced_node_declaration.title,
-              true
+              true,
+              referenced_node_declaration.references
             )
           ),
           on_blur(new UserUnselectedDiscussionEntry(new EntryFocus())),
@@ -11284,7 +11330,8 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
               new Some(referenced_node_id),
               referenced_node_declaration.topic_id,
               referenced_node_declaration.title,
-              true
+              true,
+              referenced_node_declaration.references
             )
           ),
           on_mouse_leave(
@@ -11476,7 +11523,7 @@ function get_notes(discussion, leading_spaces, topic_id) {
   let info_notes = _block$1;
   return [parent_notes, info_notes];
 }
-function line_container_view(discussion, loc, line_topic_id, line_topic_title, selected_discussion) {
+function line_container_view(discussion, loc, line_topic_id, line_topic_title, line_references, selected_discussion) {
   let $ = get_notes(discussion, loc.leading_spaces, line_topic_id);
   let parent_notes = $[0];
   let info_notes = $[1];
@@ -11545,6 +11592,7 @@ function line_container_view(discussion, loc, line_topic_id, line_topic_title, s
             parent_notes,
             line_topic_id,
             line_topic_title,
+            line_references,
             loc.line_number,
             column_count,
             selected_discussion,
@@ -11569,13 +11617,13 @@ function loc_view(discussion, loc, selected_discussion) {
       )
     );
   } else if ($ instanceof SingleDeclarationLine) {
-    let topic_id = $.topic_id;
-    let topic_title = $.topic_title;
+    let node_declaration = $.node_declaration;
     return line_container_view(
       discussion,
       loc,
-      topic_id,
-      topic_title,
+      node_declaration.topic_id,
+      node_declaration.title,
+      node_declaration.references,
       selected_discussion
     );
   } else {
@@ -11584,6 +11632,7 @@ function loc_view(discussion, loc, selected_discussion) {
       loc,
       loc.line_id,
       loc.line_tag,
+      toList([]),
       selected_discussion
     );
   }
@@ -11819,7 +11868,7 @@ function audit_file_tree_view(grouped_files, audit_name, current_file_path) {
     ])
   );
 }
-function view4(file_contents, wrap_contents, side_panel, grouped_files, audit_name, current_file_path) {
+function view4(file_contents, side_panel, grouped_files, audit_name, current_file_path) {
   return div(
     toList([id("tree-grid")]),
     toList([
@@ -11835,18 +11884,7 @@ function view4(file_contents, wrap_contents, side_panel, grouped_files, audit_na
       ),
       div(toList([id("tree-resizer")]), toList([])),
       div(
-        toList([
-          id("file-contents"),
-          class$(
-            (() => {
-              if (wrap_contents) {
-                return "wrap";
-              } else {
-                return "nowrap";
-              }
-            })()
-          )
-        ]),
+        toList([id("file-contents")]),
         toList([file_contents])
       ),
       (() => {
@@ -12046,7 +12084,7 @@ var UserEnteredKey = class extends CustomType {
   }
 };
 var UserSelectedDiscussionEntry2 = class extends CustomType {
-  constructor(kind, line_number, column_number, node_id, topic_id, topic_title, is_reference) {
+  constructor(kind, line_number, column_number, node_id, topic_id, topic_title, is_reference, references) {
     super();
     this.kind = kind;
     this.line_number = line_number;
@@ -12055,6 +12093,7 @@ var UserSelectedDiscussionEntry2 = class extends CustomType {
     this.topic_id = topic_id;
     this.topic_title = topic_title;
     this.is_reference = is_reference;
+    this.references = references;
   }
 };
 var UserUnselectedDiscussionEntry2 = class extends CustomType {
@@ -12369,6 +12408,16 @@ function update3(model, msg) {
   } else if (msg instanceof ClientFetchedSourceFile) {
     let page_path = msg.page_path;
     let source_files = msg.source_file;
+    if (source_files.isOk()) {
+      console_log("Successfully fetched source file " + page_path);
+    } else {
+      let e = source_files[0];
+      console_log(
+        "Failed to fetch source file " + page_path + ": " + inspect2(
+          e
+        )
+      );
+    }
     return [
       (() => {
         let _record = model;
@@ -12479,6 +12528,7 @@ function update3(model, msg) {
     let topic_id = msg.topic_id;
     let topic_title = msg.topic_title;
     let is_reference = msg.is_reference;
+    let references = msg.references;
     let selected_discussion = [line_number, column_number];
     let _block;
     let $ = map_get(model.discussion_models, selected_discussion);
@@ -12493,7 +12543,8 @@ function update3(model, msg) {
           column_number,
           topic_id,
           topic_title,
-          is_reference
+          is_reference,
+          references
         )
       );
     }
@@ -12547,7 +12598,7 @@ function update3(model, msg) {
     echo3(
       "Unselecting discussion " + inspect2(kind),
       "src/o11a_client.gleam",
-      349
+      364
     );
     return [
       (() => {
@@ -12622,7 +12673,7 @@ function update3(model, msg) {
   } else if (msg instanceof UserClickedInsideDiscussion2) {
     let line_number = msg.line_number;
     let column_number = msg.column_number;
-    echo3("User clicked inside discussion", "src/o11a_client.gleam", 389);
+    echo3("User clicked inside discussion", "src/o11a_client.gleam", 404);
     let _block;
     let $ = !isEqual(
       model.selected_discussion,
@@ -12697,7 +12748,7 @@ function update3(model, msg) {
     let model$3 = _block$2;
     return [model$3, none()];
   } else if (msg instanceof UserClickedOutsideDiscussion) {
-    echo3("User clicked outside discussion", "src/o11a_client.gleam", 415);
+    echo3("User clicked outside discussion", "src/o11a_client.gleam", 430);
     return [
       (() => {
         let _record = model;
@@ -12757,7 +12808,7 @@ function update3(model, msg) {
       echo3(
         "Focusing discussion input, user is typing",
         "src/o11a_client.gleam",
-        447
+        462
       );
       set_is_user_typing(true);
       return [
@@ -12803,7 +12854,7 @@ function update3(model, msg) {
         none()
       ];
     } else if (discussion_effect instanceof UnfocusDiscussionInput) {
-      echo3("Unfocusing discussion input", "src/o11a_client.gleam", 470);
+      echo3("Unfocusing discussion input", "src/o11a_client.gleam", 485);
       set_is_user_typing(false);
       return [model, none()];
     } else if (discussion_effect instanceof MaximizeDiscussion) {
@@ -12963,6 +13014,7 @@ function map_audit_page_msg(msg) {
     let topic_id = msg.topic_id;
     let topic_title = msg.topic_title;
     let is_reference = msg.is_reference;
+    let references = msg.references;
     return new UserSelectedDiscussionEntry2(
       kind,
       line_number,
@@ -12970,7 +13022,8 @@ function map_audit_page_msg(msg) {
       node_id,
       topic_id,
       topic_title,
-      is_reference
+      is_reference,
+      references
     );
   } else if (msg instanceof UserUnselectedDiscussionEntry) {
     let kind = msg.kind;
@@ -13016,7 +13069,6 @@ function view5(model) {
         ),
         view4(
           view(discussion, audit_name),
-          true,
           new None(),
           model.file_tree,
           audit_name,
@@ -13082,7 +13134,6 @@ function view5(model) {
             );
             return map5(_pipe$3, map_audit_page_msg);
           })(),
-          true,
           (() => {
             if (selected_discussion instanceof Some) {
               let selected_discussion$1 = selected_discussion[0];

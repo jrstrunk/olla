@@ -55,7 +55,7 @@ pub fn pre_processed_line_decoder() -> decode.Decoder(PreProcessedLine) {
 }
 
 pub type PreProcessedLineSignificance {
-  SingleDeclarationLine(topic_id: String, topic_title: String)
+  SingleDeclarationLine(node_declaration: NodeDeclaration)
   NonEmptyLine
   EmptyLine
 }
@@ -64,32 +64,27 @@ fn encode_pre_processed_line_significance(
   pre_processed_line_significance: PreProcessedLineSignificance,
 ) -> json.Json {
   case pre_processed_line_significance {
-    SingleDeclarationLine(..) ->
+    SingleDeclarationLine(node_declaration:) ->
       json.object([
-        #("type", json.string("single_declaration_line")),
-        #("topic_id", json.string(pre_processed_line_significance.topic_id)),
-        #(
-          "topic_title",
-          json.string(pre_processed_line_significance.topic_title),
-        ),
+        #("v", json.string("sdl")),
+        #("n", encode_node_declaration(node_declaration)),
       ])
-    NonEmptyLine -> json.object([#("type", json.string("non_empty_line"))])
-    EmptyLine -> json.object([#("type", json.string("empty_line"))])
+    NonEmptyLine -> json.object([#("v", json.string("nel"))])
+    EmptyLine -> json.object([#("v", json.string("el"))])
   }
 }
 
 fn pre_processed_line_significance_decoder() -> decode.Decoder(
   PreProcessedLineSignificance,
 ) {
-  use variant <- decode.field("type", decode.string)
+  use variant <- decode.field("v", decode.string)
   case variant {
-    "single_declaration_line" -> {
-      use topic_id <- decode.field("topic_id", decode.string)
-      use topic_title <- decode.field("topic_title", decode.string)
-      decode.success(SingleDeclarationLine(topic_id:, topic_title:))
+    "sdl" -> {
+      use node_declaration <- decode.field("n", node_declaration_decoder())
+      decode.success(SingleDeclarationLine(node_declaration:))
     }
-    "non_empty_line" -> decode.success(NonEmptyLine)
-    "empty_line" -> decode.success(EmptyLine)
+    "nel" -> decode.success(NonEmptyLine)
+    "el" -> decode.success(EmptyLine)
     _ -> decode.failure(EmptyLine, "PreProcessedLineSignificance")
   }
 }
@@ -113,76 +108,76 @@ fn encode_pre_processed_node(pre_processed_node: PreProcessedNode) -> json.Json 
   case pre_processed_node {
     PreProcessedDeclaration(..) ->
       json.object([
-        #("type", json.string("pre_processed_declaration")),
-        #("node_id", json.int(pre_processed_node.node_id)),
+        #("v", json.string("ppd")),
+        #("i", json.int(pre_processed_node.node_id)),
         #(
-          "node_declaration",
+          "d",
           encode_node_declaration(pre_processed_node.node_declaration),
         ),
-        #("tokens", json.string(pre_processed_node.tokens)),
+        #("t", json.string(pre_processed_node.tokens)),
       ])
     PreProcessedReference(..) ->
       json.object([
-        #("type", json.string("pre_processed_reference")),
-        #("referenced_node_id", json.int(pre_processed_node.referenced_node_id)),
+        #("v", json.string("ppr")),
+        #("i", json.int(pre_processed_node.referenced_node_id)),
         #(
-          "referenced_node_declaration",
+          "d",
           encode_node_declaration(
             pre_processed_node.referenced_node_declaration,
           ),
         ),
-        #("tokens", json.string(pre_processed_node.tokens)),
+        #("t", json.string(pre_processed_node.tokens)),
       ])
     PreProcessedNode(..) ->
       json.object([
-        #("type", json.string("pre_processed_node")),
-        #("element", json.string(pre_processed_node.element)),
+        #("v", json.string("ppn")),
+        #("e", json.string(pre_processed_node.element)),
       ])
     PreProcessedGapNode(..) ->
       json.object([
-        #("type", json.string("pre_processed_gap_node")),
-        #("element", json.string(pre_processed_node.element)),
-        #("leading_spaces", json.int(pre_processed_node.leading_spaces)),
+        #("v", json.string("ppgn")),
+        #("e", json.string(pre_processed_node.element)),
+        #("s", json.int(pre_processed_node.leading_spaces)),
       ])
   }
 }
 
 fn pre_processed_node_decoder() -> decode.Decoder(PreProcessedNode) {
-  use variant <- decode.field("type", decode.string)
+  use variant <- decode.field("v", decode.string)
   case variant {
-    "pre_processed_declaration" -> {
-      use node_id <- decode.field("node_id", decode.int)
+    "ppd" -> {
+      use node_id <- decode.field("i", decode.int)
       use node_declaration <- decode.field(
-        "node_declaration",
+        "d",
         node_declaration_decoder(),
       )
-      use tokens <- decode.field("tokens", decode.string)
+      use tokens <- decode.field("t", decode.string)
       decode.success(PreProcessedDeclaration(
         node_id:,
         node_declaration:,
         tokens:,
       ))
     }
-    "pre_processed_reference" -> {
-      use referenced_node_id <- decode.field("referenced_node_id", decode.int)
+    "ppr" -> {
+      use referenced_node_id <- decode.field("i", decode.int)
       use referenced_node_declaration <- decode.field(
-        "referenced_node_declaration",
+        "d",
         node_declaration_decoder(),
       )
-      use tokens <- decode.field("tokens", decode.string)
+      use tokens <- decode.field("t", decode.string)
       decode.success(PreProcessedReference(
         referenced_node_id:,
         referenced_node_declaration:,
         tokens:,
       ))
     }
-    "pre_processed_node" -> {
-      use element <- decode.field("element", decode.string)
+    "ppn" -> {
+      use element <- decode.field("e", decode.string)
       decode.success(PreProcessedNode(element:))
     }
-    "pre_processed_gap_node" -> {
-      use element <- decode.field("element", decode.string)
-      use leading_spaces <- decode.field("leading_spaces", decode.int)
+    "ppgn" -> {
+      use element <- decode.field("e", decode.string)
+      use leading_spaces <- decode.field("s", decode.int)
       decode.success(PreProcessedGapNode(element:, leading_spaces:))
     }
     _ -> decode.failure(PreProcessedNode(""), "PreProcessedNode")
@@ -207,25 +202,25 @@ pub const unknown_node_declaration = NodeDeclaration(
 
 fn encode_node_declaration(node_declaration: NodeDeclaration) -> json.Json {
   json.object([
-    #("title", json.string(node_declaration.title)),
-    #("topic_id", json.string(node_declaration.topic_id)),
+    #("t", json.string(node_declaration.title)),
+    #("i", json.string(node_declaration.topic_id)),
     #(
-      "kind",
+      "k",
       json.string(node_declaration_kind_to_string(node_declaration.kind)),
     ),
     #(
-      "references",
+      "r",
       json.array(node_declaration.references, encode_node_reference),
     ),
   ])
 }
 
 fn node_declaration_decoder() -> decode.Decoder(NodeDeclaration) {
-  use title <- decode.field("title", decode.string)
-  use topic_id <- decode.field("topic_id", decode.string)
-  use kind <- decode.field("kind", decode.string)
+  use title <- decode.field("t", decode.string)
+  use topic_id <- decode.field("i", decode.string)
+  use kind <- decode.field("k", decode.string)
   use references <- decode.field(
-    "references",
+    "r",
     decode.list(node_reference_decoder()),
   )
   decode.success(NodeDeclaration(
@@ -298,13 +293,13 @@ pub type NodeReference {
 
 fn encode_node_reference(node_reference: NodeReference) -> json.Json {
   json.object([
-    #("title", json.string(node_reference.title)),
-    #("topic_id", json.string(node_reference.topic_id)),
+    #("t", json.string(node_reference.title)),
+    #("i", json.string(node_reference.topic_id)),
   ])
 }
 
 fn node_reference_decoder() -> decode.Decoder(NodeReference) {
-  use title <- decode.field("title", decode.string)
-  use topic_id <- decode.field("topic_id", decode.string)
+  use title <- decode.field("t", decode.string)
+  use topic_id <- decode.field("i", decode.string)
   decode.success(NodeReference(title:, topic_id:))
 }

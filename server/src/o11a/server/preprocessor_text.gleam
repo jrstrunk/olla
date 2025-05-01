@@ -17,14 +17,8 @@ pub fn preprocess_source(source source: String, page_path page_path: String) {
   let line_id = page_path <> "#" <> line_tag
 
   let significance = case line {
-    preprocessor.PreProcessedDeclaration(
-      node_declaration: preprocessor.NodeDeclaration(
-        title:,
-        topic_id:,
-        ..,
-      ),
-      ..,
-    ) -> preprocessor.SingleDeclarationLine(topic_id:, topic_title: title)
+    preprocessor.PreProcessedDeclaration(node_declaration:, ..) ->
+      preprocessor.SingleDeclarationLine(node_declaration:)
     _ -> preprocessor.NonEmptyLine
   }
 
