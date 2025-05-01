@@ -215,12 +215,20 @@ line-discussion:focus-within {
   margin-bottom: 0.5rem;
 }
 
+.mb-\[\.75rem\] {
+  margin-bottom: 0.75rem;
+}
+
 .font-size-\[\.9rem\] {
   font-size: 0.9rem;
 }
 
 .pl-\[\.1rem\] {
   padding-left: 0.1rem;
+}
+
+.pl-\[\.25rem\] {
+  padding-left: 0.25rem;
 }
 
 .pt-\[\.15rem\] {

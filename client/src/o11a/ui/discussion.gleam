@@ -438,7 +438,7 @@ fn thread_header_view(model: Model) {
             ),
           ],
           [
-            html.span([attribute.class("pt-[.1rem] underline")], [
+            html.span([attribute.class("pt-[.1rem]")], [
               case model.is_reference {
                 True ->
                   html.a([attribute.href("/" <> model.topic_id)], [
@@ -477,17 +477,37 @@ fn thread_header_view(model: Model) {
 fn references_view(references) {
   case list.length(references) > 0 {
     True ->
-      html.div([attribute.class("mb-[.5rem]")], [
-        html.p([], [html.text("References: ")]),
+      html.div([attribute.class("mb-[.75rem]")], [
+        reference_group_view(references, preprocessor.UsingReference),
+        reference_group_view(references, preprocessor.InheritanceReference),
+        reference_group_view(references, preprocessor.CallReference),
+        reference_group_view(references, preprocessor.AccessReference),
+        reference_group_view(references, preprocessor.MutationReference),
+        reference_group_view(references, preprocessor.TypeReference),
+      ])
+    False -> element.fragment([])
+  }
+}
+
+fn reference_group_view(
+  references: List(preprocessor.NodeReference),
+  group_kind,
+) {
+  case list.filter(references, fn(reference) { reference.kind == group_kind }) {
+    [] -> element.fragment([])
+    references ->
+      element.fragment([
+        html.p([], [
+          html.text(preprocessor.node_reference_kind_to_annotation(group_kind)),
+        ]),
         ..list.map(references, fn(reference: preprocessor.NodeReference) {
-          html.p([], [
+          html.p([attribute.class("pl-[.25rem]")], [
             html.a([attribute.href("/" <> reference.topic_id)], [
               html.text(reference.title),
             ]),
           ])
         })
       ])
-    False -> element.fragment([])
   }
 }
 

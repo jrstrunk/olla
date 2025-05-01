@@ -580,6 +580,10 @@ video {
   margin-bottom: .5rem;
 }
 
+.mb-\[\.75rem\] {
+  margin-bottom: .75rem;
+}
+
 .mb-\[2rem\] {
   margin-bottom: 2rem;
 }
@@ -725,6 +729,10 @@ video {
 
 .pl-\[\.1rem\] {
   padding-left: .1rem;
+}
+
+.pl-\[\.25rem\] {
+  padding-left: .25rem;
 }
 
 .pl-\[\.5rem\] {

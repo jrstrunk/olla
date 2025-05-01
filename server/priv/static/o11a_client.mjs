@@ -2896,6 +2896,24 @@ function map4(decoder, transformer) {
     }
   );
 }
+function then$2(decoder, next) {
+  return new Decoder(
+    (dynamic_data) => {
+      let $ = decoder.function(dynamic_data);
+      let data2 = $[0];
+      let errors = $[1];
+      let decoder$1 = next(data2);
+      let $1 = decoder$1.function(dynamic_data);
+      let layer = $1;
+      let data$1 = $1[0];
+      if (errors.hasLength(0)) {
+        return layer;
+      } else {
+        return [data$1, errors];
+      }
+    }
+  );
+}
 function run_decoders(loop$data, loop$failure, loop$decoders) {
   while (true) {
     let data2 = loop$data;
@@ -7973,11 +7991,24 @@ var EventDeclaration = class extends CustomType {
 var UnknownDeclaration = class extends CustomType {
 };
 var NodeReference = class extends CustomType {
-  constructor(title2, topic_id) {
+  constructor(title2, topic_id, kind) {
     super();
     this.title = title2;
     this.topic_id = topic_id;
+    this.kind = kind;
   }
+};
+var CallReference = class extends CustomType {
+};
+var MutationReference = class extends CustomType {
+};
+var InheritanceReference = class extends CustomType {
+};
+var AccessReference = class extends CustomType {
+};
+var UsingReference = class extends CustomType {
+};
+var TypeReference = class extends CustomType {
 };
 function node_declaration_kind_to_string(kind) {
   if (kind instanceof ContractDeclaration) {
@@ -8043,6 +8074,28 @@ function node_declaration_kind_from_string(kind) {
     return new UnknownDeclaration();
   }
 }
+function node_reference_kind_decoder() {
+  return then$2(
+    string3,
+    (variant) => {
+      if (variant === "c") {
+        return success(new CallReference());
+      } else if (variant === "m") {
+        return success(new MutationReference());
+      } else if (variant === "i") {
+        return success(new InheritanceReference());
+      } else if (variant === "a") {
+        return success(new AccessReference());
+      } else if (variant === "u") {
+        return success(new UsingReference());
+      } else if (variant === "t") {
+        return success(new TypeReference());
+      } else {
+        return failure(new CallReference(), "NodeReferenceKind");
+      }
+    }
+  );
+}
 function node_reference_decoder() {
   return field(
     "t",
@@ -8052,7 +8105,13 @@ function node_reference_decoder() {
         "i",
         string3,
         (topic_id) => {
-          return success(new NodeReference(title2, topic_id));
+          return field(
+            "k",
+            node_reference_kind_decoder(),
+            (kind) => {
+              return success(new NodeReference(title2, topic_id, kind));
+            }
+          );
         }
       );
     }
@@ -8255,6 +8314,21 @@ function pre_processed_line_decoder() {
       );
     }
   );
+}
+function node_reference_kind_to_annotation(kind) {
+  if (kind instanceof CallReference) {
+    return "Called in:";
+  } else if (kind instanceof MutationReference) {
+    return "Mutated in:";
+  } else if (kind instanceof InheritanceReference) {
+    return "Inherited by:";
+  } else if (kind instanceof AccessReference) {
+    return "Accessed in:";
+  } else if (kind instanceof UsingReference) {
+    return "Used as a library in:";
+  } else {
+    return "Used as a type in:";
+  }
 }
 
 // build/dev/javascript/plinth/element_ffi.mjs
@@ -9962,18 +10036,32 @@ function reference_header_view(model, current_thread_notes) {
     ])
   );
 }
-function references_view(references) {
-  let $ = length(references) > 0;
-  if ($) {
-    return div(
-      toList([class$("mb-[.5rem]")]),
+function reference_group_view(references, group_kind) {
+  let $ = filter(
+    references,
+    (reference) => {
+      return isEqual(reference.kind, group_kind);
+    }
+  );
+  if ($.hasLength(0)) {
+    return fragment2(toList([]));
+  } else {
+    let references$1 = $;
+    return fragment2(
       prepend(
-        p(toList([]), toList([text3("References: ")])),
+        p(
+          toList([]),
+          toList([
+            text3(
+              node_reference_kind_to_annotation(group_kind)
+            )
+          ])
+        ),
         map2(
-          references,
+          references$1,
           (reference) => {
             return p(
-              toList([]),
+              toList([class$("pl-[.25rem]")]),
               toList([
                 a(
                   toList([href("/" + reference.topic_id)]),
@@ -9984,6 +10072,25 @@ function references_view(references) {
           }
         )
       )
+    );
+  }
+}
+function references_view(references) {
+  let $ = length(references) > 0;
+  if ($) {
+    return div(
+      toList([class$("mb-[.75rem]")]),
+      toList([
+        reference_group_view(references, new UsingReference()),
+        reference_group_view(
+          references,
+          new InheritanceReference()
+        ),
+        reference_group_view(references, new CallReference()),
+        reference_group_view(references, new AccessReference()),
+        reference_group_view(references, new MutationReference()),
+        reference_group_view(references, new TypeReference())
+      ])
     );
   } else {
     return fragment2(toList([]));
@@ -10041,7 +10148,7 @@ function thread_header_view(model) {
           ]),
           toList([
             span(
-              toList([class$("pt-[.1rem] underline")]),
+              toList([class$("pt-[.1rem]")]),
               toList([
                 (() => {
                   let $1 = model.is_reference;

@@ -110,10 +110,7 @@ fn encode_pre_processed_node(pre_processed_node: PreProcessedNode) -> json.Json 
       json.object([
         #("v", json.string("ppd")),
         #("i", json.int(pre_processed_node.node_id)),
-        #(
-          "d",
-          encode_node_declaration(pre_processed_node.node_declaration),
-        ),
+        #("d", encode_node_declaration(pre_processed_node.node_declaration)),
         #("t", json.string(pre_processed_node.tokens)),
       ])
     PreProcessedReference(..) ->
@@ -147,10 +144,7 @@ fn pre_processed_node_decoder() -> decode.Decoder(PreProcessedNode) {
   case variant {
     "ppd" -> {
       use node_id <- decode.field("i", decode.int)
-      use node_declaration <- decode.field(
-        "d",
-        node_declaration_decoder(),
-      )
+      use node_declaration <- decode.field("d", node_declaration_decoder())
       use tokens <- decode.field("t", decode.string)
       decode.success(PreProcessedDeclaration(
         node_id:,
@@ -204,14 +198,8 @@ fn encode_node_declaration(node_declaration: NodeDeclaration) -> json.Json {
   json.object([
     #("t", json.string(node_declaration.title)),
     #("i", json.string(node_declaration.topic_id)),
-    #(
-      "k",
-      json.string(node_declaration_kind_to_string(node_declaration.kind)),
-    ),
-    #(
-      "r",
-      json.array(node_declaration.references, encode_node_reference),
-    ),
+    #("k", json.string(node_declaration_kind_to_string(node_declaration.kind))),
+    #("r", json.array(node_declaration.references, encode_node_reference)),
   ])
 }
 
@@ -219,10 +207,7 @@ fn node_declaration_decoder() -> decode.Decoder(NodeDeclaration) {
   use title <- decode.field("t", decode.string)
   use topic_id <- decode.field("i", decode.string)
   use kind <- decode.field("k", decode.string)
-  use references <- decode.field(
-    "r",
-    decode.list(node_reference_decoder()),
-  )
+  use references <- decode.field("r", decode.list(node_reference_decoder()))
   decode.success(NodeDeclaration(
     title:,
     topic_id:,
@@ -288,18 +273,66 @@ fn node_declaration_kind_from_string(kind) {
 }
 
 pub type NodeReference {
-  NodeReference(title: String, topic_id: String)
+  NodeReference(title: String, topic_id: String, kind: NodeReferenceKind)
 }
 
 fn encode_node_reference(node_reference: NodeReference) -> json.Json {
   json.object([
     #("t", json.string(node_reference.title)),
     #("i", json.string(node_reference.topic_id)),
+    #("k", encode_node_reference_kind(node_reference.kind)),
   ])
 }
 
 fn node_reference_decoder() -> decode.Decoder(NodeReference) {
   use title <- decode.field("t", decode.string)
   use topic_id <- decode.field("i", decode.string)
-  decode.success(NodeReference(title:, topic_id:))
+  use kind <- decode.field("k", node_reference_kind_decoder())
+  decode.success(NodeReference(title:, topic_id:, kind:))
+}
+
+pub type NodeReferenceKind {
+  CallReference
+  MutationReference
+  InheritanceReference
+  AccessReference
+  UsingReference
+  TypeReference
+}
+
+fn encode_node_reference_kind(
+  node_reference_kind: NodeReferenceKind,
+) -> json.Json {
+  case node_reference_kind {
+    CallReference -> json.string("c")
+    MutationReference -> json.string("m")
+    InheritanceReference -> json.string("i")
+    AccessReference -> json.string("a")
+    UsingReference -> json.string("u")
+    TypeReference -> json.string("t")
+  }
+}
+
+fn node_reference_kind_decoder() -> decode.Decoder(NodeReferenceKind) {
+  use variant <- decode.then(decode.string)
+  case variant {
+    "c" -> decode.success(CallReference)
+    "m" -> decode.success(MutationReference)
+    "i" -> decode.success(InheritanceReference)
+    "a" -> decode.success(AccessReference)
+    "u" -> decode.success(UsingReference)
+    "t" -> decode.success(TypeReference)
+    _ -> decode.failure(CallReference, "NodeReferenceKind")
+  }
+}
+
+pub fn node_reference_kind_to_annotation(kind) {
+  case kind {
+    CallReference -> "Called in:"
+    MutationReference -> "Mutated in:"
+    InheritanceReference -> "Inherited by:"
+    AccessReference -> "Accessed in:"
+    UsingReference -> "Used as a library in:"
+    TypeReference -> "Used as a type in:"
+  }
 }

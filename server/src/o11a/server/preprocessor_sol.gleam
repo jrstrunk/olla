@@ -1014,7 +1014,13 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
 
 pub fn count_references(declarations, in ast: AST) {
   list.fold(ast.nodes, declarations, fn(declarations, node) {
-    do_count_node_references(declarations, node, "", ast.absolute_path)
+    do_count_node_references(
+      declarations,
+      node,
+      "",
+      ast.absolute_path,
+      preprocessor.AccessReference,
+    )
   })
 }
 
@@ -1023,6 +1029,7 @@ fn do_count_node_references(
   node: Node,
   parent_title: String,
   parent_id: String,
+  parent_reference_kind: preprocessor.NodeReferenceKind,
 ) {
   case node {
     Node(nodes:, ..)
@@ -1038,6 +1045,7 @@ fn do_count_node_references(
         nodes,
         parent_title,
         parent_id,
+        parent_reference_kind,
       )
 
     ImportDirectiveNode(..)
@@ -1051,8 +1059,19 @@ fn do_count_node_references(
       let title = name
       let contract_id = parent_id <> "#" <> name
 
-      do_count_node_references_multi(declarations, nodes, title, contract_id)
-      |> do_count_node_references_multi(base_contracts, title, contract_id)
+      do_count_node_references_multi(
+        declarations,
+        nodes,
+        title,
+        contract_id,
+        parent_reference_kind,
+      )
+      |> do_count_node_references_multi(
+        base_contracts,
+        title,
+        contract_id,
+        parent_reference_kind,
+      )
     }
 
     FunctionDefinitionNode(
@@ -1083,15 +1102,42 @@ fn do_count_node_references(
 
       let declarations =
         list.fold(nodes, declarations, fn(declarations, node) {
-          do_count_node_references(declarations, node, title, function_id)
+          do_count_node_references(
+            declarations,
+            node,
+            title,
+            function_id,
+            parent_reference_kind,
+          )
         })
-        |> do_count_node_references(parameters, title, function_id)
-        |> do_count_node_references(return_parameters, title, function_id)
-        |> do_count_node_references_multi(modifiers, title, function_id)
+        |> do_count_node_references(
+          parameters,
+          title,
+          function_id,
+          parent_reference_kind,
+        )
+        |> do_count_node_references(
+          return_parameters,
+          title,
+          function_id,
+          parent_reference_kind,
+        )
+        |> do_count_node_references_multi(
+          modifiers,
+          title,
+          function_id,
+          parent_reference_kind,
+        )
 
       case body {
         Some(body) ->
-          do_count_node_references(declarations, body, title, function_id)
+          do_count_node_references(
+            declarations,
+            body,
+            title,
+            function_id,
+            parent_reference_kind,
+          )
         option.None -> declarations
       }
     }
@@ -1100,12 +1146,29 @@ fn do_count_node_references(
       let modifier_id = parent_id <> ":" <> name
 
       let declarations =
-        do_count_node_references_multi(declarations, nodes, title, modifier_id)
-        |> do_count_node_references(parameters, title, modifier_id)
+        do_count_node_references_multi(
+          declarations,
+          nodes,
+          title,
+          modifier_id,
+          parent_reference_kind,
+        )
+        |> do_count_node_references(
+          parameters,
+          title,
+          modifier_id,
+          parent_reference_kind,
+        )
 
       case body {
         Some(body) ->
-          do_count_node_references(declarations, body, title, modifier_id)
+          do_count_node_references(
+            declarations,
+            body,
+            title,
+            modifier_id,
+            parent_reference_kind,
+          )
         option.None -> declarations
       }
     }
@@ -1115,8 +1178,14 @@ fn do_count_node_references(
         nodes,
         parent_title,
         parent_id,
+        parent_reference_kind,
       )
-      |> do_count_node_references_multi(statements, parent_title, parent_id)
+      |> do_count_node_references_multi(
+        statements,
+        parent_title,
+        parent_id,
+        parent_reference_kind,
+      )
     }
     ExpressionStatementNode(expression:, ..) ->
       case expression {
@@ -1126,6 +1195,7 @@ fn do_count_node_references(
             expression,
             parent_title,
             parent_id,
+            parent_reference_kind,
           )
         option.None -> declarations
       }
@@ -1135,6 +1205,7 @@ fn do_count_node_references(
         event_call,
         parent_title,
         parent_id,
+        parent_reference_kind,
       )
 
     VariableDeclarationStatementNode(initial_value:, ..) ->
@@ -1145,6 +1216,7 @@ fn do_count_node_references(
             initial_value,
             parent_title,
             parent_id,
+            parent_reference_kind,
           )
         option.None -> declarations
       }
@@ -1155,8 +1227,14 @@ fn do_count_node_references(
           condition,
           parent_title,
           parent_id,
+          parent_reference_kind,
         )
-        |> do_count_node_references(true_body, parent_title, parent_id)
+        |> do_count_node_references(
+          true_body,
+          parent_title,
+          parent_id,
+          parent_reference_kind,
+        )
 
       case false_body {
         Some(false_body) ->
@@ -1165,6 +1243,7 @@ fn do_count_node_references(
             false_body,
             parent_title,
             parent_id,
+            parent_reference_kind,
           )
         option.None -> declarations
       }
@@ -1178,7 +1257,13 @@ fn do_count_node_references(
     ) ->
       case initialization_expression {
         option.Some(init) ->
-          do_count_node_references(declarations, init, parent_title, parent_id)
+          do_count_node_references(
+            declarations,
+            init,
+            parent_title,
+            parent_id,
+            parent_reference_kind,
+          )
         option.None -> declarations
       }
       |> fn(declarations) {
@@ -1189,6 +1274,7 @@ fn do_count_node_references(
               condition,
               parent_title,
               parent_id,
+              parent_reference_kind,
             )
           option.None -> declarations
         }
@@ -1201,11 +1287,17 @@ fn do_count_node_references(
               loop,
               parent_title,
               parent_id,
+              parent_reference_kind,
             )
           option.None -> declarations
         }
       }
-      |> do_count_node_references(body, parent_title, parent_id)
+      |> do_count_node_references(
+        body,
+        parent_title,
+        parent_id,
+        parent_reference_kind,
+      )
     RevertStatementNode(expression:, ..) ->
       case expression {
         Some(expression) ->
@@ -1214,6 +1306,7 @@ fn do_count_node_references(
             expression,
             parent_title,
             parent_id,
+            parent_reference_kind,
           )
         option.None -> declarations
       }
@@ -1226,6 +1319,7 @@ fn do_count_node_references(
             expression,
             parent_title,
             parent_id,
+            parent_reference_kind,
           )
         option.None -> declarations
       }
@@ -1238,12 +1332,17 @@ fn do_count_node_references(
             expression,
             parent_title,
             parent_id,
+            parent_reference_kind,
           )
         option.None -> declarations
       }
       |> add_reference(
         reference_id,
-        preprocessor.NodeReference(title: parent_title, topic_id: parent_id),
+        preprocessor.NodeReference(
+          title: parent_title,
+          topic_id: parent_id,
+          kind: parent_reference_kind,
+        ),
       )
 
     MemberAccess(reference_id:, expression:, ..) ->
@@ -1252,7 +1351,11 @@ fn do_count_node_references(
           add_reference(
             declarations,
             reference_id,
-            preprocessor.NodeReference(title: parent_title, topic_id: parent_id),
+            preprocessor.NodeReference(
+              title: parent_title,
+              topic_id: parent_id,
+              kind: parent_reference_kind,
+            ),
           )
         option.None -> declarations
       }
@@ -1264,6 +1367,7 @@ fn do_count_node_references(
               expression,
               parent_title,
               parent_id,
+              parent_reference_kind,
             )
           option.None -> declarations
         }
@@ -1277,18 +1381,30 @@ fn do_count_node_references(
             expression,
             parent_title,
             parent_id,
+            preprocessor.CallReference,
           )
         option.None -> declarations
       }
-      |> do_count_node_references_multi(arguments, parent_title, parent_id)
+      |> do_count_node_references_multi(
+        arguments,
+        parent_title,
+        parent_id,
+        parent_reference_kind,
+      )
     Assignment(left_hand_side:, right_hand_side:, ..) ->
       do_count_node_references(
         declarations,
         left_hand_side,
         parent_title,
         parent_id,
+        preprocessor.MutationReference,
       )
-      |> do_count_node_references(right_hand_side, parent_title, parent_id)
+      |> do_count_node_references(
+        right_hand_side,
+        parent_title,
+        parent_id,
+        parent_reference_kind,
+      )
 
     BinaryOperation(left_expression:, right_expression:, ..) ->
       do_count_node_references(
@@ -1296,8 +1412,14 @@ fn do_count_node_references(
         left_expression,
         parent_title,
         parent_id,
+        parent_reference_kind,
       )
-      |> do_count_node_references(right_expression, parent_title, parent_id)
+      |> do_count_node_references(
+        right_expression,
+        parent_title,
+        parent_id,
+        parent_reference_kind,
+      )
 
     UnaryOperation(expression:, ..) ->
       do_count_node_references(
@@ -1305,21 +1427,37 @@ fn do_count_node_references(
         expression,
         parent_title,
         parent_id,
+        parent_reference_kind,
       )
 
     IndexAccess(base:, index:, ..) ->
       case index {
         option.Some(index) ->
-          do_count_node_references(declarations, index, parent_title, parent_id)
+          do_count_node_references(
+            declarations,
+            index,
+            parent_title,
+            parent_id,
+            parent_reference_kind,
+          )
         option.None -> declarations
       }
-      |> do_count_node_references(base, parent_title, parent_id)
+      |> do_count_node_references(
+        base,
+        parent_title,
+        parent_id,
+        parent_reference_kind,
+      )
 
     Modifier(reference_id:, arguments:, ..) ->
       add_reference(
         declarations,
         reference_id,
-        preprocessor.NodeReference(title: parent_title, topic_id: parent_id),
+        preprocessor.NodeReference(
+          title: parent_title,
+          topic_id: parent_id,
+          kind: preprocessor.CallReference,
+        ),
       )
       |> fn(declarations) {
         case arguments {
@@ -1329,6 +1467,7 @@ fn do_count_node_references(
               arguments,
               parent_title,
               parent_id,
+              parent_reference_kind,
             )
           option.None -> declarations
         }
@@ -1337,22 +1476,58 @@ fn do_count_node_references(
       add_reference(
         declarations,
         reference_id,
-        preprocessor.NodeReference(title: parent_title, topic_id: parent_id),
+        preprocessor.NodeReference(
+          title: parent_title,
+          topic_id: parent_id,
+          kind: parent_reference_kind,
+        ),
       )
     BaseContract(reference_id:, ..) ->
       add_reference(
         declarations,
         reference_id,
-        preprocessor.NodeReference(title: parent_title, topic_id: parent_id),
+        preprocessor.NodeReference(
+          title: parent_title,
+          topic_id: parent_id,
+          kind: preprocessor.InheritanceReference,
+        ),
       )
     Conditional(condition:, true_expression:, false_expression:, ..) ->
-      do_count_node_references(declarations, condition, parent_title, parent_id)
-      |> do_count_node_references(true_expression, parent_title, parent_id)
-      |> do_count_node_references(false_expression, parent_title, parent_id)
+      do_count_node_references(
+        declarations,
+        condition,
+        parent_title,
+        parent_id,
+        parent_reference_kind,
+      )
+      |> do_count_node_references(
+        true_expression,
+        parent_title,
+        parent_id,
+        parent_reference_kind,
+      )
+      |> do_count_node_references(
+        false_expression,
+        parent_title,
+        parent_id,
+        parent_reference_kind,
+      )
     UserDefinedTypeName(path_node:, ..) ->
-      do_count_node_references(declarations, path_node, parent_title, parent_id)
+      do_count_node_references(
+        declarations,
+        path_node,
+        parent_title,
+        parent_id,
+        preprocessor.TypeReference,
+      )
     NewExpression(type_name:, arguments:, ..) ->
-      do_count_node_references(declarations, type_name, parent_title, parent_id)
+      do_count_node_references(
+        declarations,
+        type_name,
+        parent_title,
+        parent_id,
+        preprocessor.TypeReference,
+      )
       |> fn(declarations) {
         case arguments {
           Some(arguments) ->
@@ -1361,12 +1536,19 @@ fn do_count_node_references(
               arguments,
               parent_title,
               parent_id,
+              parent_reference_kind,
             )
           option.None -> declarations
         }
       }
     ArrayTypeName(base_type:, ..) ->
-      do_count_node_references(declarations, base_type, parent_title, parent_id)
+      do_count_node_references(
+        declarations,
+        base_type,
+        parent_title,
+        parent_id,
+        preprocessor.TypeReference,
+      )
     FunctionCallOptions(options:, expression:, ..) ->
       case expression {
         option.Some(expression) ->
@@ -1375,19 +1557,37 @@ fn do_count_node_references(
             expression,
             parent_title,
             parent_id,
+            preprocessor.CallReference,
           )
         option.None -> declarations
       }
-      |> do_count_node_references_multi(options, parent_title, parent_id)
+      |> do_count_node_references_multi(
+        options,
+        parent_title,
+        parent_id,
+        parent_reference_kind,
+      )
     Mapping(key_type:, value_type:, ..) ->
-      do_count_node_references(declarations, key_type, parent_title, parent_id)
-      |> do_count_node_references(value_type, parent_title, parent_id)
+      do_count_node_references(
+        declarations,
+        key_type,
+        parent_title,
+        parent_id,
+        preprocessor.TypeReference,
+      )
+      |> do_count_node_references(
+        value_type,
+        parent_title,
+        parent_id,
+        preprocessor.TypeReference,
+      )
     UsingForDirective(library_name:, ..) ->
       do_count_node_references(
         declarations,
         library_name,
         parent_title,
         parent_id,
+        preprocessor.UsingReference,
       )
   }
 }
@@ -1427,9 +1627,16 @@ fn do_count_node_references_multi(
   nodes: List(Node),
   parent_title: String,
   parent_id: String,
+  parent_reference_kind: preprocessor.NodeReferenceKind,
 ) {
   list.fold(nodes, declarations, fn(declarations, node) {
-    do_count_node_references(declarations, node, parent_title, parent_id)
+    do_count_node_references(
+      declarations,
+      node,
+      parent_title,
+      parent_id,
+      parent_reference_kind,
+    )
   })
 }
 
