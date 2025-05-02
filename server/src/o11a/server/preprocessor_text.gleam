@@ -80,7 +80,7 @@ pub fn enumerate_declarations(declarations, in ast: AST) {
 fn line_node_declaration(page_path, line_number_text) {
   preprocessor.NodeDeclaration(
     name: "L" <> line_number_text,
-    scoped_name: filepath.base_name(page_path) <> ".L" <> line_number_text,
+    scope: filepath.base_name(page_path),
     title: filepath.base_name(page_path) <> "#L" <> line_number_text,
     topic_id: page_path <> "#L" <> line_number_text,
     kind: preprocessor.UnknownDeclaration,

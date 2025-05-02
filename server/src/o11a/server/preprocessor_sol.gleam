@@ -720,7 +720,7 @@ pub fn enumerate_declarations(declarations, in ast: AST) {
       declarations,
       node,
       ast.absolute_path,
-      ast.absolute_path,
+      ast.absolute_path |> filepath.base_name,
     )
   })
 }
@@ -761,9 +761,8 @@ fn do_enumerate_node_declarations(
         id,
         preprocessor.NodeDeclaration(
           name:,
-          // Contracts are technically scoped, but usually it doesn't matter,
-          // so we act like they are not scoped for the sake of user friendliness
-          scoped_name: name,
+          // The parent of a contract is the file it is defined in
+          scope: parent_name,
           title:,
           topic_id: contract_id,
           kind: preprocessor.ContractDeclaration,
@@ -784,8 +783,6 @@ fn do_enumerate_node_declarations(
       body:,
       ..,
     ) -> {
-      let scoped_name = parent_name <> "." <> name
-
       let title = case function_kind {
         audit_metadata.Function -> "function " <> name
         audit_metadata.Constructor -> "constructor"
@@ -803,13 +800,15 @@ fn do_enumerate_node_declarations(
           audit_metadata.Receive -> "receive"
         }
 
+      let scoped_name = parent_name <> "." <> name
+
       let declarations =
         dict.insert(
           declarations,
           id,
           preprocessor.NodeDeclaration(
             name:,
-            scoped_name:,
+            scope: parent_name,
             title:,
             topic_id: function_id,
             kind: case function_kind {
@@ -848,9 +847,9 @@ fn do_enumerate_node_declarations(
       }
     }
     ModifierDefinitionNode(id:, parameters:, nodes:, body:, name:, ..) -> {
-      let scoped_name = parent_name <> "." <> name
       let title = "modifier " <> name
       let modifier_id = parent_id <> ":" <> name
+      let scoped_name = parent_name <> "." <> name
 
       let declarations =
         dict.insert(
@@ -858,7 +857,7 @@ fn do_enumerate_node_declarations(
           id,
           preprocessor.NodeDeclaration(
             name:,
-            scoped_name:,
+            scope: parent_name,
             title:,
             topic_id: modifier_id,
             kind: preprocessor.ModifierDeclaration,
@@ -887,7 +886,6 @@ fn do_enumerate_node_declarations(
       })
     }
     ErrorDefinitionNode(id:, name:, nodes:, parameters:, ..) -> {
-      let scoped_name = parent_name <> "." <> name
       let title = "error " <> name
       let topic_id = parent_id <> ":" <> name
 
@@ -896,7 +894,7 @@ fn do_enumerate_node_declarations(
         id,
         preprocessor.NodeDeclaration(
           name:,
-          scoped_name:,
+          scope: parent_name,
           title:,
           topic_id:,
           kind: preprocessor.ErrorDeclaration,
@@ -914,7 +912,6 @@ fn do_enumerate_node_declarations(
       |> do_enumerate_node_declarations(parameters, parent_id, parent_name)
     }
     EventDefinitionNode(id:, name:, nodes:, parameters:, ..) -> {
-      let scoped_name = parent_name <> "." <> name
       let title = "event " <> name
       let topic_id = parent_id <> ":" <> name
 
@@ -923,7 +920,7 @@ fn do_enumerate_node_declarations(
         id,
         preprocessor.NodeDeclaration(
           name:,
-          scoped_name:,
+          scope: parent_name,
           title:,
           topic_id:,
           kind: preprocessor.EventDeclaration,
@@ -941,7 +938,6 @@ fn do_enumerate_node_declarations(
       |> do_enumerate_node_declarations(parameters, parent_id, parent_name)
     }
     VariableDeclarationNode(id:, name:, constant:, type_string:, ..) -> {
-      let scoped_name = parent_name <> "." <> name
       let title =
         case constant {
           True -> "constant "
@@ -957,7 +953,7 @@ fn do_enumerate_node_declarations(
         id,
         preprocessor.NodeDeclaration(
           name:,
-          scoped_name:,
+          scope: parent_name,
           title:,
           topic_id:,
           kind: case constant {
@@ -1034,16 +1030,16 @@ fn do_enumerate_node_declarations(
       do_enumerate_node_declarations(declarations, body, parent_id, parent_name)
     }
     EnumDefinition(id:, name:, members:, nodes:, ..) -> {
-      let scoped_name = parent_name <> "." <> name
       let title = "enum " <> name
       let enum_id = parent_id <> ":" <> name
+      let scoped_name = parent_name <> "." <> name
 
       dict.insert(
         declarations,
         id,
         preprocessor.NodeDeclaration(
           name:,
-          scoped_name:,
+          scope: parent_name,
           title:,
           topic_id: enum_id,
           kind: preprocessor.EnumDeclaration,
@@ -1051,23 +1047,32 @@ fn do_enumerate_node_declarations(
         ),
       )
       |> list.fold(nodes, _, fn(declarations, statement) {
-        do_enumerate_node_declarations(declarations, statement, enum_id, name)
+        do_enumerate_node_declarations(
+          declarations,
+          statement,
+          enum_id,
+          scoped_name,
+        )
       })
       |> list.fold(members, _, fn(declarations, statement) {
-        do_enumerate_node_declarations(declarations, statement, enum_id, name)
+        do_enumerate_node_declarations(
+          declarations,
+          statement,
+          enum_id,
+          scoped_name,
+        )
       })
     }
     EnumValue(id:, name:, ..) -> {
-      let scoped_name = parent_name <> "." <> name
       let title = "enum value " <> name
-      let topic_id = parent_id <> ":" <> scoped_name
+      let topic_id = parent_id <> ":" <> name
 
       dict.insert(
         declarations,
         id,
         preprocessor.NodeDeclaration(
           name:,
-          scoped_name:,
+          scope: parent_name,
           title:,
           topic_id:,
           kind: preprocessor.EnumValueDeclaration,
@@ -1076,7 +1081,6 @@ fn do_enumerate_node_declarations(
       )
     }
     StructDefinition(id:, name:, members:, nodes:, ..) -> {
-      let scoped_name = parent_name <> "." <> name
       let title = "struct " <> name
       let struct_id = parent_id <> ":" <> name
 
@@ -1085,7 +1089,7 @@ fn do_enumerate_node_declarations(
         id,
         preprocessor.NodeDeclaration(
           name:,
-          scoped_name:,
+          scope: parent_name,
           title:,
           topic_id: struct_id,
           kind: preprocessor.StructDeclaration,
@@ -1705,7 +1709,7 @@ fn add_reference(
         )
         preprocessor.NodeDeclaration(
           name: "",
-          scoped_name: "",
+          scope: "",
           title: "unknown",
           topic_id: "",
           kind: preprocessor.UnknownDeclaration,

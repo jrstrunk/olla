@@ -7498,10 +7498,10 @@ var AuditMetaData = class extends CustomType {
   }
 };
 var AddressableSymbol = class extends CustomType {
-  constructor(name2, scoped_name, kind, topic_id) {
+  constructor(name2, scope, kind, topic_id) {
     super();
     this.name = name2;
-    this.scoped_name = scoped_name;
+    this.scope = scope;
     this.kind = kind;
     this.topic_id = topic_id;
   }
@@ -7547,7 +7547,7 @@ function declaration_decoder() {
       return field(
         "s",
         string3,
-        (scoped_name) => {
+        (scope) => {
           return field(
             "k",
             declaration_kind_decoder(),
@@ -7557,7 +7557,7 @@ function declaration_decoder() {
                 string3,
                 (topic_id) => {
                   return success(
-                    new AddressableSymbol(name2, scoped_name, kind, topic_id)
+                    new AddressableSymbol(name2, scope, kind, topic_id)
                   );
                 }
               );
@@ -8168,10 +8168,10 @@ var PreProcessedGapNode = class extends CustomType {
   }
 };
 var NodeDeclaration = class extends CustomType {
-  constructor(name2, scoped_name, title2, topic_id, kind, references) {
+  constructor(name2, scope, title2, topic_id, kind, references) {
     super();
     this.name = name2;
-    this.scoped_name = scoped_name;
+    this.scope = scope;
     this.title = title2;
     this.topic_id = topic_id;
     this.kind = kind;
@@ -8341,7 +8341,7 @@ function node_declaration_decoder() {
       return field(
         "s",
         string3,
-        (scoped_name) => {
+        (scope) => {
           return field(
             "t",
             string3,
@@ -8361,7 +8361,7 @@ function node_declaration_decoder() {
                           return success(
                             new NodeDeclaration(
                               name2,
-                              scoped_name,
+                              scope,
                               title2,
                               topic_id,
                               node_declaration_kind_from_string(kind),

@@ -44,7 +44,7 @@ pub fn audit_metadata_decoder() -> decode.Decoder(AuditMetaData) {
 pub type AddressableSymbol {
   AddressableSymbol(
     name: String,
-    scoped_name: String,
+    scope: String,
     kind: AddressableSymbolKind,
     topic_id: String,
   )
@@ -52,17 +52,17 @@ pub type AddressableSymbol {
 
 fn declaration_decoder() -> decode.Decoder(AddressableSymbol) {
   use name <- decode.field("n", decode.string)
-  use scoped_name <- decode.field("s", decode.string)
+  use scope <- decode.field("s", decode.string)
   use kind <- decode.field("k", declaration_kind_decoder())
   use topic_id <- decode.field("i", decode.string)
-  decode.success(AddressableSymbol(name:, scoped_name:, kind:, topic_id:))
+  decode.success(AddressableSymbol(name:, scope:, kind:, topic_id:))
 }
 
 fn encode_declaration(declaration: AddressableSymbol) -> json.Json {
-  let AddressableSymbol(name:, scoped_name:, kind:, topic_id:) = declaration
+  let AddressableSymbol(name:, scope:, kind:, topic_id:) = declaration
   json.object([
     #("n", json.string(name)),
-    #("s", json.string(scoped_name)),
+    #("s", json.string(scope)),
     #("k", encode_declaration_kind(kind)),
     #("i", json.string(topic_id)),
   ])

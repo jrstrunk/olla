@@ -218,9 +218,7 @@ fn preprocess_audit_source(for audit_name) {
           preprocessor.SingleDeclarationLine(node_declaration:) ->
             Ok(audit_metadata.AddressableSymbol(
               name: "L" <> line_number_text,
-              scoped_name: filepath.base_name(source_file.0)
-                <> ".L"
-                <> line_number_text,
+              scope: filepath.base_name(source_file.0),
               kind: audit_metadata.AddressableLine,
               topic_id: node_declaration.topic_id,
             ))
@@ -228,9 +226,7 @@ fn preprocess_audit_source(for audit_name) {
           preprocessor.NonEmptyLine ->
             Ok(audit_metadata.AddressableSymbol(
               name: "L" <> line_number_text,
-              scoped_name: filepath.base_name(source_file.0)
-                <> ".L"
-                <> line_number_text,
+              scope: filepath.base_name(source_file.0),
               kind: audit_metadata.AddressableLine,
               topic_id: source_file.0 <> "#L" <> line_number_text,
             ))
@@ -312,7 +308,7 @@ fn gather_metadata(
     symbols: list.map(declarations, fn(declaration) {
       audit_metadata.AddressableSymbol(
         name: declaration.name,
-        scoped_name: declaration.scoped_name,
+        scope: declaration.scope,
         kind: preprocessor.node_declaration_kind_to_metadata_declaration_kind(
           declaration.kind,
         ),

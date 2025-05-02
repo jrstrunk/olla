@@ -198,7 +198,7 @@ fn pre_processed_node_decoder() -> decode.Decoder(PreProcessedNode) {
 pub type NodeDeclaration {
   NodeDeclaration(
     name: String,
-    scoped_name: String,
+    scope: String,
     title: String,
     topic_id: String,
     kind: NodeDeclarationKind,
@@ -218,7 +218,7 @@ pub const unknown_node_declaration = NodeDeclaration(
 fn encode_node_declaration(node_declaration: NodeDeclaration) -> json.Json {
   json.object([
     #("n", json.string(node_declaration.name)),
-    #("s", json.string(node_declaration.scoped_name)),
+    #("s", json.string(node_declaration.scope)),
     #("t", json.string(node_declaration.title)),
     #("i", json.string(node_declaration.topic_id)),
     #("k", json.string(node_declaration_kind_to_string(node_declaration.kind))),
@@ -228,14 +228,14 @@ fn encode_node_declaration(node_declaration: NodeDeclaration) -> json.Json {
 
 fn node_declaration_decoder() -> decode.Decoder(NodeDeclaration) {
   use name <- decode.field("n", decode.string)
-  use scoped_name <- decode.field("s", decode.string)
+  use scope <- decode.field("s", decode.string)
   use title <- decode.field("t", decode.string)
   use topic_id <- decode.field("i", decode.string)
   use kind <- decode.field("k", decode.string)
   use references <- decode.field("r", decode.list(node_reference_decoder()))
   decode.success(NodeDeclaration(
     name:,
-    scoped_name:,
+    scope:,
     title:,
     topic_id:,
     kind: node_declaration_kind_from_string(kind),
