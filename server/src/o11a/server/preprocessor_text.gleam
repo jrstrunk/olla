@@ -3,10 +3,16 @@
 //// the simple AST for text files.
 
 import filepath
+import gleam/dict
 import gleam/int
 import gleam/list
+import gleam/result
 import gleam/string
+import lib/snagx
+import o11a/config
 import o11a/preprocessor
+import simplifile
+import snag
 
 pub fn preprocess_source(source source: String, page_path page_path: String) {
   use line, index <- list.index_map(consume_source(source:, page_path:))
@@ -44,12 +50,7 @@ fn consume_source(source source: String, page_path page_path: String) {
         [
           preprocessor.PreProcessedDeclaration(
             node_id: acc |> list.length,
-            node_declaration: preprocessor.NodeDeclaration(
-              title: filepath.base_name(page_path) <> "#L" <> line_number_text,
-              topic_id: page_path <> "#L" <> line_number_text,
-              kind: preprocessor.UnknownDeclaration,
-              references: [],
-            ),
+            node_declaration: line_node_declaration(page_path, line_number_text),
             tokens: line,
           ),
           ..acc
@@ -58,4 +59,71 @@ fn consume_source(source source: String, page_path page_path: String) {
     }
   })
   |> list.reverse
+}
+
+pub fn enumerate_declarations(declarations, in ast: AST) {
+  list.fold(ast.nodes, declarations, fn(declarations, node) {
+    case node {
+      LineNode(id:, line_number:) ->
+        dict.insert(
+          declarations,
+          id,
+          line_node_declaration(ast.absolute_path, line_number |> int.to_string),
+        )
+    }
+  })
+}
+
+fn line_node_declaration(page_path, line_number_text) {
+  preprocessor.NodeDeclaration(
+    name: "L" <> line_number_text,
+    scoped_name: filepath.base_name(page_path) <> ".L" <> line_number_text,
+    title: filepath.base_name(page_path) <> "#L" <> line_number_text,
+    topic_id: page_path <> "#L" <> line_number_text,
+    kind: preprocessor.UnknownDeclaration,
+    references: [],
+  )
+}
+
+pub fn read_asts(for audit_name) {
+  // Get all the text files in the audit directory and sub directories
+  use text_files <- result.map(
+    config.get_audit_page_paths(audit_name:)
+    |> list.filter(fn(page_path) {
+      case filepath.extension(page_path) {
+        Ok("md") -> True
+        Ok("txt") -> True
+        Ok("dj") -> True
+        _ -> False
+      }
+    })
+    |> list.map(fn(page_path) {
+      use source <- result.map(
+        config.get_full_page_path(for: page_path)
+        |> simplifile.read
+        |> snag.map_error(simplifile.describe_error),
+      )
+      #(page_path, source)
+    })
+    |> snagx.collect_errors,
+  )
+
+  list.map(text_files, fn(text_file) {
+    let lines = string.split(text_file.1, on: "\n")
+
+    let nodes =
+      list.index_map(lines, fn(_line, index) {
+        LineNode(id: index + 1, line_number: index + 1)
+      })
+
+    AST(id: 0, absolute_path: text_file.0, nodes:)
+  })
+}
+
+pub type AST {
+  AST(id: Int, absolute_path: String, nodes: List(Node))
+}
+
+pub type Node {
+  LineNode(id: Int, line_number: Int)
 }

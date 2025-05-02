@@ -8,6 +8,7 @@ pub type AuditMetaData {
     audit_name: String,
     audit_formatted_name: String,
     in_scope_files: List(String),
+    declarations: List(Declaration),
   )
 }
 
@@ -16,6 +17,10 @@ pub fn encode_audit_metadata(audit_metadata: AuditMetaData) {
     #("audit_name", json.string(audit_metadata.audit_name)),
     #("audit_formatted_name", json.string(audit_metadata.audit_formatted_name)),
     #("in_scope_files", json.array(audit_metadata.in_scope_files, json.string)),
+    #(
+      "declarations",
+      json.array(audit_metadata.declarations, encode_declaration),
+    ),
   ])
 }
 
@@ -29,12 +34,71 @@ pub fn audit_metadata_decoder() -> decode.Decoder(AuditMetaData) {
     "in_scope_files",
     decode.list(decode.string),
   )
+  use declarations <- decode.field(
+    "declarations",
+    decode.list(declaration_decoder()),
+  )
 
   decode.success(AuditMetaData(
     audit_name:,
     audit_formatted_name:,
     in_scope_files:,
+    declarations:,
   ))
+}
+
+pub type Declaration {
+  Declaration(
+    name: String,
+    scoped_name: String,
+    kind: DeclarationKind,
+    topic_id: String,
+  )
+}
+
+fn declaration_decoder() -> decode.Decoder(Declaration) {
+  use name <- decode.field("n", decode.string)
+  use scoped_name <- decode.field("s", decode.string)
+  use kind <- decode.field("k", declaration_kind_decoder())
+  use topic_id <- decode.field("i", decode.string)
+  decode.success(Declaration(name:, scoped_name:, kind:, topic_id:))
+}
+
+fn encode_declaration(declaration: Declaration) -> json.Json {
+  let Declaration(name:, scoped_name:, kind:, topic_id:) = declaration
+  json.object([
+    #("n", json.string(name)),
+    #("s", json.string(scoped_name)),
+    #("k", encode_declaration_kind(kind)),
+    #("i", json.string(topic_id)),
+  ])
+}
+
+pub type DeclarationKind {
+  ContractDeclaration
+  FunctionDeclaration
+  VariableDeclaration
+  DocumentationDeclaration
+}
+
+fn encode_declaration_kind(declaration_kind: DeclarationKind) -> json.Json {
+  case declaration_kind {
+    ContractDeclaration -> json.string("c")
+    FunctionDeclaration -> json.string("f")
+    VariableDeclaration -> json.string("v")
+    DocumentationDeclaration -> json.string("d")
+  }
+}
+
+fn declaration_kind_decoder() -> decode.Decoder(DeclarationKind) {
+  use variant <- decode.then(decode.string)
+  case variant {
+    "c" -> decode.success(ContractDeclaration)
+    "f" -> decode.success(FunctionDeclaration)
+    "v" -> decode.success(VariableDeclaration)
+    "d" -> decode.success(DocumentationDeclaration)
+    _ -> decode.failure(DocumentationDeclaration, "DeclarationKind")
+  }
 }
 
 pub type SourceFileMetaData {

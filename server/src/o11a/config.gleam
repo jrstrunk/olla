@@ -79,19 +79,42 @@ pub fn get_all_audit_page_paths() {
       [] -> ""
     }
   })
-  |> list.filter(fn(file_path) {
-    case string.to_graphemes(file_path) |> list.reverse {
-      // Allow .sol files
-      ["l", "o", "s", ".", ..] -> True
-      // Allow .rs files
-      ["s", "r", ".", ..] -> True
-      // Allow .md files
-      ["d", "m", ".", ..] -> True
-      // everything else
-      _ -> False
+  |> list.filter(is_allowed_file_extension)
+  |> list.group(get_audit_name_from_page_path)
+}
+
+pub fn get_audit_page_paths(audit_name audit_name) {
+  let assert Ok(priv) = erlang.priv_directory("o11a_server")
+  let assert Ok(files) =
+    [priv, "audits", audit_name]
+    |> list.fold("/", filepath.join)
+    |> simplifile.get_files
+
+  list.map(files, fn(file_path) {
+    case string.split(file_path, on: "priv/audits/") {
+      [_, file_path] -> file_path
+      [unknown, ..] -> unknown
+      [] -> ""
     }
   })
-  |> list.group(get_audit_name_from_page_path)
+  |> list.filter(is_allowed_file_extension)
+}
+
+fn is_allowed_file_extension(file_path) {
+  case string.to_graphemes(file_path) |> list.reverse {
+    // Allow .sol files
+    ["l", "o", "s", ".", ..] -> True
+    // Allow .rs files
+    ["s", "r", ".", ..] -> True
+    // Allow .md files
+    ["d", "m", ".", ..] -> True
+    // Allow .txt files
+    ["t", "x", "t", ".", ..] -> True
+    // Allow .dj files
+    ["j", "d", ".", ..] -> True
+    // everything else
+    _ -> False
+  }
 }
 
 /// Gets the path to the audit's notes database

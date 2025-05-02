@@ -1,6 +1,25 @@
+import filepath
 import gleam/dynamic/decode
 import gleam/int
 import gleam/json
+import o11a/audit_metadata
+
+pub type SourceKind {
+  Solidity
+  Text
+}
+
+/// Classifies based on the file extension of the path, so it can be passed
+/// an absolute path, a relative path, or just the file name
+pub fn classify_source_kind(path path: String) {
+  case filepath.extension(path) {
+    Ok("sol") -> Ok(Solidity)
+    Ok("txt") -> Ok(Text)
+    Ok("dj") -> Ok(Text)
+    Ok("md") -> Ok(Text)
+    _ -> Error(Nil)
+  }
+}
 
 pub type PreProcessedLine {
   PreProcessedLine(
@@ -180,6 +199,8 @@ fn pre_processed_node_decoder() -> decode.Decoder(PreProcessedNode) {
 
 pub type NodeDeclaration {
   NodeDeclaration(
+    name: String,
+    scoped_name: String,
     title: String,
     topic_id: String,
     kind: NodeDeclarationKind,
@@ -190,12 +211,16 @@ pub type NodeDeclaration {
 pub const unknown_node_declaration = NodeDeclaration(
   "",
   "",
+  "",
+  "",
   UnknownDeclaration,
   [],
 )
 
 fn encode_node_declaration(node_declaration: NodeDeclaration) -> json.Json {
   json.object([
+    #("n", json.string(node_declaration.name)),
+    #("s", json.string(node_declaration.scoped_name)),
     #("t", json.string(node_declaration.title)),
     #("i", json.string(node_declaration.topic_id)),
     #("k", json.string(node_declaration_kind_to_string(node_declaration.kind))),
@@ -204,11 +229,15 @@ fn encode_node_declaration(node_declaration: NodeDeclaration) -> json.Json {
 }
 
 fn node_declaration_decoder() -> decode.Decoder(NodeDeclaration) {
+  use name <- decode.field("n", decode.string)
+  use scoped_name <- decode.field("s", decode.string)
   use title <- decode.field("t", decode.string)
   use topic_id <- decode.field("i", decode.string)
   use kind <- decode.field("k", decode.string)
   use references <- decode.field("r", decode.list(node_reference_decoder()))
   decode.success(NodeDeclaration(
+    name:,
+    scoped_name:,
     title:,
     topic_id:,
     kind: node_declaration_kind_from_string(kind),
@@ -269,6 +298,25 @@ fn node_declaration_kind_from_string(kind) {
     "event" -> EventDeclaration
     "unknown" -> UnknownDeclaration
     _ -> UnknownDeclaration
+  }
+}
+
+pub fn node_declaration_kind_to_metadata_declaration_kind(kind) {
+  case kind {
+    ContractDeclaration -> audit_metadata.ContractDeclaration
+    FunctionDeclaration -> audit_metadata.FunctionDeclaration
+    VariableDeclaration -> audit_metadata.VariableDeclaration
+    UnknownDeclaration -> audit_metadata.DocumentationDeclaration
+    ConstantDeclaration -> audit_metadata.VariableDeclaration
+    ConstructorDeclaration -> audit_metadata.FunctionDeclaration
+    EnumDeclaration -> audit_metadata.VariableDeclaration
+    EnumValueDeclaration -> audit_metadata.VariableDeclaration
+    ErrorDeclaration -> audit_metadata.VariableDeclaration
+    EventDeclaration -> audit_metadata.VariableDeclaration
+    FallbackDeclaration -> audit_metadata.FunctionDeclaration
+    ModifierDeclaration -> audit_metadata.FunctionDeclaration
+    ReceiveDeclaration -> audit_metadata.FunctionDeclaration
+    StructDeclaration -> audit_metadata.VariableDeclaration
   }
 }
 

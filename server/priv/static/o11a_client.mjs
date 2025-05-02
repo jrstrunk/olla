@@ -7489,13 +7489,81 @@ function push(path2, query, fragment3) {
 
 // build/dev/javascript/o11a_common/o11a/audit_metadata.mjs
 var AuditMetaData = class extends CustomType {
-  constructor(audit_name, audit_formatted_name, in_scope_files) {
+  constructor(audit_name, audit_formatted_name, in_scope_files, declarations) {
     super();
     this.audit_name = audit_name;
     this.audit_formatted_name = audit_formatted_name;
     this.in_scope_files = in_scope_files;
+    this.declarations = declarations;
   }
 };
+var Declaration = class extends CustomType {
+  constructor(name2, scoped_name, kind, topic_id) {
+    super();
+    this.name = name2;
+    this.scoped_name = scoped_name;
+    this.kind = kind;
+    this.topic_id = topic_id;
+  }
+};
+var ContractDeclaration = class extends CustomType {
+};
+var FunctionDeclaration = class extends CustomType {
+};
+var VariableDeclaration = class extends CustomType {
+};
+var DocumentationDeclaration = class extends CustomType {
+};
+function declaration_kind_decoder() {
+  return then$2(
+    string3,
+    (variant) => {
+      if (variant === "c") {
+        return success(new ContractDeclaration());
+      } else if (variant === "f") {
+        return success(new FunctionDeclaration());
+      } else if (variant === "v") {
+        return success(new VariableDeclaration());
+      } else if (variant === "d") {
+        return success(new DocumentationDeclaration());
+      } else {
+        return failure(
+          new DocumentationDeclaration(),
+          "DeclarationKind"
+        );
+      }
+    }
+  );
+}
+function declaration_decoder() {
+  return field(
+    "n",
+    string3,
+    (name2) => {
+      return field(
+        "s",
+        string3,
+        (scoped_name) => {
+          return field(
+            "k",
+            declaration_kind_decoder(),
+            (kind) => {
+              return field(
+                "i",
+                string3,
+                (topic_id) => {
+                  return success(
+                    new Declaration(name2, scoped_name, kind, topic_id)
+                  );
+                }
+              );
+            }
+          );
+        }
+      );
+    }
+  );
+}
 function audit_metadata_decoder() {
   return field(
     "audit_name",
@@ -7509,12 +7577,19 @@ function audit_metadata_decoder() {
             "in_scope_files",
             list2(string3),
             (in_scope_files) => {
-              return success(
-                new AuditMetaData(
-                  audit_name,
-                  audit_formatted_name,
-                  in_scope_files
-                )
+              return field(
+                "declarations",
+                list2(declaration_decoder()),
+                (declarations) => {
+                  return success(
+                    new AuditMetaData(
+                      audit_name,
+                      audit_formatted_name,
+                      in_scope_files,
+                      declarations
+                    )
+                  );
+                }
               );
             }
           );
@@ -7944,6 +8019,97 @@ function is_significance_threadable(note_significance) {
 // build/dev/javascript/o11a_common/o11a/events.mjs
 var server_updated_discussion = "sud";
 
+// build/dev/javascript/filepath/filepath_ffi.mjs
+function is_windows() {
+  return globalThis?.process?.platform === "win32" || globalThis?.Deno?.build?.os === "windows";
+}
+
+// build/dev/javascript/filepath/filepath.mjs
+function split_unix(path2) {
+  let _block;
+  let $ = split2(path2, "/");
+  if ($.hasLength(1) && $.head === "") {
+    _block = toList([]);
+  } else if ($.atLeastLength(1) && $.head === "") {
+    let rest = $.tail;
+    _block = prepend("/", rest);
+  } else {
+    let rest = $;
+    _block = rest;
+  }
+  let _pipe = _block;
+  return filter(_pipe, (x2) => {
+    return x2 !== "";
+  });
+}
+function pop_windows_drive_specifier(path2) {
+  let start4 = slice(path2, 0, 3);
+  let codepoints = to_utf_codepoints(start4);
+  let $ = map2(codepoints, utf_codepoint_to_int);
+  if ($.hasLength(3) && (($.tail.tail.head === 47 || $.tail.tail.head === 92) && $.tail.head === 58 && ($.head >= 65 && $.head <= 90 || $.head >= 97 && $.head <= 122))) {
+    let drive = $.head;
+    let colon = $.tail.head;
+    let slash = $.tail.tail.head;
+    let drive_letter = slice(path2, 0, 1);
+    let drive$1 = lowercase(drive_letter) + ":/";
+    let path$1 = drop_start(path2, 3);
+    return [new Some(drive$1), path$1];
+  } else {
+    return [new None(), path2];
+  }
+}
+function split_windows(path2) {
+  let $ = pop_windows_drive_specifier(path2);
+  let drive = $[0];
+  let path$1 = $[1];
+  let _block;
+  let _pipe = split2(path$1, "/");
+  _block = flat_map(
+    _pipe,
+    (_capture) => {
+      return split2(_capture, "\\");
+    }
+  );
+  let segments = _block;
+  let _block$1;
+  if (drive instanceof Some) {
+    let drive$1 = drive[0];
+    _block$1 = prepend(drive$1, segments);
+  } else {
+    _block$1 = segments;
+  }
+  let segments$1 = _block$1;
+  if (segments$1.hasLength(1) && segments$1.head === "") {
+    return toList([]);
+  } else if (segments$1.atLeastLength(1) && segments$1.head === "") {
+    let rest = segments$1.tail;
+    return prepend("/", rest);
+  } else {
+    let rest = segments$1;
+    return rest;
+  }
+}
+function split4(path2) {
+  let $ = is_windows();
+  if ($) {
+    return split_windows(path2);
+  } else {
+    return split_unix(path2);
+  }
+}
+function base_name(path2) {
+  return guard(
+    path2 === "/",
+    "",
+    () => {
+      let _pipe = path2;
+      let _pipe$1 = split4(_pipe);
+      let _pipe$2 = last(_pipe$1);
+      return unwrap2(_pipe$2, "");
+    }
+  );
+}
+
 // build/dev/javascript/o11a_common/o11a/preprocessor.mjs
 var PreProcessedLine = class extends CustomType {
   constructor(significance, line_number, line_number_text, line_tag, line_id, leading_spaces, elements, columns) {
@@ -7998,19 +8164,21 @@ var PreProcessedGapNode = class extends CustomType {
   }
 };
 var NodeDeclaration = class extends CustomType {
-  constructor(title2, topic_id, kind, references) {
+  constructor(name2, scoped_name, title2, topic_id, kind, references) {
     super();
+    this.name = name2;
+    this.scoped_name = scoped_name;
     this.title = title2;
     this.topic_id = topic_id;
     this.kind = kind;
     this.references = references;
   }
 };
-var ContractDeclaration = class extends CustomType {
+var ContractDeclaration2 = class extends CustomType {
 };
 var ConstructorDeclaration = class extends CustomType {
 };
-var FunctionDeclaration = class extends CustomType {
+var FunctionDeclaration2 = class extends CustomType {
 };
 var FallbackDeclaration = class extends CustomType {
 };
@@ -8018,7 +8186,7 @@ var ReceiveDeclaration = class extends CustomType {
 };
 var ModifierDeclaration = class extends CustomType {
 };
-var VariableDeclaration = class extends CustomType {
+var VariableDeclaration2 = class extends CustomType {
 };
 var ConstantDeclaration = class extends CustomType {
 };
@@ -8055,11 +8223,11 @@ var UsingReference = class extends CustomType {
 var TypeReference = class extends CustomType {
 };
 function node_declaration_kind_to_string(kind) {
-  if (kind instanceof ContractDeclaration) {
+  if (kind instanceof ContractDeclaration2) {
     return "contract";
   } else if (kind instanceof ConstructorDeclaration) {
     return "constructor";
-  } else if (kind instanceof FunctionDeclaration) {
+  } else if (kind instanceof FunctionDeclaration2) {
     return "function";
   } else if (kind instanceof FallbackDeclaration) {
     return "fallback";
@@ -8067,7 +8235,7 @@ function node_declaration_kind_to_string(kind) {
     return "receive";
   } else if (kind instanceof ModifierDeclaration) {
     return "modifier";
-  } else if (kind instanceof VariableDeclaration) {
+  } else if (kind instanceof VariableDeclaration2) {
     return "variable";
   } else if (kind instanceof ConstantDeclaration) {
     return "constant";
@@ -8087,11 +8255,11 @@ function node_declaration_kind_to_string(kind) {
 }
 function node_declaration_kind_from_string(kind) {
   if (kind === "contract") {
-    return new ContractDeclaration();
+    return new ContractDeclaration2();
   } else if (kind === "constructor") {
     return new ConstructorDeclaration();
   } else if (kind === "function") {
-    return new FunctionDeclaration();
+    return new FunctionDeclaration2();
   } else if (kind === "fallback") {
     return new FallbackDeclaration();
   } else if (kind === "receive") {
@@ -8099,7 +8267,7 @@ function node_declaration_kind_from_string(kind) {
   } else if (kind === "modifier") {
     return new ModifierDeclaration();
   } else if (kind === "variable") {
-    return new VariableDeclaration();
+    return new VariableDeclaration2();
   } else if (kind === "constant") {
     return new ConstantDeclaration();
   } else if (kind === "enum") {
@@ -8163,28 +8331,42 @@ function node_reference_decoder() {
 }
 function node_declaration_decoder() {
   return field(
-    "t",
+    "n",
     string3,
-    (title2) => {
+    (name2) => {
       return field(
-        "i",
+        "s",
         string3,
-        (topic_id) => {
+        (scoped_name) => {
           return field(
-            "k",
+            "t",
             string3,
-            (kind) => {
+            (title2) => {
               return field(
-                "r",
-                list2(node_reference_decoder()),
-                (references) => {
-                  return success(
-                    new NodeDeclaration(
-                      title2,
-                      topic_id,
-                      node_declaration_kind_from_string(kind),
-                      references
-                    )
+                "i",
+                string3,
+                (topic_id) => {
+                  return field(
+                    "k",
+                    string3,
+                    (kind) => {
+                      return field(
+                        "r",
+                        list2(node_reference_decoder()),
+                        (references) => {
+                          return success(
+                            new NodeDeclaration(
+                              name2,
+                              scoped_name,
+                              title2,
+                              topic_id,
+                              node_declaration_kind_from_string(kind),
+                              references
+                            )
+                          );
+                        }
+                      );
+                    }
                   );
                 }
               );
@@ -9228,97 +9410,6 @@ function echo$isDict2(value3) {
   } catch {
     return false;
   }
-}
-
-// build/dev/javascript/filepath/filepath_ffi.mjs
-function is_windows() {
-  return globalThis?.process?.platform === "win32" || globalThis?.Deno?.build?.os === "windows";
-}
-
-// build/dev/javascript/filepath/filepath.mjs
-function split_unix(path2) {
-  let _block;
-  let $ = split2(path2, "/");
-  if ($.hasLength(1) && $.head === "") {
-    _block = toList([]);
-  } else if ($.atLeastLength(1) && $.head === "") {
-    let rest = $.tail;
-    _block = prepend("/", rest);
-  } else {
-    let rest = $;
-    _block = rest;
-  }
-  let _pipe = _block;
-  return filter(_pipe, (x2) => {
-    return x2 !== "";
-  });
-}
-function pop_windows_drive_specifier(path2) {
-  let start4 = slice(path2, 0, 3);
-  let codepoints = to_utf_codepoints(start4);
-  let $ = map2(codepoints, utf_codepoint_to_int);
-  if ($.hasLength(3) && (($.tail.tail.head === 47 || $.tail.tail.head === 92) && $.tail.head === 58 && ($.head >= 65 && $.head <= 90 || $.head >= 97 && $.head <= 122))) {
-    let drive = $.head;
-    let colon = $.tail.head;
-    let slash = $.tail.tail.head;
-    let drive_letter = slice(path2, 0, 1);
-    let drive$1 = lowercase(drive_letter) + ":/";
-    let path$1 = drop_start(path2, 3);
-    return [new Some(drive$1), path$1];
-  } else {
-    return [new None(), path2];
-  }
-}
-function split_windows(path2) {
-  let $ = pop_windows_drive_specifier(path2);
-  let drive = $[0];
-  let path$1 = $[1];
-  let _block;
-  let _pipe = split2(path$1, "/");
-  _block = flat_map(
-    _pipe,
-    (_capture) => {
-      return split2(_capture, "\\");
-    }
-  );
-  let segments = _block;
-  let _block$1;
-  if (drive instanceof Some) {
-    let drive$1 = drive[0];
-    _block$1 = prepend(drive$1, segments);
-  } else {
-    _block$1 = segments;
-  }
-  let segments$1 = _block$1;
-  if (segments$1.hasLength(1) && segments$1.head === "") {
-    return toList([]);
-  } else if (segments$1.atLeastLength(1) && segments$1.head === "") {
-    let rest = segments$1.tail;
-    return prepend("/", rest);
-  } else {
-    let rest = segments$1;
-    return rest;
-  }
-}
-function split4(path2) {
-  let $ = is_windows();
-  if ($) {
-    return split_windows(path2);
-  } else {
-    return split_unix(path2);
-  }
-}
-function base_name(path2) {
-  return guard(
-    path2 === "/",
-    "",
-    () => {
-      let _pipe = path2;
-      let _pipe$1 = split4(_pipe);
-      let _pipe$2 = last(_pipe$1);
-      return unwrap2(_pipe$2, "");
-    }
-  );
 }
 
 // build/dev/javascript/o11a_client/o11a/ui/audit_dashboard.mjs
@@ -12901,21 +12992,11 @@ function update3(model, msg) {
     let path2 = $[0];
     let fragment3 = $[1];
     let path$1 = "/" + path2;
-    console_log(
-      "User clicked node " + path$1 + " # " + (() => {
-        if (fragment3 instanceof Some) {
-          let fragment$1 = fragment3[0];
-          return fragment$1;
-        } else {
-          return "";
-        }
-      })()
-    );
     return [model, push(path$1, new None(), fragment3)];
   } else if (msg instanceof UserClickedInsideDiscussion2) {
     let line_number = msg.line_number;
     let column_number = msg.column_number;
-    echo3("User clicked inside discussion", "src/o11a_client.gleam", 425);
+    echo3("User clicked inside discussion", "src/o11a_client.gleam", 415);
     let _block;
     let $ = !isEqual(
       model.selected_discussion,
@@ -12990,7 +13071,7 @@ function update3(model, msg) {
     let model$3 = _block$2;
     return [model$3, none()];
   } else if (msg instanceof UserClickedOutsideDiscussion) {
-    echo3("User clicked outside discussion", "src/o11a_client.gleam", 451);
+    echo3("User clicked outside discussion", "src/o11a_client.gleam", 441);
     return [
       (() => {
         let _record = model;
@@ -13050,7 +13131,7 @@ function update3(model, msg) {
       echo3(
         "Focusing discussion input, user is typing",
         "src/o11a_client.gleam",
-        483
+        473
       );
       set_is_user_typing(true);
       return [
@@ -13096,7 +13177,7 @@ function update3(model, msg) {
         none()
       ];
     } else if (discussion_effect instanceof UnfocusDiscussionInput) {
-      echo3("Unfocusing discussion input", "src/o11a_client.gleam", 506);
+      echo3("Unfocusing discussion input", "src/o11a_client.gleam", 496);
       set_is_user_typing(false);
       return [model, none()];
     } else if (discussion_effect instanceof MaximizeDiscussion) {

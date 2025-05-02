@@ -408,16 +408,6 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       }
       let path = "/" <> path
 
-      io.println(
-        "User clicked node "
-        <> path
-        <> " # "
-        <> case fragment {
-          option.Some(fragment) -> fragment
-          option.None -> ""
-        },
-      )
-
       #(model, modem.push(path, option.None, fragment))
     }
 

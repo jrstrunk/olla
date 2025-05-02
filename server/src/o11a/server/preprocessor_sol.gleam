@@ -716,54 +716,54 @@ fn do_linearize_nodes_multi(linearized_nodes: List(Node), nodes: List(Node)) {
 
 pub fn enumerate_declarations(declarations, in ast: AST) {
   list.fold(ast.nodes, declarations, fn(declarations, node) {
-    do_enumerate_node_declarations(declarations, node, ast.absolute_path)
+    do_enumerate_node_declarations(
+      declarations,
+      node,
+      ast.absolute_path,
+      ast.absolute_path,
+    )
   })
 }
 
-fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
+fn do_enumerate_node_declarations(
+  declarations,
+  node: Node,
+  parent_id: String,
+  parent_name,
+) {
   case node {
-    Node(id:, nodes:, ..) -> {
-      let title = "n" <> int.to_string(id)
-      dict.insert(
-        declarations,
-        id,
-        preprocessor.NodeDeclaration(
-          title:,
-          topic_id: parent <> ":" <> title,
-          kind: preprocessor.UnknownDeclaration,
-          references: [],
-        ),
-      )
-      |> list.fold(nodes, _, fn(declarations, node) {
-        do_enumerate_node_declarations(declarations, node, parent)
+    Node(nodes:, ..) ->
+      list.fold(nodes, declarations, fn(declarations, node) {
+        do_enumerate_node_declarations(
+          declarations,
+          node,
+          parent_id,
+          parent_name,
+        )
       })
-    }
-    NamedNode(id:, nodes:, ..) -> {
-      let title = "n" <> int.to_string(id)
-      dict.insert(
-        declarations,
-        id,
-        preprocessor.NodeDeclaration(
-          title:,
-          topic_id: parent <> ":" <> title,
-          kind: preprocessor.UnknownDeclaration,
-          references: [],
-        ),
-      )
-      |> list.fold(nodes, _, fn(declarations, node) {
-        do_enumerate_node_declarations(declarations, node, parent)
+    NamedNode(nodes:, ..) ->
+      list.fold(nodes, declarations, fn(declarations, node) {
+        do_enumerate_node_declarations(
+          declarations,
+          node,
+          parent_id,
+          parent_name,
+        )
       })
-    }
     ImportDirectiveNode(..) | StructuredDocumentationNode(..) -> declarations
     ContractDefinitionNode(id:, name:, nodes:, contract_kind:, ..) -> {
       let title =
         audit_metadata.contract_kind_to_string(contract_kind) <> " " <> name
-      let contract_id = parent <> "#" <> name
+      let contract_id = parent_id <> "#" <> name
 
       dict.insert(
         declarations,
         id,
         preprocessor.NodeDeclaration(
+          name:,
+          // Contracts are technically scoped, but usually it doesn't matter,
+          // so we act like they are not scoped for the sake of user friendliness
+          scoped_name: name,
           title:,
           topic_id: contract_id,
           kind: preprocessor.ContractDeclaration,
@@ -771,7 +771,7 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
         ),
       )
       |> list.fold(nodes, _, fn(declarations, node) {
-        do_enumerate_node_declarations(declarations, node, contract_id)
+        do_enumerate_node_declarations(declarations, node, contract_id, name)
       })
     }
     FunctionDefinitionNode(
@@ -784,14 +784,17 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
       body:,
       ..,
     ) -> {
+      let scoped_name = parent_name <> "." <> name
+
       let title = case function_kind {
         audit_metadata.Function -> "function " <> name
         audit_metadata.Constructor -> "constructor"
         audit_metadata.Fallback -> "fallback function"
         audit_metadata.Receive -> "receive function"
       }
+
       let function_id =
-        parent
+        parent_id
         <> ":"
         <> case function_kind {
           audit_metadata.Function -> name
@@ -805,6 +808,8 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
           declarations,
           id,
           preprocessor.NodeDeclaration(
+            name:,
+            scoped_name:,
             title:,
             topic_id: function_id,
             kind: case function_kind {
@@ -817,26 +822,43 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
           ),
         )
         |> list.fold(nodes, _, fn(declarations, node) {
-          do_enumerate_node_declarations(declarations, node, function_id)
+          do_enumerate_node_declarations(
+            declarations,
+            node,
+            function_id,
+            scoped_name,
+          )
         })
-        |> do_enumerate_node_declarations(parameters, function_id)
-        |> do_enumerate_node_declarations(return_parameters, function_id)
+        |> do_enumerate_node_declarations(parameters, function_id, scoped_name)
+        |> do_enumerate_node_declarations(
+          return_parameters,
+          function_id,
+          scoped_name,
+        )
 
       case body {
         Some(body) ->
-          do_enumerate_node_declarations(declarations, body, function_id)
+          do_enumerate_node_declarations(
+            declarations,
+            body,
+            function_id,
+            scoped_name,
+          )
         option.None -> declarations
       }
     }
     ModifierDefinitionNode(id:, parameters:, nodes:, body:, name:, ..) -> {
+      let scoped_name = parent_name <> "." <> name
       let title = "modifier " <> name
-      let modifier_id = parent <> ":" <> name
+      let modifier_id = parent_id <> ":" <> name
 
       let declarations =
         dict.insert(
           declarations,
           id,
           preprocessor.NodeDeclaration(
+            name:,
+            scoped_name:,
             title:,
             topic_id: modifier_id,
             kind: preprocessor.ModifierDeclaration,
@@ -844,57 +866,82 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
           ),
         )
         |> list.fold(nodes, _, fn(declarations, node) {
-          do_enumerate_node_declarations(declarations, node, title)
+          do_enumerate_node_declarations(declarations, node, title, scoped_name)
         })
-        |> do_enumerate_node_declarations(parameters, title)
+        |> do_enumerate_node_declarations(parameters, title, scoped_name)
 
       case body {
-        Some(body) -> do_enumerate_node_declarations(declarations, body, title)
+        Some(body) ->
+          do_enumerate_node_declarations(declarations, body, title, scoped_name)
         option.None -> declarations
       }
     }
     ParameterListNode(parameters:, ..) -> {
       list.fold(parameters, declarations, fn(declarations, parameter) {
-        do_enumerate_node_declarations(declarations, parameter, parent)
+        do_enumerate_node_declarations(
+          declarations,
+          parameter,
+          parent_id,
+          parent_name,
+        )
       })
     }
     ErrorDefinitionNode(id:, name:, nodes:, parameters:, ..) -> {
+      let scoped_name = parent_name <> "." <> name
       let title = "error " <> name
+      let topic_id = parent_id <> ":" <> name
 
       declarations
       |> dict.insert(
         id,
         preprocessor.NodeDeclaration(
+          name:,
+          scoped_name:,
           title:,
-          topic_id: parent <> ":" <> name,
+          topic_id:,
           kind: preprocessor.ErrorDeclaration,
           references: [],
         ),
       )
       |> list.fold(nodes, _, fn(declarations, node) {
-        do_enumerate_node_declarations(declarations, node, parent)
+        do_enumerate_node_declarations(
+          declarations,
+          node,
+          parent_id,
+          parent_name,
+        )
       })
-      |> do_enumerate_node_declarations(parameters, parent)
+      |> do_enumerate_node_declarations(parameters, parent_id, parent_name)
     }
     EventDefinitionNode(id:, name:, nodes:, parameters:, ..) -> {
+      let scoped_name = parent_name <> "." <> name
       let title = "event " <> name
+      let topic_id = parent_id <> ":" <> name
 
       declarations
       |> dict.insert(
         id,
         preprocessor.NodeDeclaration(
+          name:,
+          scoped_name:,
           title:,
-          topic_id: parent <> ":" <> name,
+          topic_id:,
           kind: preprocessor.EventDeclaration,
           references: [],
         ),
       )
       |> list.fold(nodes, _, fn(declarations, node) {
-        do_enumerate_node_declarations(declarations, node, parent)
+        do_enumerate_node_declarations(
+          declarations,
+          node,
+          parent_id,
+          parent_name,
+        )
       })
-      |> do_enumerate_node_declarations(parameters, parent)
+      |> do_enumerate_node_declarations(parameters, parent_id, parent_name)
     }
     VariableDeclarationNode(id:, name:, constant:, type_string:, ..) -> {
+      let scoped_name = parent_name <> "." <> name
       let title =
         case constant {
           True -> "constant "
@@ -903,13 +950,16 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
         <> type_string
         <> " "
         <> name
+      let topic_id = parent_id <> ":" <> name
 
       dict.insert(
         declarations,
         id,
         preprocessor.NodeDeclaration(
+          name:,
+          scoped_name:,
           title:,
-          topic_id: parent <> ":" <> name,
+          topic_id:,
           kind: case constant {
             True -> preprocessor.ConstantDeclaration
             False -> preprocessor.VariableDeclaration
@@ -920,46 +970,80 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
     }
     BlockNode(nodes:, statements:, ..) -> {
       list.fold(nodes, declarations, fn(declarations, node) {
-        do_enumerate_node_declarations(declarations, node, parent)
+        do_enumerate_node_declarations(
+          declarations,
+          node,
+          parent_id,
+          parent_name,
+        )
       })
       |> list.fold(statements, _, fn(declarations, statement) {
-        do_enumerate_node_declarations(declarations, statement, parent)
+        do_enumerate_node_declarations(
+          declarations,
+          statement,
+          parent_id,
+          parent_name,
+        )
       })
     }
     VariableDeclarationStatementNode(declarations: declaration_nodes, ..) ->
       list.fold(declaration_nodes, declarations, fn(declarations, declaration) {
         case declaration {
           Some(declaration) ->
-            do_enumerate_node_declarations(declarations, declaration, parent)
+            do_enumerate_node_declarations(
+              declarations,
+              declaration,
+              parent_id,
+              parent_name,
+            )
           option.None -> declarations
         }
       })
     IfStatementNode(true_body:, false_body:, ..) -> {
       let declarations =
-        do_enumerate_node_declarations(declarations, true_body, parent)
+        do_enumerate_node_declarations(
+          declarations,
+          true_body,
+          parent_id,
+          parent_name,
+        )
 
       case false_body {
         Some(false_body) ->
-          do_enumerate_node_declarations(declarations, false_body, parent)
+          do_enumerate_node_declarations(
+            declarations,
+            false_body,
+            parent_id,
+            parent_name,
+          )
         option.None -> declarations
       }
     }
     ForStatementNode(initialization_expression:, body:, ..) -> {
       let declarations = case initialization_expression {
         option.Some(init) ->
-          do_enumerate_node_declarations(declarations, init, parent)
+          do_enumerate_node_declarations(
+            declarations,
+            init,
+            parent_id,
+            parent_name,
+          )
         option.None -> declarations
       }
 
-      do_enumerate_node_declarations(declarations, body, parent)
+      do_enumerate_node_declarations(declarations, body, parent_id, parent_name)
     }
     EnumDefinition(id:, name:, members:, nodes:, ..) -> {
+      let scoped_name = parent_name <> "." <> name
       let title = "enum " <> name
-      let enum_id = parent <> ":" <> name
+      let enum_id = parent_id <> ":" <> name
+
       dict.insert(
         declarations,
         id,
         preprocessor.NodeDeclaration(
+          name:,
+          scoped_name:,
           title:,
           topic_id: enum_id,
           kind: preprocessor.EnumDeclaration,
@@ -967,33 +1051,41 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
         ),
       )
       |> list.fold(nodes, _, fn(declarations, statement) {
-        do_enumerate_node_declarations(declarations, statement, enum_id)
+        do_enumerate_node_declarations(declarations, statement, enum_id, name)
       })
       |> list.fold(members, _, fn(declarations, statement) {
-        do_enumerate_node_declarations(declarations, statement, enum_id)
+        do_enumerate_node_declarations(declarations, statement, enum_id, name)
       })
     }
     EnumValue(id:, name:, ..) -> {
+      let scoped_name = parent_name <> "." <> name
       let title = "enum value " <> name
+      let topic_id = parent_id <> ":" <> scoped_name
 
       dict.insert(
         declarations,
         id,
         preprocessor.NodeDeclaration(
+          name:,
+          scoped_name:,
           title:,
-          topic_id: parent <> ":" <> name,
+          topic_id:,
           kind: preprocessor.EnumValueDeclaration,
           references: [],
         ),
       )
     }
     StructDefinition(id:, name:, members:, nodes:, ..) -> {
+      let scoped_name = parent_name <> "." <> name
       let title = "struct " <> name
-      let struct_id = parent <> ":" <> name
+      let struct_id = parent_id <> ":" <> name
+
       dict.insert(
         declarations,
         id,
         preprocessor.NodeDeclaration(
+          name:,
+          scoped_name:,
           title:,
           topic_id: struct_id,
           kind: preprocessor.StructDeclaration,
@@ -1001,10 +1093,10 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
         ),
       )
       |> list.fold(nodes, _, fn(declarations, statement) {
-        do_enumerate_node_declarations(declarations, statement, struct_id)
+        do_enumerate_node_declarations(declarations, statement, struct_id, name)
       })
       |> list.fold(members, _, fn(declarations, statement) {
-        do_enumerate_node_declarations(declarations, statement, struct_id)
+        do_enumerate_node_declarations(declarations, statement, struct_id, name)
       })
     }
 
@@ -1612,6 +1704,8 @@ fn add_reference(
           <> " found, there is an issue with finding all declarations",
         )
         preprocessor.NodeDeclaration(
+          name: "",
+          scoped_name: "",
           title: "unknown",
           topic_id: "",
           kind: preprocessor.UnknownDeclaration,
@@ -1678,16 +1772,12 @@ pub fn read_asts(for audit_name: String) {
       ),
     )
 
-    use ast <- result.try(
-      json.parse(
-        source_file_contents,
-        decode.at(["ast"], ast_decoder(audit_name)),
-      )
-      |> snag.map_error(string.inspect)
-      |> snag.context("Failed to parse build file for " <> file_name),
+    json.parse(
+      source_file_contents,
+      decode.at(["ast"], ast_decoder(audit_name)),
     )
-
-    #(ast.absolute_path, ast) |> Ok
+    |> snag.map_error(string.inspect)
+    |> snag.context("Failed to parse build file for " <> file_name)
   }
 
   res

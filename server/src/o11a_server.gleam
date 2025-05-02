@@ -20,7 +20,7 @@ import lustre/element/html
 import mist
 import o11a/config
 import o11a/note
-import o11a/server/audit_source_files
+import o11a/server/audit_data
 import o11a/server/discussion
 import o11a/ui/gateway
 import snag
@@ -31,17 +31,12 @@ import wisp/wisp_mist
 type Context {
   Context(
     config: config.Config,
-    audit_metadata_gateway: gateway.AuditMetaDataGateway,
     discussion_gateway: concurrent_dict.ConcurrentDict(
       String,
       discussion.Discussion,
     ),
     discussion_component_gateway: gateway.DiscussionComponentGateway,
-    source_files: audit_source_files.AuditSourceFiles,
-    audit_metadata: concurrent_dict.ConcurrentDict(
-      String,
-      string_tree.StringTree,
-    ),
+    audit_data: audit_data.AuditData,
   )
 }
 
@@ -56,11 +51,9 @@ pub fn main() {
 
   use
     gateway.Gateway(
-      audit_metadata_gateway:,
       discussion_gateway:,
       discussion_component_gateway:,
-      source_files:,
-      audit_metadata:,
+      audit_data:,
     )
   <- result.map(
     gateway.start_gateway()
@@ -70,11 +63,9 @@ pub fn main() {
   let context =
     Context(
       config:,
-      audit_metadata_gateway:,
       discussion_gateway:,
       discussion_component_gateway:,
-      source_files:,
-      audit_metadata:,
+      audit_data:,
     )
 
   let assert Ok(_) =
@@ -118,7 +109,7 @@ fn handler(req, context: Context) {
 fn handle_wisp_request(req, context: Context) {
   case request.path_segments(req) {
     ["audit-metadata", audit_name] ->
-      gateway.get_audit_metadata(context.audit_metadata, for: audit_name)
+      audit_data.get_metadata(context.audit_data, for: audit_name)
       // TODO: try_recover to gather metadata from disk
       |> result.unwrap(string_tree.from_string("<p>Metadata not found</p>"))
       |> wisp.json_response(200)
@@ -126,8 +117,8 @@ fn handle_wisp_request(req, context: Context) {
     ["source-file", ..page_path] ->
       // If the source file was not initially found in the in-memory cache, then
       // this will try to get it from disk and reprocess the audit
-      audit_source_files.get_source_file(
-        context.source_files,
+      audit_data.get_source_file(
+        context.audit_data,
         for: page_path |> list.fold("", filepath.join),
       )
       |> result.unwrap(string_tree.from_string(
