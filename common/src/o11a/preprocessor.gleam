@@ -14,9 +14,7 @@ pub type SourceKind {
 pub fn classify_source_kind(path path: String) {
   case filepath.extension(path) {
     Ok("sol") -> Ok(Solidity)
-    Ok("txt") -> Ok(Text)
-    Ok("dj") -> Ok(Text)
-    Ok("md") -> Ok(Text)
+    Ok("md") | Ok("dj") -> Ok(Text)
     _ -> Error(Nil)
   }
 }
@@ -303,20 +301,20 @@ fn node_declaration_kind_from_string(kind) {
 
 pub fn node_declaration_kind_to_metadata_declaration_kind(kind) {
   case kind {
-    ContractDeclaration -> audit_metadata.ContractDeclaration
-    FunctionDeclaration -> audit_metadata.FunctionDeclaration
-    VariableDeclaration -> audit_metadata.VariableDeclaration
-    UnknownDeclaration -> audit_metadata.DocumentationDeclaration
-    ConstantDeclaration -> audit_metadata.VariableDeclaration
-    ConstructorDeclaration -> audit_metadata.FunctionDeclaration
-    EnumDeclaration -> audit_metadata.VariableDeclaration
-    EnumValueDeclaration -> audit_metadata.VariableDeclaration
-    ErrorDeclaration -> audit_metadata.VariableDeclaration
-    EventDeclaration -> audit_metadata.VariableDeclaration
-    FallbackDeclaration -> audit_metadata.FunctionDeclaration
-    ModifierDeclaration -> audit_metadata.FunctionDeclaration
-    ReceiveDeclaration -> audit_metadata.FunctionDeclaration
-    StructDeclaration -> audit_metadata.VariableDeclaration
+    ContractDeclaration -> audit_metadata.AddressableContract
+    FunctionDeclaration -> audit_metadata.AddressableFunction
+    VariableDeclaration -> audit_metadata.AddressableVariable
+    UnknownDeclaration -> audit_metadata.AddressableDocumentation
+    ConstantDeclaration -> audit_metadata.AddressableVariable
+    ConstructorDeclaration -> audit_metadata.AddressableFunction
+    EnumDeclaration -> audit_metadata.AddressableVariable
+    EnumValueDeclaration -> audit_metadata.AddressableVariable
+    ErrorDeclaration -> audit_metadata.AddressableVariable
+    EventDeclaration -> audit_metadata.AddressableVariable
+    FallbackDeclaration -> audit_metadata.AddressableFunction
+    ModifierDeclaration -> audit_metadata.AddressableFunction
+    ReceiveDeclaration -> audit_metadata.AddressableFunction
+    StructDeclaration -> audit_metadata.AddressableVariable
   }
 }
 

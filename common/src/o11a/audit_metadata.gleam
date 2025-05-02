@@ -8,7 +8,7 @@ pub type AuditMetaData {
     audit_name: String,
     audit_formatted_name: String,
     in_scope_files: List(String),
-    declarations: List(Declaration),
+    symbols: List(AddressableSymbol),
   )
 }
 
@@ -17,10 +17,7 @@ pub fn encode_audit_metadata(audit_metadata: AuditMetaData) {
     #("audit_name", json.string(audit_metadata.audit_name)),
     #("audit_formatted_name", json.string(audit_metadata.audit_formatted_name)),
     #("in_scope_files", json.array(audit_metadata.in_scope_files, json.string)),
-    #(
-      "declarations",
-      json.array(audit_metadata.declarations, encode_declaration),
-    ),
+    #("symbols", json.array(audit_metadata.symbols, encode_declaration)),
   ])
 }
 
@@ -34,38 +31,35 @@ pub fn audit_metadata_decoder() -> decode.Decoder(AuditMetaData) {
     "in_scope_files",
     decode.list(decode.string),
   )
-  use declarations <- decode.field(
-    "declarations",
-    decode.list(declaration_decoder()),
-  )
+  use symbols <- decode.field("symbols", decode.list(declaration_decoder()))
 
   decode.success(AuditMetaData(
     audit_name:,
     audit_formatted_name:,
     in_scope_files:,
-    declarations:,
+    symbols:,
   ))
 }
 
-pub type Declaration {
-  Declaration(
+pub type AddressableSymbol {
+  AddressableSymbol(
     name: String,
     scoped_name: String,
-    kind: DeclarationKind,
+    kind: AddressableSymbolKind,
     topic_id: String,
   )
 }
 
-fn declaration_decoder() -> decode.Decoder(Declaration) {
+fn declaration_decoder() -> decode.Decoder(AddressableSymbol) {
   use name <- decode.field("n", decode.string)
   use scoped_name <- decode.field("s", decode.string)
   use kind <- decode.field("k", declaration_kind_decoder())
   use topic_id <- decode.field("i", decode.string)
-  decode.success(Declaration(name:, scoped_name:, kind:, topic_id:))
+  decode.success(AddressableSymbol(name:, scoped_name:, kind:, topic_id:))
 }
 
-fn encode_declaration(declaration: Declaration) -> json.Json {
-  let Declaration(name:, scoped_name:, kind:, topic_id:) = declaration
+fn encode_declaration(declaration: AddressableSymbol) -> json.Json {
+  let AddressableSymbol(name:, scoped_name:, kind:, topic_id:) = declaration
   json.object([
     #("n", json.string(name)),
     #("s", json.string(scoped_name)),
@@ -74,30 +68,33 @@ fn encode_declaration(declaration: Declaration) -> json.Json {
   ])
 }
 
-pub type DeclarationKind {
-  ContractDeclaration
-  FunctionDeclaration
-  VariableDeclaration
-  DocumentationDeclaration
+pub type AddressableSymbolKind {
+  AddressableContract
+  AddressableFunction
+  AddressableVariable
+  AddressableDocumentation
+  AddressableLine
 }
 
-fn encode_declaration_kind(declaration_kind: DeclarationKind) -> json.Json {
+fn encode_declaration_kind(declaration_kind: AddressableSymbolKind) -> json.Json {
   case declaration_kind {
-    ContractDeclaration -> json.string("c")
-    FunctionDeclaration -> json.string("f")
-    VariableDeclaration -> json.string("v")
-    DocumentationDeclaration -> json.string("d")
+    AddressableContract -> json.string("c")
+    AddressableFunction -> json.string("f")
+    AddressableVariable -> json.string("v")
+    AddressableDocumentation -> json.string("d")
+    AddressableLine -> json.string("l")
   }
 }
 
-fn declaration_kind_decoder() -> decode.Decoder(DeclarationKind) {
+fn declaration_kind_decoder() -> decode.Decoder(AddressableSymbolKind) {
   use variant <- decode.then(decode.string)
   case variant {
-    "c" -> decode.success(ContractDeclaration)
-    "f" -> decode.success(FunctionDeclaration)
-    "v" -> decode.success(VariableDeclaration)
-    "d" -> decode.success(DocumentationDeclaration)
-    _ -> decode.failure(DocumentationDeclaration, "DeclarationKind")
+    "c" -> decode.success(AddressableContract)
+    "f" -> decode.success(AddressableFunction)
+    "v" -> decode.success(AddressableVariable)
+    "d" -> decode.success(AddressableDocumentation)
+    "l" -> decode.success(AddressableLine)
+    _ -> decode.failure(AddressableDocumentation, "DeclarationKind")
   }
 }
 

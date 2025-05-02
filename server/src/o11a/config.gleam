@@ -79,7 +79,7 @@ pub fn get_all_audit_page_paths() {
       [] -> ""
     }
   })
-  |> list.filter(is_allowed_file_extension)
+  |> list.filter(is_allowed_file)
   |> list.group(get_audit_name_from_page_path)
 }
 
@@ -97,21 +97,21 @@ pub fn get_audit_page_paths(audit_name audit_name) {
       [] -> ""
     }
   })
-  |> list.filter(is_allowed_file_extension)
+  |> list.filter(is_allowed_file)
 }
 
-fn is_allowed_file_extension(file_path) {
+fn is_allowed_file(file_path) {
   case string.to_graphemes(file_path) |> list.reverse {
     // Allow .sol files
     ["l", "o", "s", ".", ..] -> True
     // Allow .rs files
     ["s", "r", ".", ..] -> True
-    // Allow .md files
-    ["d", "m", ".", ..] -> True
-    // Allow .txt files
-    ["t", "x", "t", ".", ..] -> True
-    // Allow .dj files
-    ["j", "d", ".", ..] -> True
+    // Allow .md and .dj files (but not from dependencies)
+    ["d", "m", ".", ..] | ["j", "d", ".", ..] -> {
+      let file_path_split = filepath.split(file_path)
+      !{ file_path_split |> list.contains("lib") }
+      && !{ file_path_split |> list.contains("dependencies") }
+    }
     // everything else
     _ -> False
   }

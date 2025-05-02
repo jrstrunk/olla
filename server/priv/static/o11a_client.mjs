@@ -7489,15 +7489,15 @@ function push(path2, query, fragment3) {
 
 // build/dev/javascript/o11a_common/o11a/audit_metadata.mjs
 var AuditMetaData = class extends CustomType {
-  constructor(audit_name, audit_formatted_name, in_scope_files, declarations) {
+  constructor(audit_name, audit_formatted_name, in_scope_files, symbols) {
     super();
     this.audit_name = audit_name;
     this.audit_formatted_name = audit_formatted_name;
     this.in_scope_files = in_scope_files;
-    this.declarations = declarations;
+    this.symbols = symbols;
   }
 };
-var Declaration = class extends CustomType {
+var AddressableSymbol = class extends CustomType {
   constructor(name2, scoped_name, kind, topic_id) {
     super();
     this.name = name2;
@@ -7506,29 +7506,33 @@ var Declaration = class extends CustomType {
     this.topic_id = topic_id;
   }
 };
-var ContractDeclaration = class extends CustomType {
+var AddressableContract = class extends CustomType {
 };
-var FunctionDeclaration = class extends CustomType {
+var AddressableFunction = class extends CustomType {
 };
-var VariableDeclaration = class extends CustomType {
+var AddressableVariable = class extends CustomType {
 };
-var DocumentationDeclaration = class extends CustomType {
+var AddressableDocumentation = class extends CustomType {
+};
+var AddressableLine = class extends CustomType {
 };
 function declaration_kind_decoder() {
   return then$2(
     string3,
     (variant) => {
       if (variant === "c") {
-        return success(new ContractDeclaration());
+        return success(new AddressableContract());
       } else if (variant === "f") {
-        return success(new FunctionDeclaration());
+        return success(new AddressableFunction());
       } else if (variant === "v") {
-        return success(new VariableDeclaration());
+        return success(new AddressableVariable());
       } else if (variant === "d") {
-        return success(new DocumentationDeclaration());
+        return success(new AddressableDocumentation());
+      } else if (variant === "l") {
+        return success(new AddressableLine());
       } else {
         return failure(
-          new DocumentationDeclaration(),
+          new AddressableDocumentation(),
           "DeclarationKind"
         );
       }
@@ -7553,7 +7557,7 @@ function declaration_decoder() {
                 string3,
                 (topic_id) => {
                   return success(
-                    new Declaration(name2, scoped_name, kind, topic_id)
+                    new AddressableSymbol(name2, scoped_name, kind, topic_id)
                   );
                 }
               );
@@ -7578,15 +7582,15 @@ function audit_metadata_decoder() {
             list2(string3),
             (in_scope_files) => {
               return field(
-                "declarations",
+                "symbols",
                 list2(declaration_decoder()),
-                (declarations) => {
+                (symbols) => {
                   return success(
                     new AuditMetaData(
                       audit_name,
                       audit_formatted_name,
                       in_scope_files,
-                      declarations
+                      symbols
                     )
                   );
                 }
@@ -8174,11 +8178,11 @@ var NodeDeclaration = class extends CustomType {
     this.references = references;
   }
 };
-var ContractDeclaration2 = class extends CustomType {
+var ContractDeclaration = class extends CustomType {
 };
 var ConstructorDeclaration = class extends CustomType {
 };
-var FunctionDeclaration2 = class extends CustomType {
+var FunctionDeclaration = class extends CustomType {
 };
 var FallbackDeclaration = class extends CustomType {
 };
@@ -8186,7 +8190,7 @@ var ReceiveDeclaration = class extends CustomType {
 };
 var ModifierDeclaration = class extends CustomType {
 };
-var VariableDeclaration2 = class extends CustomType {
+var VariableDeclaration = class extends CustomType {
 };
 var ConstantDeclaration = class extends CustomType {
 };
@@ -8223,11 +8227,11 @@ var UsingReference = class extends CustomType {
 var TypeReference = class extends CustomType {
 };
 function node_declaration_kind_to_string(kind) {
-  if (kind instanceof ContractDeclaration2) {
+  if (kind instanceof ContractDeclaration) {
     return "contract";
   } else if (kind instanceof ConstructorDeclaration) {
     return "constructor";
-  } else if (kind instanceof FunctionDeclaration2) {
+  } else if (kind instanceof FunctionDeclaration) {
     return "function";
   } else if (kind instanceof FallbackDeclaration) {
     return "fallback";
@@ -8235,7 +8239,7 @@ function node_declaration_kind_to_string(kind) {
     return "receive";
   } else if (kind instanceof ModifierDeclaration) {
     return "modifier";
-  } else if (kind instanceof VariableDeclaration2) {
+  } else if (kind instanceof VariableDeclaration) {
     return "variable";
   } else if (kind instanceof ConstantDeclaration) {
     return "constant";
@@ -8255,11 +8259,11 @@ function node_declaration_kind_to_string(kind) {
 }
 function node_declaration_kind_from_string(kind) {
   if (kind === "contract") {
-    return new ContractDeclaration2();
+    return new ContractDeclaration();
   } else if (kind === "constructor") {
     return new ConstructorDeclaration();
   } else if (kind === "function") {
-    return new FunctionDeclaration2();
+    return new FunctionDeclaration();
   } else if (kind === "fallback") {
     return new FallbackDeclaration();
   } else if (kind === "receive") {
@@ -8267,7 +8271,7 @@ function node_declaration_kind_from_string(kind) {
   } else if (kind === "modifier") {
     return new ModifierDeclaration();
   } else if (kind === "variable") {
-    return new VariableDeclaration2();
+    return new VariableDeclaration();
   } else if (kind === "constant") {
     return new ConstantDeclaration();
   } else if (kind === "enum") {

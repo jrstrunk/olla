@@ -1,6 +1,7 @@
 import filepath
 import gleam/dict
 import gleam/function
+import gleam/int
 import gleam/io
 import gleam/json
 import gleam/list
@@ -71,11 +72,15 @@ fn gather_audit_data(audit_data: AuditData, for audit_name) {
 }
 
 fn do_gather_audit_data(audit_data: AuditData, for audit_name) {
-  use #(source_files, declarations) <- result.try(preprocess_audit_source(
-    for: audit_name,
-  ))
+  use #(source_files, declarations, addressable_lines) <- result.try(
+    preprocess_audit_source(for: audit_name),
+  )
 
-  use metadata <- result.try(gather_metadata(for: audit_name, declarations:))
+  use metadata <- result.try(gather_metadata(
+    for: audit_name,
+    declarations:,
+    addressable_lines:,
+  ))
 
   let _ =
     pcd.insert(
@@ -129,14 +134,9 @@ fn preprocess_audit_source(for audit_name) {
     |> snag.context("Unable to read sol asts for " <> audit_name),
   )
 
-  use text_asts <- result.try(
-    preprocessor_text.read_asts(audit_name)
-    |> snag.context("Unable to read text asts for " <> audit_name),
-  )
-
   let page_paths = config.get_all_audit_page_paths()
 
-  let file_to_ast =
+  let file_to_sol_ast =
     list.map(sol_asts, fn(ast) { #(ast.absolute_path, ast) })
     |> dict.from_list
 
@@ -149,12 +149,6 @@ fn preprocess_audit_source(for audit_name) {
       preprocessor_sol.count_references(declarations, ast)
     })
 
-  let text_declarations =
-    dict.new()
-    |> list.fold(text_asts, _, fn(declarations, ast) {
-      preprocessor_text.enumerate_declarations(declarations, ast)
-    })
-
   use source_files <- result.map(
     dict.get(page_paths, audit_name)
     |> result.unwrap([])
@@ -162,7 +156,7 @@ fn preprocess_audit_source(for audit_name) {
       case
         preprocessor.classify_source_kind(path: page_path),
         config.get_full_page_path(for: page_path) |> simplifile.read,
-        dict.get(file_to_ast, page_path)
+        dict.get(file_to_sol_ast, page_path)
       {
         // Solidity source file with an AST
         Ok(preprocessor.Solidity), Ok(source), Ok(nodes) -> {
@@ -213,11 +207,42 @@ fn preprocess_audit_source(for audit_name) {
       }
     })
 
-  let declarations =
-    [dict.values(sol_declarations), dict.values(text_declarations)]
+  let declarations = dict.values(sol_declarations)
+
+  let addressable_lines =
+    list.map(source_files, fn(source_file) {
+      list.index_map(source_file.1, fn(line, index) {
+        let line_number_text = int.to_string(index + 1)
+
+        case line.significance {
+          preprocessor.SingleDeclarationLine(node_declaration:) ->
+            Ok(audit_metadata.AddressableSymbol(
+              name: "L" <> line_number_text,
+              scoped_name: filepath.base_name(source_file.0)
+                <> ".L"
+                <> line_number_text,
+              kind: audit_metadata.AddressableLine,
+              topic_id: node_declaration.topic_id,
+            ))
+
+          preprocessor.NonEmptyLine ->
+            Ok(audit_metadata.AddressableSymbol(
+              name: "L" <> line_number_text,
+              scoped_name: filepath.base_name(source_file.0)
+                <> ".L"
+                <> line_number_text,
+              kind: audit_metadata.AddressableLine,
+              topic_id: source_file.0 <> "#L" <> line_number_text,
+            ))
+
+          preprocessor.EmptyLine -> Error(Nil)
+        }
+      })
+      |> list.filter_map(fn(result) { result })
+    })
     |> list.flatten
 
-  #(source_files, declarations)
+  #(source_files, declarations, addressable_lines)
 }
 
 // AuditMetadataProvider -------------------------------------------------------
@@ -249,6 +274,7 @@ fn build_audit_metadata_provider() {
 fn gather_metadata(
   for audit_name,
   declarations declarations: List(preprocessor.NodeDeclaration),
+  addressable_lines addressable_lines,
 ) {
   let in_scope_files = {
     let in_scope_sol_files =
@@ -283,8 +309,8 @@ fn gather_metadata(
     audit_name:,
     audit_formatted_name: audit_name,
     in_scope_files:,
-    declarations: list.map(declarations, fn(declaration) {
-      audit_metadata.Declaration(
+    symbols: list.map(declarations, fn(declaration) {
+      audit_metadata.AddressableSymbol(
         name: declaration.name,
         scoped_name: declaration.scoped_name,
         kind: preprocessor.node_declaration_kind_to_metadata_declaration_kind(
@@ -292,6 +318,7 @@ fn gather_metadata(
         ),
         topic_id: declaration.topic_id,
       )
-    }),
+    })
+      |> list.append(addressable_lines),
   ))
 }

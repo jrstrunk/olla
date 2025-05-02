@@ -95,7 +95,6 @@ pub fn read_asts(for audit_name) {
     |> list.filter(fn(page_path) {
       case filepath.extension(page_path) {
         Ok("md") -> True
-        Ok("txt") -> True
         Ok("dj") -> True
         _ -> False
       }
