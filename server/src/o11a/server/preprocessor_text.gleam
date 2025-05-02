@@ -25,7 +25,7 @@ pub fn preprocess_source(source source: String, page_path page_path: String) {
   let significance = case line {
     preprocessor.PreProcessedDeclaration(node_declaration:, ..) ->
       preprocessor.SingleDeclarationLine(node_declaration:)
-    _ -> preprocessor.NonEmptyLine
+    _ -> preprocessor.EmptyLine
   }
 
   preprocessor.PreProcessedLine(
@@ -44,7 +44,10 @@ fn consume_source(source source: String, page_path page_path: String) {
   string.split(source, on: "\n")
   |> list.fold([], fn(acc, line) {
     case line |> string.trim {
-      "" -> [preprocessor.PreProcessedNode(element: line), ..acc]
+      "" -> [
+        preprocessor.PreProcessedGapNode(element: line, leading_spaces: 0),
+        ..acc
+      ]
       _ -> {
         let line_number_text = { acc |> list.length } + 1 |> int.to_string
         [

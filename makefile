@@ -12,9 +12,9 @@ run:
 	&& cd ../server \
 	&& gleam run dev)
 
-.PHONY: clean-skeleton
-clean-skeleton:
-	@(cd server/priv/audits && find . -type f -name "*skeleton.html" -delete)
+.PHONY: wipe
+wipe:
+	@(cd server/priv/persist && rm *)
 
 .PHONY: count-lines
 count-lines:
