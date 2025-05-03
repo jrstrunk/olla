@@ -1,3 +1,4 @@
+import given
 import gleam/dict
 import gleam/dynamic/decode
 import gleam/int
@@ -55,12 +56,12 @@ pub type Model {
       String,
       dict.Dict(String, List(computed_note.ComputedNote)),
     ),
-    discussion_models: dict.Dict(#(Int, Int), discussion.Model),
+    discussion_models: dict.Dict(DiscussionKey, discussion.Model),
     keyboard_model: page_navigation.Model,
-    selected_discussion: option.Option(#(Int, Int)),
+    selected_discussion: option.Option(DiscussionKey),
     selected_node_id: option.Option(Int),
-    focused_discussion: option.Option(#(Int, Int)),
-    clicked_discussion: option.Option(#(Int, Int)),
+    focused_discussion: option.Option(DiscussionKey),
+    clicked_discussion: option.Option(DiscussionKey),
   )
 }
 
@@ -68,6 +69,10 @@ pub type Route {
   O11aHomeRoute
   AuditDashboardRoute(audit_name: String)
   AuditPageRoute(audit_name: String, page_path: String)
+}
+
+pub type DiscussionKey {
+  DiscussionKey(page_path: String, line_number: Int, column_number: Int)
 }
 
 fn init(_) -> #(Model, Effect(Msg)) {
@@ -172,6 +177,22 @@ fn file_tree_from_route(
         audit_name:,
       )
     }
+  }
+}
+
+fn get_page_route_from_model(model: Model) {
+  case model.route {
+    AuditDashboardRoute(..) -> Error(Nil)
+    AuditPageRoute(page_path:, ..) -> Ok(page_path)
+    O11aHomeRoute -> Error(Nil)
+  }
+}
+
+fn get_audit_name_from_model(model: Model) {
+  case model.route {
+    AuditDashboardRoute(audit_name:) -> Ok(audit_name)
+    AuditPageRoute(audit_name:, ..) -> Ok(audit_name)
+    O11aHomeRoute -> Error(Nil)
   }
 }
 
@@ -314,7 +335,24 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       is_reference:,
       references:,
     ) -> {
-      let selected_discussion = #(line_number, column_number)
+      use page_path <- given.ok(
+        get_page_route_from_model(model),
+        else_return: fn(_) { #(model, effect.none()) },
+      )
+      use audit_name <- given.ok(
+        get_audit_name_from_model(model),
+        else_return: fn(_) { #(model, effect.none()) },
+      )
+      use audit_metadata <- given.ok(
+        case dict.get(model.audit_metadata, audit_name) {
+          Ok(Ok(audit_metadata)) -> Ok(audit_metadata)
+          _ -> Error(Nil)
+        },
+        else_return: fn(_) { #(model, effect.none()) },
+      )
+
+      let selected_discussion =
+        DiscussionKey(page_path:, line_number:, column_number:)
 
       let discussion_models = case
         dict.get(model.discussion_models, selected_discussion)
@@ -331,6 +369,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               topic_title:,
               is_reference:,
               references:,
+              audit_metadata:,
             ),
           )
       }
@@ -383,10 +422,19 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     }
 
     UserClickedDiscussionEntry(line_number:, column_number:) -> {
+      use page_path <- given.ok(
+        get_page_route_from_model(model),
+        else_return: fn(_) { #(model, effect.none()) },
+      )
+
       #(
         Model(
           ..model,
-          clicked_discussion: option.Some(#(line_number, column_number)),
+          clicked_discussion: option.Some(DiscussionKey(
+            page_path:,
+            line_number:,
+            column_number:,
+          )),
         ),
         effect.from(fn(_dispatch) {
           let res =
@@ -412,23 +460,31 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     }
 
     UserClickedInsideDiscussion(line_number:, column_number:) -> {
+      use page_path <- given.ok(
+        get_page_route_from_model(model),
+        else_return: fn(_) { #(model, effect.none()) },
+      )
+
       echo "User clicked inside discussion"
       let model = case
-        model.selected_discussion != option.Some(#(line_number, column_number))
+        model.selected_discussion
+        != option.Some(DiscussionKey(page_path:, line_number:, column_number:))
       {
         True -> Model(..model, selected_discussion: option.None)
         False -> model
       }
 
       let model = case
-        model.focused_discussion != option.Some(#(line_number, column_number))
+        model.focused_discussion
+        != option.Some(DiscussionKey(page_path:, line_number:, column_number:))
       {
         True -> Model(..model, focused_discussion: option.None)
         False -> model
       }
 
       let model = case
-        model.clicked_discussion != option.Some(#(line_number, column_number))
+        model.clicked_discussion
+        != option.Some(DiscussionKey(page_path:, line_number:, column_number:))
       {
         True -> Model(..model, clicked_discussion: option.None)
         False -> model
@@ -451,6 +507,10 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     }
 
     UserUpdatedDiscussion(line_number:, column_number:, update:) -> {
+      use page_path <- given.ok(
+        get_page_route_from_model(model),
+        else_return: fn(_) { #(model, effect.none()) },
+      )
       let #(discussion_model, discussion_effect) = update
 
       case discussion_effect {
@@ -475,7 +535,11 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           #(
             Model(
               ..model,
-              focused_discussion: option.Some(#(line_number, column_number)),
+              focused_discussion: option.Some(DiscussionKey(
+                page_path:,
+                line_number:,
+                column_number:,
+              )),
             ),
             effect.none(),
           )
@@ -486,7 +550,11 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           #(
             Model(
               ..model,
-              focused_discussion: option.Some(#(line_number, column_number)),
+              focused_discussion: option.Some(DiscussionKey(
+                page_path:,
+                line_number:,
+                column_number:,
+              )),
             ),
             effect.none(),
           )
@@ -504,7 +572,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             ..model,
             discussion_models: dict.insert(
               model.discussion_models,
-              #(line_number, column_number),
+              DiscussionKey(page_path:, line_number:, column_number:),
               discussion_model,
             ),
           ),
@@ -513,17 +581,29 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       }
     }
 
-    UserSuccessfullySubmittedNote(updated_model) -> #(
-      Model(
-        ..model,
-        discussion_models: dict.insert(
-          model.discussion_models,
-          #(updated_model.line_number, updated_model.column_number),
-          updated_model,
+    UserSuccessfullySubmittedNote(updated_model) -> {
+      use page_path <- given.ok(
+        get_page_route_from_model(model),
+        else_return: fn(_) { #(model, effect.none()) },
+      )
+
+      #(
+        Model(
+          ..model,
+          discussion_models: dict.insert(
+            model.discussion_models,
+            DiscussionKey(
+              page_path:,
+              line_number: updated_model.line_number,
+              column_number: updated_model.column_number,
+            ),
+            updated_model,
+          ),
         ),
-      ),
-      effect.none(),
-    )
+        effect.none(),
+      )
+    }
+
     UserFailedToSubmitNote(error) -> {
       io.print("Failed to submit note: " <> string.inspect(error))
       #(model, effect.none())
@@ -707,8 +787,8 @@ fn get_selected_discussion(model: Model) {
       dict.get(model.discussion_models, discussion)
       |> result.map(fn(model) {
         option.Some(audit_page.DiscussionReference(
-          line_number: discussion.0,
-          column_number: discussion.1,
+          line_number: discussion.line_number,
+          column_number: discussion.column_number,
           model:,
         ))
       })
