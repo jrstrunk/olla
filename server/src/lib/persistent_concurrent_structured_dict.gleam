@@ -124,26 +124,32 @@ pub fn insert(
     structured_val,
   ),
   key key,
-  val val,
-  topic topic,
+  val submission,
+  rebuild_topics topics,
 ) {
-  // If this topic doesn't exist, create it so it can be restored on rebuild
-  use Nil <- result.try(pcd_dict.add_topic(
-    psc_dict.raw_data,
-    psc_dict.topic_encoder(topic),
-  ))
+  // If the topics do not exist, create them so they can be restored on rebuild
+  use _nils <- result.try(
+    list.map(topics, fn(topic) {
+      pcd_dict.add_topic(psc_dict.raw_data, psc_dict.topic_encoder(topic))
+    })
+    |> result.all,
+  )
 
-  use Nil <- result.map(pcd_dict.insert(psc_dict.raw_data, key, val))
+  use val <- result.map(pcd_dict.insert(psc_dict.raw_data, key, submission))
 
-  let structured_val = psc_dict.builder(psc_dict.raw_data, topic)
+  list.map(topics, fn(topic) {
+    let structured_vals = psc_dict.builder(psc_dict.raw_data, topic)
 
-  concurrent_dict.insert(psc_dict.structured_data, topic, structured_val)
+    concurrent_dict.insert(psc_dict.structured_data, topic, structured_vals)
 
-  concurrent_duplicate_dict.get(psc_dict.topic_subscribers, topic)
-  |> list.each(fn(effect) { effect() })
+    concurrent_duplicate_dict.get(psc_dict.topic_subscribers, topic)
+    |> list.each(fn(effect) { effect() })
+  })
 
   concurrent_duplicate_dict.get(psc_dict.subscribers, Nil)
   |> list.each(fn(effect) { effect() })
+
+  val
 }
 
 pub fn get(

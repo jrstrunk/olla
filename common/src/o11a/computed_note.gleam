@@ -1,3 +1,4 @@
+import given
 import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/json
@@ -5,6 +6,7 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
+import o11a/audit_metadata
 import o11a/note
 import tempo
 import tempo/datetime
@@ -19,7 +21,9 @@ pub type ComputedNote {
     message: String,
     expanded_message: Option(String),
     time: tempo.DateTime,
+    references: List(audit_metadata.AddressableSymbol),
     edited: Bool,
+    reference: option.Option(String),
   )
 }
 
@@ -36,6 +40,14 @@ pub fn encode_computed_note(computed_note: ComputedNote) -> json.Json {
     }),
     #("t", json.int(datetime.to_unix_milli(computed_note.time))),
     #("e", json.bool(computed_note.edited)),
+    #(
+      "rs",
+      json.array(
+        computed_note.references,
+        audit_metadata.encode_addressable_symbol,
+      ),
+    ),
+    #("r", json.nullable(computed_note.reference, json.string)),
   ])
 }
 
@@ -48,6 +60,11 @@ pub fn computed_note_decoder() -> decode.Decoder(ComputedNote) {
   use expanded_message <- decode.field("x", decode.optional(decode.string))
   use time <- decode.field("t", decode.int)
   use edited <- decode.field("e", decode.bool)
+  use references <- decode.field(
+    "rs",
+    decode.list(audit_metadata.addressable_symbol_decoder()),
+  )
+  use reference <- decode.field("r", decode.optional(decode.string))
 
   decode.success(ComputedNote(
     note_id:,
@@ -57,7 +74,9 @@ pub fn computed_note_decoder() -> decode.Decoder(ComputedNote) {
     message:,
     expanded_message:,
     time: datetime.from_unix_milli(time),
+    references:,
     edited:,
+    reference:,
   ))
 }
 
@@ -196,10 +215,18 @@ pub fn decode_computed_notes(notes: dynamic.Dynamic) {
   list.group(notes, by: fn(note) { note.parent_id })
 }
 
-pub fn from_note(note: note.Note, thread_notes: List(note.Note)) {
+pub fn from_note(original_note: note.Note, thread_notes: List(note.Note)) {
   // When we are searching for compound values, search from the end of the
   // list first to get the most recently added note.
   let thread_notes = list.reverse(thread_notes)
+
+  // If the note has been deleted, return a nil error so it can be filtered out
+  use Nil <- given.ok(
+    list.find(thread_notes, fn(thread_note) {
+      thread_note.modifier == note.Delete
+    }),
+    return: fn(_) { Error(Nil) },
+  )
 
   // Find the most recent edit of the note
   let edited_note =
@@ -207,19 +234,39 @@ pub fn from_note(note: note.Note, thread_notes: List(note.Note)) {
       thread_note.modifier == note.Edit
     })
 
-  // Update the note with the most recent edited messages  if any
+  echo " found edit " <> string.inspect(edited_note)
+
+  // Update the note with the most recent edited messages, if any
   let #(note, edited) = case edited_note {
     Ok(edit) -> #(
       note.Note(
-        ..note,
+        ..original_note,
         message: edit.message,
         expanded_message: edit.expanded_message,
         significance: edit.significance,
+        references: edit.references,
       ),
       True,
     )
-    Error(Nil) -> #(note, False)
+    Error(Nil) -> #(original_note, False)
   }
+
+  // If this note is a reference note, then it should have a reference to its
+  // topic in its references list. If it does not, then an edit must have been
+  // made to the note that removed the reference. In this case, return a
+  // nil error so it can be filtered out.
+  use reference <- given.ok(
+    case note.modifier {
+      note.Reference(original_note_id) ->
+        list.find(note.references, fn(reference) {
+          reference.topic_id == note.parent_id
+        })
+        |> result.replace(option.Some(original_note_id))
+
+      _ -> Ok(option.None)
+    },
+    else_return: fn(_) { Error(Nil) },
+  )
 
   let significance = case note.significance {
     note.Comment -> Comment
@@ -288,7 +335,7 @@ pub fn from_note(note: note.Note, thread_notes: List(note.Note)) {
     note.InformationalConfirmation -> InformationalConfirmation
   }
 
-  ComputedNote(
+  Ok(ComputedNote(
     note_id: note.note_id,
     parent_id: note.parent_id,
     significance:,
@@ -297,5 +344,7 @@ pub fn from_note(note: note.Note, thread_notes: List(note.Note)) {
     expanded_message: note.expanded_message,
     time: note.time,
     edited:,
-  )
+    references: note.references,
+    reference:,
+  ))
 }

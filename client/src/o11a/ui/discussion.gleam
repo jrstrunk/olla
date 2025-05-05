@@ -13,6 +13,7 @@ import lustre/attribute
 import lustre/element
 import lustre/element/html
 import lustre/event
+import o11a/audit_metadata
 import o11a/computed_note
 import o11a/note
 import o11a/preprocessor
@@ -34,6 +35,7 @@ pub type Model {
     current_expanded_message_draft: option.Option(String),
     expanded_messages: set.Set(String),
     editing_note: option.Option(computed_note.ComputedNote),
+    audit_metadata: audit_metadata.AuditMetaData,
   )
 }
 
@@ -53,6 +55,7 @@ pub fn init(
   topic_title topic_title,
   is_reference is_reference,
   references references,
+  audit_metadata audit_metadata,
 ) {
   Model(
     is_reference:,
@@ -70,6 +73,7 @@ pub fn init(
     current_expanded_message_draft: option.None,
     expanded_messages: set.new(),
     editing_note: option.None,
+    audit_metadata:,
   )
 }
 
@@ -103,24 +107,29 @@ pub type Effect {
 }
 
 pub fn update(model: Model, msg: Msg) {
+  echo "update " <> string.inspect(msg)
   case msg {
     UserWroteNote(draft) -> {
       #(Model(..model, current_note_draft: draft), None)
     }
     UserSubmittedNote -> {
+      echo "Submitting note! "
+      <> model.current_note_draft
+      <> " "
+      <> model.topic_id
+      let current_note_draft = model.current_note_draft |> string.trim_start
+
       let #(significance, message) =
-        classify_message(
-          model.current_note_draft |> string.trim,
+        note.classify_message(
+          current_note_draft,
           is_thread_open: option.is_some(model.active_thread),
         )
 
-      use <- given.that(model.current_note_draft == "", return: fn() {
-        #(model, None)
-      })
+      use <- given.that(message == "", return: fn() { #(model, None) })
 
-      let #(modifier, parent_id) = case model.editing_note {
-        option.Some(note) -> #(note.Edit, note.note_id)
-        option.None -> #(note.None, model.current_thread_id)
+      let #(modifier, parent_id, current_references) = case model.editing_note {
+        option.Some(note) -> #(note.Edit, note.note_id, note.references)
+        option.None -> #(note.None, model.current_thread_id, [])
       }
 
       let expanded_message = case
@@ -130,6 +139,23 @@ pub fn update(model: Model, msg: Msg) {
         msg -> msg
       }
 
+      let references =
+        note.get_references(message, with: model.audit_metadata)
+        |> list.append(case expanded_message {
+          option.Some(expanded_message) ->
+            note.get_references(expanded_message, with: model.audit_metadata)
+          option.None -> []
+        })
+        |> list.unique
+
+      let new_references =
+        references
+        |> list.filter(fn(reference) {
+          !{ current_references |> list.contains(reference) }
+        })
+
+      echo "New references: " <> string.inspect(new_references)
+
       let note =
         note.NoteSubmission(
           parent_id:,
@@ -138,6 +164,8 @@ pub fn update(model: Model, msg: Msg) {
           message:,
           expanded_message:,
           modifier:,
+          references:,
+          new_references:,
         )
 
       #(
@@ -530,14 +558,19 @@ fn comments_view(
             significance_badge_view(note.significance),
           ]),
           html.div([attribute.class("flex gap-[.5rem]")], [
-            html.button(
-              [
-                attribute.id("edit-message-button"),
-                attribute.class("icon-button p-[.3rem]"),
-                event.on_click(UserEditedNote(Ok(note))),
-              ],
-              [lucide.pencil([])],
-            ),
+            case note.reference {
+              option.Some(..) ->
+                html.p([attribute.class("italic")], [html.text("Reference")])
+              _ ->
+                html.button(
+                  [
+                    attribute.id("edit-message-button"),
+                    attribute.class("icon-button p-[.3rem]"),
+                    event.on_click(UserEditedNote(Ok(note))),
+                  ],
+                  [lucide.pencil([])],
+                )
+            },
             case note.expanded_message {
               option.Some(_) ->
                 html.button(
@@ -665,35 +698,6 @@ fn expand_message_input_view(model: Model) {
   )
 }
 
-fn classify_message(message, is_thread_open is_thread_open) {
-  case is_thread_open {
-    // Users can only start actionalble threads in the main thread
-    False ->
-      case message {
-        "todo: " <> rest -> #(note.ToDo, rest)
-        "q: " <> rest -> #(note.Question, rest)
-        "question: " <> rest -> #(note.Question, rest)
-        "finding: " <> rest -> #(note.FindingLead, rest)
-        "dev: " <> rest -> #(note.DevelperQuestion, rest)
-        "info: " <> rest -> #(note.Informational, rest)
-        _ -> #(note.Comment, message)
-      }
-    // Users can only resolve actionalble threads in an open thread
-    True ->
-      case message {
-        "done" -> #(note.ToDoCompletion, "done")
-        "done: " <> rest -> #(note.ToDoCompletion, rest)
-        "a: " <> rest -> #(note.Answer, rest)
-        "answer: " <> rest -> #(note.Answer, rest)
-        "reject: " <> rest -> #(note.FindingRejection, rest)
-        "confirm: " <> rest -> #(note.FindingConfirmation, rest)
-        "incorrect: " <> rest -> #(note.InformationalRejection, rest)
-        "correct: " <> rest -> #(note.InformationalConfirmation, rest)
-        _ -> #(note.Comment, message)
-      }
-  }
-}
-
 fn get_message_classification_prefix(
   significance: computed_note.ComputedNoteSignificance,
 ) {
@@ -707,11 +711,11 @@ fn get_message_classification_prefix(
     computed_note.FindingConfirmation -> "confirm: "
     computed_note.FindingRejection -> "reject: "
     computed_note.IncompleteToDo -> "todo: "
-    computed_note.Informational -> "info: "
+    computed_note.Informational -> "i: "
     computed_note.InformationalConfirmation -> "correct: "
     computed_note.InformationalRejection -> "incorrect: "
     computed_note.RejectedFinding -> "finding: "
-    computed_note.RejectedInformational -> "info: "
+    computed_note.RejectedInformational -> "i: "
     computed_note.ToDoCompletion -> "done: "
     computed_note.UnansweredDeveloperQuestion -> "dev: "
     computed_note.UnansweredQuestion -> "q: "

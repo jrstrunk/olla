@@ -2,7 +2,11 @@ import gleam/dict
 import gleam/dynamic/decode
 import gleam/int
 import gleam/json
+import gleam/list
 import gleam/option.{type Option}
+import gleam/result
+import gleam/string
+import o11a/audit_metadata
 import tempo
 import tempo/datetime
 import tempo/instant
@@ -16,6 +20,12 @@ pub type NoteSubmission {
     message: String,
     expanded_message: Option(String),
     modifier: NoteModifier,
+    references: List(audit_metadata.AddressableSymbol),
+    // References that where added to the note for the first time. This is 
+    // needed to determine if references should be added to their topics when
+    // a note is edited. Edits can add references -- we want to honor those,
+    // but do not want to add duplicate reference notes to the topic.
+    new_references: List(audit_metadata.AddressableSymbol),
   )
 }
 
@@ -29,6 +39,7 @@ pub fn build_note(from submission: NoteSubmission, with id: Int) {
     expanded_message: submission.expanded_message,
     time: instant.now() |> instant.as_utc_datetime,
     modifier: submission.modifier,
+    references: submission.references,
   )
 }
 
@@ -43,6 +54,7 @@ pub type Note {
     expanded_message: Option(String),
     time: tempo.DateTime,
     modifier: NoteModifier,
+    references: List(audit_metadata.AddressableSymbol),
   )
 }
 
@@ -103,22 +115,29 @@ pub type NoteModifier {
   None
   Edit
   Delete
+  Referer
+  Reference(original_note_id: String)
 }
 
-pub fn note_modifier_to_int(note_modifier) {
+pub fn note_modifier_to_string(note_modifier: NoteModifier) {
   case note_modifier {
-    None -> 0
-    Edit -> 1
-    Delete -> 2
+    None -> "n"
+    Edit -> "e"
+    Delete -> "d"
+    Referer -> "r"
+    Reference(original_note_id:) -> "r-" <> original_note_id
   }
 }
 
-pub fn note_modifier_from_int(note_modifier) {
-  case note_modifier {
-    0 -> None
-    1 -> Edit
-    2 -> Delete
-    _ -> panic as "Invalid note modifier given"
+pub fn note_modifier_decoder() -> decode.Decoder(NoteModifier) {
+  use char <- decode.then(decode.string)
+  case char {
+    "n" -> decode.success(None)
+    "e" -> decode.success(Edit)
+    "d" -> decode.success(Delete)
+    "r" -> decode.success(Referer)
+    "r-" <> original_note_id -> decode.success(Reference(original_note_id))
+    _ -> decode.failure(None, "NoteModifier")
   }
 }
 
@@ -159,7 +178,15 @@ pub fn encode_note_submission(note: NoteSubmission) {
     #("u", json.string(note.user_id)),
     #("m", json.string(note.message)),
     #("x", json.nullable(note.expanded_message, json.string)),
-    #("d", json.int(note.modifier |> note_modifier_to_int)),
+    #("d", json.string(note.modifier |> note_modifier_to_string)),
+    #(
+      "r",
+      json.array(note.references, audit_metadata.encode_addressable_symbol),
+    ),
+    #(
+      "nr",
+      json.array(note.new_references, audit_metadata.encode_addressable_symbol),
+    ),
   ])
 }
 
@@ -169,7 +196,15 @@ pub fn note_submission_decoder() {
   use user_id <- decode.field("u", decode.string)
   use message <- decode.field("m", decode.string)
   use expanded_message <- decode.field("x", decode.optional(decode.string))
-  use modifier <- decode.field("d", decode.int)
+  use modifier <- decode.field("d", note_modifier_decoder())
+  use references <- decode.field(
+    "r",
+    decode.list(audit_metadata.addressable_symbol_decoder()),
+  )
+  use new_references <- decode.field(
+    "nr",
+    decode.list(audit_metadata.addressable_symbol_decoder()),
+  )
 
   NoteSubmission(
     parent_id:,
@@ -177,7 +212,9 @@ pub fn note_submission_decoder() {
     user_id:,
     message:,
     expanded_message:,
-    modifier: note_modifier_from_int(modifier),
+    modifier:,
+    references:,
+    new_references:,
   )
   |> decode.success
 }
@@ -192,6 +229,7 @@ pub fn example_note() {
     expanded_message: option.None,
     time: datetime.literal("2021-01-01T00:00:00Z"),
     modifier: None,
+    references: [],
   )
 }
 
@@ -206,4 +244,62 @@ pub const example_note_submission = NoteSubmission(
   message: "Wow bro great finding that is really cool",
   expanded_message: option.None,
   modifier: None,
+  references: [],
+  new_references: [],
 )
+
+pub fn classify_message(message, is_thread_open is_thread_open) {
+  let #(sig, message) = case is_thread_open {
+    // Users can only start actionalble threads in the main thread
+    False ->
+      case message {
+        "todo:" <> rest -> #(ToDo, rest)
+        "t:" <> rest -> #(ToDo, rest)
+        "question:" <> rest -> #(Question, rest)
+        "q:" <> rest -> #(Question, rest)
+        "finding:" <> rest -> #(FindingLead, rest)
+        "f:" <> rest -> #(FindingLead, rest)
+        "dev:" <> rest -> #(DevelperQuestion, rest)
+        "info:" <> rest -> #(Informational, rest)
+        "i:" <> rest -> #(Informational, rest)
+        _ -> #(Comment, message)
+      }
+    // Users can only resolve actionalble threads in an open thread
+    True ->
+      case message {
+        "done" -> #(ToDoCompletion, "done")
+        "done:" <> rest -> #(ToDoCompletion, rest)
+        "d:" <> rest -> #(ToDoCompletion, rest)
+        "answer:" <> rest -> #(Answer, rest)
+        "a:" <> rest -> #(Answer, rest)
+        "reject:" <> rest -> #(FindingRejection, rest)
+        "confirm:" <> rest -> #(FindingConfirmation, rest)
+        "incorrect:" <> rest -> #(InformationalRejection, rest)
+        "correct:" <> rest -> #(InformationalConfirmation, rest)
+        _ -> #(Comment, message)
+      }
+  }
+
+  #(sig, message |> string.trim)
+}
+
+pub fn get_references(
+  in message: String,
+  with audit_metadata: audit_metadata.AuditMetaData,
+) {
+  string.split(message, on: " ")
+  |> list.filter_map(fn(word) {
+    use ref <- result.try({
+      case word {
+        "#" <> ref -> Ok(ref)
+        _ -> Error(Nil)
+      }
+    })
+
+    echo "found potential reference: " <> ref
+
+    list.find(audit_metadata.symbols, fn(symbol) {
+      symbol.scope <> "." <> symbol.name == ref
+    })
+  })
+}

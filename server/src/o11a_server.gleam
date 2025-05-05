@@ -196,7 +196,7 @@ fn handle_wisp_request(req, context: Context) {
             )
             decode.success(#(topic_id, note_submission))
           })
-          |> result.replace_error(snag.new("Failed to decode note")),
+          |> result.replace_error(snag.new("Failed to decode note submission")),
         )
 
         discussion.add_note(discussion, note_submission, topic_id)

@@ -657,14 +657,6 @@ function makeError(variant, module, line2, fn, message, extra) {
   return error2;
 }
 
-// build/dev/javascript/gleam_stdlib/gleam/order.mjs
-var Lt = class extends CustomType {
-};
-var Eq = class extends CustomType {
-};
-var Gt = class extends CustomType {
-};
-
 // build/dev/javascript/gleam_stdlib/gleam/option.mjs
 var Some = class extends CustomType {
   constructor(x0) {
@@ -708,6 +700,1326 @@ function flatten(option) {
   } else {
     return new None();
   }
+}
+
+// build/dev/javascript/gleam_stdlib/gleam/order.mjs
+var Lt = class extends CustomType {
+};
+var Eq = class extends CustomType {
+};
+var Gt = class extends CustomType {
+};
+
+// build/dev/javascript/gleam_stdlib/gleam/float.mjs
+function negate(x2) {
+  return -1 * x2;
+}
+function round2(x2) {
+  let $ = x2 >= 0;
+  if ($) {
+    return round(x2);
+  } else {
+    return 0 - round(negate(x2));
+  }
+}
+
+// build/dev/javascript/gleam_stdlib/gleam/int.mjs
+function min(a2, b) {
+  let $ = a2 < b;
+  if ($) {
+    return a2;
+  } else {
+    return b;
+  }
+}
+function max(a2, b) {
+  let $ = a2 > b;
+  if ($) {
+    return a2;
+  } else {
+    return b;
+  }
+}
+function random(max2) {
+  let _pipe = random_uniform() * identity(max2);
+  let _pipe$1 = floor(_pipe);
+  return round2(_pipe$1);
+}
+
+// build/dev/javascript/gleam_stdlib/gleam/string_tree.mjs
+function reverse2(tree) {
+  let _pipe = tree;
+  let _pipe$1 = identity(_pipe);
+  let _pipe$2 = graphemes(_pipe$1);
+  let _pipe$3 = reverse(_pipe$2);
+  return concat(_pipe$3);
+}
+
+// build/dev/javascript/gleam_stdlib/gleam/string.mjs
+function reverse3(string6) {
+  let _pipe = string6;
+  let _pipe$1 = identity(_pipe);
+  let _pipe$2 = reverse2(_pipe$1);
+  return identity(_pipe$2);
+}
+function replace(string6, pattern, substitute) {
+  let _pipe = string6;
+  let _pipe$1 = identity(_pipe);
+  let _pipe$2 = string_replace(_pipe$1, pattern, substitute);
+  return identity(_pipe$2);
+}
+function slice(string6, idx, len) {
+  let $ = len < 0;
+  if ($) {
+    return "";
+  } else {
+    let $1 = idx < 0;
+    if ($1) {
+      let translated_idx = string_length(string6) + idx;
+      let $2 = translated_idx < 0;
+      if ($2) {
+        return "";
+      } else {
+        return string_slice(string6, translated_idx, len);
+      }
+    } else {
+      return string_slice(string6, idx, len);
+    }
+  }
+}
+function append(first2, second2) {
+  return first2 + second2;
+}
+function concat_loop(loop$strings, loop$accumulator) {
+  while (true) {
+    let strings = loop$strings;
+    let accumulator = loop$accumulator;
+    if (strings.atLeastLength(1)) {
+      let string6 = strings.head;
+      let strings$1 = strings.tail;
+      loop$strings = strings$1;
+      loop$accumulator = accumulator + string6;
+    } else {
+      return accumulator;
+    }
+  }
+}
+function concat2(strings) {
+  return concat_loop(strings, "");
+}
+function join_loop(loop$strings, loop$separator, loop$accumulator) {
+  while (true) {
+    let strings = loop$strings;
+    let separator = loop$separator;
+    let accumulator = loop$accumulator;
+    if (strings.hasLength(0)) {
+      return accumulator;
+    } else {
+      let string6 = strings.head;
+      let strings$1 = strings.tail;
+      loop$strings = strings$1;
+      loop$separator = separator;
+      loop$accumulator = accumulator + separator + string6;
+    }
+  }
+}
+function join(strings, separator) {
+  if (strings.hasLength(0)) {
+    return "";
+  } else {
+    let first$1 = strings.head;
+    let rest = strings.tail;
+    return join_loop(rest, separator, first$1);
+  }
+}
+function trim(string6) {
+  let _pipe = string6;
+  let _pipe$1 = trim_start(_pipe);
+  return trim_end(_pipe$1);
+}
+function drop_start(loop$string, loop$num_graphemes) {
+  while (true) {
+    let string6 = loop$string;
+    let num_graphemes = loop$num_graphemes;
+    let $ = num_graphemes > 0;
+    if (!$) {
+      return string6;
+    } else {
+      let $1 = pop_grapheme(string6);
+      if ($1.isOk()) {
+        let string$1 = $1[0][1];
+        loop$string = string$1;
+        loop$num_graphemes = num_graphemes - 1;
+      } else {
+        return string6;
+      }
+    }
+  }
+}
+function split2(x2, substring) {
+  if (substring === "") {
+    return graphemes(x2);
+  } else {
+    let _pipe = x2;
+    let _pipe$1 = identity(_pipe);
+    let _pipe$2 = split(_pipe$1, substring);
+    return map2(_pipe$2, identity);
+  }
+}
+function do_to_utf_codepoints(string6) {
+  let _pipe = string6;
+  let _pipe$1 = string_to_codepoint_integer_list(_pipe);
+  return map2(_pipe$1, codepoint);
+}
+function to_utf_codepoints(string6) {
+  return do_to_utf_codepoints(string6);
+}
+function capitalise(string6) {
+  let $ = pop_grapheme(string6);
+  if ($.isOk()) {
+    let first$1 = $[0][0];
+    let rest = $[0][1];
+    return append(uppercase(first$1), lowercase(rest));
+  } else {
+    return "";
+  }
+}
+function inspect2(term) {
+  let _pipe = inspect(term);
+  return identity(_pipe);
+}
+
+// build/dev/javascript/gleam_stdlib/gleam/result.mjs
+function is_ok(result) {
+  if (!result.isOk()) {
+    return false;
+  } else {
+    return true;
+  }
+}
+function map3(result, fun) {
+  if (result.isOk()) {
+    let x2 = result[0];
+    return new Ok(fun(x2));
+  } else {
+    let e = result[0];
+    return new Error(e);
+  }
+}
+function map_error(result, fun) {
+  if (result.isOk()) {
+    let x2 = result[0];
+    return new Ok(x2);
+  } else {
+    let error2 = result[0];
+    return new Error(fun(error2));
+  }
+}
+function try$(result, fun) {
+  if (result.isOk()) {
+    let x2 = result[0];
+    return fun(x2);
+  } else {
+    let e = result[0];
+    return new Error(e);
+  }
+}
+function then$(result, fun) {
+  return try$(result, fun);
+}
+function unwrap2(result, default$) {
+  if (result.isOk()) {
+    let v = result[0];
+    return v;
+  } else {
+    return default$;
+  }
+}
+function replace_error(result, error2) {
+  if (result.isOk()) {
+    let x2 = result[0];
+    return new Ok(x2);
+  } else {
+    return new Error(error2);
+  }
+}
+function try_recover(result, fun) {
+  if (result.isOk()) {
+    let value3 = result[0];
+    return new Ok(value3);
+  } else {
+    let error2 = result[0];
+    return fun(error2);
+  }
+}
+
+// build/dev/javascript/gleam_stdlib/dict.mjs
+var referenceMap = /* @__PURE__ */ new WeakMap();
+var tempDataView = /* @__PURE__ */ new DataView(
+  /* @__PURE__ */ new ArrayBuffer(8)
+);
+var referenceUID = 0;
+function hashByReference(o) {
+  const known = referenceMap.get(o);
+  if (known !== void 0) {
+    return known;
+  }
+  const hash = referenceUID++;
+  if (referenceUID === 2147483647) {
+    referenceUID = 0;
+  }
+  referenceMap.set(o, hash);
+  return hash;
+}
+function hashMerge(a2, b) {
+  return a2 ^ b + 2654435769 + (a2 << 6) + (a2 >> 2) | 0;
+}
+function hashString(s) {
+  let hash = 0;
+  const len = s.length;
+  for (let i = 0; i < len; i++) {
+    hash = Math.imul(31, hash) + s.charCodeAt(i) | 0;
+  }
+  return hash;
+}
+function hashNumber(n) {
+  tempDataView.setFloat64(0, n);
+  const i = tempDataView.getInt32(0);
+  const j = tempDataView.getInt32(4);
+  return Math.imul(73244475, i >> 16 ^ i) ^ j;
+}
+function hashBigInt(n) {
+  return hashString(n.toString());
+}
+function hashObject(o) {
+  const proto = Object.getPrototypeOf(o);
+  if (proto !== null && typeof proto.hashCode === "function") {
+    try {
+      const code2 = o.hashCode(o);
+      if (typeof code2 === "number") {
+        return code2;
+      }
+    } catch {
+    }
+  }
+  if (o instanceof Promise || o instanceof WeakSet || o instanceof WeakMap) {
+    return hashByReference(o);
+  }
+  if (o instanceof Date) {
+    return hashNumber(o.getTime());
+  }
+  let h = 0;
+  if (o instanceof ArrayBuffer) {
+    o = new Uint8Array(o);
+  }
+  if (Array.isArray(o) || o instanceof Uint8Array) {
+    for (let i = 0; i < o.length; i++) {
+      h = Math.imul(31, h) + getHash(o[i]) | 0;
+    }
+  } else if (o instanceof Set) {
+    o.forEach((v) => {
+      h = h + getHash(v) | 0;
+    });
+  } else if (o instanceof Map) {
+    o.forEach((v, k) => {
+      h = h + hashMerge(getHash(v), getHash(k)) | 0;
+    });
+  } else {
+    const keys2 = Object.keys(o);
+    for (let i = 0; i < keys2.length; i++) {
+      const k = keys2[i];
+      const v = o[k];
+      h = h + hashMerge(getHash(v), hashString(k)) | 0;
+    }
+  }
+  return h;
+}
+function getHash(u) {
+  if (u === null) return 1108378658;
+  if (u === void 0) return 1108378659;
+  if (u === true) return 1108378657;
+  if (u === false) return 1108378656;
+  switch (typeof u) {
+    case "number":
+      return hashNumber(u);
+    case "string":
+      return hashString(u);
+    case "bigint":
+      return hashBigInt(u);
+    case "object":
+      return hashObject(u);
+    case "symbol":
+      return hashByReference(u);
+    case "function":
+      return hashByReference(u);
+    default:
+      return 0;
+  }
+}
+var SHIFT = 5;
+var BUCKET_SIZE = Math.pow(2, SHIFT);
+var MASK = BUCKET_SIZE - 1;
+var MAX_INDEX_NODE = BUCKET_SIZE / 2;
+var MIN_ARRAY_NODE = BUCKET_SIZE / 4;
+var ENTRY = 0;
+var ARRAY_NODE = 1;
+var INDEX_NODE = 2;
+var COLLISION_NODE = 3;
+var EMPTY = {
+  type: INDEX_NODE,
+  bitmap: 0,
+  array: []
+};
+function mask(hash, shift) {
+  return hash >>> shift & MASK;
+}
+function bitpos(hash, shift) {
+  return 1 << mask(hash, shift);
+}
+function bitcount(x2) {
+  x2 -= x2 >> 1 & 1431655765;
+  x2 = (x2 & 858993459) + (x2 >> 2 & 858993459);
+  x2 = x2 + (x2 >> 4) & 252645135;
+  x2 += x2 >> 8;
+  x2 += x2 >> 16;
+  return x2 & 127;
+}
+function index(bitmap, bit) {
+  return bitcount(bitmap & bit - 1);
+}
+function cloneAndSet(arr, at, val) {
+  const len = arr.length;
+  const out = new Array(len);
+  for (let i = 0; i < len; ++i) {
+    out[i] = arr[i];
+  }
+  out[at] = val;
+  return out;
+}
+function spliceIn(arr, at, val) {
+  const len = arr.length;
+  const out = new Array(len + 1);
+  let i = 0;
+  let g = 0;
+  while (i < at) {
+    out[g++] = arr[i++];
+  }
+  out[g++] = val;
+  while (i < len) {
+    out[g++] = arr[i++];
+  }
+  return out;
+}
+function spliceOut(arr, at) {
+  const len = arr.length;
+  const out = new Array(len - 1);
+  let i = 0;
+  let g = 0;
+  while (i < at) {
+    out[g++] = arr[i++];
+  }
+  ++i;
+  while (i < len) {
+    out[g++] = arr[i++];
+  }
+  return out;
+}
+function createNode(shift, key1, val1, key2hash, key2, val2) {
+  const key1hash = getHash(key1);
+  if (key1hash === key2hash) {
+    return {
+      type: COLLISION_NODE,
+      hash: key1hash,
+      array: [
+        { type: ENTRY, k: key1, v: val1 },
+        { type: ENTRY, k: key2, v: val2 }
+      ]
+    };
+  }
+  const addedLeaf = { val: false };
+  return assoc(
+    assocIndex(EMPTY, shift, key1hash, key1, val1, addedLeaf),
+    shift,
+    key2hash,
+    key2,
+    val2,
+    addedLeaf
+  );
+}
+function assoc(root3, shift, hash, key2, val, addedLeaf) {
+  switch (root3.type) {
+    case ARRAY_NODE:
+      return assocArray(root3, shift, hash, key2, val, addedLeaf);
+    case INDEX_NODE:
+      return assocIndex(root3, shift, hash, key2, val, addedLeaf);
+    case COLLISION_NODE:
+      return assocCollision(root3, shift, hash, key2, val, addedLeaf);
+  }
+}
+function assocArray(root3, shift, hash, key2, val, addedLeaf) {
+  const idx = mask(hash, shift);
+  const node = root3.array[idx];
+  if (node === void 0) {
+    addedLeaf.val = true;
+    return {
+      type: ARRAY_NODE,
+      size: root3.size + 1,
+      array: cloneAndSet(root3.array, idx, { type: ENTRY, k: key2, v: val })
+    };
+  }
+  if (node.type === ENTRY) {
+    if (isEqual(key2, node.k)) {
+      if (val === node.v) {
+        return root3;
+      }
+      return {
+        type: ARRAY_NODE,
+        size: root3.size,
+        array: cloneAndSet(root3.array, idx, {
+          type: ENTRY,
+          k: key2,
+          v: val
+        })
+      };
+    }
+    addedLeaf.val = true;
+    return {
+      type: ARRAY_NODE,
+      size: root3.size,
+      array: cloneAndSet(
+        root3.array,
+        idx,
+        createNode(shift + SHIFT, node.k, node.v, hash, key2, val)
+      )
+    };
+  }
+  const n = assoc(node, shift + SHIFT, hash, key2, val, addedLeaf);
+  if (n === node) {
+    return root3;
+  }
+  return {
+    type: ARRAY_NODE,
+    size: root3.size,
+    array: cloneAndSet(root3.array, idx, n)
+  };
+}
+function assocIndex(root3, shift, hash, key2, val, addedLeaf) {
+  const bit = bitpos(hash, shift);
+  const idx = index(root3.bitmap, bit);
+  if ((root3.bitmap & bit) !== 0) {
+    const node = root3.array[idx];
+    if (node.type !== ENTRY) {
+      const n = assoc(node, shift + SHIFT, hash, key2, val, addedLeaf);
+      if (n === node) {
+        return root3;
+      }
+      return {
+        type: INDEX_NODE,
+        bitmap: root3.bitmap,
+        array: cloneAndSet(root3.array, idx, n)
+      };
+    }
+    const nodeKey = node.k;
+    if (isEqual(key2, nodeKey)) {
+      if (val === node.v) {
+        return root3;
+      }
+      return {
+        type: INDEX_NODE,
+        bitmap: root3.bitmap,
+        array: cloneAndSet(root3.array, idx, {
+          type: ENTRY,
+          k: key2,
+          v: val
+        })
+      };
+    }
+    addedLeaf.val = true;
+    return {
+      type: INDEX_NODE,
+      bitmap: root3.bitmap,
+      array: cloneAndSet(
+        root3.array,
+        idx,
+        createNode(shift + SHIFT, nodeKey, node.v, hash, key2, val)
+      )
+    };
+  } else {
+    const n = root3.array.length;
+    if (n >= MAX_INDEX_NODE) {
+      const nodes = new Array(32);
+      const jdx = mask(hash, shift);
+      nodes[jdx] = assocIndex(EMPTY, shift + SHIFT, hash, key2, val, addedLeaf);
+      let j = 0;
+      let bitmap = root3.bitmap;
+      for (let i = 0; i < 32; i++) {
+        if ((bitmap & 1) !== 0) {
+          const node = root3.array[j++];
+          nodes[i] = node;
+        }
+        bitmap = bitmap >>> 1;
+      }
+      return {
+        type: ARRAY_NODE,
+        size: n + 1,
+        array: nodes
+      };
+    } else {
+      const newArray = spliceIn(root3.array, idx, {
+        type: ENTRY,
+        k: key2,
+        v: val
+      });
+      addedLeaf.val = true;
+      return {
+        type: INDEX_NODE,
+        bitmap: root3.bitmap | bit,
+        array: newArray
+      };
+    }
+  }
+}
+function assocCollision(root3, shift, hash, key2, val, addedLeaf) {
+  if (hash === root3.hash) {
+    const idx = collisionIndexOf(root3, key2);
+    if (idx !== -1) {
+      const entry = root3.array[idx];
+      if (entry.v === val) {
+        return root3;
+      }
+      return {
+        type: COLLISION_NODE,
+        hash,
+        array: cloneAndSet(root3.array, idx, { type: ENTRY, k: key2, v: val })
+      };
+    }
+    const size2 = root3.array.length;
+    addedLeaf.val = true;
+    return {
+      type: COLLISION_NODE,
+      hash,
+      array: cloneAndSet(root3.array, size2, { type: ENTRY, k: key2, v: val })
+    };
+  }
+  return assoc(
+    {
+      type: INDEX_NODE,
+      bitmap: bitpos(root3.hash, shift),
+      array: [root3]
+    },
+    shift,
+    hash,
+    key2,
+    val,
+    addedLeaf
+  );
+}
+function collisionIndexOf(root3, key2) {
+  const size2 = root3.array.length;
+  for (let i = 0; i < size2; i++) {
+    if (isEqual(key2, root3.array[i].k)) {
+      return i;
+    }
+  }
+  return -1;
+}
+function find(root3, shift, hash, key2) {
+  switch (root3.type) {
+    case ARRAY_NODE:
+      return findArray(root3, shift, hash, key2);
+    case INDEX_NODE:
+      return findIndex(root3, shift, hash, key2);
+    case COLLISION_NODE:
+      return findCollision(root3, key2);
+  }
+}
+function findArray(root3, shift, hash, key2) {
+  const idx = mask(hash, shift);
+  const node = root3.array[idx];
+  if (node === void 0) {
+    return void 0;
+  }
+  if (node.type !== ENTRY) {
+    return find(node, shift + SHIFT, hash, key2);
+  }
+  if (isEqual(key2, node.k)) {
+    return node;
+  }
+  return void 0;
+}
+function findIndex(root3, shift, hash, key2) {
+  const bit = bitpos(hash, shift);
+  if ((root3.bitmap & bit) === 0) {
+    return void 0;
+  }
+  const idx = index(root3.bitmap, bit);
+  const node = root3.array[idx];
+  if (node.type !== ENTRY) {
+    return find(node, shift + SHIFT, hash, key2);
+  }
+  if (isEqual(key2, node.k)) {
+    return node;
+  }
+  return void 0;
+}
+function findCollision(root3, key2) {
+  const idx = collisionIndexOf(root3, key2);
+  if (idx < 0) {
+    return void 0;
+  }
+  return root3.array[idx];
+}
+function without(root3, shift, hash, key2) {
+  switch (root3.type) {
+    case ARRAY_NODE:
+      return withoutArray(root3, shift, hash, key2);
+    case INDEX_NODE:
+      return withoutIndex(root3, shift, hash, key2);
+    case COLLISION_NODE:
+      return withoutCollision(root3, key2);
+  }
+}
+function withoutArray(root3, shift, hash, key2) {
+  const idx = mask(hash, shift);
+  const node = root3.array[idx];
+  if (node === void 0) {
+    return root3;
+  }
+  let n = void 0;
+  if (node.type === ENTRY) {
+    if (!isEqual(node.k, key2)) {
+      return root3;
+    }
+  } else {
+    n = without(node, shift + SHIFT, hash, key2);
+    if (n === node) {
+      return root3;
+    }
+  }
+  if (n === void 0) {
+    if (root3.size <= MIN_ARRAY_NODE) {
+      const arr = root3.array;
+      const out = new Array(root3.size - 1);
+      let i = 0;
+      let j = 0;
+      let bitmap = 0;
+      while (i < idx) {
+        const nv = arr[i];
+        if (nv !== void 0) {
+          out[j] = nv;
+          bitmap |= 1 << i;
+          ++j;
+        }
+        ++i;
+      }
+      ++i;
+      while (i < arr.length) {
+        const nv = arr[i];
+        if (nv !== void 0) {
+          out[j] = nv;
+          bitmap |= 1 << i;
+          ++j;
+        }
+        ++i;
+      }
+      return {
+        type: INDEX_NODE,
+        bitmap,
+        array: out
+      };
+    }
+    return {
+      type: ARRAY_NODE,
+      size: root3.size - 1,
+      array: cloneAndSet(root3.array, idx, n)
+    };
+  }
+  return {
+    type: ARRAY_NODE,
+    size: root3.size,
+    array: cloneAndSet(root3.array, idx, n)
+  };
+}
+function withoutIndex(root3, shift, hash, key2) {
+  const bit = bitpos(hash, shift);
+  if ((root3.bitmap & bit) === 0) {
+    return root3;
+  }
+  const idx = index(root3.bitmap, bit);
+  const node = root3.array[idx];
+  if (node.type !== ENTRY) {
+    const n = without(node, shift + SHIFT, hash, key2);
+    if (n === node) {
+      return root3;
+    }
+    if (n !== void 0) {
+      return {
+        type: INDEX_NODE,
+        bitmap: root3.bitmap,
+        array: cloneAndSet(root3.array, idx, n)
+      };
+    }
+    if (root3.bitmap === bit) {
+      return void 0;
+    }
+    return {
+      type: INDEX_NODE,
+      bitmap: root3.bitmap ^ bit,
+      array: spliceOut(root3.array, idx)
+    };
+  }
+  if (isEqual(key2, node.k)) {
+    if (root3.bitmap === bit) {
+      return void 0;
+    }
+    return {
+      type: INDEX_NODE,
+      bitmap: root3.bitmap ^ bit,
+      array: spliceOut(root3.array, idx)
+    };
+  }
+  return root3;
+}
+function withoutCollision(root3, key2) {
+  const idx = collisionIndexOf(root3, key2);
+  if (idx < 0) {
+    return root3;
+  }
+  if (root3.array.length === 1) {
+    return void 0;
+  }
+  return {
+    type: COLLISION_NODE,
+    hash: root3.hash,
+    array: spliceOut(root3.array, idx)
+  };
+}
+function forEach(root3, fn) {
+  if (root3 === void 0) {
+    return;
+  }
+  const items = root3.array;
+  const size2 = items.length;
+  for (let i = 0; i < size2; i++) {
+    const item = items[i];
+    if (item === void 0) {
+      continue;
+    }
+    if (item.type === ENTRY) {
+      fn(item.v, item.k);
+      continue;
+    }
+    forEach(item, fn);
+  }
+}
+var Dict = class _Dict {
+  /**
+   * @template V
+   * @param {Record<string,V>} o
+   * @returns {Dict<string,V>}
+   */
+  static fromObject(o) {
+    const keys2 = Object.keys(o);
+    let m = _Dict.new();
+    for (let i = 0; i < keys2.length; i++) {
+      const k = keys2[i];
+      m = m.set(k, o[k]);
+    }
+    return m;
+  }
+  /**
+   * @template K,V
+   * @param {Map<K,V>} o
+   * @returns {Dict<K,V>}
+   */
+  static fromMap(o) {
+    let m = _Dict.new();
+    o.forEach((v, k) => {
+      m = m.set(k, v);
+    });
+    return m;
+  }
+  static new() {
+    return new _Dict(void 0, 0);
+  }
+  /**
+   * @param {undefined | Node<K,V>} root
+   * @param {number} size
+   */
+  constructor(root3, size2) {
+    this.root = root3;
+    this.size = size2;
+  }
+  /**
+   * @template NotFound
+   * @param {K} key
+   * @param {NotFound} notFound
+   * @returns {NotFound | V}
+   */
+  get(key2, notFound) {
+    if (this.root === void 0) {
+      return notFound;
+    }
+    const found = find(this.root, 0, getHash(key2), key2);
+    if (found === void 0) {
+      return notFound;
+    }
+    return found.v;
+  }
+  /**
+   * @param {K} key
+   * @param {V} val
+   * @returns {Dict<K,V>}
+   */
+  set(key2, val) {
+    const addedLeaf = { val: false };
+    const root3 = this.root === void 0 ? EMPTY : this.root;
+    const newRoot = assoc(root3, 0, getHash(key2), key2, val, addedLeaf);
+    if (newRoot === this.root) {
+      return this;
+    }
+    return new _Dict(newRoot, addedLeaf.val ? this.size + 1 : this.size);
+  }
+  /**
+   * @param {K} key
+   * @returns {Dict<K,V>}
+   */
+  delete(key2) {
+    if (this.root === void 0) {
+      return this;
+    }
+    const newRoot = without(this.root, 0, getHash(key2), key2);
+    if (newRoot === this.root) {
+      return this;
+    }
+    if (newRoot === void 0) {
+      return _Dict.new();
+    }
+    return new _Dict(newRoot, this.size - 1);
+  }
+  /**
+   * @param {K} key
+   * @returns {boolean}
+   */
+  has(key2) {
+    if (this.root === void 0) {
+      return false;
+    }
+    return find(this.root, 0, getHash(key2), key2) !== void 0;
+  }
+  /**
+   * @returns {[K,V][]}
+   */
+  entries() {
+    if (this.root === void 0) {
+      return [];
+    }
+    const result = [];
+    this.forEach((v, k) => result.push([k, v]));
+    return result;
+  }
+  /**
+   *
+   * @param {(val:V,key:K)=>void} fn
+   */
+  forEach(fn) {
+    forEach(this.root, fn);
+  }
+  hashCode() {
+    let h = 0;
+    this.forEach((v, k) => {
+      h = h + hashMerge(getHash(v), getHash(k)) | 0;
+    });
+    return h;
+  }
+  /**
+   * @param {unknown} o
+   * @returns {boolean}
+   */
+  equals(o) {
+    if (!(o instanceof _Dict) || this.size !== o.size) {
+      return false;
+    }
+    try {
+      this.forEach((v, k) => {
+        if (!isEqual(o.get(k, !v), v)) {
+          throw unequalDictSymbol;
+        }
+      });
+      return true;
+    } catch (e) {
+      if (e === unequalDictSymbol) {
+        return false;
+      }
+      throw e;
+    }
+  }
+};
+var unequalDictSymbol = /* @__PURE__ */ Symbol();
+
+// build/dev/javascript/gleam_stdlib/gleam_stdlib.mjs
+var Nil = void 0;
+var NOT_FOUND = {};
+function identity(x2) {
+  return x2;
+}
+function parse_int(value3) {
+  if (/^[-+]?(\d+)$/.test(value3)) {
+    return new Ok(parseInt(value3));
+  } else {
+    return new Error(Nil);
+  }
+}
+function to_string(term) {
+  return term.toString();
+}
+function float_to_string(float2) {
+  const string6 = float2.toString().replace("+", "");
+  if (string6.indexOf(".") >= 0) {
+    return string6;
+  } else {
+    const index5 = string6.indexOf("e");
+    if (index5 >= 0) {
+      return string6.slice(0, index5) + ".0" + string6.slice(index5);
+    } else {
+      return string6 + ".0";
+    }
+  }
+}
+function string_replace(string6, target2, substitute) {
+  if (typeof string6.replaceAll !== "undefined") {
+    return string6.replaceAll(target2, substitute);
+  }
+  return string6.replace(
+    // $& means the whole matched string
+    new RegExp(target2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"),
+    substitute
+  );
+}
+function string_length(string6) {
+  if (string6 === "") {
+    return 0;
+  }
+  const iterator = graphemes_iterator(string6);
+  if (iterator) {
+    let i = 0;
+    for (const _ of iterator) {
+      i++;
+    }
+    return i;
+  } else {
+    return string6.match(/./gsu).length;
+  }
+}
+function graphemes(string6) {
+  const iterator = graphemes_iterator(string6);
+  if (iterator) {
+    return List.fromArray(Array.from(iterator).map((item) => item.segment));
+  } else {
+    return List.fromArray(string6.match(/./gsu));
+  }
+}
+var segmenter = void 0;
+function graphemes_iterator(string6) {
+  if (globalThis.Intl && Intl.Segmenter) {
+    segmenter ||= new Intl.Segmenter();
+    return segmenter.segment(string6)[Symbol.iterator]();
+  }
+}
+function pop_grapheme(string6) {
+  let first2;
+  const iterator = graphemes_iterator(string6);
+  if (iterator) {
+    first2 = iterator.next().value?.segment;
+  } else {
+    first2 = string6.match(/./su)?.[0];
+  }
+  if (first2) {
+    return new Ok([first2, string6.slice(first2.length)]);
+  } else {
+    return new Error(Nil);
+  }
+}
+function pop_codeunit(str) {
+  return [str.charCodeAt(0) | 0, str.slice(1)];
+}
+function lowercase(string6) {
+  return string6.toLowerCase();
+}
+function uppercase(string6) {
+  return string6.toUpperCase();
+}
+function split(xs, pattern) {
+  return List.fromArray(xs.split(pattern));
+}
+function concat(xs) {
+  let result = "";
+  for (const x2 of xs) {
+    result = result + x2;
+  }
+  return result;
+}
+function string_slice(string6, idx, len) {
+  if (len <= 0 || idx >= string6.length) {
+    return "";
+  }
+  const iterator = graphemes_iterator(string6);
+  if (iterator) {
+    while (idx-- > 0) {
+      iterator.next();
+    }
+    let result = "";
+    while (len-- > 0) {
+      const v = iterator.next().value;
+      if (v === void 0) {
+        break;
+      }
+      result += v.segment;
+    }
+    return result;
+  } else {
+    return string6.match(/./gsu).slice(idx, idx + len).join("");
+  }
+}
+function string_codeunit_slice(str, from2, length4) {
+  return str.slice(from2, from2 + length4);
+}
+function contains_string(haystack, needle) {
+  return haystack.indexOf(needle) >= 0;
+}
+function starts_with(haystack, needle) {
+  return haystack.startsWith(needle);
+}
+function split_once(haystack, needle) {
+  const index5 = haystack.indexOf(needle);
+  if (index5 >= 0) {
+    const before = haystack.slice(0, index5);
+    const after = haystack.slice(index5 + needle.length);
+    return new Ok([before, after]);
+  } else {
+    return new Error(Nil);
+  }
+}
+var unicode_whitespaces = [
+  " ",
+  // Space
+  "	",
+  // Horizontal tab
+  "\n",
+  // Line feed
+  "\v",
+  // Vertical tab
+  "\f",
+  // Form feed
+  "\r",
+  // Carriage return
+  "\x85",
+  // Next line
+  "\u2028",
+  // Line separator
+  "\u2029"
+  // Paragraph separator
+].join("");
+var trim_start_regex = /* @__PURE__ */ new RegExp(
+  `^[${unicode_whitespaces}]*`
+);
+var trim_end_regex = /* @__PURE__ */ new RegExp(`[${unicode_whitespaces}]*$`);
+function trim_start(string6) {
+  return string6.replace(trim_start_regex, "");
+}
+function trim_end(string6) {
+  return string6.replace(trim_end_regex, "");
+}
+function console_log(term) {
+  console.log(term);
+}
+function print(string6) {
+  if (typeof process === "object" && process.stdout?.write) {
+    process.stdout.write(string6);
+  } else if (typeof Deno === "object") {
+    Deno.stdout.writeSync(new TextEncoder().encode(string6));
+  } else {
+    console.log(string6);
+  }
+}
+function floor(float2) {
+  return Math.floor(float2);
+}
+function round(float2) {
+  return Math.round(float2);
+}
+function random_uniform() {
+  const random_uniform_result = Math.random();
+  if (random_uniform_result === 1) {
+    return random_uniform();
+  }
+  return random_uniform_result;
+}
+function codepoint(int5) {
+  return new UtfCodepoint(int5);
+}
+function string_to_codepoint_integer_list(string6) {
+  return List.fromArray(Array.from(string6).map((item) => item.codePointAt(0)));
+}
+function utf_codepoint_to_int(utf_codepoint) {
+  return utf_codepoint.value;
+}
+function new_map() {
+  return Dict.new();
+}
+function map_to_list(map7) {
+  return List.fromArray(map7.entries());
+}
+function map_remove(key2, map7) {
+  return map7.delete(key2);
+}
+function map_get(map7, key2) {
+  const value3 = map7.get(key2, NOT_FOUND);
+  if (value3 === NOT_FOUND) {
+    return new Error(Nil);
+  }
+  return new Ok(value3);
+}
+function map_insert(key2, value3, map7) {
+  return map7.set(key2, value3);
+}
+function classify_dynamic(data2) {
+  if (typeof data2 === "string") {
+    return "String";
+  } else if (typeof data2 === "boolean") {
+    return "Bool";
+  } else if (data2 instanceof Result) {
+    return "Result";
+  } else if (data2 instanceof List) {
+    return "List";
+  } else if (data2 instanceof BitArray) {
+    return "BitArray";
+  } else if (data2 instanceof Dict) {
+    return "Dict";
+  } else if (Number.isInteger(data2)) {
+    return "Int";
+  } else if (Array.isArray(data2)) {
+    return `Tuple of ${data2.length} elements`;
+  } else if (typeof data2 === "number") {
+    return "Float";
+  } else if (data2 === null) {
+    return "Null";
+  } else if (data2 === void 0) {
+    return "Nil";
+  } else {
+    const type = typeof data2;
+    return type.charAt(0).toUpperCase() + type.slice(1);
+  }
+}
+function inspect(v) {
+  const t = typeof v;
+  if (v === true) return "True";
+  if (v === false) return "False";
+  if (v === null) return "//js(null)";
+  if (v === void 0) return "Nil";
+  if (t === "string") return inspectString(v);
+  if (t === "bigint" || Number.isInteger(v)) return v.toString();
+  if (t === "number") return float_to_string(v);
+  if (Array.isArray(v)) return `#(${v.map(inspect).join(", ")})`;
+  if (v instanceof List) return inspectList(v);
+  if (v instanceof UtfCodepoint) return inspectUtfCodepoint(v);
+  if (v instanceof BitArray) return `<<${bit_array_inspect(v, "")}>>`;
+  if (v instanceof CustomType) return inspectCustomType(v);
+  if (v instanceof Dict) return inspectDict(v);
+  if (v instanceof Set) return `//js(Set(${[...v].map(inspect).join(", ")}))`;
+  if (v instanceof RegExp) return `//js(${v})`;
+  if (v instanceof Date) return `//js(Date("${v.toISOString()}"))`;
+  if (v instanceof Function) {
+    const args = [];
+    for (const i of Array(v.length).keys())
+      args.push(String.fromCharCode(i + 97));
+    return `//fn(${args.join(", ")}) { ... }`;
+  }
+  return inspectObject(v);
+}
+function inspectString(str) {
+  let new_str = '"';
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    switch (char) {
+      case "\n":
+        new_str += "\\n";
+        break;
+      case "\r":
+        new_str += "\\r";
+        break;
+      case "	":
+        new_str += "\\t";
+        break;
+      case "\f":
+        new_str += "\\f";
+        break;
+      case "\\":
+        new_str += "\\\\";
+        break;
+      case '"':
+        new_str += '\\"';
+        break;
+      default:
+        if (char < " " || char > "~" && char < "\xA0") {
+          new_str += "\\u{" + char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0") + "}";
+        } else {
+          new_str += char;
+        }
+    }
+  }
+  new_str += '"';
+  return new_str;
+}
+function inspectDict(map7) {
+  let body2 = "dict.from_list([";
+  let first2 = true;
+  map7.forEach((value3, key2) => {
+    if (!first2) body2 = body2 + ", ";
+    body2 = body2 + "#(" + inspect(key2) + ", " + inspect(value3) + ")";
+    first2 = false;
+  });
+  return body2 + "])";
+}
+function inspectObject(v) {
+  const name2 = Object.getPrototypeOf(v)?.constructor?.name || "Object";
+  const props = [];
+  for (const k of Object.keys(v)) {
+    props.push(`${inspect(k)}: ${inspect(v[k])}`);
+  }
+  const body2 = props.length ? " " + props.join(", ") + " " : "";
+  const head = name2 === "Object" ? "" : name2 + " ";
+  return `//js(${head}{${body2}})`;
+}
+function inspectCustomType(record) {
+  const props = Object.keys(record).map((label) => {
+    const value3 = inspect(record[label]);
+    return isNaN(parseInt(label)) ? `${label}: ${value3}` : value3;
+  }).join(", ");
+  return props ? `${record.constructor.name}(${props})` : record.constructor.name;
+}
+function inspectList(list4) {
+  return `[${list4.toArray().map(inspect).join(", ")}]`;
+}
+function inspectUtfCodepoint(codepoint2) {
+  return `//utfcodepoint(${String.fromCodePoint(codepoint2.value)})`;
+}
+function bit_array_inspect(bits, acc) {
+  if (bits.bitSize === 0) {
+    return acc;
+  }
+  for (let i = 0; i < bits.byteSize - 1; i++) {
+    acc += bits.byteAt(i).toString();
+    acc += ", ";
+  }
+  if (bits.byteSize * 8 === bits.bitSize) {
+    acc += bits.byteAt(bits.byteSize - 1).toString();
+  } else {
+    const trailingBitsCount = bits.bitSize % 8;
+    acc += bits.byteAt(bits.byteSize - 1) >> 8 - trailingBitsCount;
+    acc += `:size(${trailingBitsCount})`;
+  }
+  return acc;
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/dict.mjs
@@ -771,7 +2083,7 @@ function length_loop(loop$list, loop$count) {
     }
   }
 }
-function length(list4) {
+function length2(list4) {
   return length_loop(list4, 0);
 }
 function reverse_and_prepend(loop$prefix, loop$suffix) {
@@ -960,7 +2272,7 @@ function append_loop(loop$first, loop$second) {
     }
   }
 }
-function append(first2, second2) {
+function append2(first2, second2) {
   return append_loop(reverse(first2), second2);
 }
 function prepend2(list4, item) {
@@ -1042,7 +2354,7 @@ function index_fold_loop(loop$over, loop$acc, loop$with, loop$index) {
 function index_fold(list4, initial, fun) {
   return index_fold_loop(list4, initial, fun, 0);
 }
-function find(loop$list, loop$is_desired) {
+function find2(loop$list, loop$is_desired) {
   while (true) {
     let list4 = loop$list;
     let is_desired = loop$is_desired;
@@ -1419,7 +2731,7 @@ function repeat_loop(loop$item, loop$times, loop$acc) {
     }
   }
 }
-function repeat(a2, times) {
+function repeat2(a2, times) {
   return repeat_loop(a2, times, toList([]));
 }
 function key_set_loop(loop$list, loop$key, loop$value, loop$inspected) {
@@ -1491,1316 +2803,22 @@ function last(list4) {
   });
 }
 
-// build/dev/javascript/gleam_stdlib/gleam/result.mjs
-function is_ok(result) {
-  if (!result.isOk()) {
-    return false;
+// build/dev/javascript/given/given.mjs
+function that(requirement, consequence, alternative) {
+  if (requirement) {
+    return consequence();
   } else {
-    return true;
+    return alternative();
   }
 }
-function map3(result, fun) {
-  if (result.isOk()) {
-    let x2 = result[0];
-    return new Ok(fun(x2));
+function ok(rslt, alternative, consequence) {
+  if (rslt.isOk()) {
+    let val = rslt[0];
+    return consequence(val);
   } else {
-    let e = result[0];
-    return new Error(e);
+    let err = rslt[0];
+    return alternative(err);
   }
-}
-function map_error(result, fun) {
-  if (result.isOk()) {
-    let x2 = result[0];
-    return new Ok(x2);
-  } else {
-    let error2 = result[0];
-    return new Error(fun(error2));
-  }
-}
-function try$(result, fun) {
-  if (result.isOk()) {
-    let x2 = result[0];
-    return fun(x2);
-  } else {
-    let e = result[0];
-    return new Error(e);
-  }
-}
-function then$(result, fun) {
-  return try$(result, fun);
-}
-function unwrap2(result, default$) {
-  if (result.isOk()) {
-    let v = result[0];
-    return v;
-  } else {
-    return default$;
-  }
-}
-function replace_error(result, error2) {
-  if (result.isOk()) {
-    let x2 = result[0];
-    return new Ok(x2);
-  } else {
-    return new Error(error2);
-  }
-}
-function try_recover(result, fun) {
-  if (result.isOk()) {
-    let value3 = result[0];
-    return new Ok(value3);
-  } else {
-    let error2 = result[0];
-    return fun(error2);
-  }
-}
-
-// build/dev/javascript/gleam_stdlib/gleam/string_tree.mjs
-function reverse2(tree) {
-  let _pipe = tree;
-  let _pipe$1 = identity(_pipe);
-  let _pipe$2 = graphemes(_pipe$1);
-  let _pipe$3 = reverse(_pipe$2);
-  return concat(_pipe$3);
-}
-
-// build/dev/javascript/gleam_stdlib/dict.mjs
-var referenceMap = /* @__PURE__ */ new WeakMap();
-var tempDataView = /* @__PURE__ */ new DataView(
-  /* @__PURE__ */ new ArrayBuffer(8)
-);
-var referenceUID = 0;
-function hashByReference(o) {
-  const known = referenceMap.get(o);
-  if (known !== void 0) {
-    return known;
-  }
-  const hash = referenceUID++;
-  if (referenceUID === 2147483647) {
-    referenceUID = 0;
-  }
-  referenceMap.set(o, hash);
-  return hash;
-}
-function hashMerge(a2, b) {
-  return a2 ^ b + 2654435769 + (a2 << 6) + (a2 >> 2) | 0;
-}
-function hashString(s) {
-  let hash = 0;
-  const len = s.length;
-  for (let i = 0; i < len; i++) {
-    hash = Math.imul(31, hash) + s.charCodeAt(i) | 0;
-  }
-  return hash;
-}
-function hashNumber(n) {
-  tempDataView.setFloat64(0, n);
-  const i = tempDataView.getInt32(0);
-  const j = tempDataView.getInt32(4);
-  return Math.imul(73244475, i >> 16 ^ i) ^ j;
-}
-function hashBigInt(n) {
-  return hashString(n.toString());
-}
-function hashObject(o) {
-  const proto = Object.getPrototypeOf(o);
-  if (proto !== null && typeof proto.hashCode === "function") {
-    try {
-      const code2 = o.hashCode(o);
-      if (typeof code2 === "number") {
-        return code2;
-      }
-    } catch {
-    }
-  }
-  if (o instanceof Promise || o instanceof WeakSet || o instanceof WeakMap) {
-    return hashByReference(o);
-  }
-  if (o instanceof Date) {
-    return hashNumber(o.getTime());
-  }
-  let h = 0;
-  if (o instanceof ArrayBuffer) {
-    o = new Uint8Array(o);
-  }
-  if (Array.isArray(o) || o instanceof Uint8Array) {
-    for (let i = 0; i < o.length; i++) {
-      h = Math.imul(31, h) + getHash(o[i]) | 0;
-    }
-  } else if (o instanceof Set) {
-    o.forEach((v) => {
-      h = h + getHash(v) | 0;
-    });
-  } else if (o instanceof Map) {
-    o.forEach((v, k) => {
-      h = h + hashMerge(getHash(v), getHash(k)) | 0;
-    });
-  } else {
-    const keys2 = Object.keys(o);
-    for (let i = 0; i < keys2.length; i++) {
-      const k = keys2[i];
-      const v = o[k];
-      h = h + hashMerge(getHash(v), hashString(k)) | 0;
-    }
-  }
-  return h;
-}
-function getHash(u) {
-  if (u === null) return 1108378658;
-  if (u === void 0) return 1108378659;
-  if (u === true) return 1108378657;
-  if (u === false) return 1108378656;
-  switch (typeof u) {
-    case "number":
-      return hashNumber(u);
-    case "string":
-      return hashString(u);
-    case "bigint":
-      return hashBigInt(u);
-    case "object":
-      return hashObject(u);
-    case "symbol":
-      return hashByReference(u);
-    case "function":
-      return hashByReference(u);
-    default:
-      return 0;
-  }
-}
-var SHIFT = 5;
-var BUCKET_SIZE = Math.pow(2, SHIFT);
-var MASK = BUCKET_SIZE - 1;
-var MAX_INDEX_NODE = BUCKET_SIZE / 2;
-var MIN_ARRAY_NODE = BUCKET_SIZE / 4;
-var ENTRY = 0;
-var ARRAY_NODE = 1;
-var INDEX_NODE = 2;
-var COLLISION_NODE = 3;
-var EMPTY = {
-  type: INDEX_NODE,
-  bitmap: 0,
-  array: []
-};
-function mask(hash, shift) {
-  return hash >>> shift & MASK;
-}
-function bitpos(hash, shift) {
-  return 1 << mask(hash, shift);
-}
-function bitcount(x2) {
-  x2 -= x2 >> 1 & 1431655765;
-  x2 = (x2 & 858993459) + (x2 >> 2 & 858993459);
-  x2 = x2 + (x2 >> 4) & 252645135;
-  x2 += x2 >> 8;
-  x2 += x2 >> 16;
-  return x2 & 127;
-}
-function index(bitmap, bit) {
-  return bitcount(bitmap & bit - 1);
-}
-function cloneAndSet(arr, at, val) {
-  const len = arr.length;
-  const out = new Array(len);
-  for (let i = 0; i < len; ++i) {
-    out[i] = arr[i];
-  }
-  out[at] = val;
-  return out;
-}
-function spliceIn(arr, at, val) {
-  const len = arr.length;
-  const out = new Array(len + 1);
-  let i = 0;
-  let g = 0;
-  while (i < at) {
-    out[g++] = arr[i++];
-  }
-  out[g++] = val;
-  while (i < len) {
-    out[g++] = arr[i++];
-  }
-  return out;
-}
-function spliceOut(arr, at) {
-  const len = arr.length;
-  const out = new Array(len - 1);
-  let i = 0;
-  let g = 0;
-  while (i < at) {
-    out[g++] = arr[i++];
-  }
-  ++i;
-  while (i < len) {
-    out[g++] = arr[i++];
-  }
-  return out;
-}
-function createNode(shift, key1, val1, key2hash, key2, val2) {
-  const key1hash = getHash(key1);
-  if (key1hash === key2hash) {
-    return {
-      type: COLLISION_NODE,
-      hash: key1hash,
-      array: [
-        { type: ENTRY, k: key1, v: val1 },
-        { type: ENTRY, k: key2, v: val2 }
-      ]
-    };
-  }
-  const addedLeaf = { val: false };
-  return assoc(
-    assocIndex(EMPTY, shift, key1hash, key1, val1, addedLeaf),
-    shift,
-    key2hash,
-    key2,
-    val2,
-    addedLeaf
-  );
-}
-function assoc(root3, shift, hash, key2, val, addedLeaf) {
-  switch (root3.type) {
-    case ARRAY_NODE:
-      return assocArray(root3, shift, hash, key2, val, addedLeaf);
-    case INDEX_NODE:
-      return assocIndex(root3, shift, hash, key2, val, addedLeaf);
-    case COLLISION_NODE:
-      return assocCollision(root3, shift, hash, key2, val, addedLeaf);
-  }
-}
-function assocArray(root3, shift, hash, key2, val, addedLeaf) {
-  const idx = mask(hash, shift);
-  const node = root3.array[idx];
-  if (node === void 0) {
-    addedLeaf.val = true;
-    return {
-      type: ARRAY_NODE,
-      size: root3.size + 1,
-      array: cloneAndSet(root3.array, idx, { type: ENTRY, k: key2, v: val })
-    };
-  }
-  if (node.type === ENTRY) {
-    if (isEqual(key2, node.k)) {
-      if (val === node.v) {
-        return root3;
-      }
-      return {
-        type: ARRAY_NODE,
-        size: root3.size,
-        array: cloneAndSet(root3.array, idx, {
-          type: ENTRY,
-          k: key2,
-          v: val
-        })
-      };
-    }
-    addedLeaf.val = true;
-    return {
-      type: ARRAY_NODE,
-      size: root3.size,
-      array: cloneAndSet(
-        root3.array,
-        idx,
-        createNode(shift + SHIFT, node.k, node.v, hash, key2, val)
-      )
-    };
-  }
-  const n = assoc(node, shift + SHIFT, hash, key2, val, addedLeaf);
-  if (n === node) {
-    return root3;
-  }
-  return {
-    type: ARRAY_NODE,
-    size: root3.size,
-    array: cloneAndSet(root3.array, idx, n)
-  };
-}
-function assocIndex(root3, shift, hash, key2, val, addedLeaf) {
-  const bit = bitpos(hash, shift);
-  const idx = index(root3.bitmap, bit);
-  if ((root3.bitmap & bit) !== 0) {
-    const node = root3.array[idx];
-    if (node.type !== ENTRY) {
-      const n = assoc(node, shift + SHIFT, hash, key2, val, addedLeaf);
-      if (n === node) {
-        return root3;
-      }
-      return {
-        type: INDEX_NODE,
-        bitmap: root3.bitmap,
-        array: cloneAndSet(root3.array, idx, n)
-      };
-    }
-    const nodeKey = node.k;
-    if (isEqual(key2, nodeKey)) {
-      if (val === node.v) {
-        return root3;
-      }
-      return {
-        type: INDEX_NODE,
-        bitmap: root3.bitmap,
-        array: cloneAndSet(root3.array, idx, {
-          type: ENTRY,
-          k: key2,
-          v: val
-        })
-      };
-    }
-    addedLeaf.val = true;
-    return {
-      type: INDEX_NODE,
-      bitmap: root3.bitmap,
-      array: cloneAndSet(
-        root3.array,
-        idx,
-        createNode(shift + SHIFT, nodeKey, node.v, hash, key2, val)
-      )
-    };
-  } else {
-    const n = root3.array.length;
-    if (n >= MAX_INDEX_NODE) {
-      const nodes = new Array(32);
-      const jdx = mask(hash, shift);
-      nodes[jdx] = assocIndex(EMPTY, shift + SHIFT, hash, key2, val, addedLeaf);
-      let j = 0;
-      let bitmap = root3.bitmap;
-      for (let i = 0; i < 32; i++) {
-        if ((bitmap & 1) !== 0) {
-          const node = root3.array[j++];
-          nodes[i] = node;
-        }
-        bitmap = bitmap >>> 1;
-      }
-      return {
-        type: ARRAY_NODE,
-        size: n + 1,
-        array: nodes
-      };
-    } else {
-      const newArray = spliceIn(root3.array, idx, {
-        type: ENTRY,
-        k: key2,
-        v: val
-      });
-      addedLeaf.val = true;
-      return {
-        type: INDEX_NODE,
-        bitmap: root3.bitmap | bit,
-        array: newArray
-      };
-    }
-  }
-}
-function assocCollision(root3, shift, hash, key2, val, addedLeaf) {
-  if (hash === root3.hash) {
-    const idx = collisionIndexOf(root3, key2);
-    if (idx !== -1) {
-      const entry = root3.array[idx];
-      if (entry.v === val) {
-        return root3;
-      }
-      return {
-        type: COLLISION_NODE,
-        hash,
-        array: cloneAndSet(root3.array, idx, { type: ENTRY, k: key2, v: val })
-      };
-    }
-    const size2 = root3.array.length;
-    addedLeaf.val = true;
-    return {
-      type: COLLISION_NODE,
-      hash,
-      array: cloneAndSet(root3.array, size2, { type: ENTRY, k: key2, v: val })
-    };
-  }
-  return assoc(
-    {
-      type: INDEX_NODE,
-      bitmap: bitpos(root3.hash, shift),
-      array: [root3]
-    },
-    shift,
-    hash,
-    key2,
-    val,
-    addedLeaf
-  );
-}
-function collisionIndexOf(root3, key2) {
-  const size2 = root3.array.length;
-  for (let i = 0; i < size2; i++) {
-    if (isEqual(key2, root3.array[i].k)) {
-      return i;
-    }
-  }
-  return -1;
-}
-function find2(root3, shift, hash, key2) {
-  switch (root3.type) {
-    case ARRAY_NODE:
-      return findArray(root3, shift, hash, key2);
-    case INDEX_NODE:
-      return findIndex(root3, shift, hash, key2);
-    case COLLISION_NODE:
-      return findCollision(root3, key2);
-  }
-}
-function findArray(root3, shift, hash, key2) {
-  const idx = mask(hash, shift);
-  const node = root3.array[idx];
-  if (node === void 0) {
-    return void 0;
-  }
-  if (node.type !== ENTRY) {
-    return find2(node, shift + SHIFT, hash, key2);
-  }
-  if (isEqual(key2, node.k)) {
-    return node;
-  }
-  return void 0;
-}
-function findIndex(root3, shift, hash, key2) {
-  const bit = bitpos(hash, shift);
-  if ((root3.bitmap & bit) === 0) {
-    return void 0;
-  }
-  const idx = index(root3.bitmap, bit);
-  const node = root3.array[idx];
-  if (node.type !== ENTRY) {
-    return find2(node, shift + SHIFT, hash, key2);
-  }
-  if (isEqual(key2, node.k)) {
-    return node;
-  }
-  return void 0;
-}
-function findCollision(root3, key2) {
-  const idx = collisionIndexOf(root3, key2);
-  if (idx < 0) {
-    return void 0;
-  }
-  return root3.array[idx];
-}
-function without(root3, shift, hash, key2) {
-  switch (root3.type) {
-    case ARRAY_NODE:
-      return withoutArray(root3, shift, hash, key2);
-    case INDEX_NODE:
-      return withoutIndex(root3, shift, hash, key2);
-    case COLLISION_NODE:
-      return withoutCollision(root3, key2);
-  }
-}
-function withoutArray(root3, shift, hash, key2) {
-  const idx = mask(hash, shift);
-  const node = root3.array[idx];
-  if (node === void 0) {
-    return root3;
-  }
-  let n = void 0;
-  if (node.type === ENTRY) {
-    if (!isEqual(node.k, key2)) {
-      return root3;
-    }
-  } else {
-    n = without(node, shift + SHIFT, hash, key2);
-    if (n === node) {
-      return root3;
-    }
-  }
-  if (n === void 0) {
-    if (root3.size <= MIN_ARRAY_NODE) {
-      const arr = root3.array;
-      const out = new Array(root3.size - 1);
-      let i = 0;
-      let j = 0;
-      let bitmap = 0;
-      while (i < idx) {
-        const nv = arr[i];
-        if (nv !== void 0) {
-          out[j] = nv;
-          bitmap |= 1 << i;
-          ++j;
-        }
-        ++i;
-      }
-      ++i;
-      while (i < arr.length) {
-        const nv = arr[i];
-        if (nv !== void 0) {
-          out[j] = nv;
-          bitmap |= 1 << i;
-          ++j;
-        }
-        ++i;
-      }
-      return {
-        type: INDEX_NODE,
-        bitmap,
-        array: out
-      };
-    }
-    return {
-      type: ARRAY_NODE,
-      size: root3.size - 1,
-      array: cloneAndSet(root3.array, idx, n)
-    };
-  }
-  return {
-    type: ARRAY_NODE,
-    size: root3.size,
-    array: cloneAndSet(root3.array, idx, n)
-  };
-}
-function withoutIndex(root3, shift, hash, key2) {
-  const bit = bitpos(hash, shift);
-  if ((root3.bitmap & bit) === 0) {
-    return root3;
-  }
-  const idx = index(root3.bitmap, bit);
-  const node = root3.array[idx];
-  if (node.type !== ENTRY) {
-    const n = without(node, shift + SHIFT, hash, key2);
-    if (n === node) {
-      return root3;
-    }
-    if (n !== void 0) {
-      return {
-        type: INDEX_NODE,
-        bitmap: root3.bitmap,
-        array: cloneAndSet(root3.array, idx, n)
-      };
-    }
-    if (root3.bitmap === bit) {
-      return void 0;
-    }
-    return {
-      type: INDEX_NODE,
-      bitmap: root3.bitmap ^ bit,
-      array: spliceOut(root3.array, idx)
-    };
-  }
-  if (isEqual(key2, node.k)) {
-    if (root3.bitmap === bit) {
-      return void 0;
-    }
-    return {
-      type: INDEX_NODE,
-      bitmap: root3.bitmap ^ bit,
-      array: spliceOut(root3.array, idx)
-    };
-  }
-  return root3;
-}
-function withoutCollision(root3, key2) {
-  const idx = collisionIndexOf(root3, key2);
-  if (idx < 0) {
-    return root3;
-  }
-  if (root3.array.length === 1) {
-    return void 0;
-  }
-  return {
-    type: COLLISION_NODE,
-    hash: root3.hash,
-    array: spliceOut(root3.array, idx)
-  };
-}
-function forEach(root3, fn) {
-  if (root3 === void 0) {
-    return;
-  }
-  const items = root3.array;
-  const size2 = items.length;
-  for (let i = 0; i < size2; i++) {
-    const item = items[i];
-    if (item === void 0) {
-      continue;
-    }
-    if (item.type === ENTRY) {
-      fn(item.v, item.k);
-      continue;
-    }
-    forEach(item, fn);
-  }
-}
-var Dict = class _Dict {
-  /**
-   * @template V
-   * @param {Record<string,V>} o
-   * @returns {Dict<string,V>}
-   */
-  static fromObject(o) {
-    const keys2 = Object.keys(o);
-    let m = _Dict.new();
-    for (let i = 0; i < keys2.length; i++) {
-      const k = keys2[i];
-      m = m.set(k, o[k]);
-    }
-    return m;
-  }
-  /**
-   * @template K,V
-   * @param {Map<K,V>} o
-   * @returns {Dict<K,V>}
-   */
-  static fromMap(o) {
-    let m = _Dict.new();
-    o.forEach((v, k) => {
-      m = m.set(k, v);
-    });
-    return m;
-  }
-  static new() {
-    return new _Dict(void 0, 0);
-  }
-  /**
-   * @param {undefined | Node<K,V>} root
-   * @param {number} size
-   */
-  constructor(root3, size2) {
-    this.root = root3;
-    this.size = size2;
-  }
-  /**
-   * @template NotFound
-   * @param {K} key
-   * @param {NotFound} notFound
-   * @returns {NotFound | V}
-   */
-  get(key2, notFound) {
-    if (this.root === void 0) {
-      return notFound;
-    }
-    const found = find2(this.root, 0, getHash(key2), key2);
-    if (found === void 0) {
-      return notFound;
-    }
-    return found.v;
-  }
-  /**
-   * @param {K} key
-   * @param {V} val
-   * @returns {Dict<K,V>}
-   */
-  set(key2, val) {
-    const addedLeaf = { val: false };
-    const root3 = this.root === void 0 ? EMPTY : this.root;
-    const newRoot = assoc(root3, 0, getHash(key2), key2, val, addedLeaf);
-    if (newRoot === this.root) {
-      return this;
-    }
-    return new _Dict(newRoot, addedLeaf.val ? this.size + 1 : this.size);
-  }
-  /**
-   * @param {K} key
-   * @returns {Dict<K,V>}
-   */
-  delete(key2) {
-    if (this.root === void 0) {
-      return this;
-    }
-    const newRoot = without(this.root, 0, getHash(key2), key2);
-    if (newRoot === this.root) {
-      return this;
-    }
-    if (newRoot === void 0) {
-      return _Dict.new();
-    }
-    return new _Dict(newRoot, this.size - 1);
-  }
-  /**
-   * @param {K} key
-   * @returns {boolean}
-   */
-  has(key2) {
-    if (this.root === void 0) {
-      return false;
-    }
-    return find2(this.root, 0, getHash(key2), key2) !== void 0;
-  }
-  /**
-   * @returns {[K,V][]}
-   */
-  entries() {
-    if (this.root === void 0) {
-      return [];
-    }
-    const result = [];
-    this.forEach((v, k) => result.push([k, v]));
-    return result;
-  }
-  /**
-   *
-   * @param {(val:V,key:K)=>void} fn
-   */
-  forEach(fn) {
-    forEach(this.root, fn);
-  }
-  hashCode() {
-    let h = 0;
-    this.forEach((v, k) => {
-      h = h + hashMerge(getHash(v), getHash(k)) | 0;
-    });
-    return h;
-  }
-  /**
-   * @param {unknown} o
-   * @returns {boolean}
-   */
-  equals(o) {
-    if (!(o instanceof _Dict) || this.size !== o.size) {
-      return false;
-    }
-    try {
-      this.forEach((v, k) => {
-        if (!isEqual(o.get(k, !v), v)) {
-          throw unequalDictSymbol;
-        }
-      });
-      return true;
-    } catch (e) {
-      if (e === unequalDictSymbol) {
-        return false;
-      }
-      throw e;
-    }
-  }
-};
-var unequalDictSymbol = /* @__PURE__ */ Symbol();
-
-// build/dev/javascript/gleam_stdlib/gleam_stdlib.mjs
-var Nil = void 0;
-var NOT_FOUND = {};
-function identity(x2) {
-  return x2;
-}
-function parse_int(value3) {
-  if (/^[-+]?(\d+)$/.test(value3)) {
-    return new Ok(parseInt(value3));
-  } else {
-    return new Error(Nil);
-  }
-}
-function to_string(term) {
-  return term.toString();
-}
-function float_to_string(float2) {
-  const string6 = float2.toString().replace("+", "");
-  if (string6.indexOf(".") >= 0) {
-    return string6;
-  } else {
-    const index5 = string6.indexOf("e");
-    if (index5 >= 0) {
-      return string6.slice(0, index5) + ".0" + string6.slice(index5);
-    } else {
-      return string6 + ".0";
-    }
-  }
-}
-function string_replace(string6, target2, substitute) {
-  if (typeof string6.replaceAll !== "undefined") {
-    return string6.replaceAll(target2, substitute);
-  }
-  return string6.replace(
-    // $& means the whole matched string
-    new RegExp(target2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"),
-    substitute
-  );
-}
-function string_length(string6) {
-  if (string6 === "") {
-    return 0;
-  }
-  const iterator = graphemes_iterator(string6);
-  if (iterator) {
-    let i = 0;
-    for (const _ of iterator) {
-      i++;
-    }
-    return i;
-  } else {
-    return string6.match(/./gsu).length;
-  }
-}
-function graphemes(string6) {
-  const iterator = graphemes_iterator(string6);
-  if (iterator) {
-    return List.fromArray(Array.from(iterator).map((item) => item.segment));
-  } else {
-    return List.fromArray(string6.match(/./gsu));
-  }
-}
-var segmenter = void 0;
-function graphemes_iterator(string6) {
-  if (globalThis.Intl && Intl.Segmenter) {
-    segmenter ||= new Intl.Segmenter();
-    return segmenter.segment(string6)[Symbol.iterator]();
-  }
-}
-function pop_grapheme(string6) {
-  let first2;
-  const iterator = graphemes_iterator(string6);
-  if (iterator) {
-    first2 = iterator.next().value?.segment;
-  } else {
-    first2 = string6.match(/./su)?.[0];
-  }
-  if (first2) {
-    return new Ok([first2, string6.slice(first2.length)]);
-  } else {
-    return new Error(Nil);
-  }
-}
-function pop_codeunit(str) {
-  return [str.charCodeAt(0) | 0, str.slice(1)];
-}
-function lowercase(string6) {
-  return string6.toLowerCase();
-}
-function uppercase(string6) {
-  return string6.toUpperCase();
-}
-function split(xs, pattern) {
-  return List.fromArray(xs.split(pattern));
-}
-function concat(xs) {
-  let result = "";
-  for (const x2 of xs) {
-    result = result + x2;
-  }
-  return result;
-}
-function string_slice(string6, idx, len) {
-  if (len <= 0 || idx >= string6.length) {
-    return "";
-  }
-  const iterator = graphemes_iterator(string6);
-  if (iterator) {
-    while (idx-- > 0) {
-      iterator.next();
-    }
-    let result = "";
-    while (len-- > 0) {
-      const v = iterator.next().value;
-      if (v === void 0) {
-        break;
-      }
-      result += v.segment;
-    }
-    return result;
-  } else {
-    return string6.match(/./gsu).slice(idx, idx + len).join("");
-  }
-}
-function string_codeunit_slice(str, from2, length4) {
-  return str.slice(from2, from2 + length4);
-}
-function contains_string(haystack, needle) {
-  return haystack.indexOf(needle) >= 0;
-}
-function starts_with(haystack, needle) {
-  return haystack.startsWith(needle);
-}
-function split_once(haystack, needle) {
-  const index5 = haystack.indexOf(needle);
-  if (index5 >= 0) {
-    const before = haystack.slice(0, index5);
-    const after = haystack.slice(index5 + needle.length);
-    return new Ok([before, after]);
-  } else {
-    return new Error(Nil);
-  }
-}
-var unicode_whitespaces = [
-  " ",
-  // Space
-  "	",
-  // Horizontal tab
-  "\n",
-  // Line feed
-  "\v",
-  // Vertical tab
-  "\f",
-  // Form feed
-  "\r",
-  // Carriage return
-  "\x85",
-  // Next line
-  "\u2028",
-  // Line separator
-  "\u2029"
-  // Paragraph separator
-].join("");
-var trim_start_regex = /* @__PURE__ */ new RegExp(
-  `^[${unicode_whitespaces}]*`
-);
-var trim_end_regex = /* @__PURE__ */ new RegExp(`[${unicode_whitespaces}]*$`);
-function trim_start(string6) {
-  return string6.replace(trim_start_regex, "");
-}
-function trim_end(string6) {
-  return string6.replace(trim_end_regex, "");
-}
-function console_log(term) {
-  console.log(term);
-}
-function print(string6) {
-  if (typeof process === "object" && process.stdout?.write) {
-    process.stdout.write(string6);
-  } else if (typeof Deno === "object") {
-    Deno.stdout.writeSync(new TextEncoder().encode(string6));
-  } else {
-    console.log(string6);
-  }
-}
-function floor(float2) {
-  return Math.floor(float2);
-}
-function round2(float2) {
-  return Math.round(float2);
-}
-function random_uniform() {
-  const random_uniform_result = Math.random();
-  if (random_uniform_result === 1) {
-    return random_uniform();
-  }
-  return random_uniform_result;
-}
-function codepoint(int5) {
-  return new UtfCodepoint(int5);
-}
-function string_to_codepoint_integer_list(string6) {
-  return List.fromArray(Array.from(string6).map((item) => item.codePointAt(0)));
-}
-function utf_codepoint_to_int(utf_codepoint) {
-  return utf_codepoint.value;
-}
-function new_map() {
-  return Dict.new();
-}
-function map_to_list(map7) {
-  return List.fromArray(map7.entries());
-}
-function map_remove(key2, map7) {
-  return map7.delete(key2);
-}
-function map_get(map7, key2) {
-  const value3 = map7.get(key2, NOT_FOUND);
-  if (value3 === NOT_FOUND) {
-    return new Error(Nil);
-  }
-  return new Ok(value3);
-}
-function map_insert(key2, value3, map7) {
-  return map7.set(key2, value3);
-}
-function classify_dynamic(data2) {
-  if (typeof data2 === "string") {
-    return "String";
-  } else if (typeof data2 === "boolean") {
-    return "Bool";
-  } else if (data2 instanceof Result) {
-    return "Result";
-  } else if (data2 instanceof List) {
-    return "List";
-  } else if (data2 instanceof BitArray) {
-    return "BitArray";
-  } else if (data2 instanceof Dict) {
-    return "Dict";
-  } else if (Number.isInteger(data2)) {
-    return "Int";
-  } else if (Array.isArray(data2)) {
-    return `Tuple of ${data2.length} elements`;
-  } else if (typeof data2 === "number") {
-    return "Float";
-  } else if (data2 === null) {
-    return "Null";
-  } else if (data2 === void 0) {
-    return "Nil";
-  } else {
-    const type = typeof data2;
-    return type.charAt(0).toUpperCase() + type.slice(1);
-  }
-}
-function inspect(v) {
-  const t = typeof v;
-  if (v === true) return "True";
-  if (v === false) return "False";
-  if (v === null) return "//js(null)";
-  if (v === void 0) return "Nil";
-  if (t === "string") return inspectString(v);
-  if (t === "bigint" || Number.isInteger(v)) return v.toString();
-  if (t === "number") return float_to_string(v);
-  if (Array.isArray(v)) return `#(${v.map(inspect).join(", ")})`;
-  if (v instanceof List) return inspectList(v);
-  if (v instanceof UtfCodepoint) return inspectUtfCodepoint(v);
-  if (v instanceof BitArray) return `<<${bit_array_inspect(v, "")}>>`;
-  if (v instanceof CustomType) return inspectCustomType(v);
-  if (v instanceof Dict) return inspectDict(v);
-  if (v instanceof Set) return `//js(Set(${[...v].map(inspect).join(", ")}))`;
-  if (v instanceof RegExp) return `//js(${v})`;
-  if (v instanceof Date) return `//js(Date("${v.toISOString()}"))`;
-  if (v instanceof Function) {
-    const args = [];
-    for (const i of Array(v.length).keys())
-      args.push(String.fromCharCode(i + 97));
-    return `//fn(${args.join(", ")}) { ... }`;
-  }
-  return inspectObject(v);
-}
-function inspectString(str) {
-  let new_str = '"';
-  for (let i = 0; i < str.length; i++) {
-    const char = str[i];
-    switch (char) {
-      case "\n":
-        new_str += "\\n";
-        break;
-      case "\r":
-        new_str += "\\r";
-        break;
-      case "	":
-        new_str += "\\t";
-        break;
-      case "\f":
-        new_str += "\\f";
-        break;
-      case "\\":
-        new_str += "\\\\";
-        break;
-      case '"':
-        new_str += '\\"';
-        break;
-      default:
-        if (char < " " || char > "~" && char < "\xA0") {
-          new_str += "\\u{" + char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0") + "}";
-        } else {
-          new_str += char;
-        }
-    }
-  }
-  new_str += '"';
-  return new_str;
-}
-function inspectDict(map7) {
-  let body2 = "dict.from_list([";
-  let first2 = true;
-  map7.forEach((value3, key2) => {
-    if (!first2) body2 = body2 + ", ";
-    body2 = body2 + "#(" + inspect(key2) + ", " + inspect(value3) + ")";
-    first2 = false;
-  });
-  return body2 + "])";
-}
-function inspectObject(v) {
-  const name2 = Object.getPrototypeOf(v)?.constructor?.name || "Object";
-  const props = [];
-  for (const k of Object.keys(v)) {
-    props.push(`${inspect(k)}: ${inspect(v[k])}`);
-  }
-  const body2 = props.length ? " " + props.join(", ") + " " : "";
-  const head = name2 === "Object" ? "" : name2 + " ";
-  return `//js(${head}{${body2}})`;
-}
-function inspectCustomType(record) {
-  const props = Object.keys(record).map((label) => {
-    const value3 = inspect(record[label]);
-    return isNaN(parseInt(label)) ? `${label}: ${value3}` : value3;
-  }).join(", ");
-  return props ? `${record.constructor.name}(${props})` : record.constructor.name;
-}
-function inspectList(list4) {
-  return `[${list4.toArray().map(inspect).join(", ")}]`;
-}
-function inspectUtfCodepoint(codepoint2) {
-  return `//utfcodepoint(${String.fromCodePoint(codepoint2.value)})`;
-}
-function bit_array_inspect(bits, acc) {
-  if (bits.bitSize === 0) {
-    return acc;
-  }
-  for (let i = 0; i < bits.byteSize - 1; i++) {
-    acc += bits.byteAt(i).toString();
-    acc += ", ";
-  }
-  if (bits.byteSize * 8 === bits.bitSize) {
-    acc += bits.byteAt(bits.byteSize - 1).toString();
-  } else {
-    const trailingBitsCount = bits.bitSize % 8;
-    acc += bits.byteAt(bits.byteSize - 1) >> 8 - trailingBitsCount;
-    acc += `:size(${trailingBitsCount})`;
-  }
-  return acc;
-}
-
-// build/dev/javascript/gleam_stdlib/gleam/float.mjs
-function negate(x2) {
-  return -1 * x2;
-}
-function round(x2) {
-  let $ = x2 >= 0;
-  if ($) {
-    return round2(x2);
-  } else {
-    return 0 - round2(negate(x2));
-  }
-}
-
-// build/dev/javascript/gleam_stdlib/gleam/int.mjs
-function min(a2, b) {
-  let $ = a2 < b;
-  if ($) {
-    return a2;
-  } else {
-    return b;
-  }
-}
-function max(a2, b) {
-  let $ = a2 > b;
-  if ($) {
-    return a2;
-  } else {
-    return b;
-  }
-}
-function random(max2) {
-  let _pipe = random_uniform() * identity(max2);
-  let _pipe$1 = floor(_pipe);
-  return round(_pipe$1);
-}
-
-// build/dev/javascript/gleam_stdlib/gleam/string.mjs
-function reverse3(string6) {
-  let _pipe = string6;
-  let _pipe$1 = identity(_pipe);
-  let _pipe$2 = reverse2(_pipe$1);
-  return identity(_pipe$2);
-}
-function replace(string6, pattern, substitute) {
-  let _pipe = string6;
-  let _pipe$1 = identity(_pipe);
-  let _pipe$2 = string_replace(_pipe$1, pattern, substitute);
-  return identity(_pipe$2);
-}
-function slice(string6, idx, len) {
-  let $ = len < 0;
-  if ($) {
-    return "";
-  } else {
-    let $1 = idx < 0;
-    if ($1) {
-      let translated_idx = string_length(string6) + idx;
-      let $2 = translated_idx < 0;
-      if ($2) {
-        return "";
-      } else {
-        return string_slice(string6, translated_idx, len);
-      }
-    } else {
-      return string_slice(string6, idx, len);
-    }
-  }
-}
-function append2(first2, second2) {
-  return first2 + second2;
-}
-function concat_loop(loop$strings, loop$accumulator) {
-  while (true) {
-    let strings = loop$strings;
-    let accumulator = loop$accumulator;
-    if (strings.atLeastLength(1)) {
-      let string6 = strings.head;
-      let strings$1 = strings.tail;
-      loop$strings = strings$1;
-      loop$accumulator = accumulator + string6;
-    } else {
-      return accumulator;
-    }
-  }
-}
-function concat2(strings) {
-  return concat_loop(strings, "");
-}
-function join_loop(loop$strings, loop$separator, loop$accumulator) {
-  while (true) {
-    let strings = loop$strings;
-    let separator = loop$separator;
-    let accumulator = loop$accumulator;
-    if (strings.hasLength(0)) {
-      return accumulator;
-    } else {
-      let string6 = strings.head;
-      let strings$1 = strings.tail;
-      loop$strings = strings$1;
-      loop$separator = separator;
-      loop$accumulator = accumulator + separator + string6;
-    }
-  }
-}
-function join(strings, separator) {
-  if (strings.hasLength(0)) {
-    return "";
-  } else {
-    let first$1 = strings.head;
-    let rest = strings.tail;
-    return join_loop(rest, separator, first$1);
-  }
-}
-function trim(string6) {
-  let _pipe = string6;
-  let _pipe$1 = trim_start(_pipe);
-  return trim_end(_pipe$1);
-}
-function drop_start(loop$string, loop$num_graphemes) {
-  while (true) {
-    let string6 = loop$string;
-    let num_graphemes = loop$num_graphemes;
-    let $ = num_graphemes > 0;
-    if (!$) {
-      return string6;
-    } else {
-      let $1 = pop_grapheme(string6);
-      if ($1.isOk()) {
-        let string$1 = $1[0][1];
-        loop$string = string$1;
-        loop$num_graphemes = num_graphemes - 1;
-      } else {
-        return string6;
-      }
-    }
-  }
-}
-function split2(x2, substring) {
-  if (substring === "") {
-    return graphemes(x2);
-  } else {
-    let _pipe = x2;
-    let _pipe$1 = identity(_pipe);
-    let _pipe$2 = split(_pipe$1, substring);
-    return map2(_pipe$2, identity);
-  }
-}
-function do_to_utf_codepoints(string6) {
-  let _pipe = string6;
-  let _pipe$1 = string_to_codepoint_integer_list(_pipe);
-  return map2(_pipe$1, codepoint);
-}
-function to_utf_codepoints(string6) {
-  return do_to_utf_codepoints(string6);
-}
-function capitalise(string6) {
-  let $ = pop_grapheme(string6);
-  if ($.isOk()) {
-    let first$1 = $[0][0];
-    let rest = $[0][1];
-    return append2(uppercase(first$1), lowercase(rest));
-  } else {
-    return "";
-  }
-}
-function inspect2(term) {
-  let _pipe = inspect(term);
-  return identity(_pipe);
 }
 
 // build/dev/javascript/gleam_stdlib/gleam_stdlib_decode_ffi.mjs
@@ -3056,7 +3074,7 @@ function push_path(layer, path2) {
       return new DecodeError2(
         _record.expected,
         _record.found,
-        append(path$1, error2.path)
+        append2(path$1, error2.path)
       );
     }
   );
@@ -3121,7 +3139,7 @@ function subfield(field_path, field_decoder, next) {
       let $1 = next(out).function(data2);
       let out$1 = $1[0];
       let errors2 = $1[1];
-      return [out$1, append(errors1, errors2)];
+      return [out$1, append2(errors1, errors2)];
     }
   );
 }
@@ -3138,6 +3156,9 @@ function object(entries) {
 }
 function identity2(x2) {
   return x2;
+}
+function array(list4) {
+  return list4.toArray();
 }
 function do_null() {
   return null;
@@ -3275,6 +3296,14 @@ function nullable(input2, inner_type) {
 }
 function object2(entries) {
   return object(entries);
+}
+function preprocessed_array(from2) {
+  return array(from2);
+}
+function array2(entries, inner_type) {
+  let _pipe = entries;
+  let _pipe$1 = map2(_pipe, inner_type);
+  return preprocessed_array(_pipe$1);
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/uri.mjs
@@ -5367,9 +5396,9 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
       if ($) {
         let remove_from = node_index$1 + next_count - moved_offset;
         let patch = remove2(remove_from, child.patch.removed);
-        _block = append(child.patch.changes, prepend(patch, changes));
+        _block = append2(child.patch.changes, prepend(patch, changes));
       } else {
-        _block = append(child.patch.changes, changes);
+        _block = append2(child.patch.changes, changes);
       }
       let changes$1 = _block;
       loop$old = old$1;
@@ -6239,7 +6268,7 @@ function listAppend(a2, b) {
   } else if (b instanceof Empty) {
     return a2;
   } else {
-    return append(a2, b);
+    return append2(a2, b);
   }
 }
 
@@ -7516,6 +7545,33 @@ var AddressableDocumentation = class extends CustomType {
 };
 var AddressableLine = class extends CustomType {
 };
+function encode_declaration_kind(declaration_kind) {
+  if (declaration_kind instanceof AddressableContract) {
+    return string4("c");
+  } else if (declaration_kind instanceof AddressableFunction) {
+    return string4("f");
+  } else if (declaration_kind instanceof AddressableVariable) {
+    return string4("v");
+  } else if (declaration_kind instanceof AddressableDocumentation) {
+    return string4("d");
+  } else {
+    return string4("l");
+  }
+}
+function encode_addressable_symbol(declaration) {
+  let name2 = declaration.name;
+  let scope = declaration.scope;
+  let kind = declaration.kind;
+  let topic_id = declaration.topic_id;
+  return object2(
+    toList([
+      ["n", string4(name2)],
+      ["s", string4(scope)],
+      ["k", encode_declaration_kind(kind)],
+      ["i", string4(topic_id)]
+    ])
+  );
+}
 function declaration_kind_decoder() {
   return then$2(
     string3,
@@ -7539,7 +7595,7 @@ function declaration_kind_decoder() {
     }
   );
 }
-function declaration_decoder() {
+function addressable_symbol_decoder() {
   return field(
     "n",
     string3,
@@ -7583,7 +7639,7 @@ function audit_metadata_decoder() {
             (in_scope_files) => {
               return field(
                 "symbols",
-                list2(declaration_decoder()),
+                list2(addressable_symbol_decoder()),
                 (symbols) => {
                   return success(
                     new AuditMetaData(
@@ -7678,7 +7734,7 @@ function from_unix_milli3(unix_ts) {
 
 // build/dev/javascript/o11a_common/o11a/note.mjs
 var NoteSubmission = class extends CustomType {
-  constructor(parent_id, significance, user_id, message, expanded_message, modifier) {
+  constructor(parent_id, significance, user_id, message, expanded_message, modifier, references, new_references) {
     super();
     this.parent_id = parent_id;
     this.significance = significance;
@@ -7686,6 +7742,8 @@ var NoteSubmission = class extends CustomType {
     this.message = message;
     this.expanded_message = expanded_message;
     this.modifier = modifier;
+    this.references = references;
+    this.new_references = new_references;
   }
 };
 var Comment = class extends CustomType {
@@ -7716,6 +7774,10 @@ var None2 = class extends CustomType {
 };
 var Edit = class extends CustomType {
 };
+var Delete2 = class extends CustomType {
+};
+var Referer = class extends CustomType {
+};
 function note_significance_to_int(note_significance) {
   if (note_significance instanceof Comment) {
     return 1;
@@ -7743,13 +7805,18 @@ function note_significance_to_int(note_significance) {
     return 12;
   }
 }
-function note_modifier_to_int(note_modifier) {
+function note_modifier_to_string(note_modifier) {
   if (note_modifier instanceof None2) {
-    return 0;
+    return "n";
   } else if (note_modifier instanceof Edit) {
-    return 1;
+    return "e";
+  } else if (note_modifier instanceof Delete2) {
+    return "d";
+  } else if (note_modifier instanceof Referer) {
+    return "r";
   } else {
-    return 2;
+    let original_note_id = note_modifier.original_note_id;
+    return "r-" + original_note_id;
   }
 }
 function encode_note_submission(note) {
@@ -7770,20 +7837,269 @@ function encode_note_submission(note) {
       ["x", nullable(note.expanded_message, string4)],
       [
         "d",
-        int3(
+        string4(
           (() => {
             let _pipe = note.modifier;
-            return note_modifier_to_int(_pipe);
+            return note_modifier_to_string(_pipe);
           })()
+        )
+      ],
+      [
+        "r",
+        array2(note.references, encode_addressable_symbol)
+      ],
+      [
+        "nr",
+        array2(
+          note.new_references,
+          encode_addressable_symbol
         )
       ]
     ])
   );
 }
+function classify_message(message, is_thread_open) {
+  let _block;
+  if (!is_thread_open) {
+    if (message.startsWith("todo:")) {
+      let rest = message.slice(5);
+      _block = [new ToDo(), rest];
+    } else if (message.startsWith("t:")) {
+      let rest = message.slice(2);
+      _block = [new ToDo(), rest];
+    } else if (message.startsWith("question:")) {
+      let rest = message.slice(9);
+      _block = [new Question(), rest];
+    } else if (message.startsWith("q:")) {
+      let rest = message.slice(2);
+      _block = [new Question(), rest];
+    } else if (message.startsWith("finding:")) {
+      let rest = message.slice(8);
+      _block = [new FindingLead(), rest];
+    } else if (message.startsWith("f:")) {
+      let rest = message.slice(2);
+      _block = [new FindingLead(), rest];
+    } else if (message.startsWith("dev:")) {
+      let rest = message.slice(4);
+      _block = [new DevelperQuestion(), rest];
+    } else if (message.startsWith("info:")) {
+      let rest = message.slice(5);
+      _block = [new Informational(), rest];
+    } else if (message.startsWith("i:")) {
+      let rest = message.slice(2);
+      _block = [new Informational(), rest];
+    } else {
+      _block = [new Comment(), message];
+    }
+  } else {
+    if (message === "done") {
+      _block = [new ToDoCompletion(), "done"];
+    } else if (message.startsWith("done:")) {
+      let rest = message.slice(5);
+      _block = [new ToDoCompletion(), rest];
+    } else if (message.startsWith("d:")) {
+      let rest = message.slice(2);
+      _block = [new ToDoCompletion(), rest];
+    } else if (message.startsWith("answer:")) {
+      let rest = message.slice(7);
+      _block = [new Answer(), rest];
+    } else if (message.startsWith("a:")) {
+      let rest = message.slice(2);
+      _block = [new Answer(), rest];
+    } else if (message.startsWith("reject:")) {
+      let rest = message.slice(7);
+      _block = [new FindingRejection(), rest];
+    } else if (message.startsWith("confirm:")) {
+      let rest = message.slice(8);
+      _block = [new FindingConfirmation(), rest];
+    } else if (message.startsWith("incorrect:")) {
+      let rest = message.slice(10);
+      _block = [new InformationalRejection(), rest];
+    } else if (message.startsWith("correct:")) {
+      let rest = message.slice(8);
+      _block = [new InformationalConfirmation(), rest];
+    } else {
+      _block = [new Comment(), message];
+    }
+  }
+  let $ = _block;
+  let sig = $[0];
+  let message$1 = $[1];
+  return [
+    sig,
+    (() => {
+      let _pipe = message$1;
+      return trim(_pipe);
+    })()
+  ];
+}
+function get_references(message, audit_metadata) {
+  let _pipe = split2(message, " ");
+  return filter_map(
+    _pipe,
+    (word) => {
+      return try$(
+        (() => {
+          if (word.startsWith("#")) {
+            let ref = word.slice(1);
+            return new Ok(ref);
+          } else {
+            return new Error(void 0);
+          }
+        })(),
+        (ref) => {
+          echo("found potential reference: " + ref, "src/o11a/note.gleam", 299);
+          return find2(
+            audit_metadata.symbols,
+            (symbol) => {
+              return symbol.scope + "." + symbol.name === ref;
+            }
+          );
+        }
+      );
+    }
+  );
+}
+function echo(value3, file, line2) {
+  const grey = "\x1B[90m";
+  const reset_color = "\x1B[39m";
+  const file_line = `${file}:${line2}`;
+  const string_value = echo$inspect(value3);
+  if (globalThis.process?.stderr?.write) {
+    const string6 = `${grey}${file_line}${reset_color}
+${string_value}
+`;
+    process.stderr.write(string6);
+  } else if (globalThis.Deno) {
+    const string6 = `${grey}${file_line}${reset_color}
+${string_value}
+`;
+    globalThis.Deno.stderr.writeSync(new TextEncoder().encode(string6));
+  } else {
+    const string6 = `${file_line}
+${string_value}`;
+    globalThis.console.log(string6);
+  }
+  return value3;
+}
+function echo$inspectString(str) {
+  let new_str = '"';
+  for (let i = 0; i < str.length; i++) {
+    let char = str[i];
+    if (char == "\n") new_str += "\\n";
+    else if (char == "\r") new_str += "\\r";
+    else if (char == "	") new_str += "\\t";
+    else if (char == "\f") new_str += "\\f";
+    else if (char == "\\") new_str += "\\\\";
+    else if (char == '"') new_str += '\\"';
+    else if (char < " " || char > "~" && char < "\xA0") {
+      new_str += "\\u{" + char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0") + "}";
+    } else {
+      new_str += char;
+    }
+  }
+  new_str += '"';
+  return new_str;
+}
+function echo$inspectDict(map7) {
+  let body2 = "dict.from_list([";
+  let first2 = true;
+  let key_value_pairs = [];
+  map7.forEach((value3, key2) => {
+    key_value_pairs.push([key2, value3]);
+  });
+  key_value_pairs.sort();
+  key_value_pairs.forEach(([key2, value3]) => {
+    if (!first2) body2 = body2 + ", ";
+    body2 = body2 + "#(" + echo$inspect(key2) + ", " + echo$inspect(value3) + ")";
+    first2 = false;
+  });
+  return body2 + "])";
+}
+function echo$inspectCustomType(record) {
+  const props = globalThis.Object.keys(record).map((label) => {
+    const value3 = echo$inspect(record[label]);
+    return isNaN(parseInt(label)) ? `${label}: ${value3}` : value3;
+  }).join(", ");
+  return props ? `${record.constructor.name}(${props})` : record.constructor.name;
+}
+function echo$inspectObject(v) {
+  const name2 = Object.getPrototypeOf(v)?.constructor?.name || "Object";
+  const props = [];
+  for (const k of Object.keys(v)) {
+    props.push(`${echo$inspect(k)}: ${echo$inspect(v[k])}`);
+  }
+  const body2 = props.length ? " " + props.join(", ") + " " : "";
+  const head = name2 === "Object" ? "" : name2 + " ";
+  return `//js(${head}{${body2}})`;
+}
+function echo$inspect(v) {
+  const t = typeof v;
+  if (v === true) return "True";
+  if (v === false) return "False";
+  if (v === null) return "//js(null)";
+  if (v === void 0) return "Nil";
+  if (t === "string") return echo$inspectString(v);
+  if (t === "bigint" || t === "number") return v.toString();
+  if (globalThis.Array.isArray(v))
+    return `#(${v.map(echo$inspect).join(", ")})`;
+  if (v instanceof List)
+    return `[${v.toArray().map(echo$inspect).join(", ")}]`;
+  if (v instanceof UtfCodepoint)
+    return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
+  if (v instanceof BitArray) return echo$inspectBitArray(v);
+  if (v instanceof CustomType) return echo$inspectCustomType(v);
+  if (echo$isDict(v)) return echo$inspectDict(v);
+  if (v instanceof Set)
+    return `//js(Set(${[...v].map(echo$inspect).join(", ")}))`;
+  if (v instanceof RegExp) return `//js(${v})`;
+  if (v instanceof Date) return `//js(Date("${v.toISOString()}"))`;
+  if (v instanceof Function) {
+    const args = [];
+    for (const i of Array(v.length).keys())
+      args.push(String.fromCharCode(i + 97));
+    return `//fn(${args.join(", ")}) { ... }`;
+  }
+  return echo$inspectObject(v);
+}
+function echo$inspectBitArray(bitArray) {
+  let endOfAlignedBytes = bitArray.bitOffset + 8 * Math.trunc(bitArray.bitSize / 8);
+  let alignedBytes = bitArraySlice(
+    bitArray,
+    bitArray.bitOffset,
+    endOfAlignedBytes
+  );
+  let remainingUnalignedBits = bitArray.bitSize % 8;
+  if (remainingUnalignedBits > 0) {
+    let remainingBits = bitArraySliceToInt(
+      bitArray,
+      endOfAlignedBytes,
+      bitArray.bitSize,
+      false,
+      false
+    );
+    let alignedBytesArray = Array.from(alignedBytes.rawBuffer);
+    let suffix = `${remainingBits}:size(${remainingUnalignedBits})`;
+    if (alignedBytesArray.length === 0) {
+      return `<<${suffix}>>`;
+    } else {
+      return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}, ${suffix}>>`;
+    }
+  } else {
+    return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}>>`;
+  }
+}
+function echo$isDict(value3) {
+  try {
+    return value3 instanceof Dict;
+  } catch {
+    return false;
+  }
+}
 
 // build/dev/javascript/o11a_common/o11a/computed_note.mjs
 var ComputedNote = class extends CustomType {
-  constructor(note_id, parent_id, significance, user_name, message, expanded_message, time, edited) {
+  constructor(note_id, parent_id, significance, user_name, message, expanded_message, time, references, edited, reference) {
     super();
     this.note_id = note_id;
     this.parent_id = parent_id;
@@ -7792,7 +8108,9 @@ var ComputedNote = class extends CustomType {
     this.message = message;
     this.expanded_message = expanded_message;
     this.time = time;
+    this.references = references;
     this.edited = edited;
+    this.reference = reference;
   }
 };
 var Comment2 = class extends CustomType {
@@ -7872,7 +8190,7 @@ function significance_from_int(note_significance) {
     throw makeError(
       "panic",
       "o11a/computed_note",
-      128,
+      147,
       "significance_from_int",
       "Invalid note significance found",
       {}
@@ -7912,17 +8230,35 @@ function computed_note_decoder() {
                                 "e",
                                 bool,
                                 (edited) => {
-                                  return success(
-                                    new ComputedNote(
-                                      note_id,
-                                      parent_id,
-                                      significance_from_int(significance),
-                                      user_name,
-                                      message,
-                                      expanded_message,
-                                      from_unix_milli3(time),
-                                      edited
-                                    )
+                                  return field(
+                                    "rs",
+                                    list2(
+                                      addressable_symbol_decoder()
+                                    ),
+                                    (references) => {
+                                      return field(
+                                        "r",
+                                        optional(string3),
+                                        (reference) => {
+                                          return success(
+                                            new ComputedNote(
+                                              note_id,
+                                              parent_id,
+                                              significance_from_int(
+                                                significance
+                                              ),
+                                              user_name,
+                                              message,
+                                              expanded_message,
+                                              from_unix_milli3(time),
+                                              references,
+                                              edited,
+                                              reference
+                                            )
+                                          );
+                                        }
+                                      );
+                                    }
                                   );
                                 }
                               );
@@ -8750,7 +9086,7 @@ function error(issue) {
   return new Error(new$9(issue));
 }
 function line_print(snag) {
-  let _pipe = prepend(append2("error: ", snag.issue), snag.cause);
+  let _pipe = prepend(append("error: ", snag.issue), snag.cause);
   return join(_pipe, " <- ");
 }
 
@@ -8784,7 +9120,7 @@ function non_empty_line(line_number) {
 }
 function discussion_entry2(line_number, column_number) {
   return querySelector(
-    echo(
+    echo2(
       ".dl" + to_string(line_number) + ".dc" + to_string(
         column_number
       ) + " ." + discussion_entry,
@@ -8799,485 +9135,6 @@ function discussion_input(line_number, column_number) {
       column_number
     ) + " input"
   );
-}
-function echo(value3, file, line2) {
-  const grey = "\x1B[90m";
-  const reset_color = "\x1B[39m";
-  const file_line = `${file}:${line2}`;
-  const string_value = echo$inspect(value3);
-  if (globalThis.process?.stderr?.write) {
-    const string6 = `${grey}${file_line}${reset_color}
-${string_value}
-`;
-    process.stderr.write(string6);
-  } else if (globalThis.Deno) {
-    const string6 = `${grey}${file_line}${reset_color}
-${string_value}
-`;
-    globalThis.Deno.stderr.writeSync(new TextEncoder().encode(string6));
-  } else {
-    const string6 = `${file_line}
-${string_value}`;
-    globalThis.console.log(string6);
-  }
-  return value3;
-}
-function echo$inspectString(str) {
-  let new_str = '"';
-  for (let i = 0; i < str.length; i++) {
-    let char = str[i];
-    if (char == "\n") new_str += "\\n";
-    else if (char == "\r") new_str += "\\r";
-    else if (char == "	") new_str += "\\t";
-    else if (char == "\f") new_str += "\\f";
-    else if (char == "\\") new_str += "\\\\";
-    else if (char == '"') new_str += '\\"';
-    else if (char < " " || char > "~" && char < "\xA0") {
-      new_str += "\\u{" + char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0") + "}";
-    } else {
-      new_str += char;
-    }
-  }
-  new_str += '"';
-  return new_str;
-}
-function echo$inspectDict(map7) {
-  let body2 = "dict.from_list([";
-  let first2 = true;
-  let key_value_pairs = [];
-  map7.forEach((value3, key2) => {
-    key_value_pairs.push([key2, value3]);
-  });
-  key_value_pairs.sort();
-  key_value_pairs.forEach(([key2, value3]) => {
-    if (!first2) body2 = body2 + ", ";
-    body2 = body2 + "#(" + echo$inspect(key2) + ", " + echo$inspect(value3) + ")";
-    first2 = false;
-  });
-  return body2 + "])";
-}
-function echo$inspectCustomType(record) {
-  const props = globalThis.Object.keys(record).map((label) => {
-    const value3 = echo$inspect(record[label]);
-    return isNaN(parseInt(label)) ? `${label}: ${value3}` : value3;
-  }).join(", ");
-  return props ? `${record.constructor.name}(${props})` : record.constructor.name;
-}
-function echo$inspectObject(v) {
-  const name2 = Object.getPrototypeOf(v)?.constructor?.name || "Object";
-  const props = [];
-  for (const k of Object.keys(v)) {
-    props.push(`${echo$inspect(k)}: ${echo$inspect(v[k])}`);
-  }
-  const body2 = props.length ? " " + props.join(", ") + " " : "";
-  const head = name2 === "Object" ? "" : name2 + " ";
-  return `//js(${head}{${body2}})`;
-}
-function echo$inspect(v) {
-  const t = typeof v;
-  if (v === true) return "True";
-  if (v === false) return "False";
-  if (v === null) return "//js(null)";
-  if (v === void 0) return "Nil";
-  if (t === "string") return echo$inspectString(v);
-  if (t === "bigint" || t === "number") return v.toString();
-  if (globalThis.Array.isArray(v))
-    return `#(${v.map(echo$inspect).join(", ")})`;
-  if (v instanceof List)
-    return `[${v.toArray().map(echo$inspect).join(", ")}]`;
-  if (v instanceof UtfCodepoint)
-    return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
-  if (v instanceof BitArray) return echo$inspectBitArray(v);
-  if (v instanceof CustomType) return echo$inspectCustomType(v);
-  if (echo$isDict(v)) return echo$inspectDict(v);
-  if (v instanceof Set)
-    return `//js(Set(${[...v].map(echo$inspect).join(", ")}))`;
-  if (v instanceof RegExp) return `//js(${v})`;
-  if (v instanceof Date) return `//js(Date("${v.toISOString()}"))`;
-  if (v instanceof Function) {
-    const args = [];
-    for (const i of Array(v.length).keys())
-      args.push(String.fromCharCode(i + 97));
-    return `//fn(${args.join(", ")}) { ... }`;
-  }
-  return echo$inspectObject(v);
-}
-function echo$inspectBitArray(bitArray) {
-  let endOfAlignedBytes = bitArray.bitOffset + 8 * Math.trunc(bitArray.bitSize / 8);
-  let alignedBytes = bitArraySlice(
-    bitArray,
-    bitArray.bitOffset,
-    endOfAlignedBytes
-  );
-  let remainingUnalignedBits = bitArray.bitSize % 8;
-  if (remainingUnalignedBits > 0) {
-    let remainingBits = bitArraySliceToInt(
-      bitArray,
-      endOfAlignedBytes,
-      bitArray.bitSize,
-      false,
-      false
-    );
-    let alignedBytesArray = Array.from(alignedBytes.rawBuffer);
-    let suffix = `${remainingBits}:size(${remainingUnalignedBits})`;
-    if (alignedBytesArray.length === 0) {
-      return `<<${suffix}>>`;
-    } else {
-      return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}, ${suffix}>>`;
-    }
-  } else {
-    return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}>>`;
-  }
-}
-function echo$isDict(value3) {
-  try {
-    return value3 instanceof Dict;
-  } catch {
-    return false;
-  }
-}
-
-// build/dev/javascript/o11a_client/storage.mjs
-var is_user_typing_storage = false;
-function set_is_user_typing(value3) {
-  is_user_typing_storage = value3;
-}
-function is_user_typing() {
-  return is_user_typing_storage;
-}
-
-// build/dev/javascript/o11a_client/o11a/client/page_navigation.mjs
-var Model = class extends CustomType {
-  constructor(current_line_number, current_column_number, current_line_column_count, line_count) {
-    super();
-    this.current_line_number = current_line_number;
-    this.current_column_number = current_column_number;
-    this.current_line_column_count = current_line_column_count;
-    this.line_count = line_count;
-  }
-};
-function init2() {
-  return new Model(16, 1, 16, 16);
-}
-function prevent_default(event4) {
-  let $ = is_user_typing();
-  if ($) {
-    let $1 = ctrlKey(event4);
-    let $2 = key(event4);
-    if ($1 && $2 === "e") {
-      return preventDefault(event4);
-    } else if ($2 === "Escape") {
-      return preventDefault(event4);
-    } else {
-      return void 0;
-    }
-  } else {
-    let $1 = key(event4);
-    if ($1 === "ArrowUp") {
-      return preventDefault(event4);
-    } else if ($1 === "ArrowDown") {
-      return preventDefault(event4);
-    } else if ($1 === "ArrowLeft") {
-      return preventDefault(event4);
-    } else if ($1 === "ArrowRight") {
-      return preventDefault(event4);
-    } else if ($1 === "PageUp") {
-      return preventDefault(event4);
-    } else if ($1 === "PageDown") {
-      return preventDefault(event4);
-    } else if ($1 === "Enter") {
-      return preventDefault(event4);
-    } else if ($1 === "e") {
-      return preventDefault(event4);
-    } else if ($1 === "Escape") {
-      return preventDefault(event4);
-    } else {
-      return void 0;
-    }
-  }
-}
-function handle_expanded_input_focus(event4, model, else_do) {
-  let $ = ctrlKey(event4);
-  let $1 = key(event4);
-  if ($ && $1 === "e") {
-    return new Ok([model, none()]);
-  } else {
-    return else_do();
-  }
-}
-function find_next_discussion_line(loop$model, loop$current_line, loop$step) {
-  while (true) {
-    let model = loop$model;
-    let current_line = loop$current_line;
-    let step = loop$step;
-    if (step > 0 && current_line === model.line_count) {
-      return error(
-        "Line is " + to_string(model.line_count) + ", cannot go further down"
-      );
-    } else if (step < 0 && current_line === 1) {
-      return error("Line is 1, cannot go further up");
-    } else if (step === 0) {
-      return error("Step is zero");
-    } else {
-      let next_line = max(
-        1,
-        min(model.line_count, current_line + step)
-      );
-      let $ = non_empty_line(next_line);
-      if ($.isOk()) {
-        let line2 = $[0];
-        return map3(
-          read_column_count_data(line2),
-          (column_count) => {
-            return [next_line, column_count];
-          }
-        );
-      } else {
-        loop$model = model;
-        loop$current_line = next_line;
-        loop$step = (() => {
-          if (step > 0 && next_line === model.line_count) {
-            return -1;
-          } else if (step > 0) {
-            return 1;
-          } else if (step < 0 && next_line === 1) {
-            return 1;
-          } else if (step < 0) {
-            return -1;
-          } else {
-            return 0;
-          }
-        })();
-      }
-    }
-  }
-}
-function focus_line_discussion(line_number, column_number) {
-  return from(
-    (_) => {
-      echo2(
-        "focus line discussion",
-        "src/o11a/client/page_navigation.gleam",
-        260
-      );
-      let _block;
-      let _pipe = discussion_entry2(line_number, column_number);
-      let _pipe$1 = replace_error(
-        _pipe,
-        new$9("Failed to find line discussion to focus")
-      );
-      let _pipe$2 = map3(_pipe$1, focus);
-      _block = echo2(_pipe$2, "src/o11a/client/page_navigation.gleam", 267);
-      let $ = _block;
-      return void 0;
-    }
-  );
-}
-function handle_input_escape(event4, model, else_do) {
-  let $ = key(event4);
-  if ($ === "Escape") {
-    return new Ok(
-      [
-        model,
-        focus_line_discussion(
-          model.current_line_number,
-          model.current_column_number
-        )
-      ]
-    );
-  } else {
-    return else_do();
-  }
-}
-function move_focus_line(model, step) {
-  return map3(
-    find_next_discussion_line(model, model.current_line_number, step),
-    (_use0) => {
-      let new_line = _use0[0];
-      let column_count = _use0[1];
-      return [
-        (() => {
-          let _record = model;
-          return new Model(
-            _record.current_line_number,
-            _record.current_column_number,
-            column_count,
-            _record.line_count
-          );
-        })(),
-        focus_line_discussion(
-          new_line,
-          min(column_count, model.current_column_number)
-        )
-      ];
-    }
-  );
-}
-function move_focus_column(model, step) {
-  echo2(
-    "moving focus column by " + to_string(step),
-    "src/o11a/client/page_navigation.gleam",
-    156
-  );
-  let _block;
-  let _pipe = max(1, model.current_column_number + step);
-  _block = min(_pipe, model.current_line_column_count);
-  let new_column = _block;
-  echo2(
-    "new column " + to_string(new_column),
-    "src/o11a/client/page_navigation.gleam",
-    161
-  );
-  let _pipe$1 = [
-    model,
-    focus_line_discussion(model.current_line_number, new_column)
-  ];
-  return new Ok(_pipe$1);
-}
-function handle_keyboard_navigation(event4, model, else_do) {
-  let $ = shiftKey(event4);
-  let $1 = key(event4);
-  if (!$ && $1 === "ArrowUp") {
-    return move_focus_line(model, -1);
-  } else if (!$ && $1 === "ArrowDown") {
-    return move_focus_line(model, 1);
-  } else if ($ && $1 === "ArrowUp") {
-    return move_focus_line(model, -5);
-  } else if ($ && $1 === "ArrowDown") {
-    return move_focus_line(model, 5);
-  } else if ($1 === "PageUp") {
-    return move_focus_line(model, -20);
-  } else if ($1 === "PageDown") {
-    return move_focus_line(model, 20);
-  } else if ($1 === "ArrowLeft") {
-    return move_focus_column(model, -1);
-  } else if ($1 === "ArrowRight") {
-    return move_focus_column(model, 1);
-  } else {
-    return else_do();
-  }
-}
-function blur_line_discussion(line_number, column_number) {
-  return from(
-    (_) => {
-      echo2(
-        "blurring line discussion",
-        "src/o11a/client/page_navigation.gleam",
-        277
-      );
-      let _block;
-      let _pipe = discussion_entry2(line_number, column_number);
-      let _pipe$1 = replace_error(
-        _pipe,
-        new$9("Failed to find line discussion to focus")
-      );
-      _block = map3(_pipe$1, blur);
-      let $ = _block;
-      return void 0;
-    }
-  );
-}
-function handle_discussion_escape(event4, model, else_do) {
-  let $ = key(event4);
-  if ($ === "Escape") {
-    return new Ok(
-      [
-        model,
-        blur_line_discussion(
-          model.current_line_number,
-          model.current_column_number
-        )
-      ]
-    );
-  } else {
-    return else_do();
-  }
-}
-function focus_line_discussion_input(line_number, column_number) {
-  return from(
-    (_) => {
-      let _block;
-      let _pipe = discussion_input(line_number, column_number);
-      let _pipe$1 = replace_error(
-        _pipe,
-        new$9("Failed to find line discussion input to focus")
-      );
-      _block = map3(_pipe$1, focus);
-      let $ = _block;
-      return void 0;
-    }
-  );
-}
-function handle_input_focus(event4, model, else_do) {
-  let $ = ctrlKey(event4);
-  let $1 = key(event4);
-  if (!$ && $1 === "e") {
-    return new Ok(
-      [
-        model,
-        focus_line_discussion_input(
-          model.current_line_number,
-          model.current_column_number
-        )
-      ]
-    );
-  } else {
-    return else_do();
-  }
-}
-function do_page_navigation(event4, model) {
-  let _block;
-  let $ = is_user_typing();
-  if ($) {
-    _block = handle_expanded_input_focus(
-      event4,
-      model,
-      () => {
-        return handle_input_escape(
-          event4,
-          model,
-          () => {
-            return new Ok([model, none()]);
-          }
-        );
-      }
-    );
-  } else {
-    _block = handle_keyboard_navigation(
-      event4,
-      model,
-      () => {
-        return handle_input_focus(
-          event4,
-          model,
-          () => {
-            return handle_expanded_input_focus(
-              event4,
-              model,
-              () => {
-                return handle_discussion_escape(
-                  event4,
-                  model,
-                  () => {
-                    return new Ok([model, none()]);
-                  }
-                );
-              }
-            );
-          }
-        );
-      }
-    );
-  }
-  let res = _block;
-  if (res.isOk()) {
-    let model_effect = res[0];
-    return model_effect;
-  } else {
-    let e = res[0];
-    console_log(line_print(e));
-    return [model, none()];
-  }
 }
 function echo2(value3, file, line2) {
   const grey = "\x1B[90m";
@@ -9409,6 +9266,485 @@ function echo$inspectBitArray2(bitArray) {
   }
 }
 function echo$isDict2(value3) {
+  try {
+    return value3 instanceof Dict;
+  } catch {
+    return false;
+  }
+}
+
+// build/dev/javascript/o11a_client/storage.mjs
+var is_user_typing_storage = false;
+function set_is_user_typing(value3) {
+  is_user_typing_storage = value3;
+}
+function is_user_typing() {
+  return is_user_typing_storage;
+}
+
+// build/dev/javascript/o11a_client/o11a/client/page_navigation.mjs
+var Model = class extends CustomType {
+  constructor(current_line_number, current_column_number, current_line_column_count, line_count) {
+    super();
+    this.current_line_number = current_line_number;
+    this.current_column_number = current_column_number;
+    this.current_line_column_count = current_line_column_count;
+    this.line_count = line_count;
+  }
+};
+function init2() {
+  return new Model(16, 1, 16, 16);
+}
+function prevent_default(event4) {
+  let $ = is_user_typing();
+  if ($) {
+    let $1 = ctrlKey(event4);
+    let $2 = key(event4);
+    if ($1 && $2 === "e") {
+      return preventDefault(event4);
+    } else if ($2 === "Escape") {
+      return preventDefault(event4);
+    } else {
+      return void 0;
+    }
+  } else {
+    let $1 = key(event4);
+    if ($1 === "ArrowUp") {
+      return preventDefault(event4);
+    } else if ($1 === "ArrowDown") {
+      return preventDefault(event4);
+    } else if ($1 === "ArrowLeft") {
+      return preventDefault(event4);
+    } else if ($1 === "ArrowRight") {
+      return preventDefault(event4);
+    } else if ($1 === "PageUp") {
+      return preventDefault(event4);
+    } else if ($1 === "PageDown") {
+      return preventDefault(event4);
+    } else if ($1 === "Enter") {
+      return preventDefault(event4);
+    } else if ($1 === "e") {
+      return preventDefault(event4);
+    } else if ($1 === "Escape") {
+      return preventDefault(event4);
+    } else {
+      return void 0;
+    }
+  }
+}
+function handle_expanded_input_focus(event4, model, else_do) {
+  let $ = ctrlKey(event4);
+  let $1 = key(event4);
+  if ($ && $1 === "e") {
+    return new Ok([model, none()]);
+  } else {
+    return else_do();
+  }
+}
+function find_next_discussion_line(loop$model, loop$current_line, loop$step) {
+  while (true) {
+    let model = loop$model;
+    let current_line = loop$current_line;
+    let step = loop$step;
+    if (step > 0 && current_line === model.line_count) {
+      return error(
+        "Line is " + to_string(model.line_count) + ", cannot go further down"
+      );
+    } else if (step < 0 && current_line === 1) {
+      return error("Line is 1, cannot go further up");
+    } else if (step === 0) {
+      return error("Step is zero");
+    } else {
+      let next_line = max(
+        1,
+        min(model.line_count, current_line + step)
+      );
+      let $ = non_empty_line(next_line);
+      if ($.isOk()) {
+        let line2 = $[0];
+        return map3(
+          read_column_count_data(line2),
+          (column_count) => {
+            return [next_line, column_count];
+          }
+        );
+      } else {
+        loop$model = model;
+        loop$current_line = next_line;
+        loop$step = (() => {
+          if (step > 0 && next_line === model.line_count) {
+            return -1;
+          } else if (step > 0) {
+            return 1;
+          } else if (step < 0 && next_line === 1) {
+            return 1;
+          } else if (step < 0) {
+            return -1;
+          } else {
+            return 0;
+          }
+        })();
+      }
+    }
+  }
+}
+function focus_line_discussion(line_number, column_number) {
+  return from(
+    (_) => {
+      echo3(
+        "focus line discussion",
+        "src/o11a/client/page_navigation.gleam",
+        260
+      );
+      let _block;
+      let _pipe = discussion_entry2(line_number, column_number);
+      let _pipe$1 = replace_error(
+        _pipe,
+        new$9("Failed to find line discussion to focus")
+      );
+      let _pipe$2 = map3(_pipe$1, focus);
+      _block = echo3(_pipe$2, "src/o11a/client/page_navigation.gleam", 267);
+      let $ = _block;
+      return void 0;
+    }
+  );
+}
+function handle_input_escape(event4, model, else_do) {
+  let $ = key(event4);
+  if ($ === "Escape") {
+    return new Ok(
+      [
+        model,
+        focus_line_discussion(
+          model.current_line_number,
+          model.current_column_number
+        )
+      ]
+    );
+  } else {
+    return else_do();
+  }
+}
+function move_focus_line(model, step) {
+  return map3(
+    find_next_discussion_line(model, model.current_line_number, step),
+    (_use0) => {
+      let new_line = _use0[0];
+      let column_count = _use0[1];
+      return [
+        (() => {
+          let _record = model;
+          return new Model(
+            _record.current_line_number,
+            _record.current_column_number,
+            column_count,
+            _record.line_count
+          );
+        })(),
+        focus_line_discussion(
+          new_line,
+          min(column_count, model.current_column_number)
+        )
+      ];
+    }
+  );
+}
+function move_focus_column(model, step) {
+  echo3(
+    "moving focus column by " + to_string(step),
+    "src/o11a/client/page_navigation.gleam",
+    156
+  );
+  let _block;
+  let _pipe = max(1, model.current_column_number + step);
+  _block = min(_pipe, model.current_line_column_count);
+  let new_column = _block;
+  echo3(
+    "new column " + to_string(new_column),
+    "src/o11a/client/page_navigation.gleam",
+    161
+  );
+  let _pipe$1 = [
+    model,
+    focus_line_discussion(model.current_line_number, new_column)
+  ];
+  return new Ok(_pipe$1);
+}
+function handle_keyboard_navigation(event4, model, else_do) {
+  let $ = shiftKey(event4);
+  let $1 = key(event4);
+  if (!$ && $1 === "ArrowUp") {
+    return move_focus_line(model, -1);
+  } else if (!$ && $1 === "ArrowDown") {
+    return move_focus_line(model, 1);
+  } else if ($ && $1 === "ArrowUp") {
+    return move_focus_line(model, -5);
+  } else if ($ && $1 === "ArrowDown") {
+    return move_focus_line(model, 5);
+  } else if ($1 === "PageUp") {
+    return move_focus_line(model, -20);
+  } else if ($1 === "PageDown") {
+    return move_focus_line(model, 20);
+  } else if ($1 === "ArrowLeft") {
+    return move_focus_column(model, -1);
+  } else if ($1 === "ArrowRight") {
+    return move_focus_column(model, 1);
+  } else {
+    return else_do();
+  }
+}
+function blur_line_discussion(line_number, column_number) {
+  return from(
+    (_) => {
+      echo3(
+        "blurring line discussion",
+        "src/o11a/client/page_navigation.gleam",
+        277
+      );
+      let _block;
+      let _pipe = discussion_entry2(line_number, column_number);
+      let _pipe$1 = replace_error(
+        _pipe,
+        new$9("Failed to find line discussion to focus")
+      );
+      _block = map3(_pipe$1, blur);
+      let $ = _block;
+      return void 0;
+    }
+  );
+}
+function handle_discussion_escape(event4, model, else_do) {
+  let $ = key(event4);
+  if ($ === "Escape") {
+    return new Ok(
+      [
+        model,
+        blur_line_discussion(
+          model.current_line_number,
+          model.current_column_number
+        )
+      ]
+    );
+  } else {
+    return else_do();
+  }
+}
+function focus_line_discussion_input(line_number, column_number) {
+  return from(
+    (_) => {
+      let _block;
+      let _pipe = discussion_input(line_number, column_number);
+      let _pipe$1 = replace_error(
+        _pipe,
+        new$9("Failed to find line discussion input to focus")
+      );
+      _block = map3(_pipe$1, focus);
+      let $ = _block;
+      return void 0;
+    }
+  );
+}
+function handle_input_focus(event4, model, else_do) {
+  let $ = ctrlKey(event4);
+  let $1 = key(event4);
+  if (!$ && $1 === "e") {
+    return new Ok(
+      [
+        model,
+        focus_line_discussion_input(
+          model.current_line_number,
+          model.current_column_number
+        )
+      ]
+    );
+  } else {
+    return else_do();
+  }
+}
+function do_page_navigation(event4, model) {
+  let _block;
+  let $ = is_user_typing();
+  if ($) {
+    _block = handle_expanded_input_focus(
+      event4,
+      model,
+      () => {
+        return handle_input_escape(
+          event4,
+          model,
+          () => {
+            return new Ok([model, none()]);
+          }
+        );
+      }
+    );
+  } else {
+    _block = handle_keyboard_navigation(
+      event4,
+      model,
+      () => {
+        return handle_input_focus(
+          event4,
+          model,
+          () => {
+            return handle_expanded_input_focus(
+              event4,
+              model,
+              () => {
+                return handle_discussion_escape(
+                  event4,
+                  model,
+                  () => {
+                    return new Ok([model, none()]);
+                  }
+                );
+              }
+            );
+          }
+        );
+      }
+    );
+  }
+  let res = _block;
+  if (res.isOk()) {
+    let model_effect = res[0];
+    return model_effect;
+  } else {
+    let e = res[0];
+    console_log(line_print(e));
+    return [model, none()];
+  }
+}
+function echo3(value3, file, line2) {
+  const grey = "\x1B[90m";
+  const reset_color = "\x1B[39m";
+  const file_line = `${file}:${line2}`;
+  const string_value = echo$inspect3(value3);
+  if (globalThis.process?.stderr?.write) {
+    const string6 = `${grey}${file_line}${reset_color}
+${string_value}
+`;
+    process.stderr.write(string6);
+  } else if (globalThis.Deno) {
+    const string6 = `${grey}${file_line}${reset_color}
+${string_value}
+`;
+    globalThis.Deno.stderr.writeSync(new TextEncoder().encode(string6));
+  } else {
+    const string6 = `${file_line}
+${string_value}`;
+    globalThis.console.log(string6);
+  }
+  return value3;
+}
+function echo$inspectString3(str) {
+  let new_str = '"';
+  for (let i = 0; i < str.length; i++) {
+    let char = str[i];
+    if (char == "\n") new_str += "\\n";
+    else if (char == "\r") new_str += "\\r";
+    else if (char == "	") new_str += "\\t";
+    else if (char == "\f") new_str += "\\f";
+    else if (char == "\\") new_str += "\\\\";
+    else if (char == '"') new_str += '\\"';
+    else if (char < " " || char > "~" && char < "\xA0") {
+      new_str += "\\u{" + char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0") + "}";
+    } else {
+      new_str += char;
+    }
+  }
+  new_str += '"';
+  return new_str;
+}
+function echo$inspectDict3(map7) {
+  let body2 = "dict.from_list([";
+  let first2 = true;
+  let key_value_pairs = [];
+  map7.forEach((value3, key2) => {
+    key_value_pairs.push([key2, value3]);
+  });
+  key_value_pairs.sort();
+  key_value_pairs.forEach(([key2, value3]) => {
+    if (!first2) body2 = body2 + ", ";
+    body2 = body2 + "#(" + echo$inspect3(key2) + ", " + echo$inspect3(value3) + ")";
+    first2 = false;
+  });
+  return body2 + "])";
+}
+function echo$inspectCustomType3(record) {
+  const props = globalThis.Object.keys(record).map((label) => {
+    const value3 = echo$inspect3(record[label]);
+    return isNaN(parseInt(label)) ? `${label}: ${value3}` : value3;
+  }).join(", ");
+  return props ? `${record.constructor.name}(${props})` : record.constructor.name;
+}
+function echo$inspectObject3(v) {
+  const name2 = Object.getPrototypeOf(v)?.constructor?.name || "Object";
+  const props = [];
+  for (const k of Object.keys(v)) {
+    props.push(`${echo$inspect3(k)}: ${echo$inspect3(v[k])}`);
+  }
+  const body2 = props.length ? " " + props.join(", ") + " " : "";
+  const head = name2 === "Object" ? "" : name2 + " ";
+  return `//js(${head}{${body2}})`;
+}
+function echo$inspect3(v) {
+  const t = typeof v;
+  if (v === true) return "True";
+  if (v === false) return "False";
+  if (v === null) return "//js(null)";
+  if (v === void 0) return "Nil";
+  if (t === "string") return echo$inspectString3(v);
+  if (t === "bigint" || t === "number") return v.toString();
+  if (globalThis.Array.isArray(v))
+    return `#(${v.map(echo$inspect3).join(", ")})`;
+  if (v instanceof List)
+    return `[${v.toArray().map(echo$inspect3).join(", ")}]`;
+  if (v instanceof UtfCodepoint)
+    return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
+  if (v instanceof BitArray) return echo$inspectBitArray3(v);
+  if (v instanceof CustomType) return echo$inspectCustomType3(v);
+  if (echo$isDict3(v)) return echo$inspectDict3(v);
+  if (v instanceof Set)
+    return `//js(Set(${[...v].map(echo$inspect3).join(", ")}))`;
+  if (v instanceof RegExp) return `//js(${v})`;
+  if (v instanceof Date) return `//js(Date("${v.toISOString()}"))`;
+  if (v instanceof Function) {
+    const args = [];
+    for (const i of Array(v.length).keys())
+      args.push(String.fromCharCode(i + 97));
+    return `//fn(${args.join(", ")}) { ... }`;
+  }
+  return echo$inspectObject3(v);
+}
+function echo$inspectBitArray3(bitArray) {
+  let endOfAlignedBytes = bitArray.bitOffset + 8 * Math.trunc(bitArray.bitSize / 8);
+  let alignedBytes = bitArraySlice(
+    bitArray,
+    bitArray.bitOffset,
+    endOfAlignedBytes
+  );
+  let remainingUnalignedBits = bitArray.bitSize % 8;
+  if (remainingUnalignedBits > 0) {
+    let remainingBits = bitArraySliceToInt(
+      bitArray,
+      endOfAlignedBytes,
+      bitArray.bitSize,
+      false,
+      false
+    );
+    let alignedBytesArray = Array.from(alignedBytes.rawBuffer);
+    let suffix = `${remainingBits}:size(${remainingUnalignedBits})`;
+    if (alignedBytesArray.length === 0) {
+      return `<<${suffix}>>`;
+    } else {
+      return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}, ${suffix}>>`;
+    }
+  } else {
+    return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}>>`;
+  }
+}
+function echo$isDict3(value3) {
   try {
     return value3 instanceof Dict;
   } catch {
@@ -9737,15 +10073,6 @@ function on_ctrl_enter(msg) {
   );
 }
 
-// build/dev/javascript/given/given.mjs
-function that(requirement, consequence, alternative) {
-  if (requirement) {
-    return consequence();
-  } else {
-    return alternative();
-  }
-}
-
 // build/dev/javascript/lustre/lustre/element/svg.mjs
 var namespace = "http://www.w3.org/2000/svg";
 function line(attrs) {
@@ -10007,7 +10334,7 @@ function pencil(attributes) {
 
 // build/dev/javascript/o11a_client/o11a/ui/discussion.mjs
 var Model2 = class extends CustomType {
-  constructor(is_reference, show_reference_discussion, user_name, line_number, column_number, topic_id, topic_title, references, current_note_draft, current_thread_id, active_thread, show_expanded_message_box, current_expanded_message_draft, expanded_messages, editing_note) {
+  constructor(is_reference, show_reference_discussion, user_name, line_number, column_number, topic_id, topic_title, references, current_note_draft, current_thread_id, active_thread, show_expanded_message_box, current_expanded_message_draft, expanded_messages, editing_note, audit_metadata) {
     super();
     this.is_reference = is_reference;
     this.show_reference_discussion = show_reference_discussion;
@@ -10024,6 +10351,7 @@ var Model2 = class extends CustomType {
     this.current_expanded_message_draft = current_expanded_message_draft;
     this.expanded_messages = expanded_messages;
     this.editing_note = editing_note;
+    this.audit_metadata = audit_metadata;
   }
 };
 var ActiveThread = class extends CustomType {
@@ -10125,7 +10453,7 @@ var MaximizeDiscussion = class extends CustomType {
 };
 var None3 = class extends CustomType {
 };
-function init3(line_number, column_number, topic_id, topic_title, is_reference, references) {
+function init3(line_number, column_number, topic_id, topic_title, is_reference, references, audit_metadata) {
   return new Model2(
     is_reference,
     false,
@@ -10141,7 +10469,8 @@ function init3(line_number, column_number, topic_id, topic_title, is_reference, 
     false,
     new None(),
     new$(),
-    new None()
+    new None(),
+    audit_metadata
   );
 }
 function reference_header_view(model, current_thread_notes) {
@@ -10252,7 +10581,7 @@ function reference_group_view(references, group_kind) {
   }
 }
 function references_view(references) {
-  let $ = length(references) > 0;
+  let $ = length2(references) > 0;
   if ($) {
     return div(
       toList([class$("mb-[.75rem]")]),
@@ -10411,14 +10740,24 @@ function comments_view(model, current_thread_notes) {
                 div(
                   toList([class$("flex gap-[.5rem]")]),
                   toList([
-                    button(
-                      toList([
-                        id("edit-message-button"),
-                        class$("icon-button p-[.3rem]"),
-                        on_click(new UserEditedNote(new Ok(note)))
-                      ]),
-                      toList([pencil(toList([]))])
-                    ),
+                    (() => {
+                      let $ = note.reference;
+                      if ($ instanceof Some) {
+                        return p(
+                          toList([]),
+                          toList([text3("Reference")])
+                        );
+                      } else {
+                        return button(
+                          toList([
+                            id("edit-message-button"),
+                            class$("icon-button p-[.3rem]"),
+                            on_click(new UserEditedNote(new Ok(note)))
+                          ]),
+                          toList([pencil(toList([]))])
+                        );
+                      }
+                    })(),
                     (() => {
                       let $ = note.expanded_message;
                       if ($ instanceof Some) {
@@ -10526,58 +10865,6 @@ function expanded_message_view(model) {
     toList([expand_message_input_view(model)])
   );
 }
-function classify_message(message, is_thread_open) {
-  if (!is_thread_open) {
-    if (message.startsWith("todo: ")) {
-      let rest = message.slice(6);
-      return [new ToDo(), rest];
-    } else if (message.startsWith("q: ")) {
-      let rest = message.slice(3);
-      return [new Question(), rest];
-    } else if (message.startsWith("question: ")) {
-      let rest = message.slice(10);
-      return [new Question(), rest];
-    } else if (message.startsWith("finding: ")) {
-      let rest = message.slice(9);
-      return [new FindingLead(), rest];
-    } else if (message.startsWith("dev: ")) {
-      let rest = message.slice(5);
-      return [new DevelperQuestion(), rest];
-    } else if (message.startsWith("info: ")) {
-      let rest = message.slice(6);
-      return [new Informational(), rest];
-    } else {
-      return [new Comment(), message];
-    }
-  } else {
-    if (message === "done") {
-      return [new ToDoCompletion(), "done"];
-    } else if (message.startsWith("done: ")) {
-      let rest = message.slice(6);
-      return [new ToDoCompletion(), rest];
-    } else if (message.startsWith("a: ")) {
-      let rest = message.slice(3);
-      return [new Answer(), rest];
-    } else if (message.startsWith("answer: ")) {
-      let rest = message.slice(8);
-      return [new Answer(), rest];
-    } else if (message.startsWith("reject: ")) {
-      let rest = message.slice(8);
-      return [new FindingRejection(), rest];
-    } else if (message.startsWith("confirm: ")) {
-      let rest = message.slice(9);
-      return [new FindingConfirmation(), rest];
-    } else if (message.startsWith("incorrect: ")) {
-      let rest = message.slice(11);
-      return [new InformationalRejection(), rest];
-    } else if (message.startsWith("correct: ")) {
-      let rest = message.slice(9);
-      return [new InformationalConfirmation(), rest];
-    } else {
-      return [new Comment(), message];
-    }
-  }
-}
 function get_message_classification_prefix(significance) {
   if (significance instanceof Answer2) {
     return "a: ";
@@ -10598,7 +10885,7 @@ function get_message_classification_prefix(significance) {
   } else if (significance instanceof IncompleteToDo) {
     return "todo: ";
   } else if (significance instanceof Informational2) {
-    return "info: ";
+    return "i: ";
   } else if (significance instanceof InformationalConfirmation2) {
     return "correct: ";
   } else if (significance instanceof InformationalRejection2) {
@@ -10606,7 +10893,7 @@ function get_message_classification_prefix(significance) {
   } else if (significance instanceof RejectedFinding) {
     return "finding: ";
   } else if (significance instanceof RejectedInformational) {
-    return "info: ";
+    return "i: ";
   } else if (significance instanceof ToDoCompletion2) {
     return "done: ";
   } else if (significance instanceof UnansweredDeveloperQuestion) {
@@ -10618,6 +10905,7 @@ function get_message_classification_prefix(significance) {
   }
 }
 function update2(model, msg) {
+  echo4("update " + inspect2(msg), "src/o11a/ui/discussion.gleam", 110);
   if (msg instanceof UserWroteNote) {
     let draft = msg[0];
     return [
@@ -10638,60 +10926,102 @@ function update2(model, msg) {
           _record.show_expanded_message_box,
           _record.current_expanded_message_draft,
           _record.expanded_messages,
-          _record.editing_note
+          _record.editing_note,
+          _record.audit_metadata
         );
       })(),
       new None3()
     ];
   } else if (msg instanceof UserSubmittedNote) {
+    echo4(
+      "Submitting note! " + model.current_note_draft + " " + model.topic_id,
+      "src/o11a/ui/discussion.gleam",
+      116
+    );
+    let _block;
+    let _pipe = model.current_note_draft;
+    _block = trim_start(_pipe);
+    let current_note_draft = _block;
     let $ = classify_message(
-      (() => {
-        let _pipe = model.current_note_draft;
-        return trim(_pipe);
-      })(),
+      current_note_draft,
       is_some(model.active_thread)
     );
     let significance = $[0];
     let message = $[1];
     return that(
-      model.current_note_draft === "",
+      message === "",
       () => {
         return [model, new None3()];
       },
       () => {
-        let _block;
+        let _block$1;
         let $2 = model.editing_note;
         if ($2 instanceof Some) {
           let note2 = $2[0];
-          _block = [new Edit(), note2.note_id];
+          _block$1 = [new Edit(), note2.note_id, note2.references];
         } else {
-          _block = [new None2(), model.current_thread_id];
+          _block$1 = [new None2(), model.current_thread_id, toList([])];
         }
-        let $1 = _block;
+        let $1 = _block$1;
         let modifier = $1[0];
         let parent_id = $1[1];
-        let _block$1;
+        let current_references = $1[2];
+        let _block$2;
         let $3 = (() => {
-          let _pipe = model.current_expanded_message_draft;
-          return map(_pipe, trim);
+          let _pipe$12 = model.current_expanded_message_draft;
+          return map(_pipe$12, trim);
         })();
         if ($3 instanceof Some && $3[0] === "") {
-          _block$1 = new None();
+          _block$2 = new None();
         } else {
           let msg$1 = $3;
-          _block$1 = msg$1;
+          _block$2 = msg$1;
         }
-        let expanded_message = _block$1;
+        let expanded_message = _block$2;
+        let _block$3;
+        let _pipe$1 = get_references(message, model.audit_metadata);
+        let _pipe$2 = append2(
+          _pipe$1,
+          (() => {
+            if (expanded_message instanceof Some) {
+              let expanded_message$1 = expanded_message[0];
+              return get_references(
+                expanded_message$1,
+                model.audit_metadata
+              );
+            } else {
+              return toList([]);
+            }
+          })()
+        );
+        _block$3 = unique(_pipe$2);
+        let references = _block$3;
+        let _block$4;
+        let _pipe$3 = references;
+        _block$4 = filter(_pipe$3, (reference) => {
+          let _block$5;
+          let _pipe$4 = current_references;
+          _block$5 = contains(_pipe$4, reference);
+          return !_block$5;
+        });
+        let new_references = _block$4;
+        echo4(
+          "New references: " + inspect2(new_references),
+          "src/o11a/ui/discussion.gleam",
+          157
+        );
         let note = new NoteSubmission(
           parent_id,
           significance,
           "user" + (() => {
-            let _pipe = random(100);
-            return to_string(_pipe);
+            let _pipe$4 = random(100);
+            return to_string(_pipe$4);
           })(),
           message,
           expanded_message,
-          modifier
+          modifier,
+          references,
+          new_references
         );
         return [
           (() => {
@@ -10711,7 +11041,8 @@ function update2(model, msg) {
               false,
               new None(),
               _record.expanded_messages,
-              new None()
+              new None(),
+              _record.audit_metadata
             );
           })(),
           new SubmitNote(note, model.topic_id)
@@ -10746,7 +11077,8 @@ function update2(model, msg) {
           _record.show_expanded_message_box,
           _record.current_expanded_message_draft,
           _record.expanded_messages,
-          _record.editing_note
+          _record.editing_note,
+          _record.audit_metadata
         );
       })(),
       new None3()
@@ -10789,7 +11121,8 @@ function update2(model, msg) {
           _record.show_expanded_message_box,
           _record.current_expanded_message_draft,
           _record.expanded_messages,
-          _record.editing_note
+          _record.editing_note,
+          _record.audit_metadata
         );
       })(),
       new None3()
@@ -10814,7 +11147,8 @@ function update2(model, msg) {
           show_expanded_message_box,
           _record.current_expanded_message_draft,
           _record.expanded_messages,
-          _record.editing_note
+          _record.editing_note,
+          _record.audit_metadata
         );
       })(),
       new None3()
@@ -10839,7 +11173,8 @@ function update2(model, msg) {
           _record.show_expanded_message_box,
           new Some(expanded_message),
           _record.expanded_messages,
-          _record.editing_note
+          _record.editing_note,
+          _record.audit_metadata
         );
       })(),
       new None3()
@@ -10866,7 +11201,8 @@ function update2(model, msg) {
             _record.show_expanded_message_box,
             _record.current_expanded_message_draft,
             delete$2(model.expanded_messages, for_note_id),
-            _record.editing_note
+            _record.editing_note,
+            _record.audit_metadata
           );
         })(),
         new None3()
@@ -10890,7 +11226,8 @@ function update2(model, msg) {
             _record.show_expanded_message_box,
             _record.current_expanded_message_draft,
             insert2(model.expanded_messages, for_note_id),
-            _record.editing_note
+            _record.editing_note,
+            _record.audit_metadata
           );
         })(),
         new None3()
@@ -10920,7 +11257,8 @@ function update2(model, msg) {
           true,
           _record.current_expanded_message_draft,
           _record.expanded_messages,
-          _record.editing_note
+          _record.editing_note,
+          _record.audit_metadata
         );
       })(),
       new FocusExpandedDiscussionInput(model.line_number, model.column_number)
@@ -10964,7 +11302,8 @@ function update2(model, msg) {
             })(),
             note$1.expanded_message,
             _record.expanded_messages,
-            new Some(note$1)
+            new Some(note$1),
+            _record.audit_metadata
           );
         })(),
         new None3()
@@ -10991,7 +11330,8 @@ function update2(model, msg) {
           false,
           new None(),
           _record.expanded_messages,
-          new None()
+          new None(),
+          _record.audit_metadata
         );
       })(),
       new None3()
@@ -11015,7 +11355,8 @@ function update2(model, msg) {
           _record.show_expanded_message_box,
           _record.current_expanded_message_draft,
           _record.expanded_messages,
-          _record.editing_note
+          _record.editing_note,
+          _record.audit_metadata
         );
       })(),
       new None3()
@@ -11132,7 +11473,7 @@ function overlay_view(model, notes) {
                 toList([
                   thread_header_view(model),
                   (() => {
-                    let $1 = is_some(model.active_thread) || length(
+                    let $1 = is_some(model.active_thread) || length2(
                       current_thread_notes
                     ) > 0;
                     if ($1) {
@@ -11170,7 +11511,7 @@ function panel_view(model, notes) {
       })(),
       thread_header_view(model),
       (() => {
-        let $ = is_some(model.active_thread) || length(
+        let $ = is_some(model.active_thread) || length2(
           current_thread_notes
         ) > 0;
         if ($) {
@@ -11190,6 +11531,142 @@ function panel_view(model, notes) {
       })()
     ])
   );
+}
+function echo4(value3, file, line2) {
+  const grey = "\x1B[90m";
+  const reset_color = "\x1B[39m";
+  const file_line = `${file}:${line2}`;
+  const string_value = echo$inspect4(value3);
+  if (globalThis.process?.stderr?.write) {
+    const string6 = `${grey}${file_line}${reset_color}
+${string_value}
+`;
+    process.stderr.write(string6);
+  } else if (globalThis.Deno) {
+    const string6 = `${grey}${file_line}${reset_color}
+${string_value}
+`;
+    globalThis.Deno.stderr.writeSync(new TextEncoder().encode(string6));
+  } else {
+    const string6 = `${file_line}
+${string_value}`;
+    globalThis.console.log(string6);
+  }
+  return value3;
+}
+function echo$inspectString4(str) {
+  let new_str = '"';
+  for (let i = 0; i < str.length; i++) {
+    let char = str[i];
+    if (char == "\n") new_str += "\\n";
+    else if (char == "\r") new_str += "\\r";
+    else if (char == "	") new_str += "\\t";
+    else if (char == "\f") new_str += "\\f";
+    else if (char == "\\") new_str += "\\\\";
+    else if (char == '"') new_str += '\\"';
+    else if (char < " " || char > "~" && char < "\xA0") {
+      new_str += "\\u{" + char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0") + "}";
+    } else {
+      new_str += char;
+    }
+  }
+  new_str += '"';
+  return new_str;
+}
+function echo$inspectDict4(map7) {
+  let body2 = "dict.from_list([";
+  let first2 = true;
+  let key_value_pairs = [];
+  map7.forEach((value3, key2) => {
+    key_value_pairs.push([key2, value3]);
+  });
+  key_value_pairs.sort();
+  key_value_pairs.forEach(([key2, value3]) => {
+    if (!first2) body2 = body2 + ", ";
+    body2 = body2 + "#(" + echo$inspect4(key2) + ", " + echo$inspect4(value3) + ")";
+    first2 = false;
+  });
+  return body2 + "])";
+}
+function echo$inspectCustomType4(record) {
+  const props = globalThis.Object.keys(record).map((label) => {
+    const value3 = echo$inspect4(record[label]);
+    return isNaN(parseInt(label)) ? `${label}: ${value3}` : value3;
+  }).join(", ");
+  return props ? `${record.constructor.name}(${props})` : record.constructor.name;
+}
+function echo$inspectObject4(v) {
+  const name2 = Object.getPrototypeOf(v)?.constructor?.name || "Object";
+  const props = [];
+  for (const k of Object.keys(v)) {
+    props.push(`${echo$inspect4(k)}: ${echo$inspect4(v[k])}`);
+  }
+  const body2 = props.length ? " " + props.join(", ") + " " : "";
+  const head = name2 === "Object" ? "" : name2 + " ";
+  return `//js(${head}{${body2}})`;
+}
+function echo$inspect4(v) {
+  const t = typeof v;
+  if (v === true) return "True";
+  if (v === false) return "False";
+  if (v === null) return "//js(null)";
+  if (v === void 0) return "Nil";
+  if (t === "string") return echo$inspectString4(v);
+  if (t === "bigint" || t === "number") return v.toString();
+  if (globalThis.Array.isArray(v))
+    return `#(${v.map(echo$inspect4).join(", ")})`;
+  if (v instanceof List)
+    return `[${v.toArray().map(echo$inspect4).join(", ")}]`;
+  if (v instanceof UtfCodepoint)
+    return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
+  if (v instanceof BitArray) return echo$inspectBitArray4(v);
+  if (v instanceof CustomType) return echo$inspectCustomType4(v);
+  if (echo$isDict4(v)) return echo$inspectDict4(v);
+  if (v instanceof Set)
+    return `//js(Set(${[...v].map(echo$inspect4).join(", ")}))`;
+  if (v instanceof RegExp) return `//js(${v})`;
+  if (v instanceof Date) return `//js(Date("${v.toISOString()}"))`;
+  if (v instanceof Function) {
+    const args = [];
+    for (const i of Array(v.length).keys())
+      args.push(String.fromCharCode(i + 97));
+    return `//fn(${args.join(", ")}) { ... }`;
+  }
+  return echo$inspectObject4(v);
+}
+function echo$inspectBitArray4(bitArray) {
+  let endOfAlignedBytes = bitArray.bitOffset + 8 * Math.trunc(bitArray.bitSize / 8);
+  let alignedBytes = bitArraySlice(
+    bitArray,
+    bitArray.bitOffset,
+    endOfAlignedBytes
+  );
+  let remainingUnalignedBits = bitArray.bitSize % 8;
+  if (remainingUnalignedBits > 0) {
+    let remainingBits = bitArraySliceToInt(
+      bitArray,
+      endOfAlignedBytes,
+      bitArray.bitSize,
+      false,
+      false
+    );
+    let alignedBytesArray = Array.from(alignedBytes.rawBuffer);
+    let suffix = `${remainingBits}:size(${remainingUnalignedBits})`;
+    if (alignedBytesArray.length === 0) {
+      return `<<${suffix}>>`;
+    } else {
+      return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}, ${suffix}>>`;
+    }
+  } else {
+    return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}>>`;
+  }
+}
+function echo$isDict4(value3) {
+  try {
+    return value3 instanceof Dict;
+  } catch {
+    return false;
+  }
 }
 
 // build/dev/javascript/o11a_client/o11a/ui/audit_page.mjs
@@ -11289,7 +11766,7 @@ function discussion_view(attrs, discussion, element_line_number, element_column_
   }
 }
 function inline_comment_preview_view(parent_notes, topic_id, topic_title, references, element_line_number, element_column_number, selected_discussion, discussion) {
-  let note_result = find(
+  let note_result = find2(
     parent_notes,
     (note) => {
       return !isEqual(note.significance, new Informational2());
@@ -11871,7 +12348,7 @@ function line_container_view(discussion, loc, line_topic_id, line_topic_title, l
                   toList([
                     text3(
                       (() => {
-                        let _pipe = repeat(" ", loc.leading_spaces);
+                        let _pipe = repeat2(" ", loc.leading_spaces);
                         return join(_pipe, "");
                       })() + note_message
                     )
@@ -11951,7 +12428,7 @@ function view2(preprocessed_source, discussion, selected_discussion) {
         "lc",
         (() => {
           let _pipe = preprocessed_source;
-          let _pipe$1 = length(_pipe);
+          let _pipe$1 = length2(_pipe);
           return to_string(_pipe$1);
         })()
       )
@@ -12217,7 +12694,7 @@ function view4(file_contents, side_panel, grouped_files, audit_name, current_fil
 function get_all_parents(path2) {
   let _pipe = path2;
   let _pipe$1 = split2(_pipe, "/");
-  let _pipe$2 = take(_pipe$1, length(split2(path2, "/")) - 1);
+  let _pipe$2 = take(_pipe$1, length2(split2(path2, "/")) - 1);
   let _pipe$3 = index_fold(
     _pipe$2,
     toList([]),
@@ -12349,6 +12826,14 @@ var AuditPageRoute = class extends CustomType {
     this.page_path = page_path;
   }
 };
+var DiscussionKey = class extends CustomType {
+  constructor(page_path, line_number, column_number) {
+    super();
+    this.page_path = page_path;
+    this.line_number = line_number;
+    this.column_number = column_number;
+  }
+};
 var OnRouteChange = class extends CustomType {
   constructor(route2) {
     super();
@@ -12473,8 +12958,8 @@ function parse_route(uri) {
   }
 }
 function on_url_change(uri) {
-  echo3("on_url_change", "src/o11a_client.gleam", 110);
-  echo3(uri, "src/o11a_client.gleam", 111);
+  echo5("on_url_change", "src/o11a_client.gleam", 115);
+  echo5(uri, "src/o11a_client.gleam", 116);
   let _pipe = parse_route(uri);
   return new OnRouteChange(_pipe);
 }
@@ -12526,6 +13011,29 @@ function file_tree_from_route(route2, audit_metadata) {
       current_file_path,
       audit_name
     );
+  }
+}
+function get_page_route_from_model(model) {
+  let $ = model.route;
+  if ($ instanceof AuditDashboardRoute) {
+    return new Error(void 0);
+  } else if ($ instanceof AuditPageRoute) {
+    let page_path = $.page_path;
+    return new Ok(page_path);
+  } else {
+    return new Error(void 0);
+  }
+}
+function get_audit_name_from_model(model) {
+  let $ = model.route;
+  if ($ instanceof AuditDashboardRoute) {
+    let audit_name = $.audit_name;
+    return new Ok(audit_name);
+  } else if ($ instanceof AuditPageRoute) {
+    let audit_name = $.audit_name;
+    return new Ok(audit_name);
+  } else {
+    return new Error(void 0);
   }
 }
 function fetch_metadata(model, audit_name) {
@@ -12748,7 +13256,7 @@ function update3(model, msg) {
               (() => {
                 if (source_files.isOk()) {
                   let source_files$1 = source_files[0];
-                  return length(source_files$1);
+                  return length2(source_files$1);
                 } else {
                   return model.keyboard_model.line_count;
                 }
@@ -12840,76 +13348,113 @@ function update3(model, msg) {
     let topic_title = msg.topic_title;
     let is_reference = msg.is_reference;
     let references = msg.references;
-    let selected_discussion = [line_number, column_number];
-    let _block;
-    let $ = map_get(model.discussion_models, selected_discussion);
-    if ($.isOk()) {
-      _block = model.discussion_models;
-    } else {
-      _block = insert(
-        model.discussion_models,
-        selected_discussion,
-        init3(
-          line_number,
-          column_number,
-          topic_id,
-          topic_title,
-          is_reference,
-          references
-        )
-      );
-    }
-    let discussion_models = _block;
-    return [
-      (() => {
-        if (kind instanceof EntryHover) {
-          let _record = model;
-          return new Model3(
-            _record.route,
-            _record.file_tree,
-            _record.audit_metadata,
-            _record.source_files,
-            _record.discussions,
-            discussion_models,
-            _record.keyboard_model,
-            new Some(selected_discussion),
-            node_id,
-            _record.focused_discussion,
-            _record.clicked_discussion
-          );
-        } else {
-          let _record = model;
-          return new Model3(
-            _record.route,
-            _record.file_tree,
-            _record.audit_metadata,
-            _record.source_files,
-            _record.discussions,
-            discussion_models,
-            (() => {
-              let _record$1 = model.keyboard_model;
-              return new Model(
-                line_number,
-                column_number,
-                _record$1.current_line_column_count,
-                _record$1.line_count
-              );
-            })(),
-            _record.selected_discussion,
-            node_id,
-            new Some(selected_discussion),
-            _record.clicked_discussion
-          );
-        }
-      })(),
-      none()
-    ];
+    return ok(
+      get_page_route_from_model(model),
+      (_) => {
+        return [model, none()];
+      },
+      (page_path) => {
+        return ok(
+          get_audit_name_from_model(model),
+          (_) => {
+            return [model, none()];
+          },
+          (audit_name) => {
+            return ok(
+              (() => {
+                let $ = map_get(model.audit_metadata, audit_name);
+                if ($.isOk() && $[0].isOk()) {
+                  let audit_metadata = $[0][0];
+                  return new Ok(audit_metadata);
+                } else {
+                  return new Error(void 0);
+                }
+              })(),
+              (_) => {
+                return [model, none()];
+              },
+              (audit_metadata) => {
+                let selected_discussion = new DiscussionKey(
+                  page_path,
+                  line_number,
+                  column_number
+                );
+                let _block;
+                let $ = map_get(model.discussion_models, selected_discussion);
+                if ($.isOk()) {
+                  _block = model.discussion_models;
+                } else {
+                  _block = insert(
+                    model.discussion_models,
+                    selected_discussion,
+                    init3(
+                      line_number,
+                      column_number,
+                      topic_id,
+                      topic_title,
+                      is_reference,
+                      references,
+                      audit_metadata
+                    )
+                  );
+                }
+                let discussion_models = _block;
+                return [
+                  (() => {
+                    if (kind instanceof EntryHover) {
+                      let _record = model;
+                      return new Model3(
+                        _record.route,
+                        _record.file_tree,
+                        _record.audit_metadata,
+                        _record.source_files,
+                        _record.discussions,
+                        discussion_models,
+                        _record.keyboard_model,
+                        new Some(selected_discussion),
+                        node_id,
+                        _record.focused_discussion,
+                        _record.clicked_discussion
+                      );
+                    } else {
+                      let _record = model;
+                      return new Model3(
+                        _record.route,
+                        _record.file_tree,
+                        _record.audit_metadata,
+                        _record.source_files,
+                        _record.discussions,
+                        discussion_models,
+                        (() => {
+                          let _record$1 = model.keyboard_model;
+                          return new Model(
+                            line_number,
+                            column_number,
+                            _record$1.current_line_column_count,
+                            _record$1.line_count
+                          );
+                        })(),
+                        _record.selected_discussion,
+                        node_id,
+                        new Some(selected_discussion),
+                        _record.clicked_discussion
+                      );
+                    }
+                  })(),
+                  none()
+                ];
+              }
+            );
+          }
+        );
+      }
+    );
   } else if (msg instanceof UserUnselectedDiscussionEntry2) {
     let kind = msg.kind;
-    echo3(
+    echo5(
       "Unselecting discussion " + inspect2(kind),
       "src/o11a_client.gleam",
-      365
+      404
     );
     return [
       (() => {
@@ -12950,37 +13495,50 @@ function update3(model, msg) {
   } else if (msg instanceof UserClickedDiscussionEntry2) {
     let line_number = msg.line_number;
     let column_number = msg.column_number;
-    return [
-      (() => {
-        let _record = model;
-        return new Model3(
-          _record.route,
-          _record.file_tree,
-          _record.audit_metadata,
-          _record.source_files,
-          _record.discussions,
-          _record.discussion_models,
-          _record.keyboard_model,
-          _record.selected_discussion,
-          _record.selected_node_id,
-          _record.focused_discussion,
-          new Some([line_number, column_number])
-        );
-      })(),
-      from(
-        (_) => {
-          let _block;
-          let _pipe = discussion_input(line_number, column_number);
-          _block = map3(_pipe, focus);
-          let res = _block;
-          if (res.isOk() && !res[0]) {
-            return void 0;
-          } else {
-            return console_log("Failed to focus discussion input");
-          }
-        }
-      )
-    ];
+    return ok(
+      get_page_route_from_model(model),
+      (_) => {
+        return [model, none()];
+      },
+      (page_path) => {
+        return [
+          (() => {
+            let _record = model;
+            return new Model3(
+              _record.route,
+              _record.file_tree,
+              _record.audit_metadata,
+              _record.source_files,
+              _record.discussions,
+              _record.discussion_models,
+              _record.keyboard_model,
+              _record.selected_discussion,
+              _record.selected_node_id,
+              _record.focused_discussion,
+              new Some(
+                new DiscussionKey(page_path, line_number, column_number)
+              )
+            );
+          })(),
+          from(
+            (_) => {
+              let _block;
+              let _pipe = discussion_input(
+                line_number,
+                column_number
+              );
+              _block = map3(_pipe, focus);
+              let res = _block;
+              if (res.isOk() && !res[0]) {
+                return void 0;
+              } else {
+                return console_log("Failed to focus discussion input");
+              }
+            }
+          )
+        ];
+      }
+    );
   } else if (msg instanceof UserCtrlClickedNode2) {
     let uri = msg.uri;
     let _block;
@@ -13000,82 +13558,96 @@ function update3(model, msg) {
   } else if (msg instanceof UserClickedInsideDiscussion2) {
     let line_number = msg.line_number;
     let column_number = msg.column_number;
-    echo3("User clicked inside discussion", "src/o11a_client.gleam", 415);
-    let _block;
-    let $ = !isEqual(
-      model.selected_discussion,
-      new Some([line_number, column_number])
+    return ok(
+      get_page_route_from_model(model),
+      (_) => {
+        return [model, none()];
+      },
+      (page_path) => {
+        echo5("User clicked inside discussion", "src/o11a_client.gleam", 468);
+        let _block;
+        let $ = !isEqual(
+          model.selected_discussion,
+          new Some(
+            new DiscussionKey(page_path, line_number, column_number)
+          )
+        );
+        if ($) {
+          let _record = model;
+          _block = new Model3(
+            _record.route,
+            _record.file_tree,
+            _record.audit_metadata,
+            _record.source_files,
+            _record.discussions,
+            _record.discussion_models,
+            _record.keyboard_model,
+            new None(),
+            _record.selected_node_id,
+            _record.focused_discussion,
+            _record.clicked_discussion
+          );
+        } else {
+          _block = model;
+        }
+        let model$1 = _block;
+        let _block$1;
+        let $1 = !isEqual(
+          model$1.focused_discussion,
+          new Some(
+            new DiscussionKey(page_path, line_number, column_number)
+          )
+        );
+        if ($1) {
+          let _record = model$1;
+          _block$1 = new Model3(
+            _record.route,
+            _record.file_tree,
+            _record.audit_metadata,
+            _record.source_files,
+            _record.discussions,
+            _record.discussion_models,
+            _record.keyboard_model,
+            _record.selected_discussion,
+            _record.selected_node_id,
+            new None(),
+            _record.clicked_discussion
+          );
+        } else {
+          _block$1 = model$1;
+        }
+        let model$2 = _block$1;
+        let _block$2;
+        let $2 = !isEqual(
+          model$2.clicked_discussion,
+          new Some(
+            new DiscussionKey(page_path, line_number, column_number)
+          )
+        );
+        if ($2) {
+          let _record = model$2;
+          _block$2 = new Model3(
+            _record.route,
+            _record.file_tree,
+            _record.audit_metadata,
+            _record.source_files,
+            _record.discussions,
+            _record.discussion_models,
+            _record.keyboard_model,
+            _record.selected_discussion,
+            _record.selected_node_id,
+            _record.focused_discussion,
+            new None()
+          );
+        } else {
+          _block$2 = model$2;
+        }
+        let model$3 = _block$2;
+        return [model$3, none()];
+      }
     );
-    if ($) {
-      let _record = model;
-      _block = new Model3(
-        _record.route,
-        _record.file_tree,
-        _record.audit_metadata,
-        _record.source_files,
-        _record.discussions,
-        _record.discussion_models,
-        _record.keyboard_model,
-        new None(),
-        _record.selected_node_id,
-        _record.focused_discussion,
-        _record.clicked_discussion
-      );
-    } else {
-      _block = model;
-    }
-    let model$1 = _block;
-    let _block$1;
-    let $1 = !isEqual(
-      model$1.focused_discussion,
-      new Some([line_number, column_number])
-    );
-    if ($1) {
-      let _record = model$1;
-      _block$1 = new Model3(
-        _record.route,
-        _record.file_tree,
-        _record.audit_metadata,
-        _record.source_files,
-        _record.discussions,
-        _record.discussion_models,
-        _record.keyboard_model,
-        _record.selected_discussion,
-        _record.selected_node_id,
-        new None(),
-        _record.clicked_discussion
-      );
-    } else {
-      _block$1 = model$1;
-    }
-    let model$2 = _block$1;
-    let _block$2;
-    let $2 = !isEqual(
-      model$2.clicked_discussion,
-      new Some([line_number, column_number])
-    );
-    if ($2) {
-      let _record = model$2;
-      _block$2 = new Model3(
-        _record.route,
-        _record.file_tree,
-        _record.audit_metadata,
-        _record.source_files,
-        _record.discussions,
-        _record.discussion_models,
-        _record.keyboard_model,
-        _record.selected_discussion,
-        _record.selected_node_id,
-        _record.focused_discussion,
-        new None()
-      );
-    } else {
-      _block$2 = model$2;
-    }
-    let model$3 = _block$2;
-    return [model$3, none()];
   } else if (msg instanceof UserClickedOutsideDiscussion) {
-    echo3("User clicked outside discussion", "src/o11a_client.gleam", 441);
+    echo5("User clicked outside discussion", "src/o11a_client.gleam", 497);
     return [
       (() => {
         let _record = model;
@@ -13099,165 +13671,189 @@ function update3(model, msg) {
     let line_number = msg.line_number;
     let column_number = msg.column_number;
     let update$1 = msg.update;
-    let discussion_model = update$1[0];
-    let discussion_effect = update$1[1];
-    if (discussion_effect instanceof SubmitNote) {
-      let note_submission = discussion_effect.note;
-      let topic_id = discussion_effect.topic_id;
-      return [
-        model,
-        (() => {
-          let $ = model.route;
-          if ($ instanceof AuditPageRoute) {
-            let audit_name = $.audit_name;
-            return submit_note(
-              audit_name,
-              topic_id,
-              note_submission,
-              discussion_model
-            );
-          } else if ($ instanceof AuditDashboardRoute) {
-            let audit_name = $.audit_name;
-            return submit_note(
-              audit_name,
-              topic_id,
-              note_submission,
-              discussion_model
-            );
-          } else {
-            return none();
-          }
-        })()
-      ];
-    } else if (discussion_effect instanceof FocusDiscussionInput) {
-      let line_number$1 = discussion_effect.line_number;
-      let column_number$1 = discussion_effect.column_number;
-      echo3(
-        "Focusing discussion input, user is typing",
-        "src/o11a_client.gleam",
-        473
-      );
-      set_is_user_typing(true);
-      return [
-        (() => {
-          let _record = model;
-          return new Model3(
-            _record.route,
-            _record.file_tree,
-            _record.audit_metadata,
-            _record.source_files,
-            _record.discussions,
-            _record.discussion_models,
-            _record.keyboard_model,
-            _record.selected_discussion,
-            _record.selected_node_id,
-            new Some([line_number$1, column_number$1]),
-            _record.clicked_discussion
+    return ok(
+      get_page_route_from_model(model),
+      (_) => {
+        return [model, none()];
+      },
+      (page_path) => {
+        let discussion_model = update$1[0];
+        let discussion_effect = update$1[1];
+        if (discussion_effect instanceof SubmitNote) {
+          let note_submission = discussion_effect.note;
+          let topic_id = discussion_effect.topic_id;
+          return [
+            model,
+            (() => {
+              let $ = model.route;
+              if ($ instanceof AuditPageRoute) {
+                let audit_name = $.audit_name;
+                return submit_note(
+                  audit_name,
+                  topic_id,
+                  note_submission,
+                  discussion_model
+                );
+              } else if ($ instanceof AuditDashboardRoute) {
+                let audit_name = $.audit_name;
+                return submit_note(
+                  audit_name,
+                  topic_id,
+                  note_submission,
+                  discussion_model
+                );
+              } else {
+                return none();
+              }
+            })()
+          ];
+        } else if (discussion_effect instanceof FocusDiscussionInput) {
+          let line_number$1 = discussion_effect.line_number;
+          let column_number$1 = discussion_effect.column_number;
+          echo5(
+            "Focusing discussion input, user is typing",
+            "src/o11a_client.gleam",
+            533
           );
-        })(),
-        none()
-      ];
-    } else if (discussion_effect instanceof FocusExpandedDiscussionInput) {
-      let line_number$1 = discussion_effect.line_number;
-      let column_number$1 = discussion_effect.column_number;
-      set_is_user_typing(true);
-      return [
-        (() => {
-          let _record = model;
-          return new Model3(
-            _record.route,
-            _record.file_tree,
-            _record.audit_metadata,
-            _record.source_files,
-            _record.discussions,
-            _record.discussion_models,
-            _record.keyboard_model,
-            _record.selected_discussion,
-            _record.selected_node_id,
-            new Some([line_number$1, column_number$1]),
-            _record.clicked_discussion
-          );
-        })(),
-        none()
-      ];
-    } else if (discussion_effect instanceof UnfocusDiscussionInput) {
-      echo3("Unfocusing discussion input", "src/o11a_client.gleam", 496);
-      set_is_user_typing(false);
-      return [model, none()];
-    } else if (discussion_effect instanceof MaximizeDiscussion) {
-      return [
-        (() => {
-          let _record = model;
-          return new Model3(
-            _record.route,
-            _record.file_tree,
-            _record.audit_metadata,
-            _record.source_files,
-            _record.discussions,
-            insert(
-              model.discussion_models,
-              [line_number, column_number],
-              discussion_model
-            ),
-            _record.keyboard_model,
-            _record.selected_discussion,
-            _record.selected_node_id,
-            _record.focused_discussion,
-            _record.clicked_discussion
-          );
-        })(),
-        none()
-      ];
-    } else {
-      return [
-        (() => {
-          let _record = model;
-          return new Model3(
-            _record.route,
-            _record.file_tree,
-            _record.audit_metadata,
-            _record.source_files,
-            _record.discussions,
-            insert(
-              model.discussion_models,
-              [line_number, column_number],
-              discussion_model
-            ),
-            _record.keyboard_model,
-            _record.selected_discussion,
-            _record.selected_node_id,
-            _record.focused_discussion,
-            _record.clicked_discussion
-          );
-        })(),
-        none()
-      ];
-    }
+          set_is_user_typing(true);
+          return [
+            (() => {
+              let _record = model;
+              return new Model3(
+                _record.route,
+                _record.file_tree,
+                _record.audit_metadata,
+                _record.source_files,
+                _record.discussions,
+                _record.discussion_models,
+                _record.keyboard_model,
+                _record.selected_discussion,
+                _record.selected_node_id,
+                new Some(
+                  new DiscussionKey(page_path, line_number$1, column_number$1)
+                ),
+                _record.clicked_discussion
+              );
+            })(),
+            none()
+          ];
+        } else if (discussion_effect instanceof FocusExpandedDiscussionInput) {
+          let line_number$1 = discussion_effect.line_number;
+          let column_number$1 = discussion_effect.column_number;
+          set_is_user_typing(true);
+          return [
+            (() => {
+              let _record = model;
+              return new Model3(
+                _record.route,
+                _record.file_tree,
+                _record.audit_metadata,
+                _record.source_files,
+                _record.discussions,
+                _record.discussion_models,
+                _record.keyboard_model,
+                _record.selected_discussion,
+                _record.selected_node_id,
+                new Some(
+                  new DiscussionKey(page_path, line_number$1, column_number$1)
+                ),
+                _record.clicked_discussion
+              );
+            })(),
+            none()
+          ];
+        } else if (discussion_effect instanceof UnfocusDiscussionInput) {
+          echo5("Unfocusing discussion input", "src/o11a_client.gleam", 564);
+          set_is_user_typing(false);
+          return [model, none()];
+        } else if (discussion_effect instanceof MaximizeDiscussion) {
+          return [
+            (() => {
+              let _record = model;
+              return new Model3(
+                _record.route,
+                _record.file_tree,
+                _record.audit_metadata,
+                _record.source_files,
+                _record.discussions,
+                insert(
+                  model.discussion_models,
+                  new DiscussionKey(page_path, line_number, column_number),
+                  discussion_model
+                ),
+                _record.keyboard_model,
+                _record.selected_discussion,
+                _record.selected_node_id,
+                _record.focused_discussion,
+                _record.clicked_discussion
+              );
+            })(),
+            none()
+          ];
+        } else {
+          return [
+            (() => {
+              let _record = model;
+              return new Model3(
+                _record.route,
+                _record.file_tree,
+                _record.audit_metadata,
+                _record.source_files,
+                _record.discussions,
+                insert(
+                  model.discussion_models,
+                  new DiscussionKey(page_path, line_number, column_number),
+                  discussion_model
+                ),
+                _record.keyboard_model,
+                _record.selected_discussion,
+                _record.selected_node_id,
+                _record.focused_discussion,
+                _record.clicked_discussion
+              );
+            })(),
+            none()
+          ];
+        }
+      }
+    );
   } else if (msg instanceof UserSuccessfullySubmittedNote) {
     let updated_model = msg.updated_model;
-    return [
-      (() => {
-        let _record = model;
-        return new Model3(
-          _record.route,
-          _record.file_tree,
-          _record.audit_metadata,
-          _record.source_files,
-          _record.discussions,
-          insert(
-            model.discussion_models,
-            [updated_model.line_number, updated_model.column_number],
-            updated_model
-          ),
-          _record.keyboard_model,
-          _record.selected_discussion,
-          _record.selected_node_id,
-          _record.focused_discussion,
-          _record.clicked_discussion
-        );
-      })(),
-      none()
-    ];
+    return ok(
+      get_page_route_from_model(model),
+      (_) => {
+        return [model, none()];
+      },
+      (page_path) => {
+        return [
+          (() => {
+            let _record = model;
+            return new Model3(
+              _record.route,
+              _record.file_tree,
+              _record.audit_metadata,
+              _record.source_files,
+              _record.discussions,
+              insert(
+                model.discussion_models,
+                new DiscussionKey(
+                  page_path,
+                  updated_model.line_number,
+                  updated_model.column_number
+                ),
+                updated_model
+              ),
+              _record.keyboard_model,
+              _record.selected_discussion,
+              _record.selected_node_id,
+              _record.focused_discussion,
+              _record.clicked_discussion
+            );
+          })(),
+          none()
+        ];
+      }
+    );
   } else {
     let error2 = msg.error;
     print("Failed to submit note: " + inspect2(error2));
@@ -13276,8 +13872,8 @@ function get_selected_discussion(model) {
       (model2) => {
         return new Some(
           new DiscussionReference(
-            discussion[0],
-            discussion[1],
+            discussion.line_number,
+            discussion.column_number,
             model2
           )
         );
@@ -13292,8 +13888,8 @@ function get_selected_discussion(model) {
       (model2) => {
         return new Some(
           new DiscussionReference(
-            discussion[0],
-            discussion[1],
+            discussion.line_number,
+            discussion.column_number,
             model2
           )
         );
@@ -13308,8 +13904,8 @@ function get_selected_discussion(model) {
       (model2) => {
         return new Some(
           new DiscussionReference(
-            discussion[0],
-            discussion[1],
+            discussion.line_number,
+            discussion.column_number,
             model2
           )
         );
@@ -13498,11 +14094,11 @@ function main() {
   let _pipe = application(init4, update3, view5);
   return start3(_pipe, "#app", void 0);
 }
-function echo3(value3, file, line2) {
+function echo5(value3, file, line2) {
   const grey = "\x1B[90m";
   const reset_color = "\x1B[39m";
   const file_line = `${file}:${line2}`;
-  const string_value = echo$inspect3(value3);
+  const string_value = echo$inspect5(value3);
   if (globalThis.process?.stderr?.write) {
     const string6 = `${grey}${file_line}${reset_color}
 ${string_value}
@@ -13520,7 +14116,7 @@ ${string_value}`;
   }
   return value3;
 }
-function echo$inspectString3(str) {
+function echo$inspectString5(str) {
   let new_str = '"';
   for (let i = 0; i < str.length; i++) {
     let char = str[i];
@@ -13539,7 +14135,7 @@ function echo$inspectString3(str) {
   new_str += '"';
   return new_str;
 }
-function echo$inspectDict3(map7) {
+function echo$inspectDict5(map7) {
   let body2 = "dict.from_list([";
   let first2 = true;
   let key_value_pairs = [];
@@ -13549,47 +14145,47 @@ function echo$inspectDict3(map7) {
   key_value_pairs.sort();
   key_value_pairs.forEach(([key2, value3]) => {
     if (!first2) body2 = body2 + ", ";
-    body2 = body2 + "#(" + echo$inspect3(key2) + ", " + echo$inspect3(value3) + ")";
+    body2 = body2 + "#(" + echo$inspect5(key2) + ", " + echo$inspect5(value3) + ")";
     first2 = false;
   });
   return body2 + "])";
 }
-function echo$inspectCustomType3(record) {
+function echo$inspectCustomType5(record) {
   const props = globalThis.Object.keys(record).map((label) => {
-    const value3 = echo$inspect3(record[label]);
+    const value3 = echo$inspect5(record[label]);
     return isNaN(parseInt(label)) ? `${label}: ${value3}` : value3;
   }).join(", ");
   return props ? `${record.constructor.name}(${props})` : record.constructor.name;
 }
-function echo$inspectObject3(v) {
+function echo$inspectObject5(v) {
   const name2 = Object.getPrototypeOf(v)?.constructor?.name || "Object";
   const props = [];
   for (const k of Object.keys(v)) {
-    props.push(`${echo$inspect3(k)}: ${echo$inspect3(v[k])}`);
+    props.push(`${echo$inspect5(k)}: ${echo$inspect5(v[k])}`);
   }
   const body2 = props.length ? " " + props.join(", ") + " " : "";
   const head = name2 === "Object" ? "" : name2 + " ";
   return `//js(${head}{${body2}})`;
 }
-function echo$inspect3(v) {
+function echo$inspect5(v) {
   const t = typeof v;
   if (v === true) return "True";
   if (v === false) return "False";
   if (v === null) return "//js(null)";
   if (v === void 0) return "Nil";
-  if (t === "string") return echo$inspectString3(v);
+  if (t === "string") return echo$inspectString5(v);
   if (t === "bigint" || t === "number") return v.toString();
   if (globalThis.Array.isArray(v))
-    return `#(${v.map(echo$inspect3).join(", ")})`;
+    return `#(${v.map(echo$inspect5).join(", ")})`;
   if (v instanceof List)
-    return `[${v.toArray().map(echo$inspect3).join(", ")}]`;
+    return `[${v.toArray().map(echo$inspect5).join(", ")}]`;
   if (v instanceof UtfCodepoint)
     return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
-  if (v instanceof BitArray) return echo$inspectBitArray3(v);
-  if (v instanceof CustomType) return echo$inspectCustomType3(v);
-  if (echo$isDict3(v)) return echo$inspectDict3(v);
+  if (v instanceof BitArray) return echo$inspectBitArray5(v);
+  if (v instanceof CustomType) return echo$inspectCustomType5(v);
+  if (echo$isDict5(v)) return echo$inspectDict5(v);
   if (v instanceof Set)
-    return `//js(Set(${[...v].map(echo$inspect3).join(", ")}))`;
+    return `//js(Set(${[...v].map(echo$inspect5).join(", ")}))`;
   if (v instanceof RegExp) return `//js(${v})`;
   if (v instanceof Date) return `//js(Date("${v.toISOString()}"))`;
   if (v instanceof Function) {
@@ -13598,9 +14194,9 @@ function echo$inspect3(v) {
       args.push(String.fromCharCode(i + 97));
     return `//fn(${args.join(", ")}) { ... }`;
   }
-  return echo$inspectObject3(v);
+  return echo$inspectObject5(v);
 }
-function echo$inspectBitArray3(bitArray) {
+function echo$inspectBitArray5(bitArray) {
   let endOfAlignedBytes = bitArray.bitOffset + 8 * Math.trunc(bitArray.bitSize / 8);
   let alignedBytes = bitArraySlice(
     bitArray,
@@ -13627,7 +14223,7 @@ function echo$inspectBitArray3(bitArray) {
     return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}>>`;
   }
 }
-function echo$isDict3(value3) {
+function echo$isDict5(value3) {
   try {
     return value3 instanceof Dict;
   } catch {

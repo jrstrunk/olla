@@ -247,7 +247,8 @@ pub fn insert(
   key: key,
   submission: submission,
 ) {
-  // First persist the data in the disk database
+  // First persist the data in the disk database, getting back the stored value
+  // from the submission
   use val <- result.map(
     process.try_call(
       pcdd.connection_actor,
@@ -264,6 +265,8 @@ pub fn insert(
   // After that succeeds, update any subscribers
   concurrent_duplicate_dict.get(pcdd.subscribers, Nil)
   |> list.each(fn(effect) { effect() })
+
+  val
 }
 
 pub fn subscribe(
