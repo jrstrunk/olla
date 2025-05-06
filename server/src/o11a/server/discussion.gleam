@@ -2,12 +2,12 @@ import gleam/dynamic/decode
 import gleam/function
 import gleam/json
 import gleam/list
+import gleam/option
 import gleam/pair
 import gleam/result
 import gleam/string
 import lib/persistent_concurrent_duplicate_dict as pcd_dict
 import lib/persistent_concurrent_structured_dict as pcs_dict
-import o11a/audit_metadata
 import o11a/computed_note
 import o11a/config
 import o11a/note
@@ -71,7 +71,7 @@ pub fn note_persist_encoder(note: note.Note) {
     pcd_dict.int(datetime.to_unix_milli(note.time)),
     pcd_dict.text(note.modifier |> note.note_modifier_to_string),
     pcd_dict.text(
-      json.array(note.references, audit_metadata.encode_addressable_symbol)
+      json.array(note.referenced_topic_ids, json.string)
       |> json.to_string,
     ),
   ]
@@ -86,11 +86,9 @@ pub fn note_persist_decoder() {
   use expanded_message <- decode.field(5, decode.optional(decode.string))
   use time <- decode.field(6, decode.int)
   use modifier <- decode.field(7, note.note_modifier_decoder())
-  use references <- decode.field(8, {
+  use referenced_topic_ids <- decode.field(8, {
     use str <- decode.then(decode.string)
-    case
-      json.parse(str, decode.list(audit_metadata.addressable_symbol_decoder()))
-    {
+    case json.parse(str, decode.list(decode.string)) {
       Ok(references) -> decode.success(references)
       Error(e) -> decode.failure([], "references - " <> string.inspect(e))
     }
@@ -105,7 +103,7 @@ pub fn note_persist_decoder() {
     expanded_message:,
     time: datetime.from_unix_milli(time),
     modifier:,
-    references:,
+    referenced_topic_ids:,
   )
   |> decode.success
 }
@@ -136,42 +134,53 @@ pub fn add_note(
   note_submission: note.NoteSubmission,
   topic_id topic,
 ) {
-  use note <- result.try(
-    pcs_dict.insert(
-      discussion.notes,
-      note_submission.parent_id,
-      note_submission,
-      rebuild_topics: [
-        topic,
-        ..list.filter_map(note_submission.references, fn(ref) {
-          // It is a performance optimization to not rebuild the topics of
-          // new references here, as they will be built
-          // when those new notes are inserted
-          case list.contains(note_submission.new_references, ref) {
-            True -> Error(Nil)
-            False -> Ok(ref.topic_id)
-          }
-        })
-      ],
+  let #(removed_references, existing_references, new_references) = case
+    note_submission.prior_referenced_topic_ids
+  {
+    option.Some(prior_referenced_topic_ids) -> {
+      #(
+        list.filter(prior_referenced_topic_ids, fn(prior_ref) {
+          !list.contains(note_submission.referenced_topic_ids, prior_ref)
+        }),
+        list.filter(note_submission.referenced_topic_ids, fn(ref) {
+          list.contains(prior_referenced_topic_ids, ref)
+        }),
+        list.filter(note_submission.referenced_topic_ids, fn(ref) {
+          !list.contains(prior_referenced_topic_ids, ref)
+        }),
+      )
+    }
+    option.None -> {
+      #([], [], note_submission.referenced_topic_ids)
+    }
+  }
+
+  use note <- result.try(pcs_dict.insert(
+    discussion.notes,
+    note_submission.parent_id,
+    note_submission,
+    rebuild_topics: list.append(
+      [topic, ..removed_references],
+      existing_references,
     ),
-  )
+  ))
 
   echo "added note to discussion " <> string.inspect(note)
 
   // If the note made any new references, add them to their respective topics
-  list.map(note_submission.new_references, fn(reference) {
+  list.map(new_references, fn(reference_topic_id) {
     let reference_note =
       note.NoteSubmission(
         ..note_submission,
-        parent_id: reference.topic_id,
+        parent_id: reference_topic_id,
         modifier: note.Reference(note.note_id),
       )
 
     pcs_dict.insert(
       discussion.notes,
-      reference.topic_id,
+      reference_topic_id,
       reference_note,
-      rebuild_topics: [reference.topic_id],
+      rebuild_topics: [reference_topic_id],
     )
   })
   |> result.all

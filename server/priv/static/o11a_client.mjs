@@ -2053,6 +2053,35 @@ function from_list(list4) {
 function delete$(dict2, key2) {
   return map_remove(key2, dict2);
 }
+function fold_loop(loop$list, loop$initial, loop$fun) {
+  while (true) {
+    let list4 = loop$list;
+    let initial = loop$initial;
+    let fun = loop$fun;
+    if (list4.hasLength(0)) {
+      return initial;
+    } else {
+      let k = list4.head[0];
+      let v = list4.head[1];
+      let rest = list4.tail;
+      loop$list = rest;
+      loop$initial = fun(initial, k, v);
+      loop$fun = fun;
+    }
+  }
+}
+function fold(dict2, initial, fun) {
+  return fold_loop(map_to_list(dict2), initial, fun);
+}
+function do_map_values(f, dict2) {
+  let f$1 = (dict3, k, v) => {
+    return insert(dict3, k, f(k, v));
+  };
+  return fold(dict2, new_map(), f$1);
+}
+function map_values(dict2, fun) {
+  return do_map_values(fun, dict2);
+}
 
 // build/dev/javascript/gleam_stdlib/gleam/pair.mjs
 function second(pair) {
@@ -2299,7 +2328,7 @@ function flat_map(list4, fun) {
   let _pipe = map2(list4, fun);
   return flatten2(_pipe);
 }
-function fold(loop$list, loop$initial, loop$fun) {
+function fold2(loop$list, loop$initial, loop$fun) {
   while (true) {
     let list4 = loop$list;
     let initial = loop$initial;
@@ -2316,10 +2345,10 @@ function fold(loop$list, loop$initial, loop$fun) {
   }
 }
 function group(list4, key2) {
-  return fold(list4, new_map(), update_group(key2));
+  return fold2(list4, new_map(), update_group(key2));
 }
 function map_fold(list4, initial, fun) {
-  let _pipe = fold(
+  let _pipe = fold2(
     list4,
     [initial, toList([])],
     (acc, item) => {
@@ -2794,7 +2823,7 @@ function reduce(list4, fun) {
   } else {
     let first$1 = list4.head;
     let rest$1 = list4.tail;
-    return new Ok(fold(rest$1, first$1, fun));
+    return new Ok(fold2(rest$1, first$1, fun));
   }
 }
 function last(list4) {
@@ -4438,14 +4467,14 @@ function from(effect) {
   return new Effect(toList([task]), _record.before_paint, _record.after_paint);
 }
 function batch(effects) {
-  return fold(
+  return fold2(
     effects,
     empty2,
     (acc, eff) => {
       return new Effect(
-        fold(eff.synchronous, acc.synchronous, prepend2),
-        fold(eff.before_paint, acc.before_paint, prepend2),
-        fold(eff.after_paint, acc.after_paint, prepend2)
+        fold2(eff.synchronous, acc.synchronous, prepend2),
+        fold2(eff.before_paint, acc.before_paint, prepend2),
+        fold2(eff.after_paint, acc.after_paint, prepend2)
       );
     }
   );
@@ -6308,7 +6337,7 @@ function remove_event(events, path2, name2) {
   );
 }
 function remove_attributes(handlers, path2, attributes) {
-  return fold(
+  return fold2(
     attributes,
     handlers,
     (events, attribute3) => {
@@ -6362,7 +6391,7 @@ function add_event(events, mapper, path2, name2, handler) {
   );
 }
 function add_attributes(handlers, mapper, path2, attributes) {
-  return fold(
+  return fold2(
     attributes,
     handlers,
     (events, attribute3) => {
@@ -6723,7 +6752,7 @@ function new$6(options) {
     option_none,
     option_none
   );
-  return fold(
+  return fold2(
     options,
     init5,
     (config, option) => {
@@ -7518,112 +7547,13 @@ function push(path2, query, fragment3) {
 
 // build/dev/javascript/o11a_common/o11a/audit_metadata.mjs
 var AuditMetaData = class extends CustomType {
-  constructor(audit_name, audit_formatted_name, in_scope_files, symbols) {
+  constructor(audit_name, audit_formatted_name, in_scope_files) {
     super();
     this.audit_name = audit_name;
     this.audit_formatted_name = audit_formatted_name;
     this.in_scope_files = in_scope_files;
-    this.symbols = symbols;
   }
 };
-var AddressableSymbol = class extends CustomType {
-  constructor(name2, scope, kind, topic_id) {
-    super();
-    this.name = name2;
-    this.scope = scope;
-    this.kind = kind;
-    this.topic_id = topic_id;
-  }
-};
-var AddressableContract = class extends CustomType {
-};
-var AddressableFunction = class extends CustomType {
-};
-var AddressableVariable = class extends CustomType {
-};
-var AddressableDocumentation = class extends CustomType {
-};
-var AddressableLine = class extends CustomType {
-};
-function encode_declaration_kind(declaration_kind) {
-  if (declaration_kind instanceof AddressableContract) {
-    return string4("c");
-  } else if (declaration_kind instanceof AddressableFunction) {
-    return string4("f");
-  } else if (declaration_kind instanceof AddressableVariable) {
-    return string4("v");
-  } else if (declaration_kind instanceof AddressableDocumentation) {
-    return string4("d");
-  } else {
-    return string4("l");
-  }
-}
-function encode_addressable_symbol(declaration) {
-  let name2 = declaration.name;
-  let scope = declaration.scope;
-  let kind = declaration.kind;
-  let topic_id = declaration.topic_id;
-  return object2(
-    toList([
-      ["n", string4(name2)],
-      ["s", string4(scope)],
-      ["k", encode_declaration_kind(kind)],
-      ["i", string4(topic_id)]
-    ])
-  );
-}
-function declaration_kind_decoder() {
-  return then$2(
-    string3,
-    (variant) => {
-      if (variant === "c") {
-        return success(new AddressableContract());
-      } else if (variant === "f") {
-        return success(new AddressableFunction());
-      } else if (variant === "v") {
-        return success(new AddressableVariable());
-      } else if (variant === "d") {
-        return success(new AddressableDocumentation());
-      } else if (variant === "l") {
-        return success(new AddressableLine());
-      } else {
-        return failure(
-          new AddressableDocumentation(),
-          "DeclarationKind"
-        );
-      }
-    }
-  );
-}
-function addressable_symbol_decoder() {
-  return field(
-    "n",
-    string3,
-    (name2) => {
-      return field(
-        "s",
-        string3,
-        (scope) => {
-          return field(
-            "k",
-            declaration_kind_decoder(),
-            (kind) => {
-              return field(
-                "i",
-                string3,
-                (topic_id) => {
-                  return success(
-                    new AddressableSymbol(name2, scope, kind, topic_id)
-                  );
-                }
-              );
-            }
-          );
-        }
-      );
-    }
-  );
-}
 function audit_metadata_decoder() {
   return field(
     "audit_name",
@@ -7637,19 +7567,12 @@ function audit_metadata_decoder() {
             "in_scope_files",
             list2(string3),
             (in_scope_files) => {
-              return field(
-                "symbols",
-                list2(addressable_symbol_decoder()),
-                (symbols) => {
-                  return success(
-                    new AuditMetaData(
-                      audit_name,
-                      audit_formatted_name,
-                      in_scope_files,
-                      symbols
-                    )
-                  );
-                }
+              return success(
+                new AuditMetaData(
+                  audit_name,
+                  audit_formatted_name,
+                  in_scope_files
+                )
               );
             }
           );
@@ -7734,7 +7657,7 @@ function from_unix_milli3(unix_ts) {
 
 // build/dev/javascript/o11a_common/o11a/note.mjs
 var NoteSubmission = class extends CustomType {
-  constructor(parent_id, significance, user_id, message, expanded_message, modifier, references, new_references) {
+  constructor(parent_id, significance, user_id, message, expanded_message, modifier, referenced_topic_ids, prior_referenced_topic_ids) {
     super();
     this.parent_id = parent_id;
     this.significance = significance;
@@ -7742,8 +7665,8 @@ var NoteSubmission = class extends CustomType {
     this.message = message;
     this.expanded_message = expanded_message;
     this.modifier = modifier;
-    this.references = references;
-    this.new_references = new_references;
+    this.referenced_topic_ids = referenced_topic_ids;
+    this.prior_referenced_topic_ids = prior_referenced_topic_ids;
   }
 };
 var Comment = class extends CustomType {
@@ -7815,8 +7738,8 @@ function note_modifier_to_string(note_modifier) {
   } else if (note_modifier instanceof Referer) {
     return "r";
   } else {
-    let original_note_id = note_modifier.original_note_id;
-    return "r-" + original_note_id;
+    let referee_topic_id = note_modifier.referee_topic_id;
+    return "r-" + referee_topic_id;
   }
 }
 function encode_note_submission(note) {
@@ -7844,15 +7767,14 @@ function encode_note_submission(note) {
           })()
         )
       ],
+      ["r", array2(note.referenced_topic_ids, string4)],
       [
-        "r",
-        array2(note.references, encode_addressable_symbol)
-      ],
-      [
-        "nr",
-        array2(
-          note.new_references,
-          encode_addressable_symbol
+        "pr",
+        nullable(
+          note.prior_referenced_topic_ids,
+          (_capture) => {
+            return array2(_capture, string4);
+          }
         )
       ]
     ])
@@ -7933,7 +7855,536 @@ function classify_message(message, is_thread_open) {
     })()
   ];
 }
-function get_references(message, audit_metadata) {
+
+// build/dev/javascript/o11a_common/o11a/computed_note.mjs
+var ComputedNote = class extends CustomType {
+  constructor(note_id, parent_id, significance, user_name, message, expanded_message, time, referenced_topic_ids, edited, referee_topic_id) {
+    super();
+    this.note_id = note_id;
+    this.parent_id = parent_id;
+    this.significance = significance;
+    this.user_name = user_name;
+    this.message = message;
+    this.expanded_message = expanded_message;
+    this.time = time;
+    this.referenced_topic_ids = referenced_topic_ids;
+    this.edited = edited;
+    this.referee_topic_id = referee_topic_id;
+  }
+};
+var Comment2 = class extends CustomType {
+};
+var UnansweredQuestion = class extends CustomType {
+};
+var AnsweredQuestion = class extends CustomType {
+};
+var Answer2 = class extends CustomType {
+};
+var IncompleteToDo = class extends CustomType {
+};
+var CompleteToDo = class extends CustomType {
+};
+var ToDoCompletion2 = class extends CustomType {
+};
+var UnconfirmedFinding = class extends CustomType {
+};
+var ConfirmedFinding = class extends CustomType {
+};
+var RejectedFinding = class extends CustomType {
+};
+var FindingConfirmation2 = class extends CustomType {
+};
+var FindingRejection2 = class extends CustomType {
+};
+var UnansweredDeveloperQuestion = class extends CustomType {
+};
+var AnsweredDeveloperQuestion = class extends CustomType {
+};
+var Informational2 = class extends CustomType {
+};
+var RejectedInformational = class extends CustomType {
+};
+var InformationalRejection2 = class extends CustomType {
+};
+var InformationalConfirmation2 = class extends CustomType {
+};
+function significance_from_int(note_significance) {
+  if (note_significance === 0) {
+    return new Comment2();
+  } else if (note_significance === 1) {
+    return new UnansweredQuestion();
+  } else if (note_significance === 2) {
+    return new AnsweredQuestion();
+  } else if (note_significance === 3) {
+    return new Answer2();
+  } else if (note_significance === 4) {
+    return new IncompleteToDo();
+  } else if (note_significance === 5) {
+    return new CompleteToDo();
+  } else if (note_significance === 6) {
+    return new ToDoCompletion2();
+  } else if (note_significance === 7) {
+    return new UnconfirmedFinding();
+  } else if (note_significance === 8) {
+    return new ConfirmedFinding();
+  } else if (note_significance === 9) {
+    return new RejectedFinding();
+  } else if (note_significance === 10) {
+    return new FindingConfirmation2();
+  } else if (note_significance === 11) {
+    return new FindingRejection2();
+  } else if (note_significance === 12) {
+    return new UnansweredDeveloperQuestion();
+  } else if (note_significance === 13) {
+    return new AnsweredDeveloperQuestion();
+  } else if (note_significance === 14) {
+    return new Informational2();
+  } else if (note_significance === 15) {
+    return new RejectedInformational();
+  } else if (note_significance === 16) {
+    return new InformationalRejection2();
+  } else if (note_significance === 17) {
+    return new InformationalConfirmation2();
+  } else {
+    throw makeError(
+      "panic",
+      "o11a/computed_note",
+      137,
+      "significance_from_int",
+      "Invalid note significance found",
+      {}
+    );
+  }
+}
+function computed_note_decoder() {
+  return field(
+    "n",
+    string3,
+    (note_id) => {
+      return field(
+        "p",
+        string3,
+        (parent_id) => {
+          return field(
+            "s",
+            int2,
+            (significance) => {
+              return field(
+                "u",
+                string3,
+                (user_name) => {
+                  return field(
+                    "m",
+                    string3,
+                    (message) => {
+                      return field(
+                        "x",
+                        optional(string3),
+                        (expanded_message) => {
+                          return field(
+                            "t",
+                            int2,
+                            (time) => {
+                              return field(
+                                "e",
+                                bool,
+                                (edited) => {
+                                  return field(
+                                    "rs",
+                                    list2(string3),
+                                    (referenced_topic_ids) => {
+                                      return field(
+                                        "r",
+                                        optional(string3),
+                                        (referee_topic_id) => {
+                                          return success(
+                                            new ComputedNote(
+                                              note_id,
+                                              parent_id,
+                                              significance_from_int(
+                                                significance
+                                              ),
+                                              user_name,
+                                              message,
+                                              expanded_message,
+                                              from_unix_milli3(time),
+                                              referenced_topic_ids,
+                                              edited,
+                                              referee_topic_id
+                                            )
+                                          );
+                                        }
+                                      );
+                                    }
+                                  );
+                                }
+                              );
+                            }
+                          );
+                        }
+                      );
+                    }
+                  );
+                }
+              );
+            }
+          );
+        }
+      );
+    }
+  );
+}
+function significance_to_string(significance) {
+  if (significance instanceof Comment2) {
+    return new None();
+  } else if (significance instanceof UnansweredQuestion) {
+    return new Some("Unanswered Question");
+  } else if (significance instanceof AnsweredQuestion) {
+    return new Some("Answered");
+  } else if (significance instanceof Answer2) {
+    return new Some("Answer");
+  } else if (significance instanceof IncompleteToDo) {
+    return new Some("Incomplete ToDo");
+  } else if (significance instanceof CompleteToDo) {
+    return new Some("Complete");
+  } else if (significance instanceof ToDoCompletion2) {
+    return new Some("Completion");
+  } else if (significance instanceof UnconfirmedFinding) {
+    return new Some("Unconfirmed Finding");
+  } else if (significance instanceof ConfirmedFinding) {
+    return new Some("Confirmed Finding");
+  } else if (significance instanceof RejectedFinding) {
+    return new Some("Rejected Finding");
+  } else if (significance instanceof FindingConfirmation2) {
+    return new Some("Confirmation");
+  } else if (significance instanceof FindingRejection2) {
+    return new Some("Rejection");
+  } else if (significance instanceof UnansweredDeveloperQuestion) {
+    return new Some("Unanswered Dev Question");
+  } else if (significance instanceof AnsweredDeveloperQuestion) {
+    return new Some("Answered Dev Question");
+  } else if (significance instanceof Informational2) {
+    return new Some("Info");
+  } else if (significance instanceof RejectedInformational) {
+    return new Some("Incorrect Info");
+  } else if (significance instanceof InformationalRejection2) {
+    return new Some("Rejection");
+  } else {
+    return new Some("Confirmation");
+  }
+}
+function is_significance_threadable(note_significance) {
+  if (note_significance instanceof Comment2) {
+    return false;
+  } else if (note_significance instanceof UnansweredQuestion) {
+    return true;
+  } else if (note_significance instanceof AnsweredQuestion) {
+    return true;
+  } else if (note_significance instanceof Answer2) {
+    return false;
+  } else if (note_significance instanceof IncompleteToDo) {
+    return true;
+  } else if (note_significance instanceof CompleteToDo) {
+    return true;
+  } else if (note_significance instanceof ToDoCompletion2) {
+    return false;
+  } else if (note_significance instanceof UnconfirmedFinding) {
+    return true;
+  } else if (note_significance instanceof ConfirmedFinding) {
+    return true;
+  } else if (note_significance instanceof RejectedFinding) {
+    return true;
+  } else if (note_significance instanceof FindingConfirmation2) {
+    return false;
+  } else if (note_significance instanceof FindingRejection2) {
+    return false;
+  } else if (note_significance instanceof UnansweredDeveloperQuestion) {
+    return true;
+  } else if (note_significance instanceof AnsweredDeveloperQuestion) {
+    return true;
+  } else if (note_significance instanceof Informational2) {
+    return true;
+  } else if (note_significance instanceof RejectedInformational) {
+    return true;
+  } else if (note_significance instanceof InformationalRejection2) {
+    return false;
+  } else {
+    return false;
+  }
+}
+
+// build/dev/javascript/o11a_common/o11a/declaration.mjs
+var Declaration = class extends CustomType {
+  constructor(name2, scope, topic_id, signature, kind, references) {
+    super();
+    this.name = name2;
+    this.scope = scope;
+    this.topic_id = topic_id;
+    this.signature = signature;
+    this.kind = kind;
+    this.references = references;
+  }
+};
+var ContractDeclaration = class extends CustomType {
+  constructor(contract_kind) {
+    super();
+    this.contract_kind = contract_kind;
+  }
+};
+var FunctionDeclaration = class extends CustomType {
+  constructor(function_kind) {
+    super();
+    this.function_kind = function_kind;
+  }
+};
+var ModifierDeclaration = class extends CustomType {
+};
+var VariableDeclaration = class extends CustomType {
+};
+var ConstantDeclaration = class extends CustomType {
+};
+var EnumDeclaration = class extends CustomType {
+};
+var EnumValueDeclaration = class extends CustomType {
+};
+var StructDeclaration = class extends CustomType {
+};
+var ErrorDeclaration = class extends CustomType {
+};
+var EventDeclaration = class extends CustomType {
+};
+var LineDeclaration = class extends CustomType {
+};
+var UnknownDeclaration = class extends CustomType {
+};
+var Contract = class extends CustomType {
+};
+var Interface = class extends CustomType {
+};
+var Library = class extends CustomType {
+};
+var Abstract = class extends CustomType {
+};
+var Function2 = class extends CustomType {
+};
+var Constructor = class extends CustomType {
+};
+var Fallback = class extends CustomType {
+};
+var Receive = class extends CustomType {
+};
+var Reference2 = class extends CustomType {
+  constructor(scoped_name, topic_id, kind) {
+    super();
+    this.scoped_name = scoped_name;
+    this.topic_id = topic_id;
+    this.kind = kind;
+  }
+};
+var CallReference = class extends CustomType {
+};
+var MutationReference = class extends CustomType {
+};
+var InheritanceReference = class extends CustomType {
+};
+var AccessReference = class extends CustomType {
+};
+var UsingReference = class extends CustomType {
+};
+var TypeReference = class extends CustomType {
+};
+function decode_declaration_kind() {
+  return map4(
+    string3,
+    (variant) => {
+      if (variant === "c") {
+        return new ContractDeclaration(new Contract());
+      } else if (variant === "i") {
+        return new ContractDeclaration(new Interface());
+      } else if (variant === "l") {
+        return new ContractDeclaration(new Library());
+      } else if (variant === "a") {
+        return new ContractDeclaration(new Abstract());
+      } else if (variant === "f") {
+        return new FunctionDeclaration(new Function2());
+      } else if (variant === "cn") {
+        return new FunctionDeclaration(new Constructor());
+      } else if (variant === "fb") {
+        return new FunctionDeclaration(new Fallback());
+      } else if (variant === "r") {
+        return new FunctionDeclaration(new Receive());
+      } else if (variant === "m") {
+        return new ModifierDeclaration();
+      } else if (variant === "v") {
+        return new VariableDeclaration();
+      } else if (variant === "ct") {
+        return new ConstantDeclaration();
+      } else if (variant === "en") {
+        return new EnumDeclaration();
+      } else if (variant === "nv") {
+        return new EnumValueDeclaration();
+      } else if (variant === "s") {
+        return new StructDeclaration();
+      } else if (variant === "er") {
+        return new ErrorDeclaration();
+      } else if (variant === "ev") {
+        return new EventDeclaration();
+      } else if (variant === "ln") {
+        return new LineDeclaration();
+      } else if (variant === "u") {
+        return new UnknownDeclaration();
+      } else {
+        return new UnknownDeclaration();
+      }
+    }
+  );
+}
+function declaration_kind_to_string(kind) {
+  if (kind instanceof ContractDeclaration && kind.contract_kind instanceof Contract) {
+    return "contract";
+  } else if (kind instanceof ContractDeclaration && kind.contract_kind instanceof Interface) {
+    return "interface";
+  } else if (kind instanceof ContractDeclaration && kind.contract_kind instanceof Library) {
+    return "library";
+  } else if (kind instanceof ContractDeclaration && kind.contract_kind instanceof Abstract) {
+    return "abstract contract";
+  } else if (kind instanceof FunctionDeclaration && kind.function_kind instanceof Function2) {
+    return "function";
+  } else if (kind instanceof FunctionDeclaration && kind.function_kind instanceof Constructor) {
+    return "constructor";
+  } else if (kind instanceof FunctionDeclaration && kind.function_kind instanceof Fallback) {
+    return "fallback";
+  } else if (kind instanceof FunctionDeclaration && kind.function_kind instanceof Receive) {
+    return "receive";
+  } else if (kind instanceof ModifierDeclaration) {
+    return "modifier";
+  } else if (kind instanceof VariableDeclaration) {
+    return "variable";
+  } else if (kind instanceof ConstantDeclaration) {
+    return "constant";
+  } else if (kind instanceof EnumDeclaration) {
+    return "enum";
+  } else if (kind instanceof EnumValueDeclaration) {
+    return "enum_value";
+  } else if (kind instanceof StructDeclaration) {
+    return "struct";
+  } else if (kind instanceof ErrorDeclaration) {
+    return "error";
+  } else if (kind instanceof EventDeclaration) {
+    return "event";
+  } else if (kind instanceof LineDeclaration) {
+    return "line";
+  } else {
+    return "unknown";
+  }
+}
+function node_reference_kind_decoder() {
+  return then$2(
+    string3,
+    (variant) => {
+      if (variant === "c") {
+        return success(new CallReference());
+      } else if (variant === "m") {
+        return success(new MutationReference());
+      } else if (variant === "i") {
+        return success(new InheritanceReference());
+      } else if (variant === "a") {
+        return success(new AccessReference());
+      } else if (variant === "u") {
+        return success(new UsingReference());
+      } else if (variant === "t") {
+        return success(new TypeReference());
+      } else {
+        return failure(new CallReference(), "NodeReferenceKind");
+      }
+    }
+  );
+}
+function reference_decoder() {
+  return field(
+    "n",
+    string3,
+    (scoped_name) => {
+      return field(
+        "i",
+        string3,
+        (topic_id) => {
+          return field(
+            "k",
+            node_reference_kind_decoder(),
+            (kind) => {
+              return success(new Reference2(scoped_name, topic_id, kind));
+            }
+          );
+        }
+      );
+    }
+  );
+}
+function declaration_decoder() {
+  return field(
+    "n",
+    string3,
+    (name2) => {
+      return field(
+        "s",
+        string3,
+        (scope) => {
+          return field(
+            "t",
+            string3,
+            (topic_id) => {
+              return field(
+                "g",
+                string3,
+                (signature) => {
+                  return field(
+                    "k",
+                    decode_declaration_kind(),
+                    (kind) => {
+                      return field(
+                        "r",
+                        list2(reference_decoder()),
+                        (references) => {
+                          return success(
+                            new Declaration(
+                              name2,
+                              scope,
+                              topic_id,
+                              signature,
+                              kind,
+                              references
+                            )
+                          );
+                        }
+                      );
+                    }
+                  );
+                }
+              );
+            }
+          );
+        }
+      );
+    }
+  );
+}
+function node_reference_kind_to_annotation(kind) {
+  if (kind instanceof CallReference) {
+    return "Called in:";
+  } else if (kind instanceof MutationReference) {
+    return "Mutated in:";
+  } else if (kind instanceof InheritanceReference) {
+    return "Inherited by:";
+  } else if (kind instanceof AccessReference) {
+    return "Accessed in:";
+  } else if (kind instanceof UsingReference) {
+    return "Used as a library in:";
+  } else {
+    return "Used as a type in:";
+  }
+}
+function get_references(message, declarations) {
   let _pipe = split2(message, " ");
   return filter_map(
     _pipe,
@@ -7948,13 +8399,31 @@ function get_references(message, audit_metadata) {
           }
         })(),
         (ref) => {
-          echo("found potential reference: " + ref, "src/o11a/note.gleam", 299);
-          return find2(
-            audit_metadata.symbols,
-            (symbol) => {
-              return symbol.scope + "." + symbol.name === ref;
+          echo(
+            "found potential reference: " + ref,
+            "src/o11a/declaration.gleam",
+            263
+          );
+          let _pipe$1 = find2(
+            declarations,
+            (dec) => {
+              return dec.scope + "." + dec.name === ref;
             }
           );
+          let _pipe$2 = try_recover(
+            _pipe$1,
+            (_) => {
+              return find2(
+                declarations,
+                (dec) => {
+                  return dec.name === ref;
+                }
+              );
+            }
+          );
+          return map3(_pipe$2, (dec) => {
+            return dec.topic_id;
+          });
         }
       );
     }
@@ -8054,7 +8523,7 @@ function echo$inspect(v) {
     return `//js(Set(${[...v].map(echo$inspect).join(", ")}))`;
   if (v instanceof RegExp) return `//js(${v})`;
   if (v instanceof Date) return `//js(Date("${v.toISOString()}"))`;
-  if (v instanceof Function) {
+  if (v instanceof Function2) {
     const args = [];
     for (const i of Array(v.length).keys())
       args.push(String.fromCharCode(i + 97));
@@ -8093,265 +8562,6 @@ function echo$isDict(value3) {
   try {
     return value3 instanceof Dict;
   } catch {
-    return false;
-  }
-}
-
-// build/dev/javascript/o11a_common/o11a/computed_note.mjs
-var ComputedNote = class extends CustomType {
-  constructor(note_id, parent_id, significance, user_name, message, expanded_message, time, references, edited, reference) {
-    super();
-    this.note_id = note_id;
-    this.parent_id = parent_id;
-    this.significance = significance;
-    this.user_name = user_name;
-    this.message = message;
-    this.expanded_message = expanded_message;
-    this.time = time;
-    this.references = references;
-    this.edited = edited;
-    this.reference = reference;
-  }
-};
-var Comment2 = class extends CustomType {
-};
-var UnansweredQuestion = class extends CustomType {
-};
-var AnsweredQuestion = class extends CustomType {
-};
-var Answer2 = class extends CustomType {
-};
-var IncompleteToDo = class extends CustomType {
-};
-var CompleteToDo = class extends CustomType {
-};
-var ToDoCompletion2 = class extends CustomType {
-};
-var UnconfirmedFinding = class extends CustomType {
-};
-var ConfirmedFinding = class extends CustomType {
-};
-var RejectedFinding = class extends CustomType {
-};
-var FindingConfirmation2 = class extends CustomType {
-};
-var FindingRejection2 = class extends CustomType {
-};
-var UnansweredDeveloperQuestion = class extends CustomType {
-};
-var AnsweredDeveloperQuestion = class extends CustomType {
-};
-var Informational2 = class extends CustomType {
-};
-var RejectedInformational = class extends CustomType {
-};
-var InformationalRejection2 = class extends CustomType {
-};
-var InformationalConfirmation2 = class extends CustomType {
-};
-function significance_from_int(note_significance) {
-  if (note_significance === 0) {
-    return new Comment2();
-  } else if (note_significance === 1) {
-    return new UnansweredQuestion();
-  } else if (note_significance === 2) {
-    return new AnsweredQuestion();
-  } else if (note_significance === 3) {
-    return new Answer2();
-  } else if (note_significance === 4) {
-    return new IncompleteToDo();
-  } else if (note_significance === 5) {
-    return new CompleteToDo();
-  } else if (note_significance === 6) {
-    return new ToDoCompletion2();
-  } else if (note_significance === 7) {
-    return new UnconfirmedFinding();
-  } else if (note_significance === 8) {
-    return new ConfirmedFinding();
-  } else if (note_significance === 9) {
-    return new RejectedFinding();
-  } else if (note_significance === 10) {
-    return new FindingConfirmation2();
-  } else if (note_significance === 11) {
-    return new FindingRejection2();
-  } else if (note_significance === 12) {
-    return new UnansweredDeveloperQuestion();
-  } else if (note_significance === 13) {
-    return new AnsweredDeveloperQuestion();
-  } else if (note_significance === 14) {
-    return new Informational2();
-  } else if (note_significance === 15) {
-    return new RejectedInformational();
-  } else if (note_significance === 16) {
-    return new InformationalRejection2();
-  } else if (note_significance === 17) {
-    return new InformationalConfirmation2();
-  } else {
-    throw makeError(
-      "panic",
-      "o11a/computed_note",
-      147,
-      "significance_from_int",
-      "Invalid note significance found",
-      {}
-    );
-  }
-}
-function computed_note_decoder() {
-  return field(
-    "n",
-    string3,
-    (note_id) => {
-      return field(
-        "p",
-        string3,
-        (parent_id) => {
-          return field(
-            "s",
-            int2,
-            (significance) => {
-              return field(
-                "u",
-                string3,
-                (user_name) => {
-                  return field(
-                    "m",
-                    string3,
-                    (message) => {
-                      return field(
-                        "x",
-                        optional(string3),
-                        (expanded_message) => {
-                          return field(
-                            "t",
-                            int2,
-                            (time) => {
-                              return field(
-                                "e",
-                                bool,
-                                (edited) => {
-                                  return field(
-                                    "rs",
-                                    list2(
-                                      addressable_symbol_decoder()
-                                    ),
-                                    (references) => {
-                                      return field(
-                                        "r",
-                                        optional(string3),
-                                        (reference) => {
-                                          return success(
-                                            new ComputedNote(
-                                              note_id,
-                                              parent_id,
-                                              significance_from_int(
-                                                significance
-                                              ),
-                                              user_name,
-                                              message,
-                                              expanded_message,
-                                              from_unix_milli3(time),
-                                              references,
-                                              edited,
-                                              reference
-                                            )
-                                          );
-                                        }
-                                      );
-                                    }
-                                  );
-                                }
-                              );
-                            }
-                          );
-                        }
-                      );
-                    }
-                  );
-                }
-              );
-            }
-          );
-        }
-      );
-    }
-  );
-}
-function significance_to_string(significance) {
-  if (significance instanceof Comment2) {
-    return new None();
-  } else if (significance instanceof UnansweredQuestion) {
-    return new Some("Unanswered Question");
-  } else if (significance instanceof AnsweredQuestion) {
-    return new Some("Answered");
-  } else if (significance instanceof Answer2) {
-    return new Some("Answer");
-  } else if (significance instanceof IncompleteToDo) {
-    return new Some("Incomplete ToDo");
-  } else if (significance instanceof CompleteToDo) {
-    return new Some("Complete");
-  } else if (significance instanceof ToDoCompletion2) {
-    return new Some("Completion");
-  } else if (significance instanceof UnconfirmedFinding) {
-    return new Some("Unconfirmed Finding");
-  } else if (significance instanceof ConfirmedFinding) {
-    return new Some("Confirmed Finding");
-  } else if (significance instanceof RejectedFinding) {
-    return new Some("Rejected Finding");
-  } else if (significance instanceof FindingConfirmation2) {
-    return new Some("Confirmation");
-  } else if (significance instanceof FindingRejection2) {
-    return new Some("Rejection");
-  } else if (significance instanceof UnansweredDeveloperQuestion) {
-    return new Some("Unanswered Dev Question");
-  } else if (significance instanceof AnsweredDeveloperQuestion) {
-    return new Some("Answered Dev Question");
-  } else if (significance instanceof Informational2) {
-    return new Some("Info");
-  } else if (significance instanceof RejectedInformational) {
-    return new Some("Incorrect Info");
-  } else if (significance instanceof InformationalRejection2) {
-    return new Some("Rejection");
-  } else {
-    return new Some("Confirmation");
-  }
-}
-function is_significance_threadable(note_significance) {
-  if (note_significance instanceof Comment2) {
-    return false;
-  } else if (note_significance instanceof UnansweredQuestion) {
-    return true;
-  } else if (note_significance instanceof AnsweredQuestion) {
-    return true;
-  } else if (note_significance instanceof Answer2) {
-    return false;
-  } else if (note_significance instanceof IncompleteToDo) {
-    return true;
-  } else if (note_significance instanceof CompleteToDo) {
-    return true;
-  } else if (note_significance instanceof ToDoCompletion2) {
-    return false;
-  } else if (note_significance instanceof UnconfirmedFinding) {
-    return true;
-  } else if (note_significance instanceof ConfirmedFinding) {
-    return true;
-  } else if (note_significance instanceof RejectedFinding) {
-    return true;
-  } else if (note_significance instanceof FindingConfirmation2) {
-    return false;
-  } else if (note_significance instanceof FindingRejection2) {
-    return false;
-  } else if (note_significance instanceof UnansweredDeveloperQuestion) {
-    return true;
-  } else if (note_significance instanceof AnsweredDeveloperQuestion) {
-    return true;
-  } else if (note_significance instanceof Informational2) {
-    return true;
-  } else if (note_significance instanceof RejectedInformational) {
-    return true;
-  } else if (note_significance instanceof InformationalRejection2) {
-    return false;
-  } else {
     return false;
   }
 }
@@ -8465,9 +8675,10 @@ var PreProcessedLine = class extends CustomType {
   }
 };
 var SingleDeclarationLine = class extends CustomType {
-  constructor(node_declaration) {
+  constructor(signature, topic_id) {
     super();
-    this.node_declaration = node_declaration;
+    this.signature = signature;
+    this.topic_id = topic_id;
   }
 };
 var NonEmptyLine = class extends CustomType {
@@ -8503,220 +8714,6 @@ var PreProcessedGapNode = class extends CustomType {
     this.leading_spaces = leading_spaces;
   }
 };
-var NodeDeclaration = class extends CustomType {
-  constructor(name2, scope, title2, topic_id, kind, references) {
-    super();
-    this.name = name2;
-    this.scope = scope;
-    this.title = title2;
-    this.topic_id = topic_id;
-    this.kind = kind;
-    this.references = references;
-  }
-};
-var ContractDeclaration = class extends CustomType {
-};
-var ConstructorDeclaration = class extends CustomType {
-};
-var FunctionDeclaration = class extends CustomType {
-};
-var FallbackDeclaration = class extends CustomType {
-};
-var ReceiveDeclaration = class extends CustomType {
-};
-var ModifierDeclaration = class extends CustomType {
-};
-var VariableDeclaration = class extends CustomType {
-};
-var ConstantDeclaration = class extends CustomType {
-};
-var EnumDeclaration = class extends CustomType {
-};
-var EnumValueDeclaration = class extends CustomType {
-};
-var StructDeclaration = class extends CustomType {
-};
-var ErrorDeclaration = class extends CustomType {
-};
-var EventDeclaration = class extends CustomType {
-};
-var UnknownDeclaration = class extends CustomType {
-};
-var NodeReference = class extends CustomType {
-  constructor(title2, topic_id, kind) {
-    super();
-    this.title = title2;
-    this.topic_id = topic_id;
-    this.kind = kind;
-  }
-};
-var CallReference = class extends CustomType {
-};
-var MutationReference = class extends CustomType {
-};
-var InheritanceReference = class extends CustomType {
-};
-var AccessReference = class extends CustomType {
-};
-var UsingReference = class extends CustomType {
-};
-var TypeReference = class extends CustomType {
-};
-function node_declaration_kind_to_string(kind) {
-  if (kind instanceof ContractDeclaration) {
-    return "contract";
-  } else if (kind instanceof ConstructorDeclaration) {
-    return "constructor";
-  } else if (kind instanceof FunctionDeclaration) {
-    return "function";
-  } else if (kind instanceof FallbackDeclaration) {
-    return "fallback";
-  } else if (kind instanceof ReceiveDeclaration) {
-    return "receive";
-  } else if (kind instanceof ModifierDeclaration) {
-    return "modifier";
-  } else if (kind instanceof VariableDeclaration) {
-    return "variable";
-  } else if (kind instanceof ConstantDeclaration) {
-    return "constant";
-  } else if (kind instanceof EnumDeclaration) {
-    return "enum";
-  } else if (kind instanceof EnumValueDeclaration) {
-    return "enum_value";
-  } else if (kind instanceof StructDeclaration) {
-    return "struct";
-  } else if (kind instanceof ErrorDeclaration) {
-    return "error";
-  } else if (kind instanceof EventDeclaration) {
-    return "event";
-  } else {
-    return "unknown";
-  }
-}
-function node_declaration_kind_from_string(kind) {
-  if (kind === "contract") {
-    return new ContractDeclaration();
-  } else if (kind === "constructor") {
-    return new ConstructorDeclaration();
-  } else if (kind === "function") {
-    return new FunctionDeclaration();
-  } else if (kind === "fallback") {
-    return new FallbackDeclaration();
-  } else if (kind === "receive") {
-    return new ReceiveDeclaration();
-  } else if (kind === "modifier") {
-    return new ModifierDeclaration();
-  } else if (kind === "variable") {
-    return new VariableDeclaration();
-  } else if (kind === "constant") {
-    return new ConstantDeclaration();
-  } else if (kind === "enum") {
-    return new EnumDeclaration();
-  } else if (kind === "enum_value") {
-    return new EnumValueDeclaration();
-  } else if (kind === "struct") {
-    return new StructDeclaration();
-  } else if (kind === "error") {
-    return new ErrorDeclaration();
-  } else if (kind === "event") {
-    return new EventDeclaration();
-  } else if (kind === "unknown") {
-    return new UnknownDeclaration();
-  } else {
-    return new UnknownDeclaration();
-  }
-}
-function node_reference_kind_decoder() {
-  return then$2(
-    string3,
-    (variant) => {
-      if (variant === "c") {
-        return success(new CallReference());
-      } else if (variant === "m") {
-        return success(new MutationReference());
-      } else if (variant === "i") {
-        return success(new InheritanceReference());
-      } else if (variant === "a") {
-        return success(new AccessReference());
-      } else if (variant === "u") {
-        return success(new UsingReference());
-      } else if (variant === "t") {
-        return success(new TypeReference());
-      } else {
-        return failure(new CallReference(), "NodeReferenceKind");
-      }
-    }
-  );
-}
-function node_reference_decoder() {
-  return field(
-    "t",
-    string3,
-    (title2) => {
-      return field(
-        "i",
-        string3,
-        (topic_id) => {
-          return field(
-            "k",
-            node_reference_kind_decoder(),
-            (kind) => {
-              return success(new NodeReference(title2, topic_id, kind));
-            }
-          );
-        }
-      );
-    }
-  );
-}
-function node_declaration_decoder() {
-  return field(
-    "n",
-    string3,
-    (name2) => {
-      return field(
-        "s",
-        string3,
-        (scope) => {
-          return field(
-            "t",
-            string3,
-            (title2) => {
-              return field(
-                "i",
-                string3,
-                (topic_id) => {
-                  return field(
-                    "k",
-                    string3,
-                    (kind) => {
-                      return field(
-                        "r",
-                        list2(node_reference_decoder()),
-                        (references) => {
-                          return success(
-                            new NodeDeclaration(
-                              name2,
-                              scope,
-                              title2,
-                              topic_id,
-                              node_declaration_kind_from_string(kind),
-                              references
-                            )
-                          );
-                        }
-                      );
-                    }
-                  );
-                }
-              );
-            }
-          );
-        }
-      );
-    }
-  );
-}
 function pre_processed_line_significance_decoder() {
   return field(
     "v",
@@ -8724,10 +8721,18 @@ function pre_processed_line_significance_decoder() {
     (variant) => {
       if (variant === "sdl") {
         return field(
-          "n",
-          node_declaration_decoder(),
-          (node_declaration) => {
-            return success(new SingleDeclarationLine(node_declaration));
+          "g",
+          string3,
+          (signature) => {
+            return field(
+              "t",
+              string3,
+              (topic_id) => {
+                return success(
+                  new SingleDeclarationLine(signature, topic_id)
+                );
+              }
+            );
           }
         );
       } else if (variant === "nel") {
@@ -8752,7 +8757,7 @@ function pre_processed_node_decoder() {
           (node_id) => {
             return field(
               "d",
-              node_declaration_decoder(),
+              declaration_decoder(),
               (node_declaration) => {
                 return field(
                   "t",
@@ -8778,7 +8783,7 @@ function pre_processed_node_decoder() {
           (referenced_node_id) => {
             return field(
               "d",
-              node_declaration_decoder(),
+              declaration_decoder(),
               (referenced_node_declaration) => {
                 return field(
                   "t",
@@ -8880,21 +8885,6 @@ function pre_processed_line_decoder() {
       );
     }
   );
-}
-function node_reference_kind_to_annotation(kind) {
-  if (kind instanceof CallReference) {
-    return "Called in:";
-  } else if (kind instanceof MutationReference) {
-    return "Mutated in:";
-  } else if (kind instanceof InheritanceReference) {
-    return "Inherited by:";
-  } else if (kind instanceof AccessReference) {
-    return "Accessed in:";
-  } else if (kind instanceof UsingReference) {
-    return "Used as a library in:";
-  } else {
-    return "Used as a type in:";
-  }
 }
 
 // build/dev/javascript/plinth/element_ffi.mjs
@@ -10334,7 +10324,7 @@ function pencil(attributes) {
 
 // build/dev/javascript/o11a_client/o11a/ui/discussion.mjs
 var Model2 = class extends CustomType {
-  constructor(is_reference, show_reference_discussion, user_name, line_number, column_number, topic_id, topic_title, references, current_note_draft, current_thread_id, active_thread, show_expanded_message_box, current_expanded_message_draft, expanded_messages, editing_note, audit_metadata) {
+  constructor(is_reference, show_reference_discussion, user_name, line_number, column_number, topic_id, topic_title, current_note_draft, current_thread_id, active_thread, show_expanded_message_box, current_expanded_message_draft, expanded_messages, editing_note, declarations) {
     super();
     this.is_reference = is_reference;
     this.show_reference_discussion = show_reference_discussion;
@@ -10343,7 +10333,6 @@ var Model2 = class extends CustomType {
     this.column_number = column_number;
     this.topic_id = topic_id;
     this.topic_title = topic_title;
-    this.references = references;
     this.current_note_draft = current_note_draft;
     this.current_thread_id = current_thread_id;
     this.active_thread = active_thread;
@@ -10351,7 +10340,7 @@ var Model2 = class extends CustomType {
     this.current_expanded_message_draft = current_expanded_message_draft;
     this.expanded_messages = expanded_messages;
     this.editing_note = editing_note;
-    this.audit_metadata = audit_metadata;
+    this.declarations = declarations;
   }
 };
 var ActiveThread = class extends CustomType {
@@ -10453,7 +10442,7 @@ var MaximizeDiscussion = class extends CustomType {
 };
 var None3 = class extends CustomType {
 };
-function init3(line_number, column_number, topic_id, topic_title, is_reference, references, audit_metadata) {
+function init3(line_number, column_number, topic_id, topic_title, is_reference, declarations) {
   return new Model2(
     is_reference,
     false,
@@ -10462,7 +10451,6 @@ function init3(line_number, column_number, topic_id, topic_title, is_reference, 
     column_number,
     topic_id,
     topic_title,
-    references,
     "",
     topic_id,
     new None(),
@@ -10470,7 +10458,7 @@ function init3(line_number, column_number, topic_id, topic_title, is_reference, 
     new None(),
     new$(),
     new None(),
-    audit_metadata
+    declarations
   );
 }
 function reference_header_view(model, current_thread_notes) {
@@ -10570,7 +10558,7 @@ function reference_group_view(references, group_kind) {
               toList([
                 a(
                   toList([href("/" + reference.topic_id)]),
-                  toList([text3(reference.title)])
+                  toList([text3(reference.scoped_name)])
                 )
               ])
             );
@@ -10601,7 +10589,7 @@ function references_view(references) {
     return fragment2(toList([]));
   }
 }
-function thread_header_view(model) {
+function thread_header_view(model, references) {
   let $ = model.active_thread;
   if ($ instanceof Some) {
     let active_thread = $[0];
@@ -10696,7 +10684,7 @@ function thread_header_view(model) {
             )
           ])
         ),
-        references_view(model.references)
+        references_view(references)
       ])
     );
   }
@@ -10741,10 +10729,10 @@ function comments_view(model, current_thread_notes) {
                   toList([class$("flex gap-[.5rem]")]),
                   toList([
                     (() => {
-                      let $ = note.reference;
+                      let $ = note.referee_topic_id;
                       if ($ instanceof Some) {
                         return p(
-                          toList([]),
+                          toList([class$("italic")]),
                           toList([text3("Reference")])
                         );
                       } else {
@@ -10905,7 +10893,7 @@ function get_message_classification_prefix(significance) {
   }
 }
 function update2(model, msg) {
-  echo4("update " + inspect2(msg), "src/o11a/ui/discussion.gleam", 110);
+  echo4("update " + inspect2(msg), "src/o11a/ui/discussion.gleam", 106);
   if (msg instanceof UserWroteNote) {
     let draft = msg[0];
     return [
@@ -10919,7 +10907,6 @@ function update2(model, msg) {
           _record.column_number,
           _record.topic_id,
           _record.topic_title,
-          _record.references,
           draft,
           _record.current_thread_id,
           _record.active_thread,
@@ -10927,7 +10914,7 @@ function update2(model, msg) {
           _record.current_expanded_message_draft,
           _record.expanded_messages,
           _record.editing_note,
-          _record.audit_metadata
+          _record.declarations
         );
       })(),
       new None3()
@@ -10936,7 +10923,7 @@ function update2(model, msg) {
     echo4(
       "Submitting note! " + model.current_note_draft + " " + model.topic_id,
       "src/o11a/ui/discussion.gleam",
-      116
+      112
     );
     let _block;
     let _pipe = model.current_note_draft;
@@ -10958,14 +10945,13 @@ function update2(model, msg) {
         let $2 = model.editing_note;
         if ($2 instanceof Some) {
           let note2 = $2[0];
-          _block$1 = [new Edit(), note2.note_id, note2.references];
+          _block$1 = [new Edit(), note2.note_id];
         } else {
-          _block$1 = [new None2(), model.current_thread_id, toList([])];
+          _block$1 = [new None2(), model.current_thread_id];
         }
         let $1 = _block$1;
         let modifier = $1[0];
         let parent_id = $1[1];
-        let current_references = $1[2];
         let _block$2;
         let $3 = (() => {
           let _pipe$12 = model.current_expanded_message_draft;
@@ -10979,7 +10965,7 @@ function update2(model, msg) {
         }
         let expanded_message = _block$2;
         let _block$3;
-        let _pipe$1 = get_references(message, model.audit_metadata);
+        let _pipe$1 = get_references(message, model.declarations);
         let _pipe$2 = append2(
           _pipe$1,
           (() => {
@@ -10987,7 +10973,7 @@ function update2(model, msg) {
               let expanded_message$1 = expanded_message[0];
               return get_references(
                 expanded_message$1,
-                model.audit_metadata
+                model.declarations
               );
             } else {
               return toList([]);
@@ -10995,33 +10981,25 @@ function update2(model, msg) {
           })()
         );
         _block$3 = unique(_pipe$2);
-        let references = _block$3;
-        let _block$4;
-        let _pipe$3 = references;
-        _block$4 = filter(_pipe$3, (reference) => {
-          let _block$5;
-          let _pipe$4 = current_references;
-          _block$5 = contains(_pipe$4, reference);
-          return !_block$5;
-        });
-        let new_references = _block$4;
-        echo4(
-          "New references: " + inspect2(new_references),
-          "src/o11a/ui/discussion.gleam",
-          157
+        let referenced_topic_ids = _block$3;
+        let prior_referenced_topic_ids = map(
+          model.editing_note,
+          (note2) => {
+            return note2.referenced_topic_ids;
+          }
         );
         let note = new NoteSubmission(
           parent_id,
           significance,
           "user" + (() => {
-            let _pipe$4 = random(100);
-            return to_string(_pipe$4);
+            let _pipe$3 = random(100);
+            return to_string(_pipe$3);
           })(),
           message,
           expanded_message,
           modifier,
-          references,
-          new_references
+          referenced_topic_ids,
+          prior_referenced_topic_ids
         );
         return [
           (() => {
@@ -11034,7 +11012,6 @@ function update2(model, msg) {
               _record.column_number,
               _record.topic_id,
               _record.topic_title,
-              _record.references,
               "",
               _record.current_thread_id,
               _record.active_thread,
@@ -11042,7 +11019,7 @@ function update2(model, msg) {
               new None(),
               _record.expanded_messages,
               new None(),
-              _record.audit_metadata
+              _record.declarations
             );
           })(),
           new SubmitNote(note, model.topic_id)
@@ -11063,7 +11040,6 @@ function update2(model, msg) {
           _record.column_number,
           _record.topic_id,
           _record.topic_title,
-          _record.references,
           _record.current_note_draft,
           new_thread_id,
           new Some(
@@ -11078,7 +11054,7 @@ function update2(model, msg) {
           _record.current_expanded_message_draft,
           _record.expanded_messages,
           _record.editing_note,
-          _record.audit_metadata
+          _record.declarations
         );
       })(),
       new None3()
@@ -11114,7 +11090,6 @@ function update2(model, msg) {
           _record.column_number,
           _record.topic_id,
           _record.topic_title,
-          _record.references,
           _record.current_note_draft,
           new_current_thread_id,
           new_active_thread,
@@ -11122,7 +11097,7 @@ function update2(model, msg) {
           _record.current_expanded_message_draft,
           _record.expanded_messages,
           _record.editing_note,
-          _record.audit_metadata
+          _record.declarations
         );
       })(),
       new None3()
@@ -11140,7 +11115,6 @@ function update2(model, msg) {
           _record.column_number,
           _record.topic_id,
           _record.topic_title,
-          _record.references,
           _record.current_note_draft,
           _record.current_thread_id,
           _record.active_thread,
@@ -11148,7 +11122,7 @@ function update2(model, msg) {
           _record.current_expanded_message_draft,
           _record.expanded_messages,
           _record.editing_note,
-          _record.audit_metadata
+          _record.declarations
         );
       })(),
       new None3()
@@ -11166,7 +11140,6 @@ function update2(model, msg) {
           _record.column_number,
           _record.topic_id,
           _record.topic_title,
-          _record.references,
           _record.current_note_draft,
           _record.current_thread_id,
           _record.active_thread,
@@ -11174,7 +11147,7 @@ function update2(model, msg) {
           new Some(expanded_message),
           _record.expanded_messages,
           _record.editing_note,
-          _record.audit_metadata
+          _record.declarations
         );
       })(),
       new None3()
@@ -11194,7 +11167,6 @@ function update2(model, msg) {
             _record.column_number,
             _record.topic_id,
             _record.topic_title,
-            _record.references,
             _record.current_note_draft,
             _record.current_thread_id,
             _record.active_thread,
@@ -11202,7 +11174,7 @@ function update2(model, msg) {
             _record.current_expanded_message_draft,
             delete$2(model.expanded_messages, for_note_id),
             _record.editing_note,
-            _record.audit_metadata
+            _record.declarations
           );
         })(),
         new None3()
@@ -11219,7 +11191,6 @@ function update2(model, msg) {
             _record.column_number,
             _record.topic_id,
             _record.topic_title,
-            _record.references,
             _record.current_note_draft,
             _record.current_thread_id,
             _record.active_thread,
@@ -11227,7 +11198,7 @@ function update2(model, msg) {
             _record.current_expanded_message_draft,
             insert2(model.expanded_messages, for_note_id),
             _record.editing_note,
-            _record.audit_metadata
+            _record.declarations
           );
         })(),
         new None3()
@@ -11250,7 +11221,6 @@ function update2(model, msg) {
           _record.column_number,
           _record.topic_id,
           _record.topic_title,
-          _record.references,
           _record.current_note_draft,
           _record.current_thread_id,
           _record.active_thread,
@@ -11258,7 +11228,7 @@ function update2(model, msg) {
           _record.current_expanded_message_draft,
           _record.expanded_messages,
           _record.editing_note,
-          _record.audit_metadata
+          _record.declarations
         );
       })(),
       new FocusExpandedDiscussionInput(model.line_number, model.column_number)
@@ -11288,7 +11258,6 @@ function update2(model, msg) {
             _record.column_number,
             _record.topic_id,
             _record.topic_title,
-            _record.references,
             get_message_classification_prefix(note$1.significance) + note$1.message,
             _record.current_thread_id,
             _record.active_thread,
@@ -11303,7 +11272,7 @@ function update2(model, msg) {
             note$1.expanded_message,
             _record.expanded_messages,
             new Some(note$1),
-            _record.audit_metadata
+            _record.declarations
           );
         })(),
         new None3()
@@ -11323,7 +11292,6 @@ function update2(model, msg) {
           _record.column_number,
           _record.topic_id,
           _record.topic_title,
-          _record.references,
           "",
           _record.current_thread_id,
           _record.active_thread,
@@ -11331,7 +11299,7 @@ function update2(model, msg) {
           new None(),
           _record.expanded_messages,
           new None(),
-          _record.audit_metadata
+          _record.declarations
         );
       })(),
       new None3()
@@ -11348,7 +11316,6 @@ function update2(model, msg) {
           _record.column_number,
           _record.topic_id,
           _record.topic_title,
-          _record.references,
           _record.current_note_draft,
           _record.current_thread_id,
           _record.active_thread,
@@ -11356,7 +11323,7 @@ function update2(model, msg) {
           _record.current_expanded_message_draft,
           _record.expanded_messages,
           _record.editing_note,
-          _record.audit_metadata
+          _record.declarations
         );
       })(),
       new None3()
@@ -11438,11 +11405,22 @@ function new_message_input_view(model, current_thread_notes) {
     ])
   );
 }
-function overlay_view(model, notes) {
+function overlay_view(model, notes, references) {
   let _block;
   let _pipe = map_get(notes, model.current_thread_id);
   _block = unwrap2(_pipe, toList([]));
   let current_thread_notes = _block;
+  let _block$1;
+  let _pipe$1 = map_get(references, model.topic_id);
+  _block$1 = unwrap2(_pipe$1, toList([]));
+  let references$1 = _block$1;
+  echo4(
+    "references for " + model.topic_id + ": " + inspect2(
+      references$1
+    ),
+    "src/o11a/ui/discussion.gleam",
+    320
+  );
   return div(
     toList([
       class$(
@@ -11471,7 +11449,7 @@ function overlay_view(model, notes) {
               div(
                 toList([class$("overlay p-[.5rem]")]),
                 toList([
-                  thread_header_view(model),
+                  thread_header_view(model, references$1),
                   (() => {
                     let $1 = is_some(model.active_thread) || length2(
                       current_thread_notes
@@ -11488,45 +11466,6 @@ function overlay_view(model, notes) {
               expanded_message_view(model)
             ])
           );
-        }
-      })()
-    ])
-  );
-}
-function panel_view(model, notes) {
-  let _block;
-  let _pipe = map_get(notes, model.current_thread_id);
-  _block = unwrap2(_pipe, toList([]));
-  let current_thread_notes = _block;
-  return div(
-    toList([style("padding", ".5rem")]),
-    toList([
-      (() => {
-        let $ = model.is_reference;
-        if ($) {
-          return reference_header_view(model, current_thread_notes);
-        } else {
-          return fragment2(toList([]));
-        }
-      })(),
-      thread_header_view(model),
-      (() => {
-        let $ = is_some(model.active_thread) || length2(
-          current_thread_notes
-        ) > 0;
-        if ($) {
-          return comments_view(model, current_thread_notes);
-        } else {
-          return fragment2(toList([]));
-        }
-      })(),
-      new_message_input_view(model, current_thread_notes),
-      (() => {
-        let $ = model.show_expanded_message_box;
-        if ($) {
-          return expand_message_input_view(model);
-        } else {
-          return fragment2(toList([]));
         }
       })()
     ])
@@ -11679,7 +11618,7 @@ var DiscussionReference = class extends CustomType {
   }
 };
 var UserSelectedDiscussionEntry = class extends CustomType {
-  constructor(kind, line_number, column_number, node_id, topic_id, topic_title, is_reference, references) {
+  constructor(kind, line_number, column_number, node_id, topic_id, topic_title, is_reference) {
     super();
     this.kind = kind;
     this.line_number = line_number;
@@ -11688,7 +11627,6 @@ var UserSelectedDiscussionEntry = class extends CustomType {
     this.topic_id = topic_id;
     this.topic_title = topic_title;
     this.is_reference = is_reference;
-    this.references = references;
   }
 };
 var UserUnselectedDiscussionEntry = class extends CustomType {
@@ -11736,7 +11674,7 @@ function map_discussion_msg(msg, selected_discussion) {
     update2(selected_discussion.model, msg)
   );
 }
-function discussion_view(attrs, discussion, element_line_number, element_column_number, selected_discussion) {
+function discussion_view(attrs, discussion, references, element_line_number, element_column_number, selected_discussion) {
   if (selected_discussion instanceof Some) {
     let selected_discussion$1 = selected_discussion[0];
     let $ = element_line_number === selected_discussion$1.line_number && element_column_number === selected_discussion$1.column_number;
@@ -11747,7 +11685,8 @@ function discussion_view(attrs, discussion, element_line_number, element_column_
           (() => {
             let _pipe = overlay_view(
               selected_discussion$1.model,
-              discussion
+              discussion,
+              references
             );
             return map5(
               _pipe,
@@ -11765,7 +11704,7 @@ function discussion_view(attrs, discussion, element_line_number, element_column_
     return fragment2(toList([]));
   }
 }
-function inline_comment_preview_view(parent_notes, topic_id, topic_title, references, element_line_number, element_column_number, selected_discussion, discussion) {
+function inline_comment_preview_view(parent_notes, topic_id, topic_title, element_line_number, element_column_number, selected_discussion, discussion, references) {
   let note_result = find2(
     parent_notes,
     (note) => {
@@ -11805,8 +11744,7 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, refere
                 new None(),
                 topic_id,
                 topic_title,
-                false,
-                references
+                false
               )
             ),
             on_blur(new UserUnselectedDiscussionEntry(new EntryFocus())),
@@ -11818,8 +11756,7 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, refere
                 new None(),
                 topic_id,
                 topic_title,
-                false,
-                references
+                false
               )
             ),
             on_mouse_leave(
@@ -11865,6 +11802,7 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, refere
             })()
           ]),
           discussion,
+          references,
           element_line_number,
           element_column_number,
           selected_discussion
@@ -11901,8 +11839,7 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, refere
                 new None(),
                 topic_id,
                 topic_title,
-                false,
-                references
+                false
               )
             ),
             on_blur(new UserUnselectedDiscussionEntry(new EntryFocus())),
@@ -11914,8 +11851,7 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, refere
                 new None(),
                 topic_id,
                 topic_title,
-                false,
-                references
+                false
               )
             ),
             on_mouse_leave(
@@ -11946,6 +11882,7 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, refere
             })()
           ]),
           discussion,
+          references,
           element_line_number,
           element_column_number,
           selected_discussion
@@ -11954,7 +11891,7 @@ function inline_comment_preview_view(parent_notes, topic_id, topic_title, refere
     );
   }
 }
-function declaration_node_view(node_id, node_declaration, tokens, discussion, element_line_number, element_column_number, selected_discussion) {
+function declaration_node_view(node_id, node_declaration, tokens, discussion, references, element_line_number, element_column_number, selected_discussion) {
   return span(
     toList([
       class$("relative"),
@@ -11984,14 +11921,14 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, el
             })()
           ),
           class$(
-            node_declaration_kind_to_string(node_declaration.kind)
+            declaration_kind_to_string(node_declaration.kind)
           ),
           class$("declaration-preview N" + to_string(node_id)),
           class$(discussion_entry),
           class$(discussion_entry_hover),
           attribute2("tabindex", "0"),
           encode_topic_id_data(node_declaration.topic_id),
-          encode_topic_title_data(node_declaration.title),
+          encode_topic_title_data(node_declaration.signature),
           encode_is_reference_data(false),
           on_focus(
             new UserSelectedDiscussionEntry(
@@ -12000,9 +11937,8 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, el
               element_column_number,
               new Some(node_id),
               node_declaration.topic_id,
-              node_declaration.title,
-              false,
-              node_declaration.references
+              node_declaration.signature,
+              false
             )
           ),
           on_blur(new UserUnselectedDiscussionEntry(new EntryFocus())),
@@ -12013,9 +11949,8 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, el
               element_column_number,
               new Some(node_id),
               node_declaration.topic_id,
-              node_declaration.title,
-              false,
-              node_declaration.references
+              node_declaration.signature,
+              false
             )
           ),
           on_mouse_leave(
@@ -12049,6 +11984,7 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, el
           })()
         ]),
         discussion,
+        references,
         element_line_number,
         element_column_number,
         selected_discussion
@@ -12056,7 +11992,7 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, el
     ])
   );
 }
-function reference_node_view(referenced_node_id, referenced_node_declaration, tokens, discussion, element_line_number, element_column_number, selected_discussion) {
+function reference_node_view(referenced_node_id, referenced_node_declaration, tokens, discussion, references, element_line_number, element_column_number, selected_discussion) {
   return span(
     toList([
       class$("relative"),
@@ -12075,7 +12011,7 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
       span(
         toList([
           class$(
-            node_declaration_kind_to_string(
+            declaration_kind_to_string(
               referenced_node_declaration.kind
             )
           ),
@@ -12086,7 +12022,9 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
           class$(discussion_entry_hover),
           attribute2("tabindex", "0"),
           encode_topic_id_data(referenced_node_declaration.topic_id),
-          encode_topic_title_data(referenced_node_declaration.title),
+          encode_topic_title_data(
+            referenced_node_declaration.signature
+          ),
           encode_is_reference_data(true),
           on_focus(
             new UserSelectedDiscussionEntry(
@@ -12095,9 +12033,8 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
               element_column_number,
               new Some(referenced_node_id),
               referenced_node_declaration.topic_id,
-              referenced_node_declaration.title,
-              true,
-              referenced_node_declaration.references
+              referenced_node_declaration.signature,
+              true
             )
           ),
           on_blur(new UserUnselectedDiscussionEntry(new EntryFocus())),
@@ -12108,9 +12045,8 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
               element_column_number,
               new Some(referenced_node_id),
               referenced_node_declaration.topic_id,
-              referenced_node_declaration.title,
-              true,
-              referenced_node_declaration.references
+              referenced_node_declaration.signature,
+              true
             )
           ),
           on_mouse_leave(
@@ -12144,6 +12080,7 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
           })()
         ]),
         discussion,
+        references,
         element_line_number,
         element_column_number,
         selected_discussion
@@ -12151,7 +12088,7 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
     ])
   );
 }
-function preprocessed_nodes_view(loc, discussion, selected_discussion) {
+function preprocessed_nodes_view(loc, discussion, references, selected_discussion) {
   let _pipe = map_fold(
     loc.elements,
     0,
@@ -12168,6 +12105,7 @@ function preprocessed_nodes_view(loc, discussion, selected_discussion) {
             node_declaration,
             tokens,
             discussion,
+            references,
             loc.line_number,
             new_column_index,
             selected_discussion
@@ -12185,6 +12123,7 @@ function preprocessed_nodes_view(loc, discussion, selected_discussion) {
             referenced_node_declaration,
             tokens,
             discussion,
+            references,
             loc.line_number,
             new_column_index,
             selected_discussion
@@ -12305,7 +12244,7 @@ function get_notes(discussion, leading_spaces, topic_id) {
   let info_notes = _block$1;
   return [parent_notes, info_notes];
 }
-function line_container_view(discussion, loc, line_topic_id, line_topic_title, line_references, selected_discussion) {
+function line_container_view(discussion, references, loc, line_topic_id, line_topic_title, selected_discussion) {
   let $ = get_notes(discussion, loc.leading_spaces, line_topic_id);
   let parent_notes = $[0];
   let info_notes = $[1];
@@ -12368,24 +12307,29 @@ function line_container_view(discussion, loc, line_topic_id, line_topic_title, l
             toList([text3(loc.line_number_text)])
           ),
           fragment2(
-            preprocessed_nodes_view(loc, discussion, selected_discussion)
+            preprocessed_nodes_view(
+              loc,
+              discussion,
+              references,
+              selected_discussion
+            )
           ),
           inline_comment_preview_view(
             parent_notes,
             line_topic_id,
             line_topic_title,
-            line_references,
             loc.line_number,
             column_count,
             selected_discussion,
-            discussion
+            discussion,
+            references
           )
         ])
       )
     ])
   );
 }
-function loc_view(discussion, loc, selected_discussion) {
+function loc_view(discussion, references, loc, selected_discussion) {
   let $ = loc.significance;
   if ($ instanceof EmptyLine) {
     return p(
@@ -12395,31 +12339,37 @@ function loc_view(discussion, loc, selected_discussion) {
           toList([class$("line-number code-extras relative")]),
           toList([text3(loc.line_number_text)])
         ),
-        preprocessed_nodes_view(loc, discussion, selected_discussion)
+        preprocessed_nodes_view(
+          loc,
+          discussion,
+          references,
+          selected_discussion
+        )
       )
     );
   } else if ($ instanceof SingleDeclarationLine) {
-    let node_declaration = $.node_declaration;
+    let signature = $.signature;
+    let topic_id = $.topic_id;
     return line_container_view(
       discussion,
+      references,
       loc,
-      node_declaration.topic_id,
-      node_declaration.title,
-      node_declaration.references,
+      topic_id,
+      signature,
       selected_discussion
     );
   } else {
     return line_container_view(
       discussion,
+      references,
       loc,
       loc.line_id,
       loc.line_tag,
-      toList([]),
       selected_discussion
     );
   }
 }
-function view2(preprocessed_source, discussion, selected_discussion) {
+function view2(preprocessed_source, discussion, references, selected_discussion) {
   return div(
     toList([
       id("audit-page"),
@@ -12436,7 +12386,7 @@ function view2(preprocessed_source, discussion, selected_discussion) {
     map2(
       preprocessed_source,
       (_capture) => {
-        return loc_view(discussion, _capture, selected_discussion);
+        return loc_view(discussion, references, _capture, selected_discussion);
       }
     )
   );
@@ -12796,12 +12746,14 @@ function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
 
 // build/dev/javascript/o11a_client/o11a_client.mjs
 var Model3 = class extends CustomType {
-  constructor(route2, file_tree, audit_metadata, source_files, discussions, discussion_models, keyboard_model, selected_discussion, selected_node_id, focused_discussion, clicked_discussion) {
+  constructor(route2, file_tree, audit_metadata, source_files, audit_declarations, audit_references, discussions, discussion_models, keyboard_model, selected_discussion, selected_node_id, focused_discussion, clicked_discussion) {
     super();
     this.route = route2;
     this.file_tree = file_tree;
     this.audit_metadata = audit_metadata;
     this.source_files = source_files;
+    this.audit_declarations = audit_declarations;
+    this.audit_references = audit_references;
     this.discussions = discussions;
     this.discussion_models = discussion_models;
     this.keyboard_model = keyboard_model;
@@ -12854,6 +12806,13 @@ var ClientFetchedSourceFile = class extends CustomType {
     this.source_file = source_file;
   }
 };
+var ClientFetchedDeclarations = class extends CustomType {
+  constructor(audit_name, declarations) {
+    super();
+    this.audit_name = audit_name;
+    this.declarations = declarations;
+  }
+};
 var ClientFetchedDiscussion = class extends CustomType {
   constructor(audit_name, discussion) {
     super();
@@ -12874,7 +12833,7 @@ var UserEnteredKey = class extends CustomType {
   }
 };
 var UserSelectedDiscussionEntry2 = class extends CustomType {
-  constructor(kind, line_number, column_number, node_id, topic_id, topic_title, is_reference, references) {
+  constructor(kind, line_number, column_number, node_id, topic_id, topic_title, is_reference) {
     super();
     this.kind = kind;
     this.line_number = line_number;
@@ -12883,7 +12842,6 @@ var UserSelectedDiscussionEntry2 = class extends CustomType {
     this.topic_id = topic_id;
     this.topic_title = topic_title;
     this.is_reference = is_reference;
-    this.references = references;
   }
 };
 var UserUnselectedDiscussionEntry2 = class extends CustomType {
@@ -12958,8 +12916,8 @@ function parse_route(uri) {
   }
 }
 function on_url_change(uri) {
-  echo5("on_url_change", "src/o11a_client.gleam", 115);
-  echo5(uri, "src/o11a_client.gleam", 116);
+  echo5("on_url_change", "src/o11a_client.gleam", 129);
+  echo5(uri, "src/o11a_client.gleam", 130);
   let _pipe = parse_route(uri);
   return new OnRouteChange(_pipe);
 }
@@ -13068,6 +13026,17 @@ function fetch_source_file(model, page_path) {
     );
   }
 }
+function fetch_declarations(audit_name) {
+  return get2(
+    "/audit-declarations/" + audit_name,
+    expect_json(
+      list2(declaration_decoder()),
+      (_capture) => {
+        return new ClientFetchedDeclarations(audit_name, _capture);
+      }
+    )
+  );
+}
 function fetch_discussion(audit_name) {
   return get2(
     "/audit-discussion/" + audit_name,
@@ -13083,16 +13052,21 @@ function route_change_effect(model, route2) {
   if (route2 instanceof AuditDashboardRoute) {
     let audit_name = route2.audit_name;
     return batch(
-      toList([fetch_metadata(model, audit_name), fetch_discussion(audit_name)])
+      toList([
+        fetch_metadata(model, audit_name),
+        fetch_declarations(audit_name),
+        fetch_discussion(audit_name)
+      ])
     );
   } else if (route2 instanceof AuditPageRoute) {
     let audit_name = route2.audit_name;
     let page_path = route2.page_path;
     return batch(
       toList([
-        fetch_discussion(audit_name),
         fetch_metadata(model, audit_name),
-        fetch_source_file(model, page_path)
+        fetch_source_file(model, page_path),
+        fetch_declarations(audit_name),
+        fetch_discussion(audit_name)
       ])
     );
   } else {
@@ -13111,6 +13085,8 @@ function init4(_) {
   let route2 = _block;
   let init_model = new Model3(
     route2,
+    new_map(),
+    new_map(),
     new_map(),
     new_map(),
     new_map(),
@@ -13186,6 +13162,8 @@ function update3(model, msg) {
           file_tree_from_route(route2, model.audit_metadata),
           _record.audit_metadata,
           _record.source_files,
+          _record.audit_declarations,
+          _record.audit_references,
           _record.discussions,
           _record.discussion_models,
           _record.keyboard_model,
@@ -13213,6 +13191,8 @@ function update3(model, msg) {
           file_tree_from_route(model.route, updated_audit_metadata),
           updated_audit_metadata,
           _record.source_files,
+          _record.audit_declarations,
+          _record.audit_references,
           _record.discussions,
           _record.discussion_models,
           _record.keyboard_model,
@@ -13245,6 +13225,8 @@ function update3(model, msg) {
           _record.file_tree,
           _record.audit_metadata,
           insert(model.source_files, page_path, source_files),
+          _record.audit_declarations,
+          _record.audit_references,
           _record.discussions,
           _record.discussion_models,
           (() => {
@@ -13271,6 +13253,66 @@ function update3(model, msg) {
       })(),
       none()
     ];
+  } else if (msg instanceof ClientFetchedDeclarations) {
+    let audit_name = msg.audit_name;
+    let declarations = msg.declarations;
+    echo5("cliend fetched declarations", "src/o11a_client.gleam", 315);
+    if (declarations.isOk()) {
+      console_log("Successfully fetched declarations " + audit_name);
+    } else {
+      let e = declarations[0];
+      console_log("Failed to fetch declarations: " + inspect2(e));
+    }
+    return [
+      (() => {
+        let _record = model;
+        return new Model3(
+          _record.route,
+          _record.file_tree,
+          _record.audit_metadata,
+          _record.source_files,
+          insert(model.audit_declarations, audit_name, declarations),
+          insert(
+            model.audit_references,
+            audit_name,
+            (() => {
+              let _pipe = declarations;
+              return map3(
+                _pipe,
+                (declarations2) => {
+                  let _pipe$1 = group(
+                    declarations2,
+                    (declaration) => {
+                      return declaration.topic_id;
+                    }
+                  );
+                  return map_values(
+                    _pipe$1,
+                    (_, value3) => {
+                      let _pipe$2 = map2(
+                        value3,
+                        (declaration) => {
+                          return declaration.references;
+                        }
+                      );
+                      return flatten2(_pipe$2);
+                    }
+                  );
+                }
+              );
+            })()
+          ),
+          _record.discussions,
+          _record.discussion_models,
+          _record.keyboard_model,
+          _record.selected_discussion,
+          _record.selected_node_id,
+          _record.focused_discussion,
+          _record.clicked_discussion
+        );
+      })(),
+      none()
+    ];
   } else if (msg instanceof ClientFetchedDiscussion) {
     let audit_name = msg.audit_name;
     let discussion = msg.discussion;
@@ -13284,6 +13326,8 @@ function update3(model, msg) {
             _record.file_tree,
             _record.audit_metadata,
             _record.source_files,
+            _record.audit_declarations,
+            _record.audit_references,
             insert(
               model.discussions,
               audit_name,
@@ -13328,6 +13372,8 @@ function update3(model, msg) {
           _record.file_tree,
           _record.audit_metadata,
           _record.source_files,
+          _record.audit_declarations,
+          _record.audit_references,
           _record.discussions,
           _record.discussion_models,
           keyboard_model,
@@ -13347,7 +13393,6 @@ function update3(model, msg) {
     let topic_id = msg.topic_id;
     let topic_title = msg.topic_title;
     let is_reference = msg.is_reference;
-    let references = msg.references;
     return ok(
       get_page_route_from_model(model),
       (_) => {
@@ -13362,10 +13407,10 @@ function update3(model, msg) {
           (audit_name) => {
             return ok(
               (() => {
-                let $ = map_get(model.audit_metadata, audit_name);
+                let $ = map_get(model.audit_declarations, audit_name);
                 if ($.isOk() && $[0].isOk()) {
-                  let audit_metadata = $[0][0];
-                  return new Ok(audit_metadata);
+                  let declarations = $[0][0];
+                  return new Ok(declarations);
                 } else {
                   return new Error(void 0);
                 }
@@ -13373,7 +13418,7 @@ function update3(model, msg) {
               (_) => {
                 return [model, none()];
               },
-              (audit_metadata) => {
+              (declarations) => {
                 let selected_discussion = new DiscussionKey(
                   page_path,
                   line_number,
@@ -13393,8 +13438,7 @@ function update3(model, msg) {
                       topic_id,
                       topic_title,
                       is_reference,
-                      references,
-                      audit_metadata
+                      declarations
                     )
                   );
                 }
@@ -13408,6 +13452,8 @@ function update3(model, msg) {
                         _record.file_tree,
                         _record.audit_metadata,
                         _record.source_files,
+                        _record.audit_declarations,
+                        _record.audit_references,
                         _record.discussions,
                         discussion_models,
                         _record.keyboard_model,
@@ -13423,6 +13469,8 @@ function update3(model, msg) {
                         _record.file_tree,
                         _record.audit_metadata,
                         _record.source_files,
+                        _record.audit_declarations,
+                        _record.audit_references,
                         _record.discussions,
                         discussion_models,
                         (() => {
@@ -13454,7 +13502,7 @@ function update3(model, msg) {
     echo5(
       "Unselecting discussion " + inspect2(kind),
       "src/o11a_client.gleam",
-      404
+      455
     );
     return [
       (() => {
@@ -13465,6 +13513,8 @@ function update3(model, msg) {
             _record.file_tree,
             _record.audit_metadata,
             _record.source_files,
+            _record.audit_declarations,
+            _record.audit_references,
             _record.discussions,
             _record.discussion_models,
             _record.keyboard_model,
@@ -13480,6 +13530,8 @@ function update3(model, msg) {
             _record.file_tree,
             _record.audit_metadata,
             _record.source_files,
+            _record.audit_declarations,
+            _record.audit_references,
             _record.discussions,
             _record.discussion_models,
             _record.keyboard_model,
@@ -13509,6 +13561,8 @@ function update3(model, msg) {
               _record.file_tree,
               _record.audit_metadata,
               _record.source_files,
+              _record.audit_declarations,
+              _record.audit_references,
               _record.discussions,
               _record.discussion_models,
               _record.keyboard_model,
@@ -13564,7 +13618,7 @@ function update3(model, msg) {
         return [model, none()];
       },
       (page_path) => {
-        echo5("User clicked inside discussion", "src/o11a_client.gleam", 468);
+        echo5("User clicked inside discussion", "src/o11a_client.gleam", 519);
         let _block;
         let $ = !isEqual(
           model.selected_discussion,
@@ -13579,6 +13633,8 @@ function update3(model, msg) {
             _record.file_tree,
             _record.audit_metadata,
             _record.source_files,
+            _record.audit_declarations,
+            _record.audit_references,
             _record.discussions,
             _record.discussion_models,
             _record.keyboard_model,
@@ -13605,6 +13661,8 @@ function update3(model, msg) {
             _record.file_tree,
             _record.audit_metadata,
             _record.source_files,
+            _record.audit_declarations,
+            _record.audit_references,
             _record.discussions,
             _record.discussion_models,
             _record.keyboard_model,
@@ -13631,6 +13689,8 @@ function update3(model, msg) {
             _record.file_tree,
             _record.audit_metadata,
             _record.source_files,
+            _record.audit_declarations,
+            _record.audit_references,
             _record.discussions,
             _record.discussion_models,
             _record.keyboard_model,
@@ -13647,7 +13707,7 @@ function update3(model, msg) {
       }
     );
   } else if (msg instanceof UserClickedOutsideDiscussion) {
-    echo5("User clicked outside discussion", "src/o11a_client.gleam", 497);
+    echo5("User clicked outside discussion", "src/o11a_client.gleam", 548);
     return [
       (() => {
         let _record = model;
@@ -13656,6 +13716,8 @@ function update3(model, msg) {
           _record.file_tree,
           _record.audit_metadata,
           _record.source_files,
+          _record.audit_declarations,
+          _record.audit_references,
           _record.discussions,
           _record.discussion_models,
           _record.keyboard_model,
@@ -13713,7 +13775,7 @@ function update3(model, msg) {
           echo5(
             "Focusing discussion input, user is typing",
             "src/o11a_client.gleam",
-            533
+            584
           );
           set_is_user_typing(true);
           return [
@@ -13724,6 +13786,8 @@ function update3(model, msg) {
                 _record.file_tree,
                 _record.audit_metadata,
                 _record.source_files,
+                _record.audit_declarations,
+                _record.audit_references,
                 _record.discussions,
                 _record.discussion_models,
                 _record.keyboard_model,
@@ -13749,6 +13813,8 @@ function update3(model, msg) {
                 _record.file_tree,
                 _record.audit_metadata,
                 _record.source_files,
+                _record.audit_declarations,
+                _record.audit_references,
                 _record.discussions,
                 _record.discussion_models,
                 _record.keyboard_model,
@@ -13763,7 +13829,7 @@ function update3(model, msg) {
             none()
           ];
         } else if (discussion_effect instanceof UnfocusDiscussionInput) {
-          echo5("Unfocusing discussion input", "src/o11a_client.gleam", 564);
+          echo5("Unfocusing discussion input", "src/o11a_client.gleam", 615);
           set_is_user_typing(false);
           return [model, none()];
         } else if (discussion_effect instanceof MaximizeDiscussion) {
@@ -13775,6 +13841,8 @@ function update3(model, msg) {
                 _record.file_tree,
                 _record.audit_metadata,
                 _record.source_files,
+                _record.audit_declarations,
+                _record.audit_references,
                 _record.discussions,
                 insert(
                   model.discussion_models,
@@ -13799,6 +13867,8 @@ function update3(model, msg) {
                 _record.file_tree,
                 _record.audit_metadata,
                 _record.source_files,
+                _record.audit_declarations,
+                _record.audit_references,
                 _record.discussions,
                 insert(
                   model.discussion_models,
@@ -13833,6 +13903,8 @@ function update3(model, msg) {
               _record.file_tree,
               _record.audit_metadata,
               _record.source_files,
+              _record.audit_declarations,
+              _record.audit_references,
               _record.discussions,
               insert(
                 model.discussion_models,
@@ -13858,6 +13930,18 @@ function update3(model, msg) {
     let error2 = msg.error;
     print("Failed to submit note: " + inspect2(error2));
     return [model, none()];
+  }
+}
+function selected_node_highlighter(model) {
+  let $ = model.selected_node_id;
+  if ($ instanceof Some) {
+    let selected_node_id = $[0];
+    return style2(
+      toList([]),
+      ".N" + to_string(selected_node_id) + " { background-color: var(--highlight-color); border-radius: 0.15rem; }"
+    );
+  } else {
+    return fragment2(toList([]));
   }
 }
 function get_selected_discussion(model) {
@@ -13937,7 +14021,6 @@ function map_audit_page_msg(msg) {
     let topic_id = msg.topic_id;
     let topic_title = msg.topic_title;
     let is_reference = msg.is_reference;
-    let references = msg.references;
     return new UserSelectedDiscussionEntry2(
       kind,
       line_number,
@@ -13945,8 +14028,7 @@ function map_audit_page_msg(msg) {
       node_id,
       topic_id,
       topic_title,
-      is_reference,
-      references
+      is_reference
     );
   } else if (msg instanceof UserUnselectedDiscussionEntry) {
     let kind = msg.kind;
@@ -13968,13 +14050,6 @@ function map_audit_page_msg(msg) {
     let uri = msg.uri;
     return new UserCtrlClickedNode2(uri);
   }
-}
-function map_discussion_msg2(msg, selected_discussion) {
-  return new UserUpdatedDiscussion2(
-    selected_discussion.line_number,
-    selected_discussion.column_number,
-    update2(selected_discussion.model, msg)
-  );
 }
 function view5(model) {
   let $ = model.route;
@@ -14012,34 +14087,18 @@ function view5(model) {
     let discussion = _block;
     let _block$1;
     let _pipe$1 = map_get(model.source_files, page_path);
-    let _pipe$2 = map3(
-      _pipe$1,
-      (source_files) => {
-        if (source_files.isOk()) {
-          let source_files$1 = source_files[0];
-          return source_files$1;
-        } else {
-          return toList([]);
-        }
-      }
-    );
+    let _pipe$2 = unwrap2(_pipe$1, new Ok(toList([])));
     _block$1 = unwrap2(_pipe$2, toList([]));
     let preprocessed_source = _block$1;
+    let _block$2;
+    let _pipe$3 = map_get(model.audit_references, audit_name);
+    let _pipe$4 = unwrap2(_pipe$3, new Ok(new_map()));
+    _block$2 = unwrap2(_pipe$4, new_map());
+    let references = _block$2;
     return div(
       toList([on_click(new UserClickedOutsideDiscussion())]),
       toList([
-        (() => {
-          let $1 = model.selected_node_id;
-          if ($1 instanceof Some) {
-            let selected_node_id = $1[0];
-            return style2(
-              toList([]),
-              ".N" + to_string(selected_node_id) + " { background-color: var(--highlight-color); border-radius: 0.15rem; }"
-            );
-          } else {
-            return fragment2(toList([]));
-          }
-        })(),
+        selected_node_highlighter(model),
         element3(
           toList([
             route("/component-discussion/" + audit_name),
@@ -14053,31 +14112,17 @@ function view5(model) {
         ),
         view4(
           (() => {
-            let _pipe$3 = view2(
+            let _pipe$5 = view2(
               preprocessed_source,
               discussion,
+              references,
               selected_discussion
             );
-            return map5(_pipe$3, map_audit_page_msg);
+            return map5(_pipe$5, map_audit_page_msg);
           })(),
           (() => {
-            if (selected_discussion instanceof Some) {
-              let selected_discussion$1 = selected_discussion[0];
-              let _pipe$3 = panel_view(
-                selected_discussion$1.model,
-                discussion
-              );
-              let _pipe$4 = map5(
-                _pipe$3,
-                (_capture) => {
-                  return map_discussion_msg2(_capture, selected_discussion$1);
-                }
-              );
-              return new Some(_pipe$4);
-            } else {
-              let _pipe$3 = view3(discussion, page_path);
-              return new Some(_pipe$3);
-            }
+            let _pipe$5 = view3(discussion, page_path);
+            return new Some(_pipe$5);
           })(),
           model.file_tree,
           audit_name,

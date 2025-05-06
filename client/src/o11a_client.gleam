@@ -22,6 +22,7 @@ import o11a/client/page_navigation
 import o11a/client/selectors
 import o11a/client/storage
 import o11a/computed_note
+import o11a/declaration
 import o11a/events
 import o11a/note
 import o11a/preprocessor
@@ -51,6 +52,17 @@ pub type Model {
     source_files: dict.Dict(
       String,
       Result(List(preprocessor.PreProcessedLine), lustre_http.HttpError),
+    ),
+    audit_declarations: dict.Dict(
+      String,
+      Result(List(declaration.Declaration), lustre_http.HttpError),
+    ),
+    audit_references: dict.Dict(
+      String,
+      Result(
+        dict.Dict(String, List(declaration.Reference)),
+        lustre_http.HttpError,
+      ),
     ),
     discussions: dict.Dict(
       String,
@@ -87,7 +99,9 @@ fn init(_) -> #(Model, Effect(Msg)) {
       file_tree: dict.new(),
       audit_metadata: dict.new(),
       source_files: dict.new(),
+      audit_declarations: dict.new(),
       discussions: dict.new(),
+      audit_references: dict.new(),
       discussion_models: dict.new(),
       keyboard_model: page_navigation.init(),
       selected_discussion: option.None,
@@ -209,6 +223,10 @@ pub type Msg {
       lustre_http.HttpError,
     ),
   )
+  ClientFetchedDeclarations(
+    audit_name: String,
+    declarations: Result(List(declaration.Declaration), lustre_http.HttpError),
+  )
   ClientFetchedDiscussion(
     audit_name: String,
     discussion: Result(List(computed_note.ComputedNote), lustre_http.HttpError),
@@ -227,7 +245,6 @@ pub type Msg {
     topic_id: String,
     topic_title: String,
     is_reference: Bool,
-    references: List(preprocessor.NodeReference),
   )
   UserUnselectedDiscussionEntry(kind: audit_page.DiscussionSelectKind)
   UserClickedDiscussionEntry(line_number: Int, column_number: Int)
@@ -294,6 +311,41 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       )
     }
 
+    ClientFetchedDeclarations(audit_name:, declarations:) -> {
+      case declarations {
+        Ok(..) -> io.println("Successfully fetched declarations " <> audit_name)
+        Error(e) ->
+          io.println("Failed to fetch declarations: " <> string.inspect(e))
+      }
+      #(
+        Model(
+          ..model,
+          audit_declarations: dict.insert(
+            model.audit_declarations,
+            audit_name,
+            declarations,
+          ),
+          audit_references: dict.insert(
+            model.audit_references,
+            audit_name,
+            declarations
+              |> result.map(fn(declarations) {
+                // Multiple declarations can have the same topic_id, so we need
+                // to group them by topic_id first, then flatten the result
+                list.group(declarations, by: fn(declaration) {
+                  declaration.topic_id
+                })
+                |> dict.map_values(fn(_k, value) {
+                  list.map(value, fn(declaration) { declaration.references })
+                  |> list.flatten
+                })
+              }),
+          ),
+        ),
+        effect.none(),
+      )
+    }
+
     ClientFetchedDiscussion(audit_name:, discussion:) ->
       case discussion {
         Ok(discussion) -> #(
@@ -333,7 +385,6 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       topic_id:,
       topic_title:,
       is_reference:,
-      references:,
     ) -> {
       use page_path <- given.ok(
         get_page_route_from_model(model),
@@ -343,9 +394,9 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         get_audit_name_from_model(model),
         else_return: fn(_) { #(model, effect.none()) },
       )
-      use audit_metadata <- given.ok(
-        case dict.get(model.audit_metadata, audit_name) {
-          Ok(Ok(audit_metadata)) -> Ok(audit_metadata)
+      use declarations <- given.ok(
+        case dict.get(model.audit_declarations, audit_name) {
+          Ok(Ok(declarations)) -> Ok(declarations)
           _ -> Error(Nil)
         },
         else_return: fn(_) { #(model, effect.none()) },
@@ -368,8 +419,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               topic_id:,
               topic_title:,
               is_reference:,
-              references:,
-              audit_metadata:,
+              declarations:,
             ),
           )
       }
@@ -616,13 +666,15 @@ fn route_change_effect(model, new_route route: Route) {
     AuditDashboardRoute(audit_name:) ->
       effect.batch([
         fetch_metadata(model, audit_name),
+        fetch_declarations(audit_name),
         fetch_discussion(audit_name),
       ])
     AuditPageRoute(audit_name:, page_path:) ->
       effect.batch([
-        fetch_discussion(audit_name),
         fetch_metadata(model, audit_name),
         fetch_source_file(model, page_path),
+        fetch_declarations(audit_name),
+        fetch_discussion(audit_name),
       ])
     O11aHomeRoute -> effect.none()
   }
@@ -654,6 +706,16 @@ fn fetch_source_file(model: Model, page_path: String) -> Effect(Msg) {
         ),
       )
   }
+}
+
+fn fetch_declarations(audit_name) {
+  lustre_http.get(
+    "/audit-declarations/" <> audit_name,
+    lustre_http.expect_json(
+      decode.list(declaration.declaration_decoder()),
+      ClientFetchedDeclarations(audit_name, _),
+    ),
+  )
 }
 
 fn fetch_discussion(audit_name) {
@@ -721,25 +783,16 @@ fn view(model: Model) {
 
       let preprocessed_source =
         dict.get(model.source_files, page_path)
-        |> result.map(fn(source_files) {
-          case source_files {
-            Ok(source_files) -> source_files
-            Error(..) -> []
-          }
-        })
+        |> result.unwrap(Ok([]))
         |> result.unwrap([])
 
+      let references =
+        dict.get(model.audit_references, audit_name)
+        |> result.unwrap(Ok(dict.new()))
+        |> result.unwrap(dict.new())
+
       html.div([event.on_click(UserClickedOutsideDiscussion)], [
-        case model.selected_node_id {
-          option.Some(selected_node_id) ->
-            html.style(
-              [],
-              ".N"
-                <> int.to_string(selected_node_id)
-                <> " { background-color: var(--highlight-color); border-radius: 0.15rem; }",
-            )
-          option.None -> element.fragment([])
-        },
+        selected_node_highlighter(model),
         server_component.element(
           [
             server_component.route("/component-discussion/" <> audit_name),
@@ -751,19 +804,12 @@ fn view(model: Model) {
           audit_page.view(
             preprocessed_source:,
             discussion:,
+            references:,
             selected_discussion:,
           )
             |> element.map(map_audit_page_msg),
-          case selected_discussion {
-            option.Some(selected_discussion) -> {
-              discussion.panel_view(selected_discussion.model, discussion)
-              |> element.map(map_discussion_msg(_, selected_discussion))
-              |> option.Some
-            }
-            option.None ->
-              audit_page_dashboard.view(discussion, page_path)
-              |> option.Some
-          },
+          audit_page_dashboard.view(discussion, page_path)
+            |> option.Some,
           model.file_tree,
           audit_name,
           page_path,
@@ -771,6 +817,19 @@ fn view(model: Model) {
       ])
     }
     O11aHomeRoute -> html.p([], [html.text("Home")])
+  }
+}
+
+fn selected_node_highlighter(model: Model) {
+  case model.selected_node_id {
+    option.Some(selected_node_id) ->
+      html.style(
+        [],
+        ".N"
+          <> int.to_string(selected_node_id)
+          <> " { background-color: var(--highlight-color); border-radius: 0.15rem; }",
+      )
+    option.None -> element.fragment([])
   }
 }
 
@@ -815,7 +874,6 @@ fn map_audit_page_msg(msg) {
       topic_id:,
       topic_title:,
       is_reference:,
-      references:,
     ) ->
       UserSelectedDiscussionEntry(
         kind:,
@@ -825,7 +883,6 @@ fn map_audit_page_msg(msg) {
         topic_id:,
         topic_title:,
         is_reference:,
-        references:,
       )
     audit_page.UserUnselectedDiscussionEntry(kind:) ->
       UserUnselectedDiscussionEntry(kind:)
@@ -837,12 +894,4 @@ fn map_audit_page_msg(msg) {
       UserClickedInsideDiscussion(line_number:, column_number:)
     audit_page.UserCtrlClickedNode(uri:) -> UserCtrlClickedNode(uri:)
   }
-}
-
-fn map_discussion_msg(msg, selected_discussion: audit_page.DiscussionReference) {
-  UserUpdatedDiscussion(
-    line_number: selected_discussion.line_number,
-    column_number: selected_discussion.column_number,
-    update: discussion.update(selected_discussion.model, msg),
-  )
 }

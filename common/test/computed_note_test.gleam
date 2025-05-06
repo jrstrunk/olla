@@ -15,8 +15,8 @@ pub fn encode_computed_notes_round_trip_test() {
       expanded_message: None,
       time: datetime.literal("2024-01-01T00:00:00Z"),
       edited: False,
-      references: [],
-      reference: option.None,
+      referenced_topic_ids: [],
+      referee_topic_id: option.None,
     )
 
   computed_note.encode_computed_notes([cn])

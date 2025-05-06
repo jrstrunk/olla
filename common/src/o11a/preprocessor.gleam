@@ -2,7 +2,7 @@ import filepath
 import gleam/dynamic/decode
 import gleam/int
 import gleam/json
-import o11a/audit_metadata
+import o11a/declaration
 
 pub type SourceKind {
   Solidity
@@ -72,7 +72,7 @@ pub fn pre_processed_line_decoder() -> decode.Decoder(PreProcessedLine) {
 }
 
 pub type PreProcessedLineSignificance {
-  SingleDeclarationLine(node_declaration: NodeDeclaration)
+  SingleDeclarationLine(signature: String, topic_id: String)
   NonEmptyLine
   EmptyLine
 }
@@ -81,10 +81,11 @@ fn encode_pre_processed_line_significance(
   pre_processed_line_significance: PreProcessedLineSignificance,
 ) -> json.Json {
   case pre_processed_line_significance {
-    SingleDeclarationLine(node_declaration:) ->
+    SingleDeclarationLine(signature:, topic_id:) ->
       json.object([
         #("v", json.string("sdl")),
-        #("n", encode_node_declaration(node_declaration)),
+        #("g", json.string(signature)),
+        #("t", json.string(topic_id)),
       ])
     NonEmptyLine -> json.object([#("v", json.string("nel"))])
     EmptyLine -> json.object([#("v", json.string("el"))])
@@ -97,8 +98,9 @@ fn pre_processed_line_significance_decoder() -> decode.Decoder(
   use variant <- decode.field("v", decode.string)
   case variant {
     "sdl" -> {
-      use node_declaration <- decode.field("n", node_declaration_decoder())
-      decode.success(SingleDeclarationLine(node_declaration:))
+      use signature <- decode.field("g", decode.string)
+      use topic_id <- decode.field("t", decode.string)
+      decode.success(SingleDeclarationLine(signature:, topic_id:))
     }
     "nel" -> decode.success(NonEmptyLine)
     "el" -> decode.success(EmptyLine)
@@ -109,12 +111,12 @@ fn pre_processed_line_significance_decoder() -> decode.Decoder(
 pub type PreProcessedNode {
   PreProcessedDeclaration(
     node_id: Int,
-    node_declaration: NodeDeclaration,
+    node_declaration: declaration.Declaration,
     tokens: String,
   )
   PreProcessedReference(
     referenced_node_id: Int,
-    referenced_node_declaration: NodeDeclaration,
+    referenced_node_declaration: declaration.Declaration,
     tokens: String,
   )
   PreProcessedNode(element: String)
@@ -127,7 +129,10 @@ fn encode_pre_processed_node(pre_processed_node: PreProcessedNode) -> json.Json 
       json.object([
         #("v", json.string("ppd")),
         #("i", json.int(pre_processed_node.node_id)),
-        #("d", encode_node_declaration(pre_processed_node.node_declaration)),
+        #(
+          "d",
+          declaration.encode_declaration(pre_processed_node.node_declaration),
+        ),
         #("t", json.string(pre_processed_node.tokens)),
       ])
     PreProcessedReference(..) ->
@@ -136,7 +141,7 @@ fn encode_pre_processed_node(pre_processed_node: PreProcessedNode) -> json.Json 
         #("i", json.int(pre_processed_node.referenced_node_id)),
         #(
           "d",
-          encode_node_declaration(
+          declaration.encode_declaration(
             pre_processed_node.referenced_node_declaration,
           ),
         ),
@@ -161,7 +166,10 @@ fn pre_processed_node_decoder() -> decode.Decoder(PreProcessedNode) {
   case variant {
     "ppd" -> {
       use node_id <- decode.field("i", decode.int)
-      use node_declaration <- decode.field("d", node_declaration_decoder())
+      use node_declaration <- decode.field(
+        "d",
+        declaration.declaration_decoder(),
+      )
       use tokens <- decode.field("t", decode.string)
       decode.success(PreProcessedDeclaration(
         node_id:,
@@ -173,7 +181,7 @@ fn pre_processed_node_decoder() -> decode.Decoder(PreProcessedNode) {
       use referenced_node_id <- decode.field("i", decode.int)
       use referenced_node_declaration <- decode.field(
         "d",
-        node_declaration_decoder(),
+        declaration.declaration_decoder(),
       )
       use tokens <- decode.field("t", decode.string)
       decode.success(PreProcessedReference(
@@ -192,193 +200,5 @@ fn pre_processed_node_decoder() -> decode.Decoder(PreProcessedNode) {
       decode.success(PreProcessedGapNode(element:, leading_spaces:))
     }
     _ -> decode.failure(PreProcessedNode(""), "PreProcessedNode")
-  }
-}
-
-pub type NodeDeclaration {
-  NodeDeclaration(
-    name: String,
-    scope: String,
-    title: String,
-    topic_id: String,
-    kind: NodeDeclarationKind,
-    references: List(NodeReference),
-  )
-}
-
-pub const unknown_node_declaration = NodeDeclaration(
-  "",
-  "",
-  "",
-  "",
-  UnknownDeclaration,
-  [],
-)
-
-fn encode_node_declaration(node_declaration: NodeDeclaration) -> json.Json {
-  json.object([
-    #("n", json.string(node_declaration.name)),
-    #("s", json.string(node_declaration.scope)),
-    #("t", json.string(node_declaration.title)),
-    #("i", json.string(node_declaration.topic_id)),
-    #("k", json.string(node_declaration_kind_to_string(node_declaration.kind))),
-    #("r", json.array(node_declaration.references, encode_node_reference)),
-  ])
-}
-
-fn node_declaration_decoder() -> decode.Decoder(NodeDeclaration) {
-  use name <- decode.field("n", decode.string)
-  use scope <- decode.field("s", decode.string)
-  use title <- decode.field("t", decode.string)
-  use topic_id <- decode.field("i", decode.string)
-  use kind <- decode.field("k", decode.string)
-  use references <- decode.field("r", decode.list(node_reference_decoder()))
-  decode.success(NodeDeclaration(
-    name:,
-    scope:,
-    title:,
-    topic_id:,
-    kind: node_declaration_kind_from_string(kind),
-    references:,
-  ))
-}
-
-pub type NodeDeclarationKind {
-  ContractDeclaration
-  ConstructorDeclaration
-  FunctionDeclaration
-  FallbackDeclaration
-  ReceiveDeclaration
-  ModifierDeclaration
-  VariableDeclaration
-  ConstantDeclaration
-  EnumDeclaration
-  EnumValueDeclaration
-  StructDeclaration
-  ErrorDeclaration
-  EventDeclaration
-  UnknownDeclaration
-}
-
-pub fn node_declaration_kind_to_string(kind) {
-  case kind {
-    ContractDeclaration -> "contract"
-    ConstructorDeclaration -> "constructor"
-    FunctionDeclaration -> "function"
-    FallbackDeclaration -> "fallback"
-    ReceiveDeclaration -> "receive"
-    ModifierDeclaration -> "modifier"
-    VariableDeclaration -> "variable"
-    ConstantDeclaration -> "constant"
-    EnumDeclaration -> "enum"
-    EnumValueDeclaration -> "enum_value"
-    StructDeclaration -> "struct"
-    ErrorDeclaration -> "error"
-    EventDeclaration -> "event"
-    UnknownDeclaration -> "unknown"
-  }
-}
-
-fn node_declaration_kind_from_string(kind) {
-  case kind {
-    "contract" -> ContractDeclaration
-    "constructor" -> ConstructorDeclaration
-    "function" -> FunctionDeclaration
-    "fallback" -> FallbackDeclaration
-    "receive" -> ReceiveDeclaration
-    "modifier" -> ModifierDeclaration
-    "variable" -> VariableDeclaration
-    "constant" -> ConstantDeclaration
-    "enum" -> EnumDeclaration
-    "enum_value" -> EnumValueDeclaration
-    "struct" -> StructDeclaration
-    "error" -> ErrorDeclaration
-    "event" -> EventDeclaration
-    "unknown" -> UnknownDeclaration
-    _ -> UnknownDeclaration
-  }
-}
-
-pub fn node_declaration_kind_to_metadata_declaration_kind(kind) {
-  case kind {
-    ContractDeclaration -> audit_metadata.AddressableContract
-    FunctionDeclaration -> audit_metadata.AddressableFunction
-    VariableDeclaration -> audit_metadata.AddressableVariable
-    UnknownDeclaration -> audit_metadata.AddressableDocumentation
-    ConstantDeclaration -> audit_metadata.AddressableVariable
-    ConstructorDeclaration -> audit_metadata.AddressableFunction
-    EnumDeclaration -> audit_metadata.AddressableVariable
-    EnumValueDeclaration -> audit_metadata.AddressableVariable
-    ErrorDeclaration -> audit_metadata.AddressableVariable
-    EventDeclaration -> audit_metadata.AddressableVariable
-    FallbackDeclaration -> audit_metadata.AddressableFunction
-    ModifierDeclaration -> audit_metadata.AddressableFunction
-    ReceiveDeclaration -> audit_metadata.AddressableFunction
-    StructDeclaration -> audit_metadata.AddressableVariable
-  }
-}
-
-pub type NodeReference {
-  NodeReference(title: String, topic_id: String, kind: NodeReferenceKind)
-}
-
-fn encode_node_reference(node_reference: NodeReference) -> json.Json {
-  json.object([
-    #("t", json.string(node_reference.title)),
-    #("i", json.string(node_reference.topic_id)),
-    #("k", encode_node_reference_kind(node_reference.kind)),
-  ])
-}
-
-fn node_reference_decoder() -> decode.Decoder(NodeReference) {
-  use title <- decode.field("t", decode.string)
-  use topic_id <- decode.field("i", decode.string)
-  use kind <- decode.field("k", node_reference_kind_decoder())
-  decode.success(NodeReference(title:, topic_id:, kind:))
-}
-
-pub type NodeReferenceKind {
-  CallReference
-  MutationReference
-  InheritanceReference
-  AccessReference
-  UsingReference
-  TypeReference
-}
-
-fn encode_node_reference_kind(
-  node_reference_kind: NodeReferenceKind,
-) -> json.Json {
-  case node_reference_kind {
-    CallReference -> json.string("c")
-    MutationReference -> json.string("m")
-    InheritanceReference -> json.string("i")
-    AccessReference -> json.string("a")
-    UsingReference -> json.string("u")
-    TypeReference -> json.string("t")
-  }
-}
-
-fn node_reference_kind_decoder() -> decode.Decoder(NodeReferenceKind) {
-  use variant <- decode.then(decode.string)
-  case variant {
-    "c" -> decode.success(CallReference)
-    "m" -> decode.success(MutationReference)
-    "i" -> decode.success(InheritanceReference)
-    "a" -> decode.success(AccessReference)
-    "u" -> decode.success(UsingReference)
-    "t" -> decode.success(TypeReference)
-    _ -> decode.failure(CallReference, "NodeReferenceKind")
-  }
-}
-
-pub fn node_reference_kind_to_annotation(kind) {
-  case kind {
-    CallReference -> "Called in:"
-    MutationReference -> "Mutated in:"
-    InheritanceReference -> "Inherited by:"
-    AccessReference -> "Accessed in:"
-    UsingReference -> "Used as a library in:"
-    TypeReference -> "Used as a type in:"
   }
 }

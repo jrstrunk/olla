@@ -110,19 +110,25 @@ fn handle_wisp_request(req, context: Context) {
   case request.path_segments(req) {
     ["audit-metadata", audit_name] ->
       audit_data.get_metadata(context.audit_data, for: audit_name)
-      // TODO: try_recover to gather metadata from disk
-      |> result.unwrap(string_tree.from_string("<p>Metadata not found</p>"))
+      |> result.unwrap(string_tree.from_string(
+        "{\"error\": \"Metadata not found\"}",
+      ))
       |> wisp.json_response(200)
 
     ["source-file", ..page_path] ->
-      // If the source file was not initially found in the in-memory cache, then
-      // this will try to get it from disk and reprocess the audit
       audit_data.get_source_file(
         context.audit_data,
         for: page_path |> list.fold("", filepath.join),
       )
       |> result.unwrap(string_tree.from_string(
         "{\"error\": \"Source not found\"}",
+      ))
+      |> wisp.json_response(200)
+
+    ["audit-declarations", audit_name] ->
+      audit_data.get_declarations(context.audit_data, for: audit_name)
+      |> result.unwrap(string_tree.from_string(
+        "{\"error\": \"Declarations not found\"}",
       ))
       |> wisp.json_response(200)
 

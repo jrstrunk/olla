@@ -2,11 +2,8 @@ import gleam/dict
 import gleam/dynamic/decode
 import gleam/int
 import gleam/json
-import gleam/list
 import gleam/option.{type Option}
-import gleam/result
 import gleam/string
-import o11a/audit_metadata
 import tempo
 import tempo/datetime
 import tempo/instant
@@ -20,12 +17,8 @@ pub type NoteSubmission {
     message: String,
     expanded_message: Option(String),
     modifier: NoteModifier,
-    references: List(audit_metadata.AddressableSymbol),
-    // References that where added to the note for the first time. This is 
-    // needed to determine if references should be added to their topics when
-    // a note is edited. Edits can add references -- we want to honor those,
-    // but do not want to add duplicate reference notes to the topic.
-    new_references: List(audit_metadata.AddressableSymbol),
+    referenced_topic_ids: List(String),
+    prior_referenced_topic_ids: option.Option(List(String)),
   )
 }
 
@@ -39,7 +32,7 @@ pub fn build_note(from submission: NoteSubmission, with id: Int) {
     expanded_message: submission.expanded_message,
     time: instant.now() |> instant.as_utc_datetime,
     modifier: submission.modifier,
-    references: submission.references,
+    referenced_topic_ids: submission.referenced_topic_ids,
   )
 }
 
@@ -54,7 +47,7 @@ pub type Note {
     expanded_message: Option(String),
     time: tempo.DateTime,
     modifier: NoteModifier,
-    references: List(audit_metadata.AddressableSymbol),
+    referenced_topic_ids: List(String),
   )
 }
 
@@ -116,7 +109,7 @@ pub type NoteModifier {
   Edit
   Delete
   Referer
-  Reference(original_note_id: String)
+  Reference(referee_topic_id: String)
 }
 
 pub fn note_modifier_to_string(note_modifier: NoteModifier) {
@@ -125,7 +118,7 @@ pub fn note_modifier_to_string(note_modifier: NoteModifier) {
     Edit -> "e"
     Delete -> "d"
     Referer -> "r"
-    Reference(original_note_id:) -> "r-" <> original_note_id
+    Reference(referee_topic_id:) -> "r-" <> referee_topic_id
   }
 }
 
@@ -136,7 +129,7 @@ pub fn note_modifier_decoder() -> decode.Decoder(NoteModifier) {
     "e" -> decode.success(Edit)
     "d" -> decode.success(Delete)
     "r" -> decode.success(Referer)
-    "r-" <> original_note_id -> decode.success(Reference(original_note_id))
+    "r-" <> referee_topic_id -> decode.success(Reference(referee_topic_id))
     _ -> decode.failure(None, "NoteModifier")
   }
 }
@@ -179,13 +172,10 @@ pub fn encode_note_submission(note: NoteSubmission) {
     #("m", json.string(note.message)),
     #("x", json.nullable(note.expanded_message, json.string)),
     #("d", json.string(note.modifier |> note_modifier_to_string)),
+    #("r", json.array(note.referenced_topic_ids, json.string)),
     #(
-      "r",
-      json.array(note.references, audit_metadata.encode_addressable_symbol),
-    ),
-    #(
-      "nr",
-      json.array(note.new_references, audit_metadata.encode_addressable_symbol),
+      "pr",
+      json.nullable(note.prior_referenced_topic_ids, json.array(_, json.string)),
     ),
   ])
 }
@@ -197,13 +187,10 @@ pub fn note_submission_decoder() {
   use message <- decode.field("m", decode.string)
   use expanded_message <- decode.field("x", decode.optional(decode.string))
   use modifier <- decode.field("d", note_modifier_decoder())
-  use references <- decode.field(
-    "r",
-    decode.list(audit_metadata.addressable_symbol_decoder()),
-  )
-  use new_references <- decode.field(
-    "nr",
-    decode.list(audit_metadata.addressable_symbol_decoder()),
+  use referenced_topic_ids <- decode.field("r", decode.list(decode.string))
+  use prior_referenced_topic_ids <- decode.field(
+    "pr",
+    decode.optional(decode.list(decode.string)),
   )
 
   NoteSubmission(
@@ -213,8 +200,8 @@ pub fn note_submission_decoder() {
     message:,
     expanded_message:,
     modifier:,
-    references:,
-    new_references:,
+    referenced_topic_ids:,
+    prior_referenced_topic_ids:,
   )
   |> decode.success
 }
@@ -229,7 +216,7 @@ pub fn example_note() {
     expanded_message: option.None,
     time: datetime.literal("2021-01-01T00:00:00Z"),
     modifier: None,
-    references: [],
+    referenced_topic_ids: [],
   )
 }
 
@@ -244,8 +231,8 @@ pub const example_note_submission = NoteSubmission(
   message: "Wow bro great finding that is really cool",
   expanded_message: option.None,
   modifier: None,
-  references: [],
-  new_references: [],
+  referenced_topic_ids: [],
+  prior_referenced_topic_ids: option.None,
 )
 
 pub fn classify_message(message, is_thread_open is_thread_open) {
@@ -281,25 +268,4 @@ pub fn classify_message(message, is_thread_open is_thread_open) {
   }
 
   #(sig, message |> string.trim)
-}
-
-pub fn get_references(
-  in message: String,
-  with audit_metadata: audit_metadata.AuditMetaData,
-) {
-  string.split(message, on: " ")
-  |> list.filter_map(fn(word) {
-    use ref <- result.try({
-      case word {
-        "#" <> ref -> Ok(ref)
-        _ -> Error(Nil)
-      }
-    })
-
-    echo "found potential reference: " <> ref
-
-    list.find(audit_metadata.symbols, fn(symbol) {
-      symbol.scope <> "." <> symbol.name == ref
-    })
-  })
 }

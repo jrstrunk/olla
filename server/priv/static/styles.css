@@ -87,7 +87,9 @@ body {
   color: var(--constant-color);
 }
 
-.contract {
+.contract,
+.library,
+.interface {
   color: var(--contract-color);
 }
 

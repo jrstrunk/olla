@@ -6,7 +6,6 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
-import o11a/audit_metadata
 import o11a/note
 import tempo
 import tempo/datetime
@@ -21,9 +20,9 @@ pub type ComputedNote {
     message: String,
     expanded_message: Option(String),
     time: tempo.DateTime,
-    references: List(audit_metadata.AddressableSymbol),
+    referenced_topic_ids: List(String),
     edited: Bool,
-    reference: option.Option(String),
+    referee_topic_id: option.Option(String),
   )
 }
 
@@ -40,14 +39,8 @@ pub fn encode_computed_note(computed_note: ComputedNote) -> json.Json {
     }),
     #("t", json.int(datetime.to_unix_milli(computed_note.time))),
     #("e", json.bool(computed_note.edited)),
-    #(
-      "rs",
-      json.array(
-        computed_note.references,
-        audit_metadata.encode_addressable_symbol,
-      ),
-    ),
-    #("r", json.nullable(computed_note.reference, json.string)),
+    #("r", json.array(computed_note.referenced_topic_ids, json.string)),
+    #("f", json.nullable(computed_note.referee_topic_id, json.string)),
   ])
 }
 
@@ -60,11 +53,8 @@ pub fn computed_note_decoder() -> decode.Decoder(ComputedNote) {
   use expanded_message <- decode.field("x", decode.optional(decode.string))
   use time <- decode.field("t", decode.int)
   use edited <- decode.field("e", decode.bool)
-  use references <- decode.field(
-    "rs",
-    decode.list(audit_metadata.addressable_symbol_decoder()),
-  )
-  use reference <- decode.field("r", decode.optional(decode.string))
+  use referenced_topic_ids <- decode.field("rs", decode.list(decode.string))
+  use referee_topic_id <- decode.field("r", decode.optional(decode.string))
 
   decode.success(ComputedNote(
     note_id:,
@@ -74,9 +64,9 @@ pub fn computed_note_decoder() -> decode.Decoder(ComputedNote) {
     message:,
     expanded_message:,
     time: datetime.from_unix_milli(time),
-    references:,
+    referenced_topic_ids:,
     edited:,
-    reference:,
+    referee_topic_id:,
   ))
 }
 
@@ -244,7 +234,7 @@ pub fn from_note(original_note: note.Note, thread_notes: List(note.Note)) {
         message: edit.message,
         expanded_message: edit.expanded_message,
         significance: edit.significance,
-        references: edit.references,
+        referenced_topic_ids: edit.referenced_topic_ids,
       ),
       True,
     )
@@ -255,13 +245,13 @@ pub fn from_note(original_note: note.Note, thread_notes: List(note.Note)) {
   // topic in its references list. If it does not, then an edit must have been
   // made to the note that removed the reference. In this case, return a
   // nil error so it can be filtered out.
-  use reference <- given.ok(
+  use referee_topic_id <- given.ok(
     case note.modifier {
-      note.Reference(original_note_id) ->
-        list.find(note.references, fn(reference) {
-          reference.topic_id == note.parent_id
+      note.Reference(referee_topic_id:) ->
+        list.find(note.referenced_topic_ids, fn(reference_topic_id) {
+          reference_topic_id == note.parent_id
         })
-        |> result.replace(option.Some(original_note_id))
+        |> result.replace(option.Some(referee_topic_id))
 
       _ -> Ok(option.None)
     },
@@ -344,7 +334,7 @@ pub fn from_note(original_note: note.Note, thread_notes: List(note.Note)) {
     expanded_message: note.expanded_message,
     time: note.time,
     edited:,
-    references: note.references,
-    reference:,
+    referenced_topic_ids: note.referenced_topic_ids,
+    referee_topic_id:,
   ))
 }

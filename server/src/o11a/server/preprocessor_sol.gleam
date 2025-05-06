@@ -16,8 +16,8 @@ import lib/snagx
 import lustre/attribute
 import lustre/element
 import lustre/element/html
-import o11a/audit_metadata
 import o11a/config
+import o11a/declaration
 import o11a/preprocessor
 import simplifile
 import snag
@@ -25,7 +25,7 @@ import snag
 pub fn preprocess_source(
   source source: String,
   nodes nodes: List(Node),
-  declarations declarations: dict.Dict(Int, preprocessor.NodeDeclaration),
+  declarations declarations: dict.Dict(Int, declaration.Declaration),
   page_path page_path: String,
   audit_name audit_name: String,
 ) {
@@ -72,7 +72,10 @@ pub fn preprocess_source(
           }
         })
 
-      preprocessor.SingleDeclarationLine(node_declaration:)
+      preprocessor.SingleDeclarationLine(
+        signature: node_declaration.signature,
+        topic_id: node_declaration.topic_id,
+      )
     }
     0, 0 -> preprocessor.EmptyLine
     _, _ -> preprocessor.NonEmptyLine
@@ -103,7 +106,7 @@ pub fn preprocess_source(
 pub fn consume_source(
   source source: String,
   nodes nodes: List(Node),
-  declarations declarations: dict.Dict(Int, preprocessor.NodeDeclaration),
+  declarations declarations: dict.Dict(Int, declaration.Declaration),
   audit_name audit_name: String,
 ) {
   let #(_, current_line, processed, rest) =
@@ -132,7 +135,7 @@ pub fn consume_source(
           preprocessor.PreProcessedDeclaration(
             node_id: id,
             node_declaration: dict.get(declarations, id)
-              |> result.unwrap(preprocessor.unknown_node_declaration),
+              |> result.unwrap(declaration.unknown_node_declaration),
             tokens: _,
           )
         }
@@ -140,7 +143,7 @@ pub fn consume_source(
         BaseContract(reference_id:, ..) | Modifier(reference_id:, ..) -> preprocessor.PreProcessedReference(
           referenced_node_id: reference_id,
           referenced_node_declaration: dict.get(declarations, reference_id)
-            |> result.unwrap(preprocessor.unknown_node_declaration),
+            |> result.unwrap(declaration.unknown_node_declaration),
           tokens: _,
         )
 
@@ -150,7 +153,7 @@ pub fn consume_source(
             False -> preprocessor.PreProcessedReference(
               referenced_node_id: reference_id,
               referenced_node_declaration: dict.get(declarations, reference_id)
-                |> result.unwrap(preprocessor.unknown_node_declaration),
+                |> result.unwrap(declaration.unknown_node_declaration),
               tokens: _,
             )
           }
@@ -160,7 +163,7 @@ pub fn consume_source(
             option.Some(reference_id), _ -> preprocessor.PreProcessedReference(
               referenced_node_id: reference_id,
               referenced_node_declaration: dict.get(declarations, reference_id)
-                |> result.unwrap(preprocessor.unknown_node_declaration),
+                |> result.unwrap(declaration.unknown_node_declaration),
               tokens: _,
             )
             option.None, True -> style_tokens(_, class: "global-variable")
@@ -442,47 +445,6 @@ fn do_consume_line(
   }
 }
 
-pub fn process_asts(asts: List(#(String, AST)), audit_name: String) {
-  list.map(asts, fn(ast_data) {
-    let #(source_file, ast) = ast_data
-
-    let imports =
-      ast.nodes
-      |> list.filter_map(fn(node) {
-        case node {
-          ImportDirectiveNode(file:, absolute_path:, ..) -> {
-            Ok(#(file, filepath.join(audit_name, absolute_path)))
-          }
-          _ -> Error(Nil)
-        }
-      })
-      |> dict.from_list
-
-    let contracts =
-      ast.nodes
-      |> list.filter_map(fn(node) {
-        case node {
-          ContractDefinitionNode(name:, contract_kind:, ..) -> {
-            Ok(#(
-              name,
-              audit_metadata.ContractMetaData(
-                name:,
-                kind: contract_kind,
-                functions: dict.new(),
-                storage_vars: dict.new(),
-              ),
-            ))
-          }
-          _ -> Error(Nil)
-        }
-      })
-      |> dict.from_list
-
-    #(source_file, audit_metadata.SourceFileMetaData(imports:, contracts:))
-  })
-  |> dict.from_list
-}
-
 /// Flattens all nodes into a list of leaf nodes that we are interested in
 /// for styling and other targeted purposes. The nodes are sorted by their
 /// source map start position.
@@ -752,20 +714,20 @@ fn do_enumerate_node_declarations(
       })
     ImportDirectiveNode(..) | StructuredDocumentationNode(..) -> declarations
     ContractDefinitionNode(id:, name:, nodes:, contract_kind:, ..) -> {
-      let title =
-        audit_metadata.contract_kind_to_string(contract_kind) <> " " <> name
+      let signature =
+        declaration.contract_kind_to_string(contract_kind) <> " " <> name
       let contract_id = parent_id <> "#" <> name
 
       dict.insert(
         declarations,
         id,
-        preprocessor.NodeDeclaration(
+        declaration.Declaration(
           name:,
           // The parent of a contract is the file it is defined in
           scope: parent_name,
-          title:,
+          signature:,
           topic_id: contract_id,
-          kind: preprocessor.ContractDeclaration,
+          kind: declaration.ContractDeclaration(contract_kind),
           references: [],
         ),
       )
@@ -783,22 +745,21 @@ fn do_enumerate_node_declarations(
       body:,
       ..,
     ) -> {
-      let title = case function_kind {
-        audit_metadata.Function -> "function " <> name
-        audit_metadata.Constructor -> "constructor"
-        audit_metadata.Fallback -> "fallback function"
-        audit_metadata.Receive -> "receive function"
+      let signature = case function_kind {
+        declaration.Function -> "function " <> name
+        declaration.Constructor -> "constructor"
+        declaration.Fallback -> "fallback function"
+        declaration.Receive -> "receive function"
       }
 
-      let function_id =
-        parent_id
-        <> ":"
-        <> case function_kind {
-          audit_metadata.Function -> name
-          audit_metadata.Constructor -> "constructor"
-          audit_metadata.Fallback -> "fallback"
-          audit_metadata.Receive -> "receive"
-        }
+      let name = case function_kind {
+        declaration.Function -> name
+        declaration.Constructor -> "constructor"
+        declaration.Fallback -> "fallback"
+        declaration.Receive -> "receive"
+      }
+
+      let function_id = parent_id <> ":" <> name
 
       let scoped_name = parent_name <> "." <> name
 
@@ -806,17 +767,12 @@ fn do_enumerate_node_declarations(
         dict.insert(
           declarations,
           id,
-          preprocessor.NodeDeclaration(
+          declaration.Declaration(
             name:,
             scope: parent_name,
-            title:,
+            signature:,
             topic_id: function_id,
-            kind: case function_kind {
-              audit_metadata.Function -> preprocessor.FunctionDeclaration
-              audit_metadata.Constructor -> preprocessor.ConstructorDeclaration
-              audit_metadata.Fallback -> preprocessor.FallbackDeclaration
-              audit_metadata.Receive -> preprocessor.ReceiveDeclaration
-            },
+            kind: declaration.FunctionDeclaration(function_kind),
             references: [],
           ),
         )
@@ -847,7 +803,7 @@ fn do_enumerate_node_declarations(
       }
     }
     ModifierDefinitionNode(id:, parameters:, nodes:, body:, name:, ..) -> {
-      let title = "modifier " <> name
+      let signature = "modifier " <> name
       let modifier_id = parent_id <> ":" <> name
       let scoped_name = parent_name <> "." <> name
 
@@ -855,23 +811,33 @@ fn do_enumerate_node_declarations(
         dict.insert(
           declarations,
           id,
-          preprocessor.NodeDeclaration(
+          declaration.Declaration(
             name:,
             scope: parent_name,
-            title:,
+            signature:,
             topic_id: modifier_id,
-            kind: preprocessor.ModifierDeclaration,
+            kind: declaration.ModifierDeclaration,
             references: [],
           ),
         )
         |> list.fold(nodes, _, fn(declarations, node) {
-          do_enumerate_node_declarations(declarations, node, title, scoped_name)
+          do_enumerate_node_declarations(
+            declarations,
+            node,
+            modifier_id,
+            scoped_name,
+          )
         })
-        |> do_enumerate_node_declarations(parameters, title, scoped_name)
+        |> do_enumerate_node_declarations(parameters, modifier_id, scoped_name)
 
       case body {
         Some(body) ->
-          do_enumerate_node_declarations(declarations, body, title, scoped_name)
+          do_enumerate_node_declarations(
+            declarations,
+            body,
+            modifier_id,
+            scoped_name,
+          )
         option.None -> declarations
       }
     }
@@ -886,18 +852,18 @@ fn do_enumerate_node_declarations(
       })
     }
     ErrorDefinitionNode(id:, name:, nodes:, parameters:, ..) -> {
-      let title = "error " <> name
+      let signature = "error " <> name
       let topic_id = parent_id <> ":" <> name
 
       declarations
       |> dict.insert(
         id,
-        preprocessor.NodeDeclaration(
+        declaration.Declaration(
           name:,
           scope: parent_name,
-          title:,
+          signature:,
           topic_id:,
-          kind: preprocessor.ErrorDeclaration,
+          kind: declaration.ErrorDeclaration,
           references: [],
         ),
       )
@@ -912,18 +878,18 @@ fn do_enumerate_node_declarations(
       |> do_enumerate_node_declarations(parameters, parent_id, parent_name)
     }
     EventDefinitionNode(id:, name:, nodes:, parameters:, ..) -> {
-      let title = "event " <> name
+      let signature = "event " <> name
       let topic_id = parent_id <> ":" <> name
 
       declarations
       |> dict.insert(
         id,
-        preprocessor.NodeDeclaration(
+        declaration.Declaration(
           name:,
           scope: parent_name,
-          title:,
+          signature:,
           topic_id:,
-          kind: preprocessor.EventDeclaration,
+          kind: declaration.EventDeclaration,
           references: [],
         ),
       )
@@ -938,7 +904,7 @@ fn do_enumerate_node_declarations(
       |> do_enumerate_node_declarations(parameters, parent_id, parent_name)
     }
     VariableDeclarationNode(id:, name:, constant:, type_string:, ..) -> {
-      let title =
+      let signature =
         case constant {
           True -> "constant "
           False -> ""
@@ -951,14 +917,14 @@ fn do_enumerate_node_declarations(
       dict.insert(
         declarations,
         id,
-        preprocessor.NodeDeclaration(
+        declaration.Declaration(
           name:,
           scope: parent_name,
-          title:,
+          signature:,
           topic_id:,
           kind: case constant {
-            True -> preprocessor.ConstantDeclaration
-            False -> preprocessor.VariableDeclaration
+            True -> declaration.ConstantDeclaration
+            False -> declaration.VariableDeclaration
           },
           references: [],
         ),
@@ -1030,19 +996,19 @@ fn do_enumerate_node_declarations(
       do_enumerate_node_declarations(declarations, body, parent_id, parent_name)
     }
     EnumDefinition(id:, name:, members:, nodes:, ..) -> {
-      let title = "enum " <> name
+      let signature = "enum " <> name
       let enum_id = parent_id <> ":" <> name
       let scoped_name = parent_name <> "." <> name
 
       dict.insert(
         declarations,
         id,
-        preprocessor.NodeDeclaration(
+        declaration.Declaration(
           name:,
           scope: parent_name,
-          title:,
+          signature:,
           topic_id: enum_id,
-          kind: preprocessor.EnumDeclaration,
+          kind: declaration.EnumDeclaration,
           references: [],
         ),
       )
@@ -1064,35 +1030,35 @@ fn do_enumerate_node_declarations(
       })
     }
     EnumValue(id:, name:, ..) -> {
-      let title = "enum value " <> name
+      let signature = "enum value " <> name
       let topic_id = parent_id <> ":" <> name
 
       dict.insert(
         declarations,
         id,
-        preprocessor.NodeDeclaration(
+        declaration.Declaration(
           name:,
           scope: parent_name,
-          title:,
+          signature:,
           topic_id:,
-          kind: preprocessor.EnumValueDeclaration,
+          kind: declaration.EnumValueDeclaration,
           references: [],
         ),
       )
     }
     StructDefinition(id:, name:, members:, nodes:, ..) -> {
-      let title = "struct " <> name
+      let signature = "struct " <> name
       let struct_id = parent_id <> ":" <> name
 
       dict.insert(
         declarations,
         id,
-        preprocessor.NodeDeclaration(
+        declaration.Declaration(
           name:,
           scope: parent_name,
-          title:,
+          signature:,
           topic_id: struct_id,
-          kind: preprocessor.StructDeclaration,
+          kind: declaration.StructDeclaration,
           references: [],
         ),
       )
@@ -1115,7 +1081,7 @@ pub fn count_references(declarations, in ast: AST) {
       node,
       "",
       ast.absolute_path,
-      preprocessor.AccessReference,
+      declaration.AccessReference,
     )
   })
 }
@@ -1123,9 +1089,9 @@ pub fn count_references(declarations, in ast: AST) {
 fn do_count_node_references(
   declarations,
   node: Node,
-  parent_title: String,
+  parent_scoped_name: String,
   parent_id: String,
-  parent_reference_kind: preprocessor.NodeReferenceKind,
+  parent_reference_kind: declaration.NodeReferenceKind,
 ) {
   case node {
     Node(nodes:, ..)
@@ -1139,7 +1105,7 @@ fn do_count_node_references(
       do_count_node_references_multi(
         declarations,
         nodes,
-        parent_title,
+        parent_scoped_name,
         parent_id,
         parent_reference_kind,
       )
@@ -1152,19 +1118,19 @@ fn do_count_node_references(
     | Literal(..) -> declarations
 
     ContractDefinitionNode(nodes:, base_contracts:, name:, ..) -> {
-      let title = name
+      let scoped_name = name
       let contract_id = parent_id <> "#" <> name
 
       do_count_node_references_multi(
         declarations,
         nodes,
-        title,
+        scoped_name,
         contract_id,
         parent_reference_kind,
       )
       |> do_count_node_references_multi(
         base_contracts,
-        title,
+        scoped_name,
         contract_id,
         parent_reference_kind,
       )
@@ -1180,20 +1146,20 @@ fn do_count_node_references(
       name:,
       ..,
     ) -> {
-      let title = case function_kind {
-        audit_metadata.Function -> parent_title <> "." <> name
-        audit_metadata.Constructor -> parent_title <> " constructor"
-        audit_metadata.Fallback -> parent_title <> "fallback function"
-        audit_metadata.Receive -> parent_title <> "receive function"
+      let scoped_name = case function_kind {
+        declaration.Function -> parent_scoped_name <> "." <> name
+        declaration.Constructor -> parent_scoped_name <> " constructor"
+        declaration.Fallback -> parent_scoped_name <> "fallback function"
+        declaration.Receive -> parent_scoped_name <> "receive function"
       }
       let function_id =
         parent_id
         <> ":"
         <> case function_kind {
-          audit_metadata.Function -> name
-          audit_metadata.Constructor -> "constructor"
-          audit_metadata.Fallback -> "fallback"
-          audit_metadata.Receive -> "receive"
+          declaration.Function -> name
+          declaration.Constructor -> "constructor"
+          declaration.Fallback -> "fallback"
+          declaration.Receive -> "receive"
         }
 
       let declarations =
@@ -1201,26 +1167,26 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             node,
-            title,
+            scoped_name,
             function_id,
             parent_reference_kind,
           )
         })
         |> do_count_node_references(
           parameters,
-          title,
+          scoped_name,
           function_id,
           parent_reference_kind,
         )
         |> do_count_node_references(
           return_parameters,
-          title,
+          scoped_name,
           function_id,
           parent_reference_kind,
         )
         |> do_count_node_references_multi(
           modifiers,
-          title,
+          scoped_name,
           function_id,
           parent_reference_kind,
         )
@@ -1230,7 +1196,7 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             body,
-            title,
+            scoped_name,
             function_id,
             parent_reference_kind,
           )
@@ -1238,20 +1204,20 @@ fn do_count_node_references(
       }
     }
     ModifierDefinitionNode(nodes:, parameters:, body:, name:, ..) -> {
-      let title = "modifier " <> name
+      let scoped_name = parent_scoped_name <> " modifier " <> name
       let modifier_id = parent_id <> ":" <> name
 
       let declarations =
         do_count_node_references_multi(
           declarations,
           nodes,
-          title,
+          scoped_name,
           modifier_id,
           parent_reference_kind,
         )
         |> do_count_node_references(
           parameters,
-          title,
+          scoped_name,
           modifier_id,
           parent_reference_kind,
         )
@@ -1261,7 +1227,7 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             body,
-            title,
+            scoped_name,
             modifier_id,
             parent_reference_kind,
           )
@@ -1272,13 +1238,13 @@ fn do_count_node_references(
       do_count_node_references_multi(
         declarations,
         nodes,
-        parent_title,
+        parent_scoped_name,
         parent_id,
         parent_reference_kind,
       )
       |> do_count_node_references_multi(
         statements,
-        parent_title,
+        parent_scoped_name,
         parent_id,
         parent_reference_kind,
       )
@@ -1289,7 +1255,7 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             expression,
-            parent_title,
+            parent_scoped_name,
             parent_id,
             parent_reference_kind,
           )
@@ -1299,7 +1265,7 @@ fn do_count_node_references(
       do_count_node_references(
         declarations,
         event_call,
-        parent_title,
+        parent_scoped_name,
         parent_id,
         parent_reference_kind,
       )
@@ -1310,7 +1276,7 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             initial_value,
-            parent_title,
+            parent_scoped_name,
             parent_id,
             parent_reference_kind,
           )
@@ -1321,13 +1287,13 @@ fn do_count_node_references(
         do_count_node_references(
           declarations,
           condition,
-          parent_title,
+          parent_scoped_name,
           parent_id,
           parent_reference_kind,
         )
         |> do_count_node_references(
           true_body,
-          parent_title,
+          parent_scoped_name,
           parent_id,
           parent_reference_kind,
         )
@@ -1337,7 +1303,7 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             false_body,
-            parent_title,
+            parent_scoped_name,
             parent_id,
             parent_reference_kind,
           )
@@ -1356,7 +1322,7 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             init,
-            parent_title,
+            parent_scoped_name,
             parent_id,
             parent_reference_kind,
           )
@@ -1368,7 +1334,7 @@ fn do_count_node_references(
             do_count_node_references(
               declarations,
               condition,
-              parent_title,
+              parent_scoped_name,
               parent_id,
               parent_reference_kind,
             )
@@ -1381,7 +1347,7 @@ fn do_count_node_references(
             do_count_node_references(
               declarations,
               loop,
-              parent_title,
+              parent_scoped_name,
               parent_id,
               parent_reference_kind,
             )
@@ -1390,7 +1356,7 @@ fn do_count_node_references(
       }
       |> do_count_node_references(
         body,
-        parent_title,
+        parent_scoped_name,
         parent_id,
         parent_reference_kind,
       )
@@ -1400,7 +1366,7 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             expression,
-            parent_title,
+            parent_scoped_name,
             parent_id,
             parent_reference_kind,
           )
@@ -1413,7 +1379,7 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             expression,
-            parent_title,
+            parent_scoped_name,
             parent_id,
             parent_reference_kind,
           )
@@ -1426,7 +1392,7 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             expression,
-            parent_title,
+            parent_scoped_name,
             parent_id,
             parent_reference_kind,
           )
@@ -1434,8 +1400,8 @@ fn do_count_node_references(
       }
       |> add_reference(
         reference_id,
-        preprocessor.NodeReference(
-          title: parent_title,
+        declaration.Reference(
+          scoped_name: parent_scoped_name,
           topic_id: parent_id,
           kind: parent_reference_kind,
         ),
@@ -1447,8 +1413,8 @@ fn do_count_node_references(
           add_reference(
             declarations,
             reference_id,
-            preprocessor.NodeReference(
-              title: parent_title,
+            declaration.Reference(
+              scoped_name: parent_scoped_name,
               topic_id: parent_id,
               kind: parent_reference_kind,
             ),
@@ -1461,7 +1427,7 @@ fn do_count_node_references(
             do_count_node_references(
               declarations,
               expression,
-              parent_title,
+              parent_scoped_name,
               parent_id,
               parent_reference_kind,
             )
@@ -1475,15 +1441,15 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             expression,
-            parent_title,
+            parent_scoped_name,
             parent_id,
-            preprocessor.CallReference,
+            declaration.CallReference,
           )
         option.None -> declarations
       }
       |> do_count_node_references_multi(
         arguments,
-        parent_title,
+        parent_scoped_name,
         parent_id,
         parent_reference_kind,
       )
@@ -1491,13 +1457,13 @@ fn do_count_node_references(
       do_count_node_references(
         declarations,
         left_hand_side,
-        parent_title,
+        parent_scoped_name,
         parent_id,
-        preprocessor.MutationReference,
+        declaration.MutationReference,
       )
       |> do_count_node_references(
         right_hand_side,
-        parent_title,
+        parent_scoped_name,
         parent_id,
         parent_reference_kind,
       )
@@ -1506,13 +1472,13 @@ fn do_count_node_references(
       do_count_node_references(
         declarations,
         left_expression,
-        parent_title,
+        parent_scoped_name,
         parent_id,
         parent_reference_kind,
       )
       |> do_count_node_references(
         right_expression,
-        parent_title,
+        parent_scoped_name,
         parent_id,
         parent_reference_kind,
       )
@@ -1521,7 +1487,7 @@ fn do_count_node_references(
       do_count_node_references(
         declarations,
         expression,
-        parent_title,
+        parent_scoped_name,
         parent_id,
         parent_reference_kind,
       )
@@ -1532,7 +1498,7 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             index,
-            parent_title,
+            parent_scoped_name,
             parent_id,
             parent_reference_kind,
           )
@@ -1540,7 +1506,7 @@ fn do_count_node_references(
       }
       |> do_count_node_references(
         base,
-        parent_title,
+        parent_scoped_name,
         parent_id,
         parent_reference_kind,
       )
@@ -1549,10 +1515,10 @@ fn do_count_node_references(
       add_reference(
         declarations,
         reference_id,
-        preprocessor.NodeReference(
-          title: parent_title,
+        declaration.Reference(
+          scoped_name: parent_scoped_name,
           topic_id: parent_id,
-          kind: preprocessor.CallReference,
+          kind: declaration.CallReference,
         ),
       )
       |> fn(declarations) {
@@ -1561,7 +1527,7 @@ fn do_count_node_references(
             do_count_node_references_multi(
               declarations,
               arguments,
-              parent_title,
+              parent_scoped_name,
               parent_id,
               parent_reference_kind,
             )
@@ -1572,8 +1538,8 @@ fn do_count_node_references(
       add_reference(
         declarations,
         reference_id,
-        preprocessor.NodeReference(
-          title: parent_title,
+        declaration.Reference(
+          scoped_name: parent_scoped_name,
           topic_id: parent_id,
           kind: parent_reference_kind,
         ),
@@ -1582,29 +1548,29 @@ fn do_count_node_references(
       add_reference(
         declarations,
         reference_id,
-        preprocessor.NodeReference(
-          title: parent_title,
+        declaration.Reference(
+          scoped_name: parent_scoped_name,
           topic_id: parent_id,
-          kind: preprocessor.InheritanceReference,
+          kind: declaration.InheritanceReference,
         ),
       )
     Conditional(condition:, true_expression:, false_expression:, ..) ->
       do_count_node_references(
         declarations,
         condition,
-        parent_title,
+        parent_scoped_name,
         parent_id,
         parent_reference_kind,
       )
       |> do_count_node_references(
         true_expression,
-        parent_title,
+        parent_scoped_name,
         parent_id,
         parent_reference_kind,
       )
       |> do_count_node_references(
         false_expression,
-        parent_title,
+        parent_scoped_name,
         parent_id,
         parent_reference_kind,
       )
@@ -1612,17 +1578,17 @@ fn do_count_node_references(
       do_count_node_references(
         declarations,
         path_node,
-        parent_title,
+        parent_scoped_name,
         parent_id,
-        preprocessor.TypeReference,
+        declaration.TypeReference,
       )
     NewExpression(type_name:, arguments:, ..) ->
       do_count_node_references(
         declarations,
         type_name,
-        parent_title,
+        parent_scoped_name,
         parent_id,
-        preprocessor.TypeReference,
+        declaration.TypeReference,
       )
       |> fn(declarations) {
         case arguments {
@@ -1630,7 +1596,7 @@ fn do_count_node_references(
             do_count_node_references_multi(
               declarations,
               arguments,
-              parent_title,
+              parent_scoped_name,
               parent_id,
               parent_reference_kind,
             )
@@ -1641,9 +1607,9 @@ fn do_count_node_references(
       do_count_node_references(
         declarations,
         base_type,
-        parent_title,
+        parent_scoped_name,
         parent_id,
-        preprocessor.TypeReference,
+        declaration.TypeReference,
       )
     FunctionCallOptions(options:, expression:, ..) ->
       case expression {
@@ -1651,15 +1617,15 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             expression,
-            parent_title,
+            parent_scoped_name,
             parent_id,
-            preprocessor.CallReference,
+            declaration.CallReference,
           )
         option.None -> declarations
       }
       |> do_count_node_references_multi(
         options,
-        parent_title,
+        parent_scoped_name,
         parent_id,
         parent_reference_kind,
       )
@@ -1667,23 +1633,23 @@ fn do_count_node_references(
       do_count_node_references(
         declarations,
         key_type,
-        parent_title,
+        parent_scoped_name,
         parent_id,
-        preprocessor.TypeReference,
+        declaration.TypeReference,
       )
       |> do_count_node_references(
         value_type,
-        parent_title,
+        parent_scoped_name,
         parent_id,
-        preprocessor.TypeReference,
+        declaration.TypeReference,
       )
     UsingForDirective(library_name:, ..) ->
       do_count_node_references(
         declarations,
         library_name,
-        parent_title,
+        parent_scoped_name,
         parent_id,
-        preprocessor.UsingReference,
+        declaration.UsingReference,
       )
   }
 }
@@ -1691,12 +1657,12 @@ fn do_count_node_references(
 fn add_reference(
   declarations,
   declaration_id: Int,
-  reference: preprocessor.NodeReference,
+  reference: declaration.Reference,
 ) {
   dict.upsert(declarations, declaration_id, with: fn(dec) {
     case dec {
       Some(node_declaration) ->
-        preprocessor.NodeDeclaration(..node_declaration, references: [
+        declaration.Declaration(..node_declaration, references: [
           reference,
           ..node_declaration.references
         ])
@@ -1707,12 +1673,12 @@ fn add_reference(
           <> int.to_string(declaration_id)
           <> " found, there is an issue with finding all declarations",
         )
-        preprocessor.NodeDeclaration(
+        declaration.Declaration(
           name: "",
           scope: "",
-          title: "unknown",
+          signature: "unknown",
           topic_id: "",
-          kind: preprocessor.UnknownDeclaration,
+          kind: declaration.UnknownDeclaration,
           references: [reference],
         )
       }
@@ -1725,7 +1691,7 @@ fn do_count_node_references_multi(
   nodes: List(Node),
   parent_title: String,
   parent_id: String,
-  parent_reference_kind: preprocessor.NodeReferenceKind,
+  parent_reference_kind: declaration.NodeReferenceKind,
 ) {
   list.fold(nodes, declarations, fn(declarations, node) {
     do_count_node_references(
@@ -1819,7 +1785,7 @@ pub type Node {
     id: Int,
     source_map: SourceMap,
     name: String,
-    contract_kind: audit_metadata.ContractKind,
+    contract_kind: declaration.ContractKind,
     base_contracts: List(Node),
     nodes: List(Node),
   )
@@ -1852,7 +1818,7 @@ pub type Node {
     id: Int,
     source_map: SourceMap,
     name: String,
-    function_kind: audit_metadata.FunctionKind,
+    function_kind: declaration.FunctionKind,
     parameters: Node,
     modifiers: List(Node),
     return_parameters: Node,
@@ -2130,7 +2096,7 @@ fn node_decoder() -> decode.Decoder(Node) {
         id:,
         source_map: source_map_from_string(name_location),
         name:,
-        contract_kind: audit_metadata.contract_kind_from_string(contract_kind),
+        contract_kind: declaration.contract_kind_from_string(contract_kind),
         base_contracts:,
         nodes:,
       ))
@@ -2226,19 +2192,19 @@ fn node_decoder() -> decode.Decoder(Node) {
         option.None,
         decode.optional(node_decoder()),
       )
-      let function_kind = audit_metadata.function_kind_from_string(kind)
+      let function_kind = declaration.function_kind_from_string(kind)
 
       let location = source_map_from_string(src)
       let name_location = source_map_from_string(name_location)
 
       let #(name, source_map) = case function_kind {
-        audit_metadata.Constructor -> #(
+        declaration.Constructor -> #(
           "constructor",
           SourceMap(location.start, 11),
         )
-        audit_metadata.Function -> #(name, name_location)
-        audit_metadata.Fallback -> #("fallback", SourceMap(location.start, 8))
-        audit_metadata.Receive -> #("receive", SourceMap(location.start, 7))
+        declaration.Function -> #(name, name_location)
+        declaration.Fallback -> #("fallback", SourceMap(location.start, 8))
+        declaration.Receive -> #("receive", SourceMap(location.start, 7))
       }
 
       decode.success(FunctionDefinitionNode(

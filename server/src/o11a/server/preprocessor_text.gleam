@@ -10,6 +10,7 @@ import gleam/result
 import gleam/string
 import lib/snagx
 import o11a/config
+import o11a/declaration
 import o11a/preprocessor
 import simplifile
 import snag
@@ -24,7 +25,10 @@ pub fn preprocess_source(source source: String, page_path page_path: String) {
 
   let significance = case line {
     preprocessor.PreProcessedDeclaration(node_declaration:, ..) ->
-      preprocessor.SingleDeclarationLine(node_declaration:)
+      preprocessor.SingleDeclarationLine(
+        signature: node_declaration.signature,
+        topic_id: node_declaration.topic_id,
+      )
     _ -> preprocessor.EmptyLine
   }
 
@@ -78,12 +82,12 @@ pub fn enumerate_declarations(declarations, in ast: AST) {
 }
 
 fn line_node_declaration(page_path, line_number_text) {
-  preprocessor.NodeDeclaration(
+  declaration.Declaration(
     name: "L" <> line_number_text,
     scope: filepath.base_name(page_path),
-    title: filepath.base_name(page_path) <> "#L" <> line_number_text,
+    signature: filepath.base_name(page_path) <> "#L" <> line_number_text,
     topic_id: page_path <> "#L" <> line_number_text,
-    kind: preprocessor.UnknownDeclaration,
+    kind: declaration.UnknownDeclaration,
     references: [],
   )
 }

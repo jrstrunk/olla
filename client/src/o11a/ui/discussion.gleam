@@ -13,10 +13,9 @@ import lustre/attribute
 import lustre/element
 import lustre/element/html
 import lustre/event
-import o11a/audit_metadata
 import o11a/computed_note
+import o11a/declaration
 import o11a/note
-import o11a/preprocessor
 
 pub type Model {
   Model(
@@ -27,7 +26,6 @@ pub type Model {
     column_number: Int,
     topic_id: String,
     topic_title: String,
-    references: List(preprocessor.NodeReference),
     current_note_draft: String,
     current_thread_id: String,
     active_thread: option.Option(ActiveThread),
@@ -35,7 +33,7 @@ pub type Model {
     current_expanded_message_draft: option.Option(String),
     expanded_messages: set.Set(String),
     editing_note: option.Option(computed_note.ComputedNote),
-    audit_metadata: audit_metadata.AuditMetaData,
+    declarations: List(declaration.Declaration),
   )
 }
 
@@ -54,8 +52,7 @@ pub fn init(
   topic_id topic_id,
   topic_title topic_title,
   is_reference is_reference,
-  references references,
-  audit_metadata audit_metadata,
+  declarations declarations,
 ) {
   Model(
     is_reference:,
@@ -65,7 +62,6 @@ pub fn init(
     column_number:,
     topic_id:,
     topic_title:,
-    references:,
     current_note_draft: "",
     current_thread_id: topic_id,
     active_thread: option.None,
@@ -73,7 +69,7 @@ pub fn init(
     current_expanded_message_draft: option.None,
     expanded_messages: set.new(),
     editing_note: option.None,
-    audit_metadata:,
+    declarations:,
   )
 }
 
@@ -127,9 +123,9 @@ pub fn update(model: Model, msg: Msg) {
 
       use <- given.that(message == "", return: fn() { #(model, None) })
 
-      let #(modifier, parent_id, current_references) = case model.editing_note {
-        option.Some(note) -> #(note.Edit, note.note_id, note.references)
-        option.None -> #(note.None, model.current_thread_id, [])
+      let #(modifier, parent_id) = case model.editing_note {
+        option.Some(note) -> #(note.Edit, note.note_id)
+        option.None -> #(note.None, model.current_thread_id)
       }
 
       let expanded_message = case
@@ -139,22 +135,20 @@ pub fn update(model: Model, msg: Msg) {
         msg -> msg
       }
 
-      let references =
-        note.get_references(message, with: model.audit_metadata)
+      let referenced_topic_ids =
+        declaration.get_references(message, with: model.declarations)
         |> list.append(case expanded_message {
           option.Some(expanded_message) ->
-            note.get_references(expanded_message, with: model.audit_metadata)
+            declaration.get_references(
+              expanded_message,
+              with: model.declarations,
+            )
           option.None -> []
         })
         |> list.unique
 
-      let new_references =
-        references
-        |> list.filter(fn(reference) {
-          !{ current_references |> list.contains(reference) }
-        })
-
-      echo "New references: " <> string.inspect(new_references)
+      let prior_referenced_topic_ids =
+        option.map(model.editing_note, fn(note) { note.referenced_topic_ids })
 
       let note =
         note.NoteSubmission(
@@ -164,8 +158,8 @@ pub fn update(model: Model, msg: Msg) {
           message:,
           expanded_message:,
           modifier:,
-          references:,
-          new_references:,
+          referenced_topic_ids:,
+          prior_referenced_topic_ids:,
         )
 
       #(
@@ -313,10 +307,17 @@ pub fn update(model: Model, msg: Msg) {
 pub fn overlay_view(
   model: Model,
   notes: dict.Dict(String, List(computed_note.ComputedNote)),
+  references,
 ) {
   let current_thread_notes =
     dict.get(notes, model.current_thread_id)
     |> result.unwrap([])
+
+  let references =
+    dict.get(references, model.topic_id)
+    |> result.unwrap([])
+
+  echo "references for " <> model.topic_id <> ": " <> string.inspect(references)
 
   html.div(
     [
@@ -339,7 +340,7 @@ pub fn overlay_view(
         False ->
           element.fragment([
             html.div([attribute.class("overlay p-[.5rem]")], [
-              thread_header_view(model),
+              thread_header_view(model, references),
               case
                 option.is_some(model.active_thread)
                 || list.length(current_thread_notes) > 0
@@ -356,7 +357,7 @@ pub fn overlay_view(
   )
 }
 
-pub fn panel_view(model: Model, notes) {
+pub fn panel_view(model: Model, notes, references) {
   let current_thread_notes =
     dict.get(notes, model.current_thread_id)
     |> result.unwrap([])
@@ -366,7 +367,7 @@ pub fn panel_view(model: Model, notes) {
       True -> reference_header_view(model, current_thread_notes)
       False -> element.fragment([])
     },
-    thread_header_view(model),
+    thread_header_view(model, references),
     case
       option.is_some(model.active_thread)
       || list.length(current_thread_notes) > 0
@@ -431,7 +432,7 @@ fn reference_header_view(model: Model, current_thread_notes) {
   ])
 }
 
-fn thread_header_view(model: Model) {
+fn thread_header_view(model: Model, references) {
   case model.active_thread {
     option.Some(active_thread) ->
       html.div([], [
@@ -497,7 +498,7 @@ fn thread_header_view(model: Model) {
             ]),
           ],
         ),
-        references_view(model.references),
+        references_view(references),
       ])
   }
 }
@@ -506,32 +507,29 @@ fn references_view(references) {
   case list.length(references) > 0 {
     True ->
       html.div([attribute.class("mb-[.75rem]")], [
-        reference_group_view(references, preprocessor.UsingReference),
-        reference_group_view(references, preprocessor.InheritanceReference),
-        reference_group_view(references, preprocessor.CallReference),
-        reference_group_view(references, preprocessor.AccessReference),
-        reference_group_view(references, preprocessor.MutationReference),
-        reference_group_view(references, preprocessor.TypeReference),
+        reference_group_view(references, declaration.UsingReference),
+        reference_group_view(references, declaration.InheritanceReference),
+        reference_group_view(references, declaration.CallReference),
+        reference_group_view(references, declaration.AccessReference),
+        reference_group_view(references, declaration.MutationReference),
+        reference_group_view(references, declaration.TypeReference),
       ])
     False -> element.fragment([])
   }
 }
 
-fn reference_group_view(
-  references: List(preprocessor.NodeReference),
-  group_kind,
-) {
+fn reference_group_view(references: List(declaration.Reference), group_kind) {
   case list.filter(references, fn(reference) { reference.kind == group_kind }) {
     [] -> element.fragment([])
     references ->
       element.fragment([
         html.p([], [
-          html.text(preprocessor.node_reference_kind_to_annotation(group_kind)),
+          html.text(declaration.node_reference_kind_to_annotation(group_kind)),
         ]),
-        ..list.map(references, fn(reference: preprocessor.NodeReference) {
+        ..list.map(references, fn(reference) {
           html.p([attribute.class("pl-[.25rem]")], [
             html.a([attribute.href("/" <> reference.topic_id)], [
-              html.text(reference.title),
+              html.text(reference.scoped_name),
             ]),
           ])
         })
@@ -558,7 +556,7 @@ fn comments_view(
             significance_badge_view(note.significance),
           ]),
           html.div([attribute.class("flex gap-[.5rem]")], [
-            case note.reference {
+            case note.referee_topic_id {
               option.Some(..) ->
                 html.p([attribute.class("italic")], [html.text("Reference")])
               _ ->
