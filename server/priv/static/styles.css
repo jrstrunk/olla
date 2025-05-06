@@ -19,6 +19,7 @@
   --constant-color: #d19a66;
   /* --global-variable-color: #e06a74; */
   --global-variable-color: #d19a66;
+  --highlight-color: rgb(84, 82, 90);
 }
 
 html,
@@ -86,7 +87,9 @@ body {
   color: var(--constant-color);
 }
 
-.contract {
+.contract,
+.library,
+.interface {
   color: var(--contract-color);
 }
 
@@ -174,7 +177,8 @@ line-discussion {
 
 /* When the new thread preview is hovered */
 
-.line-container:hover .new-thread-preview {
+.line-container:hover .new-thread-preview,
+.line-container:focus-within .new-thread-preview {
   opacity: 1;
 }
 
@@ -213,12 +217,20 @@ line-discussion:focus-within {
   margin-bottom: 0.5rem;
 }
 
+.mb-\[\.75rem\] {
+  margin-bottom: 0.75rem;
+}
+
 .font-size-\[\.9rem\] {
   font-size: 0.9rem;
 }
 
 .pl-\[\.1rem\] {
   padding-left: 0.1rem;
+}
+
+.pl-\[\.25rem\] {
+  padding-left: 0.25rem;
 }
 
 .pt-\[\.15rem\] {
@@ -231,10 +243,6 @@ line-discussion:focus-within {
 
 .italic {
   font-style: italic;
-}
-
-.relative {
-  position: relative;
 }
 
 .absolute {
@@ -277,12 +285,12 @@ line-discussion:focus-within {
   user-select: none;
 }
 
-.top-\[1\.4rem\] {
-  top: 1.4rem;
+.top-\[1\.75rem\] {
+  top: 1.75rem;
 }
 
-.bottom-\[1\.4rem\] {
-  bottom: 1.4rem;
+.bottom-\[1\.75rem\] {
+  bottom: 1.75rem;
 }
 
 /* Tree view */
@@ -290,9 +298,8 @@ line-discussion:focus-within {
   display: grid;
   grid-template-columns: 12rem 4px 1fr 4px 20rem;
   /* these are critical for scrolling sections of the grid separately */
-  height: 100%;
-  width: 100%;
-  max-width: 100vw;
+  height: 100vh;
+  width: 100vw;
   overflow: hidden;
 }
 

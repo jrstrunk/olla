@@ -1,7 +1,6 @@
 import filepath
 import given
 import gleam/bit_array
-import gleam/bool
 import gleam/dict
 import gleam/dynamic/decode
 import gleam/int
@@ -9,7 +8,6 @@ import gleam/io
 import gleam/json
 import gleam/list
 import gleam/option.{Some}
-import gleam/pair
 import gleam/regexp
 import gleam/result
 import gleam/string
@@ -18,35 +16,16 @@ import lib/snagx
 import lustre/attribute
 import lustre/element
 import lustre/element/html
-import o11a/attributes
-import o11a/audit_metadata
-import o11a/classes
 import o11a/config
+import o11a/declaration
+import o11a/preprocessor
 import simplifile
 import snag
-
-pub type PreProcessedLine(msg) {
-  PreProcessedLine(
-    significance: PreProcessedLineSignificance,
-    line_number: Int,
-    line_number_text: String,
-    line_tag: String,
-    line_id: String,
-    leading_spaces: Int,
-    elements: String,
-  )
-}
-
-pub type PreProcessedLineSignificance {
-  SingleDeclarationLine(topic_id: String, title: String)
-  NonEmptyLine
-  EmptyLine
-}
 
 pub fn preprocess_source(
   source source: String,
   nodes nodes: List(Node),
-  declarations declarations: dict.Dict(Int, NodeDeclaration),
+  declarations declarations: dict.Dict(Int, declaration.Declaration),
   page_path page_path: String,
   audit_name audit_name: String,
 ) {
@@ -62,14 +41,15 @@ pub fn preprocess_source(
   let line_tag = "L" <> line_number_text
   let line_id = page_path <> "#" <> line_tag
   let leading_spaces = case line {
-    [PreProcessedGapNode(leading_spaces:, ..), ..] -> leading_spaces
+    [preprocessor.PreProcessedGapNode(leading_spaces:, ..), ..] ->
+      leading_spaces
     _ -> 0
   }
 
   let declaration_count =
     list.count(line, fn(decl) {
       case decl {
-        PreProcessedDeclaration(..) -> True
+        preprocessor.PreProcessedDeclaration(..) -> True
         _ -> False
       }
     })
@@ -77,81 +57,56 @@ pub fn preprocess_source(
   let reference_count =
     list.count(line, fn(ref) {
       case ref {
-        PreProcessedReference(..) -> True
+        preprocessor.PreProcessedReference(..) -> True
         _ -> False
       }
     })
 
   let significance = case declaration_count, reference_count {
     1, _ -> {
-      let assert Ok(PreProcessedDeclaration(node_declaration:, ..)) =
+      let assert Ok(preprocessor.PreProcessedDeclaration(node_declaration:, ..)) =
         list.find(line, fn(decl) {
           case decl {
-            PreProcessedDeclaration(..) -> True
+            preprocessor.PreProcessedDeclaration(..) -> True
             _ -> False
           }
         })
 
-      SingleDeclarationLine(
+      preprocessor.SingleDeclarationLine(
+        signature: node_declaration.signature,
         topic_id: node_declaration.topic_id,
-        title: node_declaration.title,
       )
     }
-    0, 0 -> EmptyLine
-    _, _ -> NonEmptyLine
+    0, 0 -> preprocessor.EmptyLine
+    _, _ -> preprocessor.NonEmptyLine
   }
 
-  let elements =
-    list.fold(line, #(0, ""), fn(acc, node) {
+  let columns =
+    list.fold(line, 0, fn(acc, node) {
       case node {
-        PreProcessedDeclaration(build_element:, ..)
-        | PreProcessedReference(build_element:, ..) -> {
-          let col_number = acc.0 + 1
-
-          #(
-            col_number,
-            acc.1
-              <> build_element(col_number |> int.to_string, line_number_text)
-            |> element.to_string,
-          )
-        }
-
-        PreProcessedNode(element:) | PreProcessedGapNode(element:, ..) -> #(
-          acc.0,
-          acc.1 <> element |> element.to_string,
-        )
+        preprocessor.PreProcessedDeclaration(..)
+        | preprocessor.PreProcessedReference(..) -> acc + 1
+        preprocessor.PreProcessedNode(..) | preprocessor.PreProcessedGapNode(..) ->
+          acc
       }
     })
-    |> pair.second
 
-  PreProcessedLine(
+  preprocessor.PreProcessedLine(
     significance:,
-    elements:,
     line_id:,
     line_number:,
     line_number_text:,
     line_tag:,
     leading_spaces:,
+    elements: line,
+    columns:,
   )
-}
-
-pub type PreProcessedNode(msg) {
-  PreProcessedDeclaration(
-    build_element: fn(String, String) -> element.Element(msg),
-    node_declaration: NodeDeclaration,
-  )
-  PreProcessedReference(
-    build_element: fn(String, String) -> element.Element(msg),
-    referenced_node_declaration: NodeDeclaration,
-  )
-  PreProcessedNode(element: element.Element(msg))
-  PreProcessedGapNode(element: element.Element(msg), leading_spaces: Int)
 }
 
 pub fn consume_source(
   source source: String,
   nodes nodes: List(Node),
-  declarations declarations: dict.Dict(Int, NodeDeclaration),
+  declarations declarations: dict.Dict(Int, declaration.Declaration),
   audit_name audit_name: String,
 ) {
   let #(_, current_line, processed, rest) =
@@ -176,45 +131,51 @@ pub fn consume_source(
         | ErrorDefinitionNode(id:, ..)
         | EnumDefinition(id:, ..)
         | StructDefinition(id:, ..)
-        | EnumValue(id:, ..) -> style_declaration_node(
-          declarations:,
-          id:,
-          tokens: _,
-        )
+        | EnumValue(id:, ..) -> {
+          preprocessor.PreProcessedDeclaration(
+            node_id: id,
+            node_declaration: dict.get(declarations, id)
+              |> result.unwrap(declaration.unknown_node_declaration),
+            tokens: _,
+          )
+        }
 
-        BaseContract(reference_id:, ..) | Modifier(reference_id:, ..) -> style_reference_node(
-          declarations:,
-          reference_id:,
+        BaseContract(reference_id:, ..) | Modifier(reference_id:, ..) -> preprocessor.PreProcessedReference(
+          referenced_node_id: reference_id,
+          referenced_node_declaration: dict.get(declarations, reference_id)
+            |> result.unwrap(declaration.unknown_node_declaration),
           tokens: _,
         )
 
         Identifier(reference_id:, ..) | IdentifierPath(reference_id:, ..) ->
           case reference_id < 0 {
-            True -> style_gap_token(_, class: "global-variable")
-            False -> style_reference_node(
-              declarations:,
-              reference_id:,
+            True -> style_tokens(_, class: "global-variable")
+            False -> preprocessor.PreProcessedReference(
+              referenced_node_id: reference_id,
+              referenced_node_declaration: dict.get(declarations, reference_id)
+                |> result.unwrap(declaration.unknown_node_declaration),
               tokens: _,
             )
           }
 
         MemberAccess(reference_id:, is_global_access:, ..) ->
           case reference_id, is_global_access {
-            option.Some(reference_id), _ -> style_reference_node(
-              declarations:,
-              reference_id:,
+            option.Some(reference_id), _ -> preprocessor.PreProcessedReference(
+              referenced_node_id: reference_id,
+              referenced_node_declaration: dict.get(declarations, reference_id)
+                |> result.unwrap(declaration.unknown_node_declaration),
               tokens: _,
             )
-            option.None, True -> style_gap_token(_, class: "global-variable")
-            option.None, False -> style_gap_token(_, class: "text")
+            option.None, True -> style_tokens(_, class: "global-variable")
+            option.None, False -> style_tokens(_, class: "text")
           }
 
-        ElementaryTypeNameExpression(..) -> style_gap_token(_, class: "type")
+        ElementaryTypeNameExpression(..) -> style_tokens(_, class: "type")
 
         Literal(kind:, ..) ->
           case kind {
-            StringLiteral -> style_gap_token(_, class: "string")
-            NumberLiteral | BoolLiteral | HexStringLiteral -> style_gap_token(
+            StringLiteral -> style_tokens(_, class: "string")
+            NumberLiteral | BoolLiteral | HexStringLiteral -> style_tokens(
               _,
               class: "number",
             )
@@ -256,8 +217,8 @@ pub fn consume_source(
 pub fn consume_part(
   node node: Node,
   total_consumed_count total_consumed_count,
-  current_line current_line: List(PreProcessedNode(msg)),
-  processed processed: List(List(PreProcessedNode(msg))),
+  current_line current_line,
+  processed processed,
   rest rest,
   style_node_tokens style_node_tokens,
 ) {
@@ -338,73 +299,6 @@ pub fn consume_part(
   }
 }
 
-fn style_declaration_node(
-  declarations declarations,
-  id id,
-  tokens tokens: String,
-) {
-  let node_declaration =
-    dict.get(declarations, id)
-    |> result.unwrap(NodeDeclaration("", "", UnknownDeclaration, []))
-
-  let build_element = fn(line_number, column_number) {
-    html.span(
-      [
-        attribute.id(node_declaration.topic_id),
-        attribute.class(node_declaration_kind_to_string(node_declaration.kind)),
-        attribute.class("declaration-preview N" <> int.to_string(id)),
-        attribute.class(classes.discussion_entry),
-        attribute.class(classes.discussion_entry_hover),
-        attribute.class("L" <> line_number),
-        attribute.class("C" <> column_number),
-        attribute.attribute("tabindex", "0"),
-        attributes.encode_line_number_data(line_number),
-        attributes.encode_column_number_data(column_number),
-        attributes.encode_topic_id_data(node_declaration.topic_id),
-        attributes.encode_topic_title_data(node_declaration.title),
-        attributes.encode_is_reference_data(False),
-      ],
-      [html.text(tokens)],
-    )
-  }
-
-  PreProcessedDeclaration(node_declaration:, build_element:)
-}
-
-fn style_reference_node(
-  declarations declarations,
-  reference_id reference_id,
-  tokens tokens: String,
-) {
-  let referenced_node_declaration =
-    dict.get(declarations, reference_id)
-    |> result.unwrap(NodeDeclaration("", "", UnknownDeclaration, []))
-
-  let build_element = fn(line_number, column_number) {
-    html.span(
-      [
-        attribute.class(node_declaration_kind_to_string(
-          referenced_node_declaration.kind,
-        )),
-        attribute.class("reference-preview N" <> int.to_string(reference_id)),
-        attribute.class(classes.discussion_entry),
-        attribute.class(classes.discussion_entry_hover),
-        attribute.class("L" <> line_number),
-        attribute.class("C" <> column_number),
-        attribute.attribute("tabindex", "0"),
-        attributes.encode_line_number_data(line_number),
-        attributes.encode_column_number_data(column_number),
-        attributes.encode_topic_id_data(referenced_node_declaration.topic_id),
-        attributes.encode_topic_title_data(referenced_node_declaration.title),
-        attributes.encode_is_reference_data(True),
-      ],
-      [html.text(tokens)],
-    )
-  }
-
-  PreProcessedReference(referenced_node_declaration:, build_element:)
-}
-
 fn style_import_node(
   abs_path: String,
   tokens: String,
@@ -454,13 +348,13 @@ fn style_import_node(
     |> element.to_string
     <> ";"
 
-  html.span([attribute.attribute("dangerous-unescaped-html", styled_line)], [])
-  |> PreProcessedNode
+  preprocessor.PreProcessedNode(element: styled_line)
 }
 
-fn style_gap_token(gap_token, class class) {
-  html.span([attribute.class(class)], [html.text(gap_token)])
-  |> PreProcessedNode
+fn style_tokens(tokens, class class) {
+  html.span([attribute.class(class)], [html.text(tokens)])
+  |> element.to_string
+  |> preprocessor.PreProcessedNode
 }
 
 /// Gap tokens are everything left out of the AST: brackets, comments, etc.
@@ -486,11 +380,7 @@ fn style_gap_tokens(gap_tokens) {
 
   let leading_spaces = enumerate.leading_spaces(gap_tokens)
 
-  html.span(
-    [attribute.attribute("dangerous-unescaped-html", styled_gap_tokens)],
-    [],
-  )
-  |> PreProcessedGapNode(leading_spaces:)
+  preprocessor.PreProcessedGapNode(element: styled_gap_tokens, leading_spaces:)
 }
 
 pub fn style_comment_line(line_text) {
@@ -553,47 +443,6 @@ fn do_consume_line(
         _ -> #(consumed, consumed_count, line, False)
       }
   }
-}
-
-pub fn process_asts(asts: List(#(String, AST)), audit_name: String) {
-  list.map(asts, fn(ast_data) {
-    let #(source_file, ast) = ast_data
-
-    let imports =
-      ast.nodes
-      |> list.filter_map(fn(node) {
-        case node {
-          ImportDirectiveNode(file:, absolute_path:, ..) -> {
-            Ok(#(file, filepath.join(audit_name, absolute_path)))
-          }
-          _ -> Error(Nil)
-        }
-      })
-      |> dict.from_list
-
-    let contracts =
-      ast.nodes
-      |> list.filter_map(fn(node) {
-        case node {
-          ContractDefinitionNode(name:, contract_kind:, ..) -> {
-            Ok(#(
-              name,
-              audit_metadata.ContractMetaData(
-                name:,
-                kind: contract_kind,
-                functions: dict.new(),
-                storage_vars: dict.new(),
-              ),
-            ))
-          }
-          _ -> Error(Nil)
-        }
-      })
-      |> dict.from_list
-
-    #(source_file, audit_metadata.SourceFileMetaData(imports:, contracts:))
-  })
-  |> dict.from_list
 }
 
 /// Flattens all nodes into a list of leaf nodes that we are interested in
@@ -827,113 +676,63 @@ fn do_linearize_nodes_multi(linearized_nodes: List(Node), nodes: List(Node)) {
   list.fold(nodes, linearized_nodes, do_linearize_nodes)
 }
 
-pub type NodeDeclaration {
-  NodeDeclaration(
-    title: String,
-    topic_id: String,
-    kind: NodeDeclarationKind,
-    references: List(NodeReference),
-  )
-}
-
-pub type NodeDeclarationKind {
-  ContractDeclaration
-  ConstructorDeclaration
-  FunctionDeclaration
-  FallbackDeclaration
-  ReceiveDeclaration
-  ModifierDeclaration
-  VariableDeclaration
-  ConstantDeclaration
-  EnumDeclaration
-  EnumValueDeclaration
-  StructDeclaration
-  ErrorDeclaration
-  EventDeclaration
-  UnknownDeclaration
-}
-
-fn node_declaration_kind_to_string(kind) {
-  case kind {
-    ContractDeclaration -> "contract"
-    ConstructorDeclaration -> "constructor"
-    FunctionDeclaration -> "function"
-    FallbackDeclaration -> "fallback"
-    ReceiveDeclaration -> "receive"
-    ModifierDeclaration -> "modifier"
-    VariableDeclaration -> "variable"
-    ConstantDeclaration -> "constant"
-    EnumDeclaration -> "enum"
-    EnumValueDeclaration -> "enum-value"
-    StructDeclaration -> "struct"
-    ErrorDeclaration -> "error"
-    EventDeclaration -> "event"
-    UnknownDeclaration -> "unknown"
-  }
-}
-
-pub type NodeReference {
-  NodeReference(title: String, topic_id: String)
-}
-
 pub fn enumerate_declarations(declarations, in ast: AST) {
   list.fold(ast.nodes, declarations, fn(declarations, node) {
-    do_enumerate_node_declarations(declarations, node, ast.absolute_path)
+    do_enumerate_node_declarations(
+      declarations,
+      node,
+      ast.absolute_path,
+      ast.absolute_path |> filepath.base_name,
+    )
   })
 }
 
-fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
+fn do_enumerate_node_declarations(
+  declarations,
+  node: Node,
+  parent_id: String,
+  parent_name,
+) {
   case node {
-    Node(id:, nodes:, ..) -> {
-      let title = "n" <> int.to_string(id)
-      dict.insert(
-        declarations,
-        id,
-        NodeDeclaration(
-          title:,
-          topic_id: parent <> ":" <> title,
-          kind: UnknownDeclaration,
-          references: [],
-        ),
-      )
-      |> list.fold(nodes, _, fn(declarations, node) {
-        do_enumerate_node_declarations(declarations, node, parent)
+    Node(nodes:, ..) ->
+      list.fold(nodes, declarations, fn(declarations, node) {
+        do_enumerate_node_declarations(
+          declarations,
+          node,
+          parent_id,
+          parent_name,
+        )
       })
-    }
-    NamedNode(id:, nodes:, ..) -> {
-      let title = "n" <> int.to_string(id)
-      dict.insert(
-        declarations,
-        id,
-        NodeDeclaration(
-          title:,
-          topic_id: parent <> ":" <> title,
-          kind: UnknownDeclaration,
-          references: [],
-        ),
-      )
-      |> list.fold(nodes, _, fn(declarations, node) {
-        do_enumerate_node_declarations(declarations, node, parent)
+    NamedNode(nodes:, ..) ->
+      list.fold(nodes, declarations, fn(declarations, node) {
+        do_enumerate_node_declarations(
+          declarations,
+          node,
+          parent_id,
+          parent_name,
+        )
       })
-    }
     ImportDirectiveNode(..) | StructuredDocumentationNode(..) -> declarations
     ContractDefinitionNode(id:, name:, nodes:, contract_kind:, ..) -> {
-      let title =
-        audit_metadata.contract_kind_to_string(contract_kind) <> " " <> name
-      let contract_id = parent <> "#" <> name
+      let signature =
+        declaration.contract_kind_to_string(contract_kind) <> " " <> name
+      let contract_id = parent_id <> "#" <> name
 
       dict.insert(
         declarations,
         id,
-        NodeDeclaration(
-          title:,
+        declaration.Declaration(
+          name:,
+          // The parent of a contract is the file it is defined in
+          scope: parent_name,
+          signature:,
           topic_id: contract_id,
-          kind: ContractDeclaration,
+          kind: declaration.ContractDeclaration(contract_kind),
           references: [],
         ),
       )
       |> list.fold(nodes, _, fn(declarations, node) {
-        do_enumerate_node_declarations(declarations, node, contract_id)
+        do_enumerate_node_declarations(declarations, node, contract_id, name)
       })
     }
     FunctionDefinitionNode(
@@ -946,118 +745,166 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
       body:,
       ..,
     ) -> {
-      let title = case function_kind {
-        audit_metadata.Function -> "function " <> name
-        audit_metadata.Constructor -> "constructor"
-        audit_metadata.Fallback -> "fallback function"
-        audit_metadata.Receive -> "receive function"
+      let signature = case function_kind {
+        declaration.Function -> "function " <> name
+        declaration.Constructor -> "constructor"
+        declaration.Fallback -> "fallback function"
+        declaration.Receive -> "receive function"
       }
-      let function_id =
-        parent
-        <> ":"
-        <> case function_kind {
-          audit_metadata.Function -> name
-          audit_metadata.Constructor -> "constructor"
-          audit_metadata.Fallback -> "fallback"
-          audit_metadata.Receive -> "receive"
-        }
+
+      let name = case function_kind {
+        declaration.Function -> name
+        declaration.Constructor -> "constructor"
+        declaration.Fallback -> "fallback"
+        declaration.Receive -> "receive"
+      }
+
+      let function_id = parent_id <> ":" <> name
+
+      let scoped_name = parent_name <> "." <> name
 
       let declarations =
         dict.insert(
           declarations,
           id,
-          NodeDeclaration(
-            title:,
+          declaration.Declaration(
+            name:,
+            scope: parent_name,
+            signature:,
             topic_id: function_id,
-            kind: case function_kind {
-              audit_metadata.Function -> FunctionDeclaration
-              audit_metadata.Constructor -> ConstructorDeclaration
-              audit_metadata.Fallback -> FallbackDeclaration
-              audit_metadata.Receive -> ReceiveDeclaration
-            },
+            kind: declaration.FunctionDeclaration(function_kind),
             references: [],
           ),
         )
         |> list.fold(nodes, _, fn(declarations, node) {
-          do_enumerate_node_declarations(declarations, node, function_id)
+          do_enumerate_node_declarations(
+            declarations,
+            node,
+            function_id,
+            scoped_name,
+          )
         })
-        |> do_enumerate_node_declarations(parameters, function_id)
-        |> do_enumerate_node_declarations(return_parameters, function_id)
+        |> do_enumerate_node_declarations(parameters, function_id, scoped_name)
+        |> do_enumerate_node_declarations(
+          return_parameters,
+          function_id,
+          scoped_name,
+        )
 
       case body {
         Some(body) ->
-          do_enumerate_node_declarations(declarations, body, function_id)
+          do_enumerate_node_declarations(
+            declarations,
+            body,
+            function_id,
+            scoped_name,
+          )
         option.None -> declarations
       }
     }
     ModifierDefinitionNode(id:, parameters:, nodes:, body:, name:, ..) -> {
-      let title = "modifier " <> name
-      let modifier_id = parent <> ":" <> name
+      let signature = "modifier " <> name
+      let modifier_id = parent_id <> ":" <> name
+      let scoped_name = parent_name <> "." <> name
 
       let declarations =
         dict.insert(
           declarations,
           id,
-          NodeDeclaration(
-            title:,
+          declaration.Declaration(
+            name:,
+            scope: parent_name,
+            signature:,
             topic_id: modifier_id,
-            kind: ModifierDeclaration,
+            kind: declaration.ModifierDeclaration,
             references: [],
           ),
         )
         |> list.fold(nodes, _, fn(declarations, node) {
-          do_enumerate_node_declarations(declarations, node, title)
+          do_enumerate_node_declarations(
+            declarations,
+            node,
+            modifier_id,
+            scoped_name,
+          )
         })
-        |> do_enumerate_node_declarations(parameters, title)
+        |> do_enumerate_node_declarations(parameters, modifier_id, scoped_name)
 
       case body {
-        Some(body) -> do_enumerate_node_declarations(declarations, body, title)
+        Some(body) ->
+          do_enumerate_node_declarations(
+            declarations,
+            body,
+            modifier_id,
+            scoped_name,
+          )
         option.None -> declarations
       }
     }
     ParameterListNode(parameters:, ..) -> {
       list.fold(parameters, declarations, fn(declarations, parameter) {
-        do_enumerate_node_declarations(declarations, parameter, parent)
+        do_enumerate_node_declarations(
+          declarations,
+          parameter,
+          parent_id,
+          parent_name,
+        )
       })
     }
     ErrorDefinitionNode(id:, name:, nodes:, parameters:, ..) -> {
-      let title = "error " <> name
+      let signature = "error " <> name
+      let topic_id = parent_id <> ":" <> name
 
       declarations
       |> dict.insert(
         id,
-        NodeDeclaration(
-          title:,
-          topic_id: parent <> ":" <> name,
-          kind: ErrorDeclaration,
+        declaration.Declaration(
+          name:,
+          scope: parent_name,
+          signature:,
+          topic_id:,
+          kind: declaration.ErrorDeclaration,
           references: [],
         ),
       )
       |> list.fold(nodes, _, fn(declarations, node) {
-        do_enumerate_node_declarations(declarations, node, parent)
+        do_enumerate_node_declarations(
+          declarations,
+          node,
+          parent_id,
+          parent_name,
+        )
       })
-      |> do_enumerate_node_declarations(parameters, parent)
+      |> do_enumerate_node_declarations(parameters, parent_id, parent_name)
     }
     EventDefinitionNode(id:, name:, nodes:, parameters:, ..) -> {
-      let title = "event " <> name
+      let signature = "event " <> name
+      let topic_id = parent_id <> ":" <> name
 
       declarations
       |> dict.insert(
         id,
-        NodeDeclaration(
-          title:,
-          topic_id: parent <> ":" <> name,
-          kind: EventDeclaration,
+        declaration.Declaration(
+          name:,
+          scope: parent_name,
+          signature:,
+          topic_id:,
+          kind: declaration.EventDeclaration,
           references: [],
         ),
       )
       |> list.fold(nodes, _, fn(declarations, node) {
-        do_enumerate_node_declarations(declarations, node, parent)
+        do_enumerate_node_declarations(
+          declarations,
+          node,
+          parent_id,
+          parent_name,
+        )
       })
-      |> do_enumerate_node_declarations(parameters, parent)
+      |> do_enumerate_node_declarations(parameters, parent_id, parent_name)
     }
     VariableDeclarationNode(id:, name:, constant:, type_string:, ..) -> {
-      let title =
+      let signature =
         case constant {
           True -> "constant "
           False -> ""
@@ -1065,16 +912,19 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
         <> type_string
         <> " "
         <> name
+      let topic_id = parent_id <> ":" <> name
 
       dict.insert(
         declarations,
         id,
-        NodeDeclaration(
-          title:,
-          topic_id: parent <> ":" <> name,
+        declaration.Declaration(
+          name:,
+          scope: parent_name,
+          signature:,
+          topic_id:,
           kind: case constant {
-            True -> ConstantDeclaration
-            False -> VariableDeclaration
+            True -> declaration.ConstantDeclaration
+            False -> declaration.VariableDeclaration
           },
           references: [],
         ),
@@ -1082,91 +932,141 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
     }
     BlockNode(nodes:, statements:, ..) -> {
       list.fold(nodes, declarations, fn(declarations, node) {
-        do_enumerate_node_declarations(declarations, node, parent)
+        do_enumerate_node_declarations(
+          declarations,
+          node,
+          parent_id,
+          parent_name,
+        )
       })
       |> list.fold(statements, _, fn(declarations, statement) {
-        do_enumerate_node_declarations(declarations, statement, parent)
+        do_enumerate_node_declarations(
+          declarations,
+          statement,
+          parent_id,
+          parent_name,
+        )
       })
     }
     VariableDeclarationStatementNode(declarations: declaration_nodes, ..) ->
       list.fold(declaration_nodes, declarations, fn(declarations, declaration) {
         case declaration {
           Some(declaration) ->
-            do_enumerate_node_declarations(declarations, declaration, parent)
+            do_enumerate_node_declarations(
+              declarations,
+              declaration,
+              parent_id,
+              parent_name,
+            )
           option.None -> declarations
         }
       })
     IfStatementNode(true_body:, false_body:, ..) -> {
       let declarations =
-        do_enumerate_node_declarations(declarations, true_body, parent)
+        do_enumerate_node_declarations(
+          declarations,
+          true_body,
+          parent_id,
+          parent_name,
+        )
 
       case false_body {
         Some(false_body) ->
-          do_enumerate_node_declarations(declarations, false_body, parent)
+          do_enumerate_node_declarations(
+            declarations,
+            false_body,
+            parent_id,
+            parent_name,
+          )
         option.None -> declarations
       }
     }
     ForStatementNode(initialization_expression:, body:, ..) -> {
       let declarations = case initialization_expression {
         option.Some(init) ->
-          do_enumerate_node_declarations(declarations, init, parent)
+          do_enumerate_node_declarations(
+            declarations,
+            init,
+            parent_id,
+            parent_name,
+          )
         option.None -> declarations
       }
 
-      do_enumerate_node_declarations(declarations, body, parent)
+      do_enumerate_node_declarations(declarations, body, parent_id, parent_name)
     }
     EnumDefinition(id:, name:, members:, nodes:, ..) -> {
-      let title = "enum " <> name
-      let enum_id = parent <> ":" <> name
+      let signature = "enum " <> name
+      let enum_id = parent_id <> ":" <> name
+      let scoped_name = parent_name <> "." <> name
+
       dict.insert(
         declarations,
         id,
-        NodeDeclaration(
-          title:,
+        declaration.Declaration(
+          name:,
+          scope: parent_name,
+          signature:,
           topic_id: enum_id,
-          kind: EnumDeclaration,
+          kind: declaration.EnumDeclaration,
           references: [],
         ),
       )
       |> list.fold(nodes, _, fn(declarations, statement) {
-        do_enumerate_node_declarations(declarations, statement, enum_id)
+        do_enumerate_node_declarations(
+          declarations,
+          statement,
+          enum_id,
+          scoped_name,
+        )
       })
       |> list.fold(members, _, fn(declarations, statement) {
-        do_enumerate_node_declarations(declarations, statement, enum_id)
+        do_enumerate_node_declarations(
+          declarations,
+          statement,
+          enum_id,
+          scoped_name,
+        )
       })
     }
     EnumValue(id:, name:, ..) -> {
-      let title = "enum value " <> name
+      let signature = "enum value " <> name
+      let topic_id = parent_id <> ":" <> name
 
       dict.insert(
         declarations,
         id,
-        NodeDeclaration(
-          title:,
-          topic_id: parent <> ":" <> name,
-          kind: EnumValueDeclaration,
+        declaration.Declaration(
+          name:,
+          scope: parent_name,
+          signature:,
+          topic_id:,
+          kind: declaration.EnumValueDeclaration,
           references: [],
         ),
       )
     }
     StructDefinition(id:, name:, members:, nodes:, ..) -> {
-      let title = "struct " <> name
-      let struct_id = parent <> ":" <> name
+      let signature = "struct " <> name
+      let struct_id = parent_id <> ":" <> name
+
       dict.insert(
         declarations,
         id,
-        NodeDeclaration(
-          title:,
+        declaration.Declaration(
+          name:,
+          scope: parent_name,
+          signature:,
           topic_id: struct_id,
-          kind: StructDeclaration,
+          kind: declaration.StructDeclaration,
           references: [],
         ),
       )
       |> list.fold(nodes, _, fn(declarations, statement) {
-        do_enumerate_node_declarations(declarations, statement, struct_id)
+        do_enumerate_node_declarations(declarations, statement, struct_id, name)
       })
       |> list.fold(members, _, fn(declarations, statement) {
-        do_enumerate_node_declarations(declarations, statement, struct_id)
+        do_enumerate_node_declarations(declarations, statement, struct_id, name)
       })
     }
 
@@ -1176,15 +1076,22 @@ fn do_enumerate_node_declarations(declarations, node: Node, parent: String) {
 
 pub fn count_references(declarations, in ast: AST) {
   list.fold(ast.nodes, declarations, fn(declarations, node) {
-    do_count_node_references(declarations, node, "", ast.absolute_path)
+    do_count_node_references(
+      declarations,
+      node,
+      "",
+      ast.absolute_path,
+      declaration.AccessReference,
+    )
   })
 }
 
 fn do_count_node_references(
   declarations,
   node: Node,
-  parent_title: String,
+  parent_scoped_name: String,
   parent_id: String,
+  parent_reference_kind: declaration.NodeReferenceKind,
 ) {
   case node {
     Node(nodes:, ..)
@@ -1198,8 +1105,9 @@ fn do_count_node_references(
       do_count_node_references_multi(
         declarations,
         nodes,
-        parent_title,
+        parent_scoped_name,
         parent_id,
+        parent_reference_kind,
       )
 
     ImportDirectiveNode(..)
@@ -1209,13 +1117,23 @@ fn do_count_node_references(
     | EnumValue(..)
     | Literal(..) -> declarations
 
-    ContractDefinitionNode(nodes:, base_contracts:, name:, contract_kind:, ..) -> {
-      let title =
-        audit_metadata.contract_kind_to_string(contract_kind) <> " " <> name
+    ContractDefinitionNode(nodes:, base_contracts:, name:, ..) -> {
+      let scoped_name = name
       let contract_id = parent_id <> "#" <> name
 
-      do_count_node_references_multi(declarations, nodes, title, contract_id)
-      |> do_count_node_references_multi(base_contracts, title, contract_id)
+      do_count_node_references_multi(
+        declarations,
+        nodes,
+        scoped_name,
+        contract_id,
+        parent_reference_kind,
+      )
+      |> do_count_node_references_multi(
+        base_contracts,
+        scoped_name,
+        contract_id,
+        parent_reference_kind,
+      )
     }
 
     FunctionDefinitionNode(
@@ -1228,47 +1146,91 @@ fn do_count_node_references(
       name:,
       ..,
     ) -> {
-      let title = case function_kind {
-        audit_metadata.Function -> "function " <> name
-        audit_metadata.Constructor -> "constructor"
-        audit_metadata.Fallback -> "fallback function"
-        audit_metadata.Receive -> "receive function"
+      let scoped_name = case function_kind {
+        declaration.Function -> parent_scoped_name <> "." <> name
+        declaration.Constructor -> parent_scoped_name <> " constructor"
+        declaration.Fallback -> parent_scoped_name <> "fallback function"
+        declaration.Receive -> parent_scoped_name <> "receive function"
       }
       let function_id =
         parent_id
         <> ":"
         <> case function_kind {
-          audit_metadata.Function -> name
-          audit_metadata.Constructor -> "constructor"
-          audit_metadata.Fallback -> "fallback"
-          audit_metadata.Receive -> "receive"
+          declaration.Function -> name
+          declaration.Constructor -> "constructor"
+          declaration.Fallback -> "fallback"
+          declaration.Receive -> "receive"
         }
 
       let declarations =
         list.fold(nodes, declarations, fn(declarations, node) {
-          do_count_node_references(declarations, node, title, function_id)
+          do_count_node_references(
+            declarations,
+            node,
+            scoped_name,
+            function_id,
+            parent_reference_kind,
+          )
         })
-        |> do_count_node_references(parameters, title, function_id)
-        |> do_count_node_references(return_parameters, title, function_id)
-        |> do_count_node_references_multi(modifiers, title, function_id)
+        |> do_count_node_references(
+          parameters,
+          scoped_name,
+          function_id,
+          parent_reference_kind,
+        )
+        |> do_count_node_references(
+          return_parameters,
+          scoped_name,
+          function_id,
+          parent_reference_kind,
+        )
+        |> do_count_node_references_multi(
+          modifiers,
+          scoped_name,
+          function_id,
+          parent_reference_kind,
+        )
 
       case body {
         Some(body) ->
-          do_count_node_references(declarations, body, title, function_id)
+          do_count_node_references(
+            declarations,
+            body,
+            scoped_name,
+            function_id,
+            parent_reference_kind,
+          )
         option.None -> declarations
       }
     }
     ModifierDefinitionNode(nodes:, parameters:, body:, name:, ..) -> {
-      let title = "modifier " <> name
+      let scoped_name = parent_scoped_name <> " modifier " <> name
       let modifier_id = parent_id <> ":" <> name
 
       let declarations =
-        do_count_node_references_multi(declarations, nodes, title, modifier_id)
-        |> do_count_node_references(parameters, title, modifier_id)
+        do_count_node_references_multi(
+          declarations,
+          nodes,
+          scoped_name,
+          modifier_id,
+          parent_reference_kind,
+        )
+        |> do_count_node_references(
+          parameters,
+          scoped_name,
+          modifier_id,
+          parent_reference_kind,
+        )
 
       case body {
         Some(body) ->
-          do_count_node_references(declarations, body, title, modifier_id)
+          do_count_node_references(
+            declarations,
+            body,
+            scoped_name,
+            modifier_id,
+            parent_reference_kind,
+          )
         option.None -> declarations
       }
     }
@@ -1276,10 +1238,16 @@ fn do_count_node_references(
       do_count_node_references_multi(
         declarations,
         nodes,
-        parent_title,
+        parent_scoped_name,
         parent_id,
+        parent_reference_kind,
       )
-      |> do_count_node_references_multi(statements, parent_title, parent_id)
+      |> do_count_node_references_multi(
+        statements,
+        parent_scoped_name,
+        parent_id,
+        parent_reference_kind,
+      )
     }
     ExpressionStatementNode(expression:, ..) ->
       case expression {
@@ -1287,8 +1255,9 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             expression,
-            parent_title,
+            parent_scoped_name,
             parent_id,
+            parent_reference_kind,
           )
         option.None -> declarations
       }
@@ -1296,8 +1265,9 @@ fn do_count_node_references(
       do_count_node_references(
         declarations,
         event_call,
-        parent_title,
+        parent_scoped_name,
         parent_id,
+        parent_reference_kind,
       )
 
     VariableDeclarationStatementNode(initial_value:, ..) ->
@@ -1306,8 +1276,9 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             initial_value,
-            parent_title,
+            parent_scoped_name,
             parent_id,
+            parent_reference_kind,
           )
         option.None -> declarations
       }
@@ -1316,18 +1287,25 @@ fn do_count_node_references(
         do_count_node_references(
           declarations,
           condition,
-          parent_title,
+          parent_scoped_name,
           parent_id,
+          parent_reference_kind,
         )
-        |> do_count_node_references(true_body, parent_title, parent_id)
+        |> do_count_node_references(
+          true_body,
+          parent_scoped_name,
+          parent_id,
+          parent_reference_kind,
+        )
 
       case false_body {
         Some(false_body) ->
           do_count_node_references(
             declarations,
             false_body,
-            parent_title,
+            parent_scoped_name,
             parent_id,
+            parent_reference_kind,
           )
         option.None -> declarations
       }
@@ -1341,7 +1319,13 @@ fn do_count_node_references(
     ) ->
       case initialization_expression {
         option.Some(init) ->
-          do_count_node_references(declarations, init, parent_title, parent_id)
+          do_count_node_references(
+            declarations,
+            init,
+            parent_scoped_name,
+            parent_id,
+            parent_reference_kind,
+          )
         option.None -> declarations
       }
       |> fn(declarations) {
@@ -1350,8 +1334,9 @@ fn do_count_node_references(
             do_count_node_references(
               declarations,
               condition,
-              parent_title,
+              parent_scoped_name,
               parent_id,
+              parent_reference_kind,
             )
           option.None -> declarations
         }
@@ -1362,21 +1347,28 @@ fn do_count_node_references(
             do_count_node_references(
               declarations,
               loop,
-              parent_title,
+              parent_scoped_name,
               parent_id,
+              parent_reference_kind,
             )
           option.None -> declarations
         }
       }
-      |> do_count_node_references(body, parent_title, parent_id)
+      |> do_count_node_references(
+        body,
+        parent_scoped_name,
+        parent_id,
+        parent_reference_kind,
+      )
     RevertStatementNode(expression:, ..) ->
       case expression {
         Some(expression) ->
           do_count_node_references(
             declarations,
             expression,
-            parent_title,
+            parent_scoped_name,
             parent_id,
+            parent_reference_kind,
           )
         option.None -> declarations
       }
@@ -1387,8 +1379,9 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             expression,
-            parent_title,
+            parent_scoped_name,
             parent_id,
+            parent_reference_kind,
           )
         option.None -> declarations
       }
@@ -1399,14 +1392,19 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             expression,
-            parent_title,
+            parent_scoped_name,
             parent_id,
+            parent_reference_kind,
           )
         option.None -> declarations
       }
       |> add_reference(
         reference_id,
-        NodeReference(title: parent_title, topic_id: parent_id),
+        declaration.Reference(
+          scoped_name: parent_scoped_name,
+          topic_id: parent_id,
+          kind: parent_reference_kind,
+        ),
       )
 
     MemberAccess(reference_id:, expression:, ..) ->
@@ -1415,7 +1413,11 @@ fn do_count_node_references(
           add_reference(
             declarations,
             reference_id,
-            NodeReference(title: parent_title, topic_id: parent_id),
+            declaration.Reference(
+              scoped_name: parent_scoped_name,
+              topic_id: parent_id,
+              kind: parent_reference_kind,
+            ),
           )
         option.None -> declarations
       }
@@ -1425,8 +1427,9 @@ fn do_count_node_references(
             do_count_node_references(
               declarations,
               expression,
-              parent_title,
+              parent_scoped_name,
               parent_id,
+              parent_reference_kind,
             )
           option.None -> declarations
         }
@@ -1438,51 +1441,85 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             expression,
-            parent_title,
+            parent_scoped_name,
             parent_id,
+            declaration.CallReference,
           )
         option.None -> declarations
       }
-      |> do_count_node_references_multi(arguments, parent_title, parent_id)
+      |> do_count_node_references_multi(
+        arguments,
+        parent_scoped_name,
+        parent_id,
+        parent_reference_kind,
+      )
     Assignment(left_hand_side:, right_hand_side:, ..) ->
       do_count_node_references(
         declarations,
         left_hand_side,
-        parent_title,
+        parent_scoped_name,
         parent_id,
+        declaration.MutationReference,
       )
-      |> do_count_node_references(right_hand_side, parent_title, parent_id)
+      |> do_count_node_references(
+        right_hand_side,
+        parent_scoped_name,
+        parent_id,
+        parent_reference_kind,
+      )
 
     BinaryOperation(left_expression:, right_expression:, ..) ->
       do_count_node_references(
         declarations,
         left_expression,
-        parent_title,
+        parent_scoped_name,
         parent_id,
+        parent_reference_kind,
       )
-      |> do_count_node_references(right_expression, parent_title, parent_id)
+      |> do_count_node_references(
+        right_expression,
+        parent_scoped_name,
+        parent_id,
+        parent_reference_kind,
+      )
 
     UnaryOperation(expression:, ..) ->
       do_count_node_references(
         declarations,
         expression,
-        parent_title,
+        parent_scoped_name,
         parent_id,
+        parent_reference_kind,
       )
 
     IndexAccess(base:, index:, ..) ->
       case index {
         option.Some(index) ->
-          do_count_node_references(declarations, index, parent_title, parent_id)
+          do_count_node_references(
+            declarations,
+            index,
+            parent_scoped_name,
+            parent_id,
+            parent_reference_kind,
+          )
         option.None -> declarations
       }
-      |> do_count_node_references(base, parent_title, parent_id)
+      |> do_count_node_references(
+        base,
+        parent_scoped_name,
+        parent_id,
+        parent_reference_kind,
+      )
 
     Modifier(reference_id:, arguments:, ..) ->
       add_reference(
         declarations,
         reference_id,
-        NodeReference(title: parent_title, topic_id: parent_id),
+        declaration.Reference(
+          scoped_name: parent_scoped_name,
+          topic_id: parent_id,
+          kind: declaration.CallReference,
+        ),
       )
       |> fn(declarations) {
         case arguments {
@@ -1490,8 +1527,9 @@ fn do_count_node_references(
             do_count_node_references_multi(
               declarations,
               arguments,
-              parent_title,
+              parent_scoped_name,
               parent_id,
+              parent_reference_kind,
             )
           option.None -> declarations
         }
@@ -1500,66 +1538,131 @@ fn do_count_node_references(
       add_reference(
         declarations,
         reference_id,
-        NodeReference(title: parent_title, topic_id: parent_id),
+        declaration.Reference(
+          scoped_name: parent_scoped_name,
+          topic_id: parent_id,
+          kind: parent_reference_kind,
+        ),
       )
     BaseContract(reference_id:, ..) ->
       add_reference(
         declarations,
         reference_id,
-        NodeReference(title: parent_title, topic_id: parent_id),
+        declaration.Reference(
+          scoped_name: parent_scoped_name,
+          topic_id: parent_id,
+          kind: declaration.InheritanceReference,
+        ),
       )
     Conditional(condition:, true_expression:, false_expression:, ..) ->
-      do_count_node_references(declarations, condition, parent_title, parent_id)
-      |> do_count_node_references(true_expression, parent_title, parent_id)
-      |> do_count_node_references(false_expression, parent_title, parent_id)
+      do_count_node_references(
+        declarations,
+        condition,
+        parent_scoped_name,
+        parent_id,
+        parent_reference_kind,
+      )
+      |> do_count_node_references(
+        true_expression,
+        parent_scoped_name,
+        parent_id,
+        parent_reference_kind,
+      )
+      |> do_count_node_references(
+        false_expression,
+        parent_scoped_name,
+        parent_id,
+        parent_reference_kind,
+      )
     UserDefinedTypeName(path_node:, ..) ->
-      do_count_node_references(declarations, path_node, parent_title, parent_id)
+      do_count_node_references(
+        declarations,
+        path_node,
+        parent_scoped_name,
+        parent_id,
+        declaration.TypeReference,
+      )
     NewExpression(type_name:, arguments:, ..) ->
-      do_count_node_references(declarations, type_name, parent_title, parent_id)
+      do_count_node_references(
+        declarations,
+        type_name,
+        parent_scoped_name,
+        parent_id,
+        declaration.TypeReference,
+      )
       |> fn(declarations) {
         case arguments {
           Some(arguments) ->
             do_count_node_references_multi(
               declarations,
               arguments,
-              parent_title,
+              parent_scoped_name,
               parent_id,
+              parent_reference_kind,
             )
           option.None -> declarations
         }
       }
     ArrayTypeName(base_type:, ..) ->
-      do_count_node_references(declarations, base_type, parent_title, parent_id)
+      do_count_node_references(
+        declarations,
+        base_type,
+        parent_scoped_name,
+        parent_id,
+        declaration.TypeReference,
+      )
     FunctionCallOptions(options:, expression:, ..) ->
       case expression {
         option.Some(expression) ->
           do_count_node_references(
             declarations,
             expression,
-            parent_title,
+            parent_scoped_name,
             parent_id,
+            declaration.CallReference,
           )
         option.None -> declarations
       }
-      |> do_count_node_references_multi(options, parent_title, parent_id)
+      |> do_count_node_references_multi(
+        options,
+        parent_scoped_name,
+        parent_id,
+        parent_reference_kind,
+      )
     Mapping(key_type:, value_type:, ..) ->
-      do_count_node_references(declarations, key_type, parent_title, parent_id)
-      |> do_count_node_references(value_type, parent_title, parent_id)
+      do_count_node_references(
+        declarations,
+        key_type,
+        parent_scoped_name,
+        parent_id,
+        declaration.TypeReference,
+      )
+      |> do_count_node_references(
+        value_type,
+        parent_scoped_name,
+        parent_id,
+        declaration.TypeReference,
+      )
     UsingForDirective(library_name:, ..) ->
       do_count_node_references(
         declarations,
         library_name,
-        parent_title,
+        parent_scoped_name,
         parent_id,
+        declaration.UsingReference,
       )
   }
 }
 
-fn add_reference(declarations, declaration_id: Int, reference: NodeReference) {
+fn add_reference(
+  declarations,
+  declaration_id: Int,
+  reference: declaration.Reference,
+) {
   dict.upsert(declarations, declaration_id, with: fn(dec) {
     case dec {
       Some(node_declaration) ->
-        NodeDeclaration(..node_declaration, references: [
+        declaration.Declaration(..node_declaration, references: [
           reference,
           ..node_declaration.references
         ])
@@ -1570,10 +1673,12 @@ fn add_reference(declarations, declaration_id: Int, reference: NodeReference) {
           <> int.to_string(declaration_id)
           <> " found, there is an issue with finding all declarations",
         )
-        NodeDeclaration(
-          title: "unknown",
+        declaration.Declaration(
+          name: "",
+          scope: "",
+          signature: "unknown",
           topic_id: "",
-          kind: UnknownDeclaration,
+          kind: declaration.UnknownDeclaration,
           references: [reference],
         )
       }
@@ -1586,9 +1691,16 @@ fn do_count_node_references_multi(
   nodes: List(Node),
   parent_title: String,
   parent_id: String,
+  parent_reference_kind: declaration.NodeReferenceKind,
 ) {
   list.fold(nodes, declarations, fn(declarations, node) {
-    do_count_node_references(declarations, node, parent_title, parent_id)
+    do_count_node_references(
+      declarations,
+      node,
+      parent_title,
+      parent_id,
+      parent_reference_kind,
+    )
   })
 }
 
@@ -1630,16 +1742,12 @@ pub fn read_asts(for audit_name: String) {
       ),
     )
 
-    use ast <- result.try(
-      json.parse(
-        source_file_contents,
-        decode.at(["ast"], ast_decoder(audit_name)),
-      )
-      |> snag.map_error(string.inspect)
-      |> snag.context("Failed to parse build file for " <> file_name),
+    json.parse(
+      source_file_contents,
+      decode.at(["ast"], ast_decoder(audit_name)),
     )
-
-    #(ast.absolute_path, ast) |> Ok
+    |> snag.map_error(string.inspect)
+    |> snag.context("Failed to parse build file for " <> file_name)
   }
 
   res
@@ -1653,7 +1761,6 @@ pub type AST {
 
 pub fn ast_decoder(for audit_name) -> decode.Decoder(AST) {
   use id <- decode.field("id", decode.int)
-  echo id
   use absolute_path <- decode.field("absolutePath", decode.string)
   use nodes <- decode.field("nodes", decode.list(node_decoder()))
   decode.success(AST(
@@ -1678,7 +1785,7 @@ pub type Node {
     id: Int,
     source_map: SourceMap,
     name: String,
-    contract_kind: audit_metadata.ContractKind,
+    contract_kind: declaration.ContractKind,
     base_contracts: List(Node),
     nodes: List(Node),
   )
@@ -1711,7 +1818,7 @@ pub type Node {
     id: Int,
     source_map: SourceMap,
     name: String,
-    function_kind: audit_metadata.FunctionKind,
+    function_kind: declaration.FunctionKind,
     parameters: Node,
     modifiers: List(Node),
     return_parameters: Node,
@@ -1989,7 +2096,7 @@ fn node_decoder() -> decode.Decoder(Node) {
         id:,
         source_map: source_map_from_string(name_location),
         name:,
-        contract_kind: audit_metadata.contract_kind_from_string(contract_kind),
+        contract_kind: declaration.contract_kind_from_string(contract_kind),
         base_contracts:,
         nodes:,
       ))
@@ -2085,19 +2192,19 @@ fn node_decoder() -> decode.Decoder(Node) {
         option.None,
         decode.optional(node_decoder()),
       )
-      let function_kind = audit_metadata.function_kind_from_string(kind)
+      let function_kind = declaration.function_kind_from_string(kind)
 
       let location = source_map_from_string(src)
       let name_location = source_map_from_string(name_location)
 
       let #(name, source_map) = case function_kind {
-        audit_metadata.Constructor -> #(
+        declaration.Constructor -> #(
           "constructor",
           SourceMap(location.start, 11),
         )
-        audit_metadata.Function -> #(name, name_location)
-        audit_metadata.Fallback -> #("fallback", SourceMap(location.start, 8))
-        audit_metadata.Receive -> #("receive", SourceMap(location.start, 7))
+        declaration.Function -> #(name, name_location)
+        declaration.Fallback -> #("fallback", SourceMap(location.start, 8))
+        declaration.Receive -> #("receive", SourceMap(location.start, 7))
       }
 
       decode.success(FunctionDefinitionNode(
@@ -2656,506 +2763,6 @@ fn node_decoder() -> decode.Decoder(Node) {
       }
     }
   }
-}
-
-pub fn find_contract_id(
-  audit_metadata: audit_metadata.AuditMetaData,
-  named contract_name,
-  in imports,
-) {
-  list.find_map(imports, fn(import_path) {
-    use file_metadata <- result.try(dict.get(
-      audit_metadata.source_files_sol,
-      import_path |> filepath.base_name,
-    ))
-
-    case dict.get(file_metadata.contracts, contract_name) {
-      Ok(contract_meta_data) ->
-        Ok(#(import_path <> "#" <> contract_name, contract_meta_data.kind))
-      Error(Nil) -> Error(Nil)
-    }
-  })
-}
-
-pub fn preprocess_source_old(
-  for page_path,
-  with audit_metadata: audit_metadata.AuditMetaData,
-) {
-  use source <- result.try(
-    config.get_full_page_path(for: page_path)
-    |> simplifile.read,
-  )
-
-  use source_file_metadata <- given.ok(
-    dict.get(audit_metadata.source_files_sol, page_path |> filepath.base_name),
-    else_return: fn(_) { Ok([]) },
-  )
-
-  let vals = {
-    use line_text, line_number <- list.index_map(
-      source |> string.split(on: "\n"),
-    )
-
-    let line_number = line_number + 1
-    let line_number_text = int.to_string(line_number)
-    let line_tag = "L" <> line_number_text
-    let line_id = page_path <> "#" <> line_tag
-    let leading_spaces = enumerate.get_leading_spaces(line_text)
-
-    let sigificance = classify_line(line_text)
-
-    let preprocessed_line = case sigificance {
-      Empty -> line_text |> PreprocessedLine
-      Regular -> line_text |> style_code_tokens |> PreprocessedLine
-      License -> line_text |> style_license_line |> PreprocessedLine
-      PragmaDeclaration -> line_text |> style_pragma_line |> PreprocessedLine
-      Import ->
-        line_text
-        |> process_import_line(source_file_metadata)
-        |> PreprocessedLine
-      ContractDefinition(contract_kind:) ->
-        line_text
-        |> process_contract_definition_line(
-          contract_kind:,
-          page_path:,
-          audit_metadata:,
-          source_file_metadata:,
-        )
-      LibraryDirective -> line_text |> style_code_tokens |> PreprocessedLine
-      ConstructorDefinition ->
-        line_text |> style_code_tokens |> PreprocessedLine
-      FallbackFunctionDefinition ->
-        line_text |> style_code_tokens |> PreprocessedLine
-      ReceiveFunctionDefinition ->
-        line_text |> style_code_tokens |> PreprocessedLine
-      FunctionDefinition -> line_text |> process_function_definition_line
-      StorageVariableDefinition ->
-        line_text |> style_code_tokens |> PreprocessedLine
-      EventDefinition -> line_text |> style_code_tokens |> PreprocessedLine
-      ErrorDefinition -> line_text |> style_code_tokens |> PreprocessedLine
-      LocalVariableDefinition ->
-        line_text |> style_code_tokens |> PreprocessedLine
-    }
-
-    PreprocessedSourceLine(
-      line_number:,
-      line_number_text:,
-      line_tag:,
-      line_id:,
-      line_text_raw: line_text,
-      leading_spaces:,
-      preprocessed_line:,
-      sigificance:,
-    )
-  }
-  Ok(vals)
-}
-
-pub type PreprocessedSourceLine(msg) {
-  PreprocessedSourceLine(
-    line_number: Int,
-    line_number_text: String,
-    line_tag: String,
-    line_id: String,
-    line_text_raw: String,
-    leading_spaces: String,
-    preprocessed_line: PreprocessedLineElement(msg),
-    sigificance: LineSigificance,
-  )
-}
-
-pub type PreprocessedLineElement(msg) {
-  PreprocessedLine(preprocessed_line_text: String)
-  PreprocessedContractDefinition(
-    contract_id: String,
-    contract_name: String,
-    contract_kind: audit_metadata.ContractKind,
-    contract_inheritances: List(ExternalContractReference),
-    process_line: fn(element.Element(msg), List(element.Element(msg))) ->
-      element.Element(msg),
-  )
-  PreprocessedFunctionDefinition(
-    function_id: String,
-    function_name: String,
-    process_line: fn(element.Element(msg)) -> element.Element(msg),
-  )
-}
-
-pub type ExternalContractReference {
-  ExternalReference(name: String, id: String, kind: audit_metadata.ContractKind)
-}
-
-pub type LineSigificance {
-  Empty
-  Regular
-  License
-  PragmaDeclaration
-  Import
-  ContractDefinition(contract_kind: audit_metadata.ContractKind)
-  LibraryDirective
-  ConstructorDefinition
-  FallbackFunctionDefinition
-  ReceiveFunctionDefinition
-  FunctionDefinition
-  StorageVariableDefinition
-  EventDefinition
-  ErrorDefinition
-  LocalVariableDefinition
-}
-
-fn classify_line(line_text) {
-  let trimmed_line_text = line_text |> string.trim
-
-  use <- bool.guard(trimmed_line_text == "", Empty)
-  use <- bool.guard(trimmed_line_text == "}", Empty)
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("// SPDX-License-Identifier"),
-    License,
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("pragma"),
-    PragmaDeclaration,
-  )
-  use <- bool.guard(trimmed_line_text |> string.starts_with("import"), Import)
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("contract"),
-    ContractDefinition(contract_kind: audit_metadata.Contract),
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("abstract contract"),
-    ContractDefinition(contract_kind: audit_metadata.Abstract),
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("interface"),
-    ContractDefinition(contract_kind: audit_metadata.Interface),
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("library"),
-    ContractDefinition(contract_kind: audit_metadata.Library),
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("using"),
-    LibraryDirective,
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("constructor"),
-    ConstructorDefinition,
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("fallback"),
-    FallbackFunctionDefinition,
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("receive"),
-    ReceiveFunctionDefinition,
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("function"),
-    FunctionDefinition,
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("event"),
-    EventDefinition,
-  )
-  use <- bool.guard(
-    trimmed_line_text |> string.starts_with("error"),
-    ErrorDefinition,
-  )
-  // todo classify storage variables
-  Regular
-}
-
-pub fn style_license_line(line_text) {
-  html.span([attribute.class("comment")], [html.text(line_text)])
-  |> element.to_string
-}
-
-pub fn process_import_line(
-  line_text,
-  source_file_metadata: audit_metadata.SourceFileMetaData,
-) {
-  let #(import_statement_base, import_path) =
-    line_text
-    |> string.split_once("\"")
-    |> result.unwrap(#(line_text, ""))
-
-  // Remove the "import " that is always present
-  let import_statement_base = import_statement_base |> string_drop_start(7)
-  // Remove the trailing "";"
-  let import_path = import_path |> string_drop_end(2)
-
-  let assert Ok(capitalized_word_regex) = regexp.from_string("\\b[A-Z]\\w+\\b")
-
-  html.span([attribute.class("keyword")], [html.text("import")])
-  |> element.to_string
-  <> " "
-  <> regexp.match_map(capitalized_word_regex, import_statement_base, fn(match) {
-    html.span([attribute.class("contract")], [html.text(match.content)])
-    |> element.to_string
-  })
-  |> string.replace(
-    "from",
-    html.span([attribute.class("keyword")], [html.text("from")])
-      |> element.to_string,
-  )
-  <> html.span([attribute.class("string")], [
-    html.text("\""),
-    html.a(
-      [
-        attribute.class("import-path"),
-        attribute.href(
-          dict.get(source_file_metadata.imports, import_path)
-          |> result.map(fn(abs_import) { "/" <> abs_import })
-          |> result.unwrap(""),
-        ),
-      ],
-      [html.text(import_path)],
-    ),
-    html.text("\""),
-  ])
-  |> element.to_string
-  <> ";"
-}
-
-pub fn process_contract_definition_line(
-  page_path page_path,
-  contract_kind contract_kind: audit_metadata.ContractKind,
-  line_text line_text,
-  audit_metadata audit_metadata,
-  source_file_metadata source_file_metadata: audit_metadata.SourceFileMetaData,
-) {
-  case string.split_once(line_text, " is ") {
-    Ok(#(line_base, contract_inheritance)) -> {
-      let contract_name = case contract_kind {
-        // Remove "contract "
-        audit_metadata.Contract -> line_base |> string_drop_start(9)
-        // Remove "abstract contract "
-        audit_metadata.Abstract -> line_base |> string_drop_start(18)
-        // Remove "interface "
-        audit_metadata.Interface -> line_base |> string_drop_start(10)
-        // Remove "library "
-        audit_metadata.Library -> line_base |> string_drop_start(8)
-      }
-
-      let contract_inheritances =
-        contract_inheritance
-        // Remove " {" 
-        |> string_drop_end(2)
-        |> string.split(on: ", ")
-        |> list.map(fn(inheritance) {
-          let #(id, kind) =
-            find_contract_id(
-              audit_metadata,
-              named: inheritance,
-              in: dict.values(source_file_metadata.imports),
-            )
-            |> result.unwrap(#("", audit_metadata.Contract))
-          ExternalReference(name: inheritance, id:, kind:)
-        })
-
-      let process_line = fn(contract_discussion, inheritances) {
-        element.fragment([
-          html.span([attribute.class("keyword")], [
-            html.text(audit_metadata.contract_kind_to_string(contract_kind)),
-          ]),
-          html.text("\u{a0}"),
-          html.span(
-            [
-              attribute.id(contract_name),
-              attribute.class("contract contract-definition"),
-            ],
-            [html.text(contract_name), contract_discussion],
-          ),
-          html.text("\u{a0}"),
-          html.span([attribute.class("keyword")], [html.text("is")]),
-          html.text("\u{a0}"),
-          element.fragment(list.intersperse(inheritances, html.text(", "))),
-          html.text(" {"),
-        ])
-      }
-
-      PreprocessedContractDefinition(
-        contract_id: page_path <> "#" <> contract_name,
-        contract_name:,
-        contract_kind:,
-        contract_inheritances:,
-        process_line:,
-      )
-    }
-    Error(Nil) -> {
-      let contract_name =
-        case contract_kind {
-          // Remove "contract "
-          audit_metadata.Contract -> line_text |> string_drop_start(9)
-          // Remove "abstract contract "
-          audit_metadata.Abstract -> line_text |> string_drop_start(18)
-          // Remove "interface "
-          audit_metadata.Interface -> line_text |> string_drop_start(10)
-          // Remove "library "
-          audit_metadata.Library -> line_text |> string_drop_start(8)
-        }
-        // Remove " {"
-        |> string_drop_end(2)
-
-      let process_line = fn(contract_discussion, _inheritances) {
-        element.fragment([
-          html.span([attribute.class("keyword")], [
-            html.text(
-              audit_metadata.contract_kind_to_string(contract_kind) <> " ",
-            ),
-          ]),
-          html.span(
-            [
-              attribute.id(contract_name),
-              attribute.class("contract contract-definition"),
-            ],
-            [html.text(contract_name), contract_discussion],
-          ),
-          html.text(" {"),
-        ])
-      }
-
-      PreprocessedContractDefinition(
-        contract_id: page_path <> "#" <> contract_name,
-        contract_name:,
-        contract_kind:,
-        contract_inheritances: [],
-        process_line:,
-      )
-    }
-  }
-}
-
-pub fn process_function_definition_line(line_text) {
-  let #(function_name, rest) =
-    string.split_once(line_text, "(")
-    |> result.unwrap(#(line_text, ""))
-
-  // Remove "function "
-  let function_name = string_drop_start(function_name, 9)
-
-  let #(args, attributes) =
-    string.split_once(rest, ")")
-    |> result.unwrap(#(rest, ""))
-
-  // Remove " " and trailing " {"
-  let attributes =
-    string_drop_start(attributes, 1)
-    |> string_drop_end(2)
-
-  let process_line = fn(function_discussion) {
-    element.fragment([
-      html.span([attribute.class("keyword")], [html.text("function ")]),
-      html.span(
-        [
-          attribute.id(function_name),
-          attribute.class("function function-definition"),
-        ],
-        [html.text(function_name), function_discussion],
-      ),
-      html.text("("),
-      style_arguments(args),
-      html.text(")"),
-      style_fuction_attributes(attributes),
-      html.text(" {"),
-    ])
-  }
-
-  PreprocessedFunctionDefinition(
-    function_id: line_text,
-    function_name:,
-    process_line:,
-  )
-}
-
-fn style_arguments(args_text) {
-  string.split(args_text, on: ", ")
-  |> list.map(fn(arg) {
-    let #(arg_type, arg_name) =
-      string.split_once(arg, on: " ")
-      |> result.unwrap(#("", arg))
-
-    [
-      html.span([attribute.class("type")], [html.text(arg_type)]),
-      html.text(" " <> arg_name),
-    ]
-  })
-  |> list.intersperse([html.text(", ")])
-  |> list.flatten
-  |> element.fragment
-}
-
-fn style_fuction_attributes(attributes_text) {
-  string.split(attributes_text, on: " ")
-  |> list.map(fn(attribute) {
-    case attribute {
-      "public"
-      | "private"
-      | "internal"
-      | "external"
-      | "view"
-      | "pure"
-      | "payable"
-      | "virtual"
-      | "override"
-      | "abstract"
-      | "returns" -> [
-        html.span([attribute.class("keyword")], [html.text(" " <> attribute)]),
-      ]
-      _ ->
-        case string.starts_with(attribute, "(") {
-          // Return variables
-          True ->
-            attribute
-            |> string_drop_start(1)
-            |> string_drop_end(1)
-            |> style_return_variables
-            |> fn(return_variables) {
-              [html.text(" ("), return_variables, html.text(")")]
-            }
-          // Modifiers
-          False -> [style_function_modifier(attribute)]
-        }
-    }
-  })
-  // |> list.intersperse([html.text(" ")])
-  |> list.flatten
-  |> element.fragment
-}
-
-fn style_return_variables(return_variables_text) {
-  string.split(return_variables_text, on: ", ")
-  |> list.map(fn(arg) {
-    let #(arg_type, arg_name) =
-      string.split_once(arg, on: " ")
-      |> result.unwrap(#(arg, ""))
-
-    [
-      html.span([attribute.class("type")], [html.text(arg_type)]),
-      case arg_name != "" {
-        True -> html.text(" " <> arg_name)
-        False -> element.fragment([])
-      },
-    ]
-  })
-  |> list.intersperse([html.text(", ")])
-  |> list.flatten
-  |> element.fragment
-}
-
-fn style_function_modifier(modifiers_text) {
-  let #(modifier, args) =
-    string.split_once(modifiers_text, on: "(")
-    |> result.unwrap(#(modifiers_text, ""))
-
-  let args = string_drop_end(args, 1)
-
-  element.fragment([
-    html.span([attribute.class("function")], [html.text(" " <> modifier)]),
-    html.text("("),
-    style_arguments(args),
-    html.text(")"),
-  ])
 }
 
 pub fn style_code_tokens(line_text) {

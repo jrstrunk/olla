@@ -3,6 +3,7 @@ import gleam/dynamic/decode
 import gleam/int
 import gleam/json
 import gleam/option.{type Option}
+import gleam/string
 import tempo
 import tempo/datetime
 import tempo/instant
@@ -16,6 +17,8 @@ pub type NoteSubmission {
     message: String,
     expanded_message: Option(String),
     modifier: NoteModifier,
+    referenced_topic_ids: List(String),
+    prior_referenced_topic_ids: option.Option(List(String)),
   )
 }
 
@@ -29,6 +32,7 @@ pub fn build_note(from submission: NoteSubmission, with id: Int) {
     expanded_message: submission.expanded_message,
     time: instant.now() |> instant.as_utc_datetime,
     modifier: submission.modifier,
+    referenced_topic_ids: submission.referenced_topic_ids,
   )
 }
 
@@ -43,6 +47,7 @@ pub type Note {
     expanded_message: Option(String),
     time: tempo.DateTime,
     modifier: NoteModifier,
+    referenced_topic_ids: List(String),
   )
 }
 
@@ -103,22 +108,29 @@ pub type NoteModifier {
   None
   Edit
   Delete
+  Referer
+  Reference(referee_topic_id: String)
 }
 
-pub fn note_modifier_to_int(note_modifier) {
+pub fn note_modifier_to_string(note_modifier: NoteModifier) {
   case note_modifier {
-    None -> 0
-    Edit -> 1
-    Delete -> 2
+    None -> "n"
+    Edit -> "e"
+    Delete -> "d"
+    Referer -> "r"
+    Reference(referee_topic_id:) -> "r-" <> referee_topic_id
   }
 }
 
-pub fn note_modifier_from_int(note_modifier) {
-  case note_modifier {
-    0 -> None
-    1 -> Edit
-    2 -> Delete
-    _ -> panic as "Invalid note modifier given"
+pub fn note_modifier_decoder() -> decode.Decoder(NoteModifier) {
+  use char <- decode.then(decode.string)
+  case char {
+    "n" -> decode.success(None)
+    "e" -> decode.success(Edit)
+    "d" -> decode.success(Delete)
+    "r" -> decode.success(Referer)
+    "r-" <> referee_topic_id -> decode.success(Reference(referee_topic_id))
+    _ -> decode.failure(None, "NoteModifier")
   }
 }
 
@@ -159,7 +171,12 @@ pub fn encode_note_submission(note: NoteSubmission) {
     #("u", json.string(note.user_id)),
     #("m", json.string(note.message)),
     #("x", json.nullable(note.expanded_message, json.string)),
-    #("d", json.int(note.modifier |> note_modifier_to_int)),
+    #("d", json.string(note.modifier |> note_modifier_to_string)),
+    #("r", json.array(note.referenced_topic_ids, json.string)),
+    #(
+      "pr",
+      json.nullable(note.prior_referenced_topic_ids, json.array(_, json.string)),
+    ),
   ])
 }
 
@@ -169,7 +186,12 @@ pub fn note_submission_decoder() {
   use user_id <- decode.field("u", decode.string)
   use message <- decode.field("m", decode.string)
   use expanded_message <- decode.field("x", decode.optional(decode.string))
-  use modifier <- decode.field("d", decode.int)
+  use modifier <- decode.field("d", note_modifier_decoder())
+  use referenced_topic_ids <- decode.field("r", decode.list(decode.string))
+  use prior_referenced_topic_ids <- decode.field(
+    "pr",
+    decode.optional(decode.list(decode.string)),
+  )
 
   NoteSubmission(
     parent_id:,
@@ -177,7 +199,9 @@ pub fn note_submission_decoder() {
     user_id:,
     message:,
     expanded_message:,
-    modifier: note_modifier_from_int(modifier),
+    modifier:,
+    referenced_topic_ids:,
+    prior_referenced_topic_ids:,
   )
   |> decode.success
 }
@@ -192,6 +216,7 @@ pub fn example_note() {
     expanded_message: option.None,
     time: datetime.literal("2021-01-01T00:00:00Z"),
     modifier: None,
+    referenced_topic_ids: [],
   )
 }
 
@@ -206,4 +231,41 @@ pub const example_note_submission = NoteSubmission(
   message: "Wow bro great finding that is really cool",
   expanded_message: option.None,
   modifier: None,
+  referenced_topic_ids: [],
+  prior_referenced_topic_ids: option.None,
 )
+
+pub fn classify_message(message, is_thread_open is_thread_open) {
+  let #(sig, message) = case is_thread_open {
+    // Users can only start actionalble threads in the main thread
+    False ->
+      case message {
+        "todo:" <> rest -> #(ToDo, rest)
+        "t:" <> rest -> #(ToDo, rest)
+        "question:" <> rest -> #(Question, rest)
+        "q:" <> rest -> #(Question, rest)
+        "finding:" <> rest -> #(FindingLead, rest)
+        "f:" <> rest -> #(FindingLead, rest)
+        "dev:" <> rest -> #(DevelperQuestion, rest)
+        "info:" <> rest -> #(Informational, rest)
+        "i:" <> rest -> #(Informational, rest)
+        _ -> #(Comment, message)
+      }
+    // Users can only resolve actionalble threads in an open thread
+    True ->
+      case message {
+        "done" -> #(ToDoCompletion, "done")
+        "done:" <> rest -> #(ToDoCompletion, rest)
+        "d:" <> rest -> #(ToDoCompletion, rest)
+        "answer:" <> rest -> #(Answer, rest)
+        "a:" <> rest -> #(Answer, rest)
+        "reject:" <> rest -> #(FindingRejection, rest)
+        "confirm:" <> rest -> #(FindingConfirmation, rest)
+        "incorrect:" <> rest -> #(InformationalRejection, rest)
+        "correct:" <> rest -> #(InformationalConfirmation, rest)
+        _ -> #(Comment, message)
+      }
+  }
+
+  #(sig, message |> string.trim)
+}

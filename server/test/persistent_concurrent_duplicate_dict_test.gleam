@@ -26,7 +26,7 @@ pub fn pcdd_test() {
 
   let test_val = #("hello", option.None)
 
-  let assert Ok(Nil) = pcdd.insert(pcdd, "first_msg", test_val)
+  let assert Ok(..) = pcdd.insert(pcdd, "first_msg", test_val)
 
   let assert [#("hello", option.None), ..] = pcdd.get(pcdd, "first_msg")
 
@@ -50,7 +50,7 @@ pub fn pcdd_test() {
       },
     )
 
-  let assert Ok(Nil) = pcdd.insert(pcdd, "first_msg", test_val)
+  let assert Ok(..) = pcdd.insert(pcdd, "first_msg", test_val)
 
   // The value should already be there
   let assert [#("hello", option.None), #("hello", option.None), ..] =

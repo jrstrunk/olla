@@ -1,62 +1,51 @@
-import gleam/dynamic
 import gleam/dynamic/decode
-import gleam/result
+import gleam/option
 import lustre/event
 
-pub fn on_ctrl_enter(msg: msg) {
-  use event <- event.on("keydown")
+pub fn on_ctrl_click(ctrl_click ctrl_click, non_ctrl_click non_ctrl_click) {
+  event.on("click", {
+    use ctrl_key <- decode.field("ctrlKey", decode.bool)
 
-  let decoder = {
+    case ctrl_key {
+      True -> decode.success(ctrl_click)
+      False ->
+        case non_ctrl_click {
+          option.Some(non_ctrl_click) -> decode.success(non_ctrl_click)
+          option.None -> decode.failure(ctrl_click, "ctrl_click")
+        }
+    }
+  })
+}
+
+pub fn on_non_ctrl_click(msg: msg) {
+  event.on("click", {
+    use ctrl_key <- decode.field("ctrlKey", decode.bool)
+
+    case ctrl_key {
+      False -> decode.success(msg)
+      _ -> decode.failure(msg, "non_ctrl_click")
+    }
+  })
+}
+
+pub fn on_ctrl_enter(msg: msg) {
+  event.on("keydown", {
     use ctrl_key <- decode.field("ctrlKey", decode.bool)
     use key <- decode.field("key", decode.string)
 
-    decode.success(#(ctrl_key, key))
-  }
-
-  let empty_error = [dynamic.DecodeError("", "", [])]
-
-  use #(ctrl_key, key) <- result.try(
-    decode.run(event, decoder)
-    |> result.replace_error(empty_error),
-  )
-
-  case ctrl_key, key {
-    True, "Enter" -> Ok(msg)
-    _, _ -> Error(empty_error)
-  }
+    case ctrl_key, key {
+      True, "Enter" -> decode.success(msg)
+      _, _ -> decode.failure(msg, "ctrl_enter")
+    }
+  })
 }
 
 pub fn on_up_arrow(msg: msg) {
-  use event <- event.on("keydown")
-
-  let empty_error = [dynamic.DecodeError("", "", [])]
-
-  use key <- result.try(
-    decode.field("key", decode.string, decode.success)
-    |> decode.run(event, _)
-    |> result.replace_error(empty_error),
-  )
-
-  case key {
-    "ArrowUp" -> Ok(msg)
-    _ -> Error(empty_error)
-  }
-}
-
-pub fn on_input_no_propigation(msg: fn(String) -> msg) {
-  use event <- event.on("input")
-  event.stop_propagation(event)
-
-  decode.run(
-    event,
-    decode.subfield(["target", "value"], decode.string, decode.success),
-  )
-  |> result.replace_error([dynamic.DecodeError("", "", [])])
-  |> result.map(msg)
-}
-
-pub fn suppress_keydown_propagation(msg) {
-  use event <- event.on("keydown")
-  event.stop_propagation(event)
-  Ok(msg)
+  event.on("keydown", {
+    use key <- decode.field("key", decode.string)
+    case key {
+      "ArrowUp" -> decode.success(msg)
+      _ -> decode.failure(msg, "up_arrow")
+    }
+  })
 }

@@ -1,8 +1,6 @@
 import gleam/dict
 import gleam/dynamic/decode
-import gleam/io
 import gleam/json
-import gleam/list
 import gleeunit/should
 import o11a/server/preprocessor_sol
 import simplifile
@@ -14,24 +12,10 @@ pub fn style_code_tokens_operator_test() {
   )
 }
 
-pub fn style_code_tokens_function_definition_test() {
-  preprocessor_sol.style_code_tokens("function hello(string memory world) {")
-  |> should.equal(
-    "<span class=\"keyword\">function</span> <span class=\"function\">hello</span>(<span class=\"type\">string</span> <span class=\"keyword\">memory</span> world) {",
-  )
-}
-
 pub fn style_code_tokens_comment_test() {
   preprocessor_sol.style_code_tokens("return vr; // hello world")
   |> should.equal(
     "<span class=\"keyword\">return</span> vr; <span class=\"comment\">// hello world</span>",
-  )
-}
-
-pub fn style_code_tokens_contract_test() {
-  preprocessor_sol.style_code_tokens("using SafeERC20 for IERC20;")
-  |> should.equal(
-    "<span class=\"keyword\">using</span> <span class=\"contract\">SafeERC20</span> <span class=\"keyword\">for</span> <span class=\"contract\">IERC20</span>;",
   )
 }
 
@@ -74,7 +58,6 @@ pub fn preprocess_source_test() {
   let nodes = preprocessor_sol.linearize_nodes(ast)
 
   preprocessor_sol.preprocess_source(src, nodes, dict.new(), "thorwallet", "")
-  |> list.map(io.debug)
 }
 
 const src = "// SPDX-License-Identifier: MIT

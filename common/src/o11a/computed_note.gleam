@@ -1,3 +1,4 @@
+import given
 import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/json
@@ -19,7 +20,9 @@ pub type ComputedNote {
     message: String,
     expanded_message: Option(String),
     time: tempo.DateTime,
+    referenced_topic_ids: List(String),
     edited: Bool,
+    referee_topic_id: option.Option(String),
   )
 }
 
@@ -36,6 +39,8 @@ pub fn encode_computed_note(computed_note: ComputedNote) -> json.Json {
     }),
     #("t", json.int(datetime.to_unix_milli(computed_note.time))),
     #("e", json.bool(computed_note.edited)),
+    #("r", json.array(computed_note.referenced_topic_ids, json.string)),
+    #("f", json.nullable(computed_note.referee_topic_id, json.string)),
   ])
 }
 
@@ -48,6 +53,8 @@ pub fn computed_note_decoder() -> decode.Decoder(ComputedNote) {
   use expanded_message <- decode.field("x", decode.optional(decode.string))
   use time <- decode.field("t", decode.int)
   use edited <- decode.field("e", decode.bool)
+  use referenced_topic_ids <- decode.field("rs", decode.list(decode.string))
+  use referee_topic_id <- decode.field("r", decode.optional(decode.string))
 
   decode.success(ComputedNote(
     note_id:,
@@ -57,7 +64,9 @@ pub fn computed_note_decoder() -> decode.Decoder(ComputedNote) {
     message:,
     expanded_message:,
     time: datetime.from_unix_milli(time),
+    referenced_topic_ids:,
     edited:,
+    referee_topic_id:,
   ))
 }
 
@@ -196,10 +205,18 @@ pub fn decode_computed_notes(notes: dynamic.Dynamic) {
   list.group(notes, by: fn(note) { note.parent_id })
 }
 
-pub fn from_note(note: note.Note, thread_notes: List(note.Note)) {
+pub fn from_note(original_note: note.Note, thread_notes: List(note.Note)) {
   // When we are searching for compound values, search from the end of the
   // list first to get the most recently added note.
   let thread_notes = list.reverse(thread_notes)
+
+  // If the note has been deleted, return a nil error so it can be filtered out
+  use Nil <- given.ok(
+    list.find(thread_notes, fn(thread_note) {
+      thread_note.modifier == note.Delete
+    }),
+    return: fn(_) { Error(Nil) },
+  )
 
   // Find the most recent edit of the note
   let edited_note =
@@ -207,19 +224,39 @@ pub fn from_note(note: note.Note, thread_notes: List(note.Note)) {
       thread_note.modifier == note.Edit
     })
 
-  // Update the note with the most recent edited messages  if any
+  echo " found edit " <> string.inspect(edited_note)
+
+  // Update the note with the most recent edited messages, if any
   let #(note, edited) = case edited_note {
     Ok(edit) -> #(
       note.Note(
-        ..note,
+        ..original_note,
         message: edit.message,
         expanded_message: edit.expanded_message,
         significance: edit.significance,
+        referenced_topic_ids: edit.referenced_topic_ids,
       ),
       True,
     )
-    Error(Nil) -> #(note, False)
+    Error(Nil) -> #(original_note, False)
   }
+
+  // If this note is a reference note, then it should have a reference to its
+  // topic in its references list. If it does not, then an edit must have been
+  // made to the note that removed the reference. In this case, return a
+  // nil error so it can be filtered out.
+  use referee_topic_id <- given.ok(
+    case note.modifier {
+      note.Reference(referee_topic_id:) ->
+        list.find(note.referenced_topic_ids, fn(reference_topic_id) {
+          reference_topic_id == note.parent_id
+        })
+        |> result.replace(option.Some(referee_topic_id))
+
+      _ -> Ok(option.None)
+    },
+    else_return: fn(_) { Error(Nil) },
+  )
 
   let significance = case note.significance {
     note.Comment -> Comment
@@ -288,7 +325,7 @@ pub fn from_note(note: note.Note, thread_notes: List(note.Note)) {
     note.InformationalConfirmation -> InformationalConfirmation
   }
 
-  ComputedNote(
+  Ok(ComputedNote(
     note_id: note.note_id,
     parent_id: note.parent_id,
     significance:,
@@ -297,5 +334,7 @@ pub fn from_note(note: note.Note, thread_notes: List(note.Note)) {
     expanded_message: note.expanded_message,
     time: note.time,
     edited:,
-  )
+    referenced_topic_ids: note.referenced_topic_ids,
+    referee_topic_id:,
+  ))
 }

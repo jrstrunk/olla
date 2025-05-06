@@ -8,15 +8,13 @@ all:
 .PHONY: run
 run:
 	@(cd client \
-  && gleam run -m lustre/dev build component o11a/ui/line_discussion --minify --outdir="../server/priv/static" \
-	&& gleam run -m lustre/dev build component o11a/ui/discussion_preview --minify --outdir="../server/priv/static" \
-	&& npx vite build \
+	&& gleam run -m lustre/dev build app --outdir="../server/priv/static" \
 	&& cd ../server \
-	add && gleam run dev)
+	&& gleam run dev)
 
-.PHONY: clean-skeleton
-clean-skeleton:
-	@(cd server/priv/audits && find . -type f -name "*skeleton.html" -delete)
+.PHONY: wipe
+wipe:
+	@(cd server/priv/persist && rm *)
 
 .PHONY: count-lines
 count-lines:

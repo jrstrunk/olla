@@ -2,8 +2,10 @@ import gleam/dynamic/decode
 import gleam/function
 import gleam/json
 import gleam/list
+import gleam/option
 import gleam/pair
 import gleam/result
+import gleam/string
 import lib/persistent_concurrent_duplicate_dict as pcd_dict
 import lib/persistent_concurrent_structured_dict as pcs_dict
 import o11a/computed_note
@@ -67,7 +69,11 @@ pub fn note_persist_encoder(note: note.Note) {
     pcd_dict.text(note.message),
     pcd_dict.text_nullable(note.expanded_message),
     pcd_dict.int(datetime.to_unix_milli(note.time)),
-    pcd_dict.int(note.modifier |> note.note_modifier_to_int),
+    pcd_dict.text(note.modifier |> note.note_modifier_to_string),
+    pcd_dict.text(
+      json.array(note.referenced_topic_ids, json.string)
+      |> json.to_string,
+    ),
   ]
 }
 
@@ -79,7 +85,14 @@ pub fn note_persist_decoder() {
   use message <- decode.field(4, decode.string)
   use expanded_message <- decode.field(5, decode.optional(decode.string))
   use time <- decode.field(6, decode.int)
-  use modifier <- decode.field(7, decode.int)
+  use modifier <- decode.field(7, note.note_modifier_decoder())
+  use referenced_topic_ids <- decode.field(8, {
+    use str <- decode.then(decode.string)
+    case json.parse(str, decode.list(decode.string)) {
+      Ok(references) -> decode.success(references)
+      Error(e) -> decode.failure([], "references - " <> string.inspect(e))
+    }
+  })
 
   note.Note(
     note_id:,
@@ -89,7 +102,8 @@ pub fn note_persist_decoder() {
     message:,
     expanded_message:,
     time: datetime.from_unix_milli(time),
-    modifier: note.note_modifier_from_int(modifier),
+    modifier:,
+    referenced_topic_ids:,
   )
   |> decode.success
 }
@@ -118,14 +132,59 @@ pub fn note_vote_persist_decoder() {
 pub fn add_note(
   discussion: Discussion,
   note_submission: note.NoteSubmission,
-  topic_id topic: String,
+  topic_id topic,
 ) {
-  pcs_dict.insert(
+  let #(removed_references, existing_references, new_references) = case
+    note_submission.prior_referenced_topic_ids
+  {
+    option.Some(prior_referenced_topic_ids) -> {
+      #(
+        list.filter(prior_referenced_topic_ids, fn(prior_ref) {
+          !list.contains(note_submission.referenced_topic_ids, prior_ref)
+        }),
+        list.filter(note_submission.referenced_topic_ids, fn(ref) {
+          list.contains(prior_referenced_topic_ids, ref)
+        }),
+        list.filter(note_submission.referenced_topic_ids, fn(ref) {
+          !list.contains(prior_referenced_topic_ids, ref)
+        }),
+      )
+    }
+    option.None -> {
+      #([], [], note_submission.referenced_topic_ids)
+    }
+  }
+
+  use note <- result.try(pcs_dict.insert(
     discussion.notes,
     note_submission.parent_id,
     note_submission,
-    topic:,
-  )
+    rebuild_topics: list.append(
+      [topic, ..removed_references],
+      existing_references,
+    ),
+  ))
+
+  echo "added note to discussion " <> string.inspect(note)
+
+  // If the note made any new references, add them to their respective topics
+  list.map(new_references, fn(reference_topic_id) {
+    let reference_note =
+      note.NoteSubmission(
+        ..note_submission,
+        parent_id: reference_topic_id,
+        modifier: note.Reference(note.note_id),
+      )
+
+    pcs_dict.insert(
+      discussion.notes,
+      reference_topic_id,
+      reference_note,
+      rebuild_topics: [reference_topic_id],
+    )
+  })
+  |> result.all
+  |> result.replace(Nil)
 }
 
 pub fn subscribe_to_note_updates(discussion: Discussion, effect: fn() -> Nil) {
@@ -164,8 +223,15 @@ fn build_structured_notes(
     list.filter(notes, fn(note) {
       note.modifier != note.Edit && note.modifier != note.Delete
     })
-    |> list.map(fn(note) {
-      computed_note.from_note(note, pcd_dict.get(notes_dict, note.note_id))
+    |> list.filter_map(fn(note) {
+      echo "found note " <> string.inspect(note)
+      let thread_id = case note.modifier {
+        note.Reference(original_note_id) -> original_note_id
+        _ -> note.note_id
+      }
+      echo "thread id " <> thread_id
+
+      computed_note.from_note(note, pcd_dict.get(notes_dict, thread_id))
     })
 
   case computed_notes {
@@ -184,6 +250,18 @@ pub fn dump_computed_notes(discussion: Discussion) {
     pcs_dict.to_list(discussion.notes)
     |> list.map(pair.second)
     |> list.flatten
+
+  json.array(notes, computed_note.encode_computed_note)
+}
+
+pub fn dump_computed_notes_since(discussion: Discussion, since ref_time) {
+  let notes =
+    pcs_dict.to_list(discussion.notes)
+    |> list.map(pair.second)
+    |> list.flatten
+    |> list.filter(fn(note) {
+      note.time |> datetime.is_later_or_equal(to: ref_time)
+    })
 
   json.array(notes, computed_note.encode_computed_note)
 }
