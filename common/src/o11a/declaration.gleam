@@ -1,15 +1,16 @@
 import gleam/dynamic/decode
 import gleam/json
 import gleam/list
+import gleam/option
 import gleam/result
 import gleam/string
 
 pub type Declaration {
   Declaration(
     name: String,
-    scope: String,
-    topic_id: String,
     signature: String,
+    scope: Scope,
+    topic_id: String,
     kind: DeclarationKind,
     references: List(Reference),
   )
@@ -20,7 +21,7 @@ pub fn encode_declaration(declaration: Declaration) -> json.Json {
     Declaration(name:, scope:, topic_id:, signature:, kind:, references:) ->
       json.object([
         #("n", json.string(name)),
-        #("s", json.string(scope)),
+        #("s", encode_scope(scope)),
         #("t", json.string(topic_id)),
         #("g", json.string(signature)),
         #("k", encode_declaration_kind(kind)),
@@ -31,7 +32,7 @@ pub fn encode_declaration(declaration: Declaration) -> json.Json {
 
 pub fn declaration_decoder() -> decode.Decoder(Declaration) {
   use name <- decode.field("n", decode.string)
-  use scope <- decode.field("s", decode.string)
+  use scope <- decode.field("s", scope_decoder())
   use topic_id <- decode.field("t", decode.string)
   use signature <- decode.field("g", decode.string)
   use kind <- decode.field("k", decode_declaration_kind())
@@ -46,14 +47,56 @@ pub fn declaration_decoder() -> decode.Decoder(Declaration) {
   ))
 }
 
-pub const unknown_node_declaration = Declaration(
+pub const unknown_declaration = Declaration(
   "",
   "",
-  "",
+  Scope(option.None, option.None),
   "",
   UnknownDeclaration,
   [],
 )
+
+pub type Scope {
+  Scope(object: option.Option(String), member: option.Option(String))
+}
+
+fn encode_scope(scope: Scope) -> json.Json {
+  let Scope(object:, member:) = scope
+  json.object(
+    [
+      case object {
+        option.None -> []
+        option.Some(object) -> [#("o", json.string(object))]
+      },
+      case member {
+        option.None -> []
+        option.Some(member) -> [#("m", json.string(member))]
+      },
+    ]
+    |> list.flatten,
+  )
+}
+
+fn scope_decoder() -> decode.Decoder(Scope) {
+  use object <- decode.optional_field(
+    "o",
+    option.None,
+    decode.optional(decode.string),
+  )
+  use member <- decode.optional_field(
+    "m",
+    option.None,
+    decode.optional(decode.string),
+  )
+  decode.success(Scope(object:, member:))
+}
+
+pub fn contract_scope_to_string(scope: Scope) {
+  scope.object
+  |> option.unwrap("")
+  <> option.map(scope.member, fn(member) { "." <> member })
+  |> option.unwrap("")
+}
 
 pub type DeclarationKind {
   ContractDeclaration(contract_kind: ContractKind)
@@ -188,22 +231,22 @@ pub fn function_kind_from_string(kind) {
 /// A reference to a node in the AST, only possible to be done in the source
 /// code
 pub type Reference {
-  Reference(scoped_name: String, topic_id: String, kind: NodeReferenceKind)
+  Reference(scope: Scope, topic_id: String, kind: NodeReferenceKind)
 }
 
 pub fn encode_reference(node_reference: Reference) {
   json.object([
-    #("n", json.string(node_reference.scoped_name)),
+    #("s", encode_scope(node_reference.scope)),
     #("i", json.string(node_reference.topic_id)),
     #("k", encode_node_reference_kind(node_reference.kind)),
   ])
 }
 
 pub fn reference_decoder() {
-  use scoped_name <- decode.field("n", decode.string)
+  use scope <- decode.field("s", scope_decoder())
   use topic_id <- decode.field("i", decode.string)
   use kind <- decode.field("k", node_reference_kind_decoder())
-  decode.success(Reference(scoped_name:, topic_id:, kind:))
+  decode.success(Reference(scope:, topic_id:, kind:))
 }
 
 pub type NodeReferenceKind {
@@ -260,9 +303,9 @@ pub fn get_references(in message: String, with declarations: List(Declaration)) 
       }
     })
 
-    echo "found potential reference: " <> ref
-
-    list.find(declarations, fn(dec) { dec.scope <> "." <> dec.name == ref })
+    list.find(declarations, fn(dec) {
+      contract_scope_to_string(dec.scope) <> "." <> dec.name == ref
+    })
     |> result.try_recover(fn(_) {
       list.find(declarations, fn(dec) { dec.name == ref })
     })

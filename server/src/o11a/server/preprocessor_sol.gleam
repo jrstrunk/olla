@@ -135,7 +135,7 @@ pub fn consume_source(
           preprocessor.PreProcessedDeclaration(
             node_id: id,
             node_declaration: dict.get(declarations, id)
-              |> result.unwrap(declaration.unknown_node_declaration),
+              |> result.unwrap(declaration.unknown_declaration),
             tokens: _,
           )
         }
@@ -143,7 +143,7 @@ pub fn consume_source(
         BaseContract(reference_id:, ..) | Modifier(reference_id:, ..) -> preprocessor.PreProcessedReference(
           referenced_node_id: reference_id,
           referenced_node_declaration: dict.get(declarations, reference_id)
-            |> result.unwrap(declaration.unknown_node_declaration),
+            |> result.unwrap(declaration.unknown_declaration),
           tokens: _,
         )
 
@@ -153,7 +153,7 @@ pub fn consume_source(
             False -> preprocessor.PreProcessedReference(
               referenced_node_id: reference_id,
               referenced_node_declaration: dict.get(declarations, reference_id)
-                |> result.unwrap(declaration.unknown_node_declaration),
+                |> result.unwrap(declaration.unknown_declaration),
               tokens: _,
             )
           }
@@ -163,7 +163,7 @@ pub fn consume_source(
             option.Some(reference_id), _ -> preprocessor.PreProcessedReference(
               referenced_node_id: reference_id,
               referenced_node_declaration: dict.get(declarations, reference_id)
-                |> result.unwrap(declaration.unknown_node_declaration),
+                |> result.unwrap(declaration.unknown_declaration),
               tokens: _,
             )
             option.None, True -> style_tokens(_, class: "global-variable")
@@ -682,7 +682,7 @@ pub fn enumerate_declarations(declarations, in ast: AST) {
       declarations,
       node,
       ast.absolute_path,
-      ast.absolute_path |> filepath.base_name,
+      parent_scope: declaration.Scope(object: option.None, member: option.None),
     )
   })
 }
@@ -691,7 +691,7 @@ fn do_enumerate_node_declarations(
   declarations,
   node: Node,
   parent_id: String,
-  parent_name,
+  parent_scope parent_scope: declaration.Scope,
 ) {
   case node {
     Node(nodes:, ..) ->
@@ -700,7 +700,7 @@ fn do_enumerate_node_declarations(
           declarations,
           node,
           parent_id,
-          parent_name,
+          parent_scope,
         )
       })
     NamedNode(nodes:, ..) ->
@@ -709,7 +709,7 @@ fn do_enumerate_node_declarations(
           declarations,
           node,
           parent_id,
-          parent_name,
+          parent_scope,
         )
       })
     ImportDirectiveNode(..) | StructuredDocumentationNode(..) -> declarations
@@ -718,13 +718,16 @@ fn do_enumerate_node_declarations(
         declaration.contract_kind_to_string(contract_kind) <> " " <> name
       let contract_id = parent_id <> "#" <> name
 
+      let children_scope =
+        declaration.Scope(object: option.Some(name), member: option.None)
+
       dict.insert(
         declarations,
         id,
         declaration.Declaration(
           name:,
           // The parent of a contract is the file it is defined in
-          scope: parent_name,
+          scope: parent_scope,
           signature:,
           topic_id: contract_id,
           kind: declaration.ContractDeclaration(contract_kind),
@@ -732,7 +735,12 @@ fn do_enumerate_node_declarations(
         ),
       )
       |> list.fold(nodes, _, fn(declarations, node) {
-        do_enumerate_node_declarations(declarations, node, contract_id, name)
+        do_enumerate_node_declarations(
+          declarations,
+          node,
+          contract_id,
+          children_scope,
+        )
       })
     }
     FunctionDefinitionNode(
@@ -761,7 +769,8 @@ fn do_enumerate_node_declarations(
 
       let function_id = parent_id <> ":" <> name
 
-      let scoped_name = parent_name <> "." <> name
+      let children_scope =
+        declaration.Scope(..parent_scope, member: option.Some(name))
 
       let declarations =
         dict.insert(
@@ -769,7 +778,7 @@ fn do_enumerate_node_declarations(
           id,
           declaration.Declaration(
             name:,
-            scope: parent_name,
+            scope: parent_scope,
             signature:,
             topic_id: function_id,
             kind: declaration.FunctionDeclaration(function_kind),
@@ -781,14 +790,18 @@ fn do_enumerate_node_declarations(
             declarations,
             node,
             function_id,
-            scoped_name,
+            children_scope,
           )
         })
-        |> do_enumerate_node_declarations(parameters, function_id, scoped_name)
+        |> do_enumerate_node_declarations(
+          parameters,
+          function_id,
+          children_scope,
+        )
         |> do_enumerate_node_declarations(
           return_parameters,
           function_id,
-          scoped_name,
+          children_scope,
         )
 
       case body {
@@ -797,7 +810,7 @@ fn do_enumerate_node_declarations(
             declarations,
             body,
             function_id,
-            scoped_name,
+            children_scope,
           )
         option.None -> declarations
       }
@@ -805,7 +818,9 @@ fn do_enumerate_node_declarations(
     ModifierDefinitionNode(id:, parameters:, nodes:, body:, name:, ..) -> {
       let signature = "modifier " <> name
       let modifier_id = parent_id <> ":" <> name
-      let scoped_name = parent_name <> "." <> name
+
+      let children_scope =
+        declaration.Scope(..parent_scope, member: option.Some(name))
 
       let declarations =
         dict.insert(
@@ -813,7 +828,7 @@ fn do_enumerate_node_declarations(
           id,
           declaration.Declaration(
             name:,
-            scope: parent_name,
+            scope: parent_scope,
             signature:,
             topic_id: modifier_id,
             kind: declaration.ModifierDeclaration,
@@ -825,10 +840,14 @@ fn do_enumerate_node_declarations(
             declarations,
             node,
             modifier_id,
-            scoped_name,
+            children_scope,
           )
         })
-        |> do_enumerate_node_declarations(parameters, modifier_id, scoped_name)
+        |> do_enumerate_node_declarations(
+          parameters,
+          modifier_id,
+          children_scope,
+        )
 
       case body {
         Some(body) ->
@@ -836,7 +855,7 @@ fn do_enumerate_node_declarations(
             declarations,
             body,
             modifier_id,
-            scoped_name,
+            children_scope,
           )
         option.None -> declarations
       }
@@ -847,7 +866,7 @@ fn do_enumerate_node_declarations(
           declarations,
           parameter,
           parent_id,
-          parent_name,
+          parent_scope,
         )
       })
     }
@@ -860,7 +879,7 @@ fn do_enumerate_node_declarations(
         id,
         declaration.Declaration(
           name:,
-          scope: parent_name,
+          scope: parent_scope,
           signature:,
           topic_id:,
           kind: declaration.ErrorDeclaration,
@@ -872,10 +891,10 @@ fn do_enumerate_node_declarations(
           declarations,
           node,
           parent_id,
-          parent_name,
+          parent_scope,
         )
       })
-      |> do_enumerate_node_declarations(parameters, parent_id, parent_name)
+      |> do_enumerate_node_declarations(parameters, parent_id, parent_scope)
     }
     EventDefinitionNode(id:, name:, nodes:, parameters:, ..) -> {
       let signature = "event " <> name
@@ -886,7 +905,7 @@ fn do_enumerate_node_declarations(
         id,
         declaration.Declaration(
           name:,
-          scope: parent_name,
+          scope: parent_scope,
           signature:,
           topic_id:,
           kind: declaration.EventDeclaration,
@@ -898,10 +917,10 @@ fn do_enumerate_node_declarations(
           declarations,
           node,
           parent_id,
-          parent_name,
+          parent_scope,
         )
       })
-      |> do_enumerate_node_declarations(parameters, parent_id, parent_name)
+      |> do_enumerate_node_declarations(parameters, parent_id, parent_scope)
     }
     VariableDeclarationNode(id:, name:, constant:, type_string:, ..) -> {
       let signature =
@@ -919,7 +938,7 @@ fn do_enumerate_node_declarations(
         id,
         declaration.Declaration(
           name:,
-          scope: parent_name,
+          scope: parent_scope,
           signature:,
           topic_id:,
           kind: case constant {
@@ -936,7 +955,7 @@ fn do_enumerate_node_declarations(
           declarations,
           node,
           parent_id,
-          parent_name,
+          parent_scope,
         )
       })
       |> list.fold(statements, _, fn(declarations, statement) {
@@ -944,7 +963,7 @@ fn do_enumerate_node_declarations(
           declarations,
           statement,
           parent_id,
-          parent_name,
+          parent_scope,
         )
       })
     }
@@ -956,7 +975,7 @@ fn do_enumerate_node_declarations(
               declarations,
               declaration,
               parent_id,
-              parent_name,
+              parent_scope,
             )
           option.None -> declarations
         }
@@ -967,7 +986,7 @@ fn do_enumerate_node_declarations(
           declarations,
           true_body,
           parent_id,
-          parent_name,
+          parent_scope,
         )
 
       case false_body {
@@ -976,7 +995,7 @@ fn do_enumerate_node_declarations(
             declarations,
             false_body,
             parent_id,
-            parent_name,
+            parent_scope,
           )
         option.None -> declarations
       }
@@ -988,24 +1007,31 @@ fn do_enumerate_node_declarations(
             declarations,
             init,
             parent_id,
-            parent_name,
+            parent_scope,
           )
         option.None -> declarations
       }
 
-      do_enumerate_node_declarations(declarations, body, parent_id, parent_name)
+      do_enumerate_node_declarations(
+        declarations,
+        body,
+        parent_id,
+        parent_scope,
+      )
     }
     EnumDefinition(id:, name:, members:, nodes:, ..) -> {
       let signature = "enum " <> name
       let enum_id = parent_id <> ":" <> name
-      let scoped_name = parent_name <> "." <> name
+
+      let children_scope =
+        declaration.Scope(..parent_scope, member: option.Some(name))
 
       dict.insert(
         declarations,
         id,
         declaration.Declaration(
           name:,
-          scope: parent_name,
+          scope: parent_scope,
           signature:,
           topic_id: enum_id,
           kind: declaration.EnumDeclaration,
@@ -1017,7 +1043,7 @@ fn do_enumerate_node_declarations(
           declarations,
           statement,
           enum_id,
-          scoped_name,
+          children_scope,
         )
       })
       |> list.fold(members, _, fn(declarations, statement) {
@@ -1025,7 +1051,7 @@ fn do_enumerate_node_declarations(
           declarations,
           statement,
           enum_id,
-          scoped_name,
+          children_scope,
         )
       })
     }
@@ -1038,7 +1064,7 @@ fn do_enumerate_node_declarations(
         id,
         declaration.Declaration(
           name:,
-          scope: parent_name,
+          scope: parent_scope,
           signature:,
           topic_id:,
           kind: declaration.EnumValueDeclaration,
@@ -1049,13 +1075,15 @@ fn do_enumerate_node_declarations(
     StructDefinition(id:, name:, members:, nodes:, ..) -> {
       let signature = "struct " <> name
       let struct_id = parent_id <> ":" <> name
+      let children_scope =
+        declaration.Scope(..parent_scope, member: option.Some(name))
 
       dict.insert(
         declarations,
         id,
         declaration.Declaration(
           name:,
-          scope: parent_name,
+          scope: parent_scope,
           signature:,
           topic_id: struct_id,
           kind: declaration.StructDeclaration,
@@ -1063,10 +1091,20 @@ fn do_enumerate_node_declarations(
         ),
       )
       |> list.fold(nodes, _, fn(declarations, statement) {
-        do_enumerate_node_declarations(declarations, statement, struct_id, name)
+        do_enumerate_node_declarations(
+          declarations,
+          statement,
+          struct_id,
+          children_scope,
+        )
       })
       |> list.fold(members, _, fn(declarations, statement) {
-        do_enumerate_node_declarations(declarations, statement, struct_id, name)
+        do_enumerate_node_declarations(
+          declarations,
+          statement,
+          struct_id,
+          children_scope,
+        )
       })
     }
 
@@ -1079,7 +1117,7 @@ pub fn count_references(declarations, in ast: AST) {
     do_count_node_references(
       declarations,
       node,
-      "",
+      declaration.Scope(object: option.None, member: option.None),
       ast.absolute_path,
       declaration.AccessReference,
     )
@@ -1089,8 +1127,8 @@ pub fn count_references(declarations, in ast: AST) {
 fn do_count_node_references(
   declarations,
   node: Node,
-  parent_scoped_name: String,
-  parent_id: String,
+  parent_scope: declaration.Scope,
+  parent_topic_id: String,
   parent_reference_kind: declaration.NodeReferenceKind,
 ) {
   case node {
@@ -1105,8 +1143,8 @@ fn do_count_node_references(
       do_count_node_references_multi(
         declarations,
         nodes,
-        parent_scoped_name,
-        parent_id,
+        parent_scope,
+        parent_topic_id,
         parent_reference_kind,
       )
 
@@ -1118,19 +1156,20 @@ fn do_count_node_references(
     | Literal(..) -> declarations
 
     ContractDefinitionNode(nodes:, base_contracts:, name:, ..) -> {
-      let scoped_name = name
-      let contract_id = parent_id <> "#" <> name
+      let children_scope =
+        declaration.Scope(object: option.Some(name), member: option.None)
+      let contract_id = parent_topic_id <> "#" <> name
 
       do_count_node_references_multi(
         declarations,
         nodes,
-        scoped_name,
+        children_scope,
         contract_id,
         parent_reference_kind,
       )
       |> do_count_node_references_multi(
         base_contracts,
-        scoped_name,
+        children_scope,
         contract_id,
         parent_reference_kind,
       )
@@ -1146,14 +1185,18 @@ fn do_count_node_references(
       name:,
       ..,
     ) -> {
-      let scoped_name = case function_kind {
-        declaration.Function -> parent_scoped_name <> "." <> name
-        declaration.Constructor -> parent_scoped_name <> " constructor"
-        declaration.Fallback -> parent_scoped_name <> "fallback function"
-        declaration.Receive -> parent_scoped_name <> "receive function"
-      }
+      let children_scope =
+        declaration.Scope(
+          ..parent_scope,
+          member: option.Some(case function_kind {
+            declaration.Function -> name
+            declaration.Constructor -> "constructor"
+            declaration.Fallback -> "fallback"
+            declaration.Receive -> "receive"
+          }),
+        )
       let function_id =
-        parent_id
+        parent_topic_id
         <> ":"
         <> case function_kind {
           declaration.Function -> name
@@ -1167,26 +1210,26 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             node,
-            scoped_name,
+            children_scope,
             function_id,
             parent_reference_kind,
           )
         })
         |> do_count_node_references(
           parameters,
-          scoped_name,
+          children_scope,
           function_id,
           parent_reference_kind,
         )
         |> do_count_node_references(
           return_parameters,
-          scoped_name,
+          children_scope,
           function_id,
           parent_reference_kind,
         )
         |> do_count_node_references_multi(
           modifiers,
-          scoped_name,
+          children_scope,
           function_id,
           parent_reference_kind,
         )
@@ -1196,7 +1239,7 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             body,
-            scoped_name,
+            children_scope,
             function_id,
             parent_reference_kind,
           )
@@ -1204,20 +1247,21 @@ fn do_count_node_references(
       }
     }
     ModifierDefinitionNode(nodes:, parameters:, body:, name:, ..) -> {
-      let scoped_name = parent_scoped_name <> " modifier " <> name
-      let modifier_id = parent_id <> ":" <> name
+      let children_scope =
+        declaration.Scope(..parent_scope, member: option.Some(name))
+      let modifier_id = parent_topic_id <> ":" <> name
 
       let declarations =
         do_count_node_references_multi(
           declarations,
           nodes,
-          scoped_name,
+          children_scope,
           modifier_id,
           parent_reference_kind,
         )
         |> do_count_node_references(
           parameters,
-          scoped_name,
+          children_scope,
           modifier_id,
           parent_reference_kind,
         )
@@ -1227,7 +1271,7 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             body,
-            scoped_name,
+            children_scope,
             modifier_id,
             parent_reference_kind,
           )
@@ -1238,14 +1282,14 @@ fn do_count_node_references(
       do_count_node_references_multi(
         declarations,
         nodes,
-        parent_scoped_name,
-        parent_id,
+        parent_scope,
+        parent_topic_id,
         parent_reference_kind,
       )
       |> do_count_node_references_multi(
         statements,
-        parent_scoped_name,
-        parent_id,
+        parent_scope,
+        parent_topic_id,
         parent_reference_kind,
       )
     }
@@ -1255,8 +1299,8 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             expression,
-            parent_scoped_name,
-            parent_id,
+            parent_scope,
+            parent_topic_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1265,8 +1309,8 @@ fn do_count_node_references(
       do_count_node_references(
         declarations,
         event_call,
-        parent_scoped_name,
-        parent_id,
+        parent_scope,
+        parent_topic_id,
         parent_reference_kind,
       )
 
@@ -1276,8 +1320,8 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             initial_value,
-            parent_scoped_name,
-            parent_id,
+            parent_scope,
+            parent_topic_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1287,14 +1331,14 @@ fn do_count_node_references(
         do_count_node_references(
           declarations,
           condition,
-          parent_scoped_name,
-          parent_id,
+          parent_scope,
+          parent_topic_id,
           parent_reference_kind,
         )
         |> do_count_node_references(
           true_body,
-          parent_scoped_name,
-          parent_id,
+          parent_scope,
+          parent_topic_id,
           parent_reference_kind,
         )
 
@@ -1303,8 +1347,8 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             false_body,
-            parent_scoped_name,
-            parent_id,
+            parent_scope,
+            parent_topic_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1322,8 +1366,8 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             init,
-            parent_scoped_name,
-            parent_id,
+            parent_scope,
+            parent_topic_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1334,8 +1378,8 @@ fn do_count_node_references(
             do_count_node_references(
               declarations,
               condition,
-              parent_scoped_name,
-              parent_id,
+              parent_scope,
+              parent_topic_id,
               parent_reference_kind,
             )
           option.None -> declarations
@@ -1347,8 +1391,8 @@ fn do_count_node_references(
             do_count_node_references(
               declarations,
               loop,
-              parent_scoped_name,
-              parent_id,
+              parent_scope,
+              parent_topic_id,
               parent_reference_kind,
             )
           option.None -> declarations
@@ -1356,8 +1400,8 @@ fn do_count_node_references(
       }
       |> do_count_node_references(
         body,
-        parent_scoped_name,
-        parent_id,
+        parent_scope,
+        parent_topic_id,
         parent_reference_kind,
       )
     RevertStatementNode(expression:, ..) ->
@@ -1366,8 +1410,8 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             expression,
-            parent_scoped_name,
-            parent_id,
+            parent_scope,
+            parent_topic_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1379,8 +1423,8 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             expression,
-            parent_scoped_name,
-            parent_id,
+            parent_scope,
+            parent_topic_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1392,8 +1436,8 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             expression,
-            parent_scoped_name,
-            parent_id,
+            parent_scope,
+            parent_topic_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1401,8 +1445,8 @@ fn do_count_node_references(
       |> add_reference(
         reference_id,
         declaration.Reference(
-          scoped_name: parent_scoped_name,
-          topic_id: parent_id,
+          scope: parent_scope,
+          topic_id: parent_topic_id,
           kind: parent_reference_kind,
         ),
       )
@@ -1414,8 +1458,8 @@ fn do_count_node_references(
             declarations,
             reference_id,
             declaration.Reference(
-              scoped_name: parent_scoped_name,
-              topic_id: parent_id,
+              scope: parent_scope,
+              topic_id: parent_topic_id,
               kind: parent_reference_kind,
             ),
           )
@@ -1427,8 +1471,8 @@ fn do_count_node_references(
             do_count_node_references(
               declarations,
               expression,
-              parent_scoped_name,
-              parent_id,
+              parent_scope,
+              parent_topic_id,
               parent_reference_kind,
             )
           option.None -> declarations
@@ -1441,30 +1485,30 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             expression,
-            parent_scoped_name,
-            parent_id,
+            parent_scope,
+            parent_topic_id,
             declaration.CallReference,
           )
         option.None -> declarations
       }
       |> do_count_node_references_multi(
         arguments,
-        parent_scoped_name,
-        parent_id,
+        parent_scope,
+        parent_topic_id,
         parent_reference_kind,
       )
     Assignment(left_hand_side:, right_hand_side:, ..) ->
       do_count_node_references(
         declarations,
         left_hand_side,
-        parent_scoped_name,
-        parent_id,
+        parent_scope,
+        parent_topic_id,
         declaration.MutationReference,
       )
       |> do_count_node_references(
         right_hand_side,
-        parent_scoped_name,
-        parent_id,
+        parent_scope,
+        parent_topic_id,
         parent_reference_kind,
       )
 
@@ -1472,14 +1516,14 @@ fn do_count_node_references(
       do_count_node_references(
         declarations,
         left_expression,
-        parent_scoped_name,
-        parent_id,
+        parent_scope,
+        parent_topic_id,
         parent_reference_kind,
       )
       |> do_count_node_references(
         right_expression,
-        parent_scoped_name,
-        parent_id,
+        parent_scope,
+        parent_topic_id,
         parent_reference_kind,
       )
 
@@ -1487,8 +1531,8 @@ fn do_count_node_references(
       do_count_node_references(
         declarations,
         expression,
-        parent_scoped_name,
-        parent_id,
+        parent_scope,
+        parent_topic_id,
         parent_reference_kind,
       )
 
@@ -1498,16 +1542,16 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             index,
-            parent_scoped_name,
-            parent_id,
+            parent_scope,
+            parent_topic_id,
             parent_reference_kind,
           )
         option.None -> declarations
       }
       |> do_count_node_references(
         base,
-        parent_scoped_name,
-        parent_id,
+        parent_scope,
+        parent_topic_id,
         parent_reference_kind,
       )
 
@@ -1516,8 +1560,8 @@ fn do_count_node_references(
         declarations,
         reference_id,
         declaration.Reference(
-          scoped_name: parent_scoped_name,
-          topic_id: parent_id,
+          scope: parent_scope,
+          topic_id: parent_topic_id,
           kind: declaration.CallReference,
         ),
       )
@@ -1527,8 +1571,8 @@ fn do_count_node_references(
             do_count_node_references_multi(
               declarations,
               arguments,
-              parent_scoped_name,
-              parent_id,
+              parent_scope,
+              parent_topic_id,
               parent_reference_kind,
             )
           option.None -> declarations
@@ -1539,8 +1583,8 @@ fn do_count_node_references(
         declarations,
         reference_id,
         declaration.Reference(
-          scoped_name: parent_scoped_name,
-          topic_id: parent_id,
+          scope: parent_scope,
+          topic_id: parent_topic_id,
           kind: parent_reference_kind,
         ),
       )
@@ -1549,8 +1593,8 @@ fn do_count_node_references(
         declarations,
         reference_id,
         declaration.Reference(
-          scoped_name: parent_scoped_name,
-          topic_id: parent_id,
+          scope: parent_scope,
+          topic_id: parent_topic_id,
           kind: declaration.InheritanceReference,
         ),
       )
@@ -1558,36 +1602,36 @@ fn do_count_node_references(
       do_count_node_references(
         declarations,
         condition,
-        parent_scoped_name,
-        parent_id,
+        parent_scope,
+        parent_topic_id,
         parent_reference_kind,
       )
       |> do_count_node_references(
         true_expression,
-        parent_scoped_name,
-        parent_id,
+        parent_scope,
+        parent_topic_id,
         parent_reference_kind,
       )
       |> do_count_node_references(
         false_expression,
-        parent_scoped_name,
-        parent_id,
+        parent_scope,
+        parent_topic_id,
         parent_reference_kind,
       )
     UserDefinedTypeName(path_node:, ..) ->
       do_count_node_references(
         declarations,
         path_node,
-        parent_scoped_name,
-        parent_id,
+        parent_scope,
+        parent_topic_id,
         declaration.TypeReference,
       )
     NewExpression(type_name:, arguments:, ..) ->
       do_count_node_references(
         declarations,
         type_name,
-        parent_scoped_name,
-        parent_id,
+        parent_scope,
+        parent_topic_id,
         declaration.TypeReference,
       )
       |> fn(declarations) {
@@ -1596,8 +1640,8 @@ fn do_count_node_references(
             do_count_node_references_multi(
               declarations,
               arguments,
-              parent_scoped_name,
-              parent_id,
+              parent_scope,
+              parent_topic_id,
               parent_reference_kind,
             )
           option.None -> declarations
@@ -1607,8 +1651,8 @@ fn do_count_node_references(
       do_count_node_references(
         declarations,
         base_type,
-        parent_scoped_name,
-        parent_id,
+        parent_scope,
+        parent_topic_id,
         declaration.TypeReference,
       )
     FunctionCallOptions(options:, expression:, ..) ->
@@ -1617,38 +1661,38 @@ fn do_count_node_references(
           do_count_node_references(
             declarations,
             expression,
-            parent_scoped_name,
-            parent_id,
+            parent_scope,
+            parent_topic_id,
             declaration.CallReference,
           )
         option.None -> declarations
       }
       |> do_count_node_references_multi(
         options,
-        parent_scoped_name,
-        parent_id,
+        parent_scope,
+        parent_topic_id,
         parent_reference_kind,
       )
     Mapping(key_type:, value_type:, ..) ->
       do_count_node_references(
         declarations,
         key_type,
-        parent_scoped_name,
-        parent_id,
+        parent_scope,
+        parent_topic_id,
         declaration.TypeReference,
       )
       |> do_count_node_references(
         value_type,
-        parent_scoped_name,
-        parent_id,
+        parent_scope,
+        parent_topic_id,
         declaration.TypeReference,
       )
     UsingForDirective(library_name:, ..) ->
       do_count_node_references(
         declarations,
         library_name,
-        parent_scoped_name,
-        parent_id,
+        parent_scope,
+        parent_topic_id,
         declaration.UsingReference,
       )
   }
@@ -1673,14 +1717,7 @@ fn add_reference(
           <> int.to_string(declaration_id)
           <> " found, there is an issue with finding all declarations",
         )
-        declaration.Declaration(
-          name: "",
-          scope: "",
-          signature: "unknown",
-          topic_id: "",
-          kind: declaration.UnknownDeclaration,
-          references: [reference],
-        )
+        declaration.unknown_declaration
       }
     }
   })
@@ -1689,7 +1726,7 @@ fn add_reference(
 fn do_count_node_references_multi(
   declarations,
   nodes: List(Node),
-  parent_title: String,
+  parent_scope,
   parent_id: String,
   parent_reference_kind: declaration.NodeReferenceKind,
 ) {
@@ -1697,7 +1734,7 @@ fn do_count_node_references_multi(
     do_count_node_references(
       declarations,
       node,
-      parent_title,
+      parent_scope,
       parent_id,
       parent_reference_kind,
     )

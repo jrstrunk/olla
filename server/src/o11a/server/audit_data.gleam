@@ -255,7 +255,10 @@ fn preprocess_audit_source(for audit_name) {
             Ok(
               declaration.Declaration(
                 name: "L" <> line_number_text,
-                scope: filepath.base_name(source_file.0),
+                scope: declaration.Scope(
+                  object: option.Some(filepath.base_name(source_file.0)),
+                  member: option.None,
+                ),
                 signature: "line " <> line_number_text,
                 topic_id:,
                 kind: declaration.LineDeclaration,
@@ -267,7 +270,10 @@ fn preprocess_audit_source(for audit_name) {
             Ok(
               declaration.Declaration(
                 name: "L" <> line_number_text,
-                scope: filepath.base_name(source_file.0),
+                scope: declaration.Scope(
+                  object: option.Some(filepath.base_name(source_file.0)),
+                  member: option.None,
+                ),
                 signature: "line " <> line_number_text,
                 kind: declaration.LineDeclaration,
                 topic_id: source_file.0 <> "#L" <> line_number_text,

@@ -529,7 +529,7 @@ fn reference_group_view(references: List(declaration.Reference), group_kind) {
         ..list.map(references, fn(reference) {
           html.p([attribute.class("pl-[.25rem]")], [
             html.a([attribute.href("/" <> reference.topic_id)], [
-              html.text(reference.scoped_name),
+              html.text(declaration.contract_scope_to_string(reference.scope)),
             ]),
           ])
         })

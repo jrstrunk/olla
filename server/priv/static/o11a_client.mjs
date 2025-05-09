@@ -3175,6 +3175,36 @@ function subfield(field_path, field_decoder, next) {
 function field(field_name, field_decoder, next) {
   return subfield(toList([field_name]), field_decoder, next);
 }
+function optional_field(key2, default$, field_decoder, next) {
+  return new Decoder(
+    (data2) => {
+      let _block$1;
+      let $1 = index2(data2, key2);
+      if ($1.isOk() && $1[0] instanceof Some) {
+        let data$1 = $1[0][0];
+        _block$1 = field_decoder.function(data$1);
+      } else if ($1.isOk() && $1[0] instanceof None) {
+        _block$1 = [default$, toList([])];
+      } else {
+        let kind = $1[0];
+        _block$1 = [
+          default$,
+          toList([new DecodeError2(kind, classify_dynamic(data2), toList([]))])
+        ];
+      }
+      let _block;
+      let _pipe = _block$1;
+      _block = push_path(_pipe, toList([key2]));
+      let $ = _block;
+      let out = $[0];
+      let errors1 = $[1];
+      let $2 = next(out).function(data2);
+      let out$1 = $2[0];
+      let errors2 = $2[1];
+      return [out$1, append2(errors1, errors2)];
+    }
+  );
+}
 
 // build/dev/javascript/gleam_json/gleam_json_ffi.mjs
 function json_to_string(json2) {
@@ -8115,14 +8145,21 @@ function is_significance_threadable(note_significance) {
 
 // build/dev/javascript/o11a_common/o11a/declaration.mjs
 var Declaration = class extends CustomType {
-  constructor(name2, scope, topic_id, signature, kind, references) {
+  constructor(name2, signature, scope, topic_id, kind, references) {
     super();
     this.name = name2;
+    this.signature = signature;
     this.scope = scope;
     this.topic_id = topic_id;
-    this.signature = signature;
     this.kind = kind;
     this.references = references;
+  }
+};
+var Scope = class extends CustomType {
+  constructor(object4, member) {
+    super();
+    this.object = object4;
+    this.member = member;
   }
 };
 var ContractDeclaration = class extends CustomType {
@@ -8174,9 +8211,9 @@ var Fallback = class extends CustomType {
 var Receive = class extends CustomType {
 };
 var Reference2 = class extends CustomType {
-  constructor(scoped_name, topic_id, kind) {
+  constructor(scope, topic_id, kind) {
     super();
-    this.scoped_name = scoped_name;
+    this.scope = scope;
     this.topic_id = topic_id;
     this.kind = kind;
   }
@@ -8193,6 +8230,34 @@ var UsingReference = class extends CustomType {
 };
 var TypeReference = class extends CustomType {
 };
+function scope_decoder() {
+  return optional_field(
+    "o",
+    new None(),
+    optional(string3),
+    (object4) => {
+      return optional_field(
+        "m",
+        new None(),
+        optional(string3),
+        (member) => {
+          return success(new Scope(object4, member));
+        }
+      );
+    }
+  );
+}
+function contract_scope_to_string(scope) {
+  return (() => {
+    let _pipe = scope.object;
+    return unwrap(_pipe, "");
+  })() + (() => {
+    let _pipe = map(scope.member, (member) => {
+      return "." + member;
+    });
+    return unwrap(_pipe, "");
+  })();
+}
 function decode_declaration_kind() {
   return map4(
     string3,
@@ -8302,9 +8367,9 @@ function node_reference_kind_decoder() {
 }
 function reference_decoder() {
   return field(
-    "n",
-    string3,
-    (scoped_name) => {
+    "s",
+    scope_decoder(),
+    (scope) => {
       return field(
         "i",
         string3,
@@ -8313,7 +8378,7 @@ function reference_decoder() {
             "k",
             node_reference_kind_decoder(),
             (kind) => {
-              return success(new Reference2(scoped_name, topic_id, kind));
+              return success(new Reference2(scope, topic_id, kind));
             }
           );
         }
@@ -8328,7 +8393,7 @@ function declaration_decoder() {
     (name2) => {
       return field(
         "s",
-        string3,
+        scope_decoder(),
         (scope) => {
           return field(
             "t",
@@ -8349,9 +8414,9 @@ function declaration_decoder() {
                           return success(
                             new Declaration(
                               name2,
+                              signature,
                               scope,
                               topic_id,
-                              signature,
                               kind,
                               references
                             )
@@ -8399,15 +8464,10 @@ function get_references(message, declarations) {
           }
         })(),
         (ref) => {
-          echo(
-            "found potential reference: " + ref,
-            "src/o11a/declaration.gleam",
-            263
-          );
           let _pipe$1 = find2(
             declarations,
             (dec) => {
-              return dec.scope + "." + dec.name === ref;
+              return contract_scope_to_string(dec.scope) + "." + dec.name === ref;
             }
           );
           let _pipe$2 = try_recover(
@@ -8428,142 +8488,6 @@ function get_references(message, declarations) {
       );
     }
   );
-}
-function echo(value3, file, line2) {
-  const grey = "\x1B[90m";
-  const reset_color = "\x1B[39m";
-  const file_line = `${file}:${line2}`;
-  const string_value = echo$inspect(value3);
-  if (globalThis.process?.stderr?.write) {
-    const string6 = `${grey}${file_line}${reset_color}
-${string_value}
-`;
-    process.stderr.write(string6);
-  } else if (globalThis.Deno) {
-    const string6 = `${grey}${file_line}${reset_color}
-${string_value}
-`;
-    globalThis.Deno.stderr.writeSync(new TextEncoder().encode(string6));
-  } else {
-    const string6 = `${file_line}
-${string_value}`;
-    globalThis.console.log(string6);
-  }
-  return value3;
-}
-function echo$inspectString(str) {
-  let new_str = '"';
-  for (let i = 0; i < str.length; i++) {
-    let char = str[i];
-    if (char == "\n") new_str += "\\n";
-    else if (char == "\r") new_str += "\\r";
-    else if (char == "	") new_str += "\\t";
-    else if (char == "\f") new_str += "\\f";
-    else if (char == "\\") new_str += "\\\\";
-    else if (char == '"') new_str += '\\"';
-    else if (char < " " || char > "~" && char < "\xA0") {
-      new_str += "\\u{" + char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0") + "}";
-    } else {
-      new_str += char;
-    }
-  }
-  new_str += '"';
-  return new_str;
-}
-function echo$inspectDict(map7) {
-  let body2 = "dict.from_list([";
-  let first2 = true;
-  let key_value_pairs = [];
-  map7.forEach((value3, key2) => {
-    key_value_pairs.push([key2, value3]);
-  });
-  key_value_pairs.sort();
-  key_value_pairs.forEach(([key2, value3]) => {
-    if (!first2) body2 = body2 + ", ";
-    body2 = body2 + "#(" + echo$inspect(key2) + ", " + echo$inspect(value3) + ")";
-    first2 = false;
-  });
-  return body2 + "])";
-}
-function echo$inspectCustomType(record) {
-  const props = globalThis.Object.keys(record).map((label) => {
-    const value3 = echo$inspect(record[label]);
-    return isNaN(parseInt(label)) ? `${label}: ${value3}` : value3;
-  }).join(", ");
-  return props ? `${record.constructor.name}(${props})` : record.constructor.name;
-}
-function echo$inspectObject(v) {
-  const name2 = Object.getPrototypeOf(v)?.constructor?.name || "Object";
-  const props = [];
-  for (const k of Object.keys(v)) {
-    props.push(`${echo$inspect(k)}: ${echo$inspect(v[k])}`);
-  }
-  const body2 = props.length ? " " + props.join(", ") + " " : "";
-  const head = name2 === "Object" ? "" : name2 + " ";
-  return `//js(${head}{${body2}})`;
-}
-function echo$inspect(v) {
-  const t = typeof v;
-  if (v === true) return "True";
-  if (v === false) return "False";
-  if (v === null) return "//js(null)";
-  if (v === void 0) return "Nil";
-  if (t === "string") return echo$inspectString(v);
-  if (t === "bigint" || t === "number") return v.toString();
-  if (globalThis.Array.isArray(v))
-    return `#(${v.map(echo$inspect).join(", ")})`;
-  if (v instanceof List)
-    return `[${v.toArray().map(echo$inspect).join(", ")}]`;
-  if (v instanceof UtfCodepoint)
-    return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
-  if (v instanceof BitArray) return echo$inspectBitArray(v);
-  if (v instanceof CustomType) return echo$inspectCustomType(v);
-  if (echo$isDict(v)) return echo$inspectDict(v);
-  if (v instanceof Set)
-    return `//js(Set(${[...v].map(echo$inspect).join(", ")}))`;
-  if (v instanceof RegExp) return `//js(${v})`;
-  if (v instanceof Date) return `//js(Date("${v.toISOString()}"))`;
-  if (v instanceof Function2) {
-    const args = [];
-    for (const i of Array(v.length).keys())
-      args.push(String.fromCharCode(i + 97));
-    return `//fn(${args.join(", ")}) { ... }`;
-  }
-  return echo$inspectObject(v);
-}
-function echo$inspectBitArray(bitArray) {
-  let endOfAlignedBytes = bitArray.bitOffset + 8 * Math.trunc(bitArray.bitSize / 8);
-  let alignedBytes = bitArraySlice(
-    bitArray,
-    bitArray.bitOffset,
-    endOfAlignedBytes
-  );
-  let remainingUnalignedBits = bitArray.bitSize % 8;
-  if (remainingUnalignedBits > 0) {
-    let remainingBits = bitArraySliceToInt(
-      bitArray,
-      endOfAlignedBytes,
-      bitArray.bitSize,
-      false,
-      false
-    );
-    let alignedBytesArray = Array.from(alignedBytes.rawBuffer);
-    let suffix = `${remainingBits}:size(${remainingUnalignedBits})`;
-    if (alignedBytesArray.length === 0) {
-      return `<<${suffix}>>`;
-    } else {
-      return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}, ${suffix}>>`;
-    }
-  } else {
-    return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}>>`;
-  }
-}
-function echo$isDict(value3) {
-  try {
-    return value3 instanceof Dict;
-  } catch {
-    return false;
-  }
 }
 
 // build/dev/javascript/o11a_common/o11a/events.mjs
@@ -9110,7 +9034,7 @@ function non_empty_line(line_number) {
 }
 function discussion_entry2(line_number, column_number) {
   return querySelector(
-    echo2(
+    echo(
       ".dl" + to_string(line_number) + ".dc" + to_string(
         column_number
       ) + " ." + discussion_entry,
@@ -9125,6 +9049,485 @@ function discussion_input(line_number, column_number) {
       column_number
     ) + " input"
   );
+}
+function echo(value3, file, line2) {
+  const grey = "\x1B[90m";
+  const reset_color = "\x1B[39m";
+  const file_line = `${file}:${line2}`;
+  const string_value = echo$inspect(value3);
+  if (globalThis.process?.stderr?.write) {
+    const string6 = `${grey}${file_line}${reset_color}
+${string_value}
+`;
+    process.stderr.write(string6);
+  } else if (globalThis.Deno) {
+    const string6 = `${grey}${file_line}${reset_color}
+${string_value}
+`;
+    globalThis.Deno.stderr.writeSync(new TextEncoder().encode(string6));
+  } else {
+    const string6 = `${file_line}
+${string_value}`;
+    globalThis.console.log(string6);
+  }
+  return value3;
+}
+function echo$inspectString(str) {
+  let new_str = '"';
+  for (let i = 0; i < str.length; i++) {
+    let char = str[i];
+    if (char == "\n") new_str += "\\n";
+    else if (char == "\r") new_str += "\\r";
+    else if (char == "	") new_str += "\\t";
+    else if (char == "\f") new_str += "\\f";
+    else if (char == "\\") new_str += "\\\\";
+    else if (char == '"') new_str += '\\"';
+    else if (char < " " || char > "~" && char < "\xA0") {
+      new_str += "\\u{" + char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0") + "}";
+    } else {
+      new_str += char;
+    }
+  }
+  new_str += '"';
+  return new_str;
+}
+function echo$inspectDict(map7) {
+  let body2 = "dict.from_list([";
+  let first2 = true;
+  let key_value_pairs = [];
+  map7.forEach((value3, key2) => {
+    key_value_pairs.push([key2, value3]);
+  });
+  key_value_pairs.sort();
+  key_value_pairs.forEach(([key2, value3]) => {
+    if (!first2) body2 = body2 + ", ";
+    body2 = body2 + "#(" + echo$inspect(key2) + ", " + echo$inspect(value3) + ")";
+    first2 = false;
+  });
+  return body2 + "])";
+}
+function echo$inspectCustomType(record) {
+  const props = globalThis.Object.keys(record).map((label) => {
+    const value3 = echo$inspect(record[label]);
+    return isNaN(parseInt(label)) ? `${label}: ${value3}` : value3;
+  }).join(", ");
+  return props ? `${record.constructor.name}(${props})` : record.constructor.name;
+}
+function echo$inspectObject(v) {
+  const name2 = Object.getPrototypeOf(v)?.constructor?.name || "Object";
+  const props = [];
+  for (const k of Object.keys(v)) {
+    props.push(`${echo$inspect(k)}: ${echo$inspect(v[k])}`);
+  }
+  const body2 = props.length ? " " + props.join(", ") + " " : "";
+  const head = name2 === "Object" ? "" : name2 + " ";
+  return `//js(${head}{${body2}})`;
+}
+function echo$inspect(v) {
+  const t = typeof v;
+  if (v === true) return "True";
+  if (v === false) return "False";
+  if (v === null) return "//js(null)";
+  if (v === void 0) return "Nil";
+  if (t === "string") return echo$inspectString(v);
+  if (t === "bigint" || t === "number") return v.toString();
+  if (globalThis.Array.isArray(v))
+    return `#(${v.map(echo$inspect).join(", ")})`;
+  if (v instanceof List)
+    return `[${v.toArray().map(echo$inspect).join(", ")}]`;
+  if (v instanceof UtfCodepoint)
+    return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
+  if (v instanceof BitArray) return echo$inspectBitArray(v);
+  if (v instanceof CustomType) return echo$inspectCustomType(v);
+  if (echo$isDict(v)) return echo$inspectDict(v);
+  if (v instanceof Set)
+    return `//js(Set(${[...v].map(echo$inspect).join(", ")}))`;
+  if (v instanceof RegExp) return `//js(${v})`;
+  if (v instanceof Date) return `//js(Date("${v.toISOString()}"))`;
+  if (v instanceof Function) {
+    const args = [];
+    for (const i of Array(v.length).keys())
+      args.push(String.fromCharCode(i + 97));
+    return `//fn(${args.join(", ")}) { ... }`;
+  }
+  return echo$inspectObject(v);
+}
+function echo$inspectBitArray(bitArray) {
+  let endOfAlignedBytes = bitArray.bitOffset + 8 * Math.trunc(bitArray.bitSize / 8);
+  let alignedBytes = bitArraySlice(
+    bitArray,
+    bitArray.bitOffset,
+    endOfAlignedBytes
+  );
+  let remainingUnalignedBits = bitArray.bitSize % 8;
+  if (remainingUnalignedBits > 0) {
+    let remainingBits = bitArraySliceToInt(
+      bitArray,
+      endOfAlignedBytes,
+      bitArray.bitSize,
+      false,
+      false
+    );
+    let alignedBytesArray = Array.from(alignedBytes.rawBuffer);
+    let suffix = `${remainingBits}:size(${remainingUnalignedBits})`;
+    if (alignedBytesArray.length === 0) {
+      return `<<${suffix}>>`;
+    } else {
+      return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}, ${suffix}>>`;
+    }
+  } else {
+    return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}>>`;
+  }
+}
+function echo$isDict(value3) {
+  try {
+    return value3 instanceof Dict;
+  } catch {
+    return false;
+  }
+}
+
+// build/dev/javascript/o11a_client/storage.mjs
+var is_user_typing_storage = false;
+function set_is_user_typing(value3) {
+  is_user_typing_storage = value3;
+}
+function is_user_typing() {
+  return is_user_typing_storage;
+}
+
+// build/dev/javascript/o11a_client/o11a/client/page_navigation.mjs
+var Model = class extends CustomType {
+  constructor(current_line_number, current_column_number, current_line_column_count, line_count) {
+    super();
+    this.current_line_number = current_line_number;
+    this.current_column_number = current_column_number;
+    this.current_line_column_count = current_line_column_count;
+    this.line_count = line_count;
+  }
+};
+function init2() {
+  return new Model(16, 1, 16, 16);
+}
+function prevent_default(event4) {
+  let $ = is_user_typing();
+  if ($) {
+    let $1 = ctrlKey(event4);
+    let $2 = key(event4);
+    if ($1 && $2 === "e") {
+      return preventDefault(event4);
+    } else if ($2 === "Escape") {
+      return preventDefault(event4);
+    } else {
+      return void 0;
+    }
+  } else {
+    let $1 = key(event4);
+    if ($1 === "ArrowUp") {
+      return preventDefault(event4);
+    } else if ($1 === "ArrowDown") {
+      return preventDefault(event4);
+    } else if ($1 === "ArrowLeft") {
+      return preventDefault(event4);
+    } else if ($1 === "ArrowRight") {
+      return preventDefault(event4);
+    } else if ($1 === "PageUp") {
+      return preventDefault(event4);
+    } else if ($1 === "PageDown") {
+      return preventDefault(event4);
+    } else if ($1 === "Enter") {
+      return preventDefault(event4);
+    } else if ($1 === "e") {
+      return preventDefault(event4);
+    } else if ($1 === "Escape") {
+      return preventDefault(event4);
+    } else {
+      return void 0;
+    }
+  }
+}
+function handle_expanded_input_focus(event4, model, else_do) {
+  let $ = ctrlKey(event4);
+  let $1 = key(event4);
+  if ($ && $1 === "e") {
+    return new Ok([model, none()]);
+  } else {
+    return else_do();
+  }
+}
+function find_next_discussion_line(loop$model, loop$current_line, loop$step) {
+  while (true) {
+    let model = loop$model;
+    let current_line = loop$current_line;
+    let step = loop$step;
+    if (step > 0 && current_line === model.line_count) {
+      return error(
+        "Line is " + to_string(model.line_count) + ", cannot go further down"
+      );
+    } else if (step < 0 && current_line === 1) {
+      return error("Line is 1, cannot go further up");
+    } else if (step === 0) {
+      return error("Step is zero");
+    } else {
+      let next_line = max(
+        1,
+        min(model.line_count, current_line + step)
+      );
+      let $ = non_empty_line(next_line);
+      if ($.isOk()) {
+        let line2 = $[0];
+        return map3(
+          read_column_count_data(line2),
+          (column_count) => {
+            return [next_line, column_count];
+          }
+        );
+      } else {
+        loop$model = model;
+        loop$current_line = next_line;
+        loop$step = (() => {
+          if (step > 0 && next_line === model.line_count) {
+            return -1;
+          } else if (step > 0) {
+            return 1;
+          } else if (step < 0 && next_line === 1) {
+            return 1;
+          } else if (step < 0) {
+            return -1;
+          } else {
+            return 0;
+          }
+        })();
+      }
+    }
+  }
+}
+function focus_line_discussion(line_number, column_number) {
+  return from(
+    (_) => {
+      echo2(
+        "focus line discussion",
+        "src/o11a/client/page_navigation.gleam",
+        260
+      );
+      let _block;
+      let _pipe = discussion_entry2(line_number, column_number);
+      let _pipe$1 = replace_error(
+        _pipe,
+        new$9("Failed to find line discussion to focus")
+      );
+      let _pipe$2 = map3(_pipe$1, focus);
+      _block = echo2(_pipe$2, "src/o11a/client/page_navigation.gleam", 267);
+      let $ = _block;
+      return void 0;
+    }
+  );
+}
+function handle_input_escape(event4, model, else_do) {
+  let $ = key(event4);
+  if ($ === "Escape") {
+    return new Ok(
+      [
+        model,
+        focus_line_discussion(
+          model.current_line_number,
+          model.current_column_number
+        )
+      ]
+    );
+  } else {
+    return else_do();
+  }
+}
+function move_focus_line(model, step) {
+  return map3(
+    find_next_discussion_line(model, model.current_line_number, step),
+    (_use0) => {
+      let new_line = _use0[0];
+      let column_count = _use0[1];
+      return [
+        (() => {
+          let _record = model;
+          return new Model(
+            _record.current_line_number,
+            _record.current_column_number,
+            column_count,
+            _record.line_count
+          );
+        })(),
+        focus_line_discussion(
+          new_line,
+          min(column_count, model.current_column_number)
+        )
+      ];
+    }
+  );
+}
+function move_focus_column(model, step) {
+  echo2(
+    "moving focus column by " + to_string(step),
+    "src/o11a/client/page_navigation.gleam",
+    156
+  );
+  let _block;
+  let _pipe = max(1, model.current_column_number + step);
+  _block = min(_pipe, model.current_line_column_count);
+  let new_column = _block;
+  echo2(
+    "new column " + to_string(new_column),
+    "src/o11a/client/page_navigation.gleam",
+    161
+  );
+  let _pipe$1 = [
+    model,
+    focus_line_discussion(model.current_line_number, new_column)
+  ];
+  return new Ok(_pipe$1);
+}
+function handle_keyboard_navigation(event4, model, else_do) {
+  let $ = shiftKey(event4);
+  let $1 = key(event4);
+  if (!$ && $1 === "ArrowUp") {
+    return move_focus_line(model, -1);
+  } else if (!$ && $1 === "ArrowDown") {
+    return move_focus_line(model, 1);
+  } else if ($ && $1 === "ArrowUp") {
+    return move_focus_line(model, -5);
+  } else if ($ && $1 === "ArrowDown") {
+    return move_focus_line(model, 5);
+  } else if ($1 === "PageUp") {
+    return move_focus_line(model, -20);
+  } else if ($1 === "PageDown") {
+    return move_focus_line(model, 20);
+  } else if ($1 === "ArrowLeft") {
+    return move_focus_column(model, -1);
+  } else if ($1 === "ArrowRight") {
+    return move_focus_column(model, 1);
+  } else {
+    return else_do();
+  }
+}
+function blur_line_discussion(line_number, column_number) {
+  return from(
+    (_) => {
+      echo2(
+        "blurring line discussion",
+        "src/o11a/client/page_navigation.gleam",
+        277
+      );
+      let _block;
+      let _pipe = discussion_entry2(line_number, column_number);
+      let _pipe$1 = replace_error(
+        _pipe,
+        new$9("Failed to find line discussion to focus")
+      );
+      _block = map3(_pipe$1, blur);
+      let $ = _block;
+      return void 0;
+    }
+  );
+}
+function handle_discussion_escape(event4, model, else_do) {
+  let $ = key(event4);
+  if ($ === "Escape") {
+    return new Ok(
+      [
+        model,
+        blur_line_discussion(
+          model.current_line_number,
+          model.current_column_number
+        )
+      ]
+    );
+  } else {
+    return else_do();
+  }
+}
+function focus_line_discussion_input(line_number, column_number) {
+  return from(
+    (_) => {
+      let _block;
+      let _pipe = discussion_input(line_number, column_number);
+      let _pipe$1 = replace_error(
+        _pipe,
+        new$9("Failed to find line discussion input to focus")
+      );
+      _block = map3(_pipe$1, focus);
+      let $ = _block;
+      return void 0;
+    }
+  );
+}
+function handle_input_focus(event4, model, else_do) {
+  let $ = ctrlKey(event4);
+  let $1 = key(event4);
+  if (!$ && $1 === "e") {
+    return new Ok(
+      [
+        model,
+        focus_line_discussion_input(
+          model.current_line_number,
+          model.current_column_number
+        )
+      ]
+    );
+  } else {
+    return else_do();
+  }
+}
+function do_page_navigation(event4, model) {
+  let _block;
+  let $ = is_user_typing();
+  if ($) {
+    _block = handle_expanded_input_focus(
+      event4,
+      model,
+      () => {
+        return handle_input_escape(
+          event4,
+          model,
+          () => {
+            return new Ok([model, none()]);
+          }
+        );
+      }
+    );
+  } else {
+    _block = handle_keyboard_navigation(
+      event4,
+      model,
+      () => {
+        return handle_input_focus(
+          event4,
+          model,
+          () => {
+            return handle_expanded_input_focus(
+              event4,
+              model,
+              () => {
+                return handle_discussion_escape(
+                  event4,
+                  model,
+                  () => {
+                    return new Ok([model, none()]);
+                  }
+                );
+              }
+            );
+          }
+        );
+      }
+    );
+  }
+  let res = _block;
+  if (res.isOk()) {
+    let model_effect = res[0];
+    return model_effect;
+  } else {
+    let e = res[0];
+    console_log(line_print(e));
+    return [model, none()];
+  }
 }
 function echo2(value3, file, line2) {
   const grey = "\x1B[90m";
@@ -9256,485 +9659,6 @@ function echo$inspectBitArray2(bitArray) {
   }
 }
 function echo$isDict2(value3) {
-  try {
-    return value3 instanceof Dict;
-  } catch {
-    return false;
-  }
-}
-
-// build/dev/javascript/o11a_client/storage.mjs
-var is_user_typing_storage = false;
-function set_is_user_typing(value3) {
-  is_user_typing_storage = value3;
-}
-function is_user_typing() {
-  return is_user_typing_storage;
-}
-
-// build/dev/javascript/o11a_client/o11a/client/page_navigation.mjs
-var Model = class extends CustomType {
-  constructor(current_line_number, current_column_number, current_line_column_count, line_count) {
-    super();
-    this.current_line_number = current_line_number;
-    this.current_column_number = current_column_number;
-    this.current_line_column_count = current_line_column_count;
-    this.line_count = line_count;
-  }
-};
-function init2() {
-  return new Model(16, 1, 16, 16);
-}
-function prevent_default(event4) {
-  let $ = is_user_typing();
-  if ($) {
-    let $1 = ctrlKey(event4);
-    let $2 = key(event4);
-    if ($1 && $2 === "e") {
-      return preventDefault(event4);
-    } else if ($2 === "Escape") {
-      return preventDefault(event4);
-    } else {
-      return void 0;
-    }
-  } else {
-    let $1 = key(event4);
-    if ($1 === "ArrowUp") {
-      return preventDefault(event4);
-    } else if ($1 === "ArrowDown") {
-      return preventDefault(event4);
-    } else if ($1 === "ArrowLeft") {
-      return preventDefault(event4);
-    } else if ($1 === "ArrowRight") {
-      return preventDefault(event4);
-    } else if ($1 === "PageUp") {
-      return preventDefault(event4);
-    } else if ($1 === "PageDown") {
-      return preventDefault(event4);
-    } else if ($1 === "Enter") {
-      return preventDefault(event4);
-    } else if ($1 === "e") {
-      return preventDefault(event4);
-    } else if ($1 === "Escape") {
-      return preventDefault(event4);
-    } else {
-      return void 0;
-    }
-  }
-}
-function handle_expanded_input_focus(event4, model, else_do) {
-  let $ = ctrlKey(event4);
-  let $1 = key(event4);
-  if ($ && $1 === "e") {
-    return new Ok([model, none()]);
-  } else {
-    return else_do();
-  }
-}
-function find_next_discussion_line(loop$model, loop$current_line, loop$step) {
-  while (true) {
-    let model = loop$model;
-    let current_line = loop$current_line;
-    let step = loop$step;
-    if (step > 0 && current_line === model.line_count) {
-      return error(
-        "Line is " + to_string(model.line_count) + ", cannot go further down"
-      );
-    } else if (step < 0 && current_line === 1) {
-      return error("Line is 1, cannot go further up");
-    } else if (step === 0) {
-      return error("Step is zero");
-    } else {
-      let next_line = max(
-        1,
-        min(model.line_count, current_line + step)
-      );
-      let $ = non_empty_line(next_line);
-      if ($.isOk()) {
-        let line2 = $[0];
-        return map3(
-          read_column_count_data(line2),
-          (column_count) => {
-            return [next_line, column_count];
-          }
-        );
-      } else {
-        loop$model = model;
-        loop$current_line = next_line;
-        loop$step = (() => {
-          if (step > 0 && next_line === model.line_count) {
-            return -1;
-          } else if (step > 0) {
-            return 1;
-          } else if (step < 0 && next_line === 1) {
-            return 1;
-          } else if (step < 0) {
-            return -1;
-          } else {
-            return 0;
-          }
-        })();
-      }
-    }
-  }
-}
-function focus_line_discussion(line_number, column_number) {
-  return from(
-    (_) => {
-      echo3(
-        "focus line discussion",
-        "src/o11a/client/page_navigation.gleam",
-        260
-      );
-      let _block;
-      let _pipe = discussion_entry2(line_number, column_number);
-      let _pipe$1 = replace_error(
-        _pipe,
-        new$9("Failed to find line discussion to focus")
-      );
-      let _pipe$2 = map3(_pipe$1, focus);
-      _block = echo3(_pipe$2, "src/o11a/client/page_navigation.gleam", 267);
-      let $ = _block;
-      return void 0;
-    }
-  );
-}
-function handle_input_escape(event4, model, else_do) {
-  let $ = key(event4);
-  if ($ === "Escape") {
-    return new Ok(
-      [
-        model,
-        focus_line_discussion(
-          model.current_line_number,
-          model.current_column_number
-        )
-      ]
-    );
-  } else {
-    return else_do();
-  }
-}
-function move_focus_line(model, step) {
-  return map3(
-    find_next_discussion_line(model, model.current_line_number, step),
-    (_use0) => {
-      let new_line = _use0[0];
-      let column_count = _use0[1];
-      return [
-        (() => {
-          let _record = model;
-          return new Model(
-            _record.current_line_number,
-            _record.current_column_number,
-            column_count,
-            _record.line_count
-          );
-        })(),
-        focus_line_discussion(
-          new_line,
-          min(column_count, model.current_column_number)
-        )
-      ];
-    }
-  );
-}
-function move_focus_column(model, step) {
-  echo3(
-    "moving focus column by " + to_string(step),
-    "src/o11a/client/page_navigation.gleam",
-    156
-  );
-  let _block;
-  let _pipe = max(1, model.current_column_number + step);
-  _block = min(_pipe, model.current_line_column_count);
-  let new_column = _block;
-  echo3(
-    "new column " + to_string(new_column),
-    "src/o11a/client/page_navigation.gleam",
-    161
-  );
-  let _pipe$1 = [
-    model,
-    focus_line_discussion(model.current_line_number, new_column)
-  ];
-  return new Ok(_pipe$1);
-}
-function handle_keyboard_navigation(event4, model, else_do) {
-  let $ = shiftKey(event4);
-  let $1 = key(event4);
-  if (!$ && $1 === "ArrowUp") {
-    return move_focus_line(model, -1);
-  } else if (!$ && $1 === "ArrowDown") {
-    return move_focus_line(model, 1);
-  } else if ($ && $1 === "ArrowUp") {
-    return move_focus_line(model, -5);
-  } else if ($ && $1 === "ArrowDown") {
-    return move_focus_line(model, 5);
-  } else if ($1 === "PageUp") {
-    return move_focus_line(model, -20);
-  } else if ($1 === "PageDown") {
-    return move_focus_line(model, 20);
-  } else if ($1 === "ArrowLeft") {
-    return move_focus_column(model, -1);
-  } else if ($1 === "ArrowRight") {
-    return move_focus_column(model, 1);
-  } else {
-    return else_do();
-  }
-}
-function blur_line_discussion(line_number, column_number) {
-  return from(
-    (_) => {
-      echo3(
-        "blurring line discussion",
-        "src/o11a/client/page_navigation.gleam",
-        277
-      );
-      let _block;
-      let _pipe = discussion_entry2(line_number, column_number);
-      let _pipe$1 = replace_error(
-        _pipe,
-        new$9("Failed to find line discussion to focus")
-      );
-      _block = map3(_pipe$1, blur);
-      let $ = _block;
-      return void 0;
-    }
-  );
-}
-function handle_discussion_escape(event4, model, else_do) {
-  let $ = key(event4);
-  if ($ === "Escape") {
-    return new Ok(
-      [
-        model,
-        blur_line_discussion(
-          model.current_line_number,
-          model.current_column_number
-        )
-      ]
-    );
-  } else {
-    return else_do();
-  }
-}
-function focus_line_discussion_input(line_number, column_number) {
-  return from(
-    (_) => {
-      let _block;
-      let _pipe = discussion_input(line_number, column_number);
-      let _pipe$1 = replace_error(
-        _pipe,
-        new$9("Failed to find line discussion input to focus")
-      );
-      _block = map3(_pipe$1, focus);
-      let $ = _block;
-      return void 0;
-    }
-  );
-}
-function handle_input_focus(event4, model, else_do) {
-  let $ = ctrlKey(event4);
-  let $1 = key(event4);
-  if (!$ && $1 === "e") {
-    return new Ok(
-      [
-        model,
-        focus_line_discussion_input(
-          model.current_line_number,
-          model.current_column_number
-        )
-      ]
-    );
-  } else {
-    return else_do();
-  }
-}
-function do_page_navigation(event4, model) {
-  let _block;
-  let $ = is_user_typing();
-  if ($) {
-    _block = handle_expanded_input_focus(
-      event4,
-      model,
-      () => {
-        return handle_input_escape(
-          event4,
-          model,
-          () => {
-            return new Ok([model, none()]);
-          }
-        );
-      }
-    );
-  } else {
-    _block = handle_keyboard_navigation(
-      event4,
-      model,
-      () => {
-        return handle_input_focus(
-          event4,
-          model,
-          () => {
-            return handle_expanded_input_focus(
-              event4,
-              model,
-              () => {
-                return handle_discussion_escape(
-                  event4,
-                  model,
-                  () => {
-                    return new Ok([model, none()]);
-                  }
-                );
-              }
-            );
-          }
-        );
-      }
-    );
-  }
-  let res = _block;
-  if (res.isOk()) {
-    let model_effect = res[0];
-    return model_effect;
-  } else {
-    let e = res[0];
-    console_log(line_print(e));
-    return [model, none()];
-  }
-}
-function echo3(value3, file, line2) {
-  const grey = "\x1B[90m";
-  const reset_color = "\x1B[39m";
-  const file_line = `${file}:${line2}`;
-  const string_value = echo$inspect3(value3);
-  if (globalThis.process?.stderr?.write) {
-    const string6 = `${grey}${file_line}${reset_color}
-${string_value}
-`;
-    process.stderr.write(string6);
-  } else if (globalThis.Deno) {
-    const string6 = `${grey}${file_line}${reset_color}
-${string_value}
-`;
-    globalThis.Deno.stderr.writeSync(new TextEncoder().encode(string6));
-  } else {
-    const string6 = `${file_line}
-${string_value}`;
-    globalThis.console.log(string6);
-  }
-  return value3;
-}
-function echo$inspectString3(str) {
-  let new_str = '"';
-  for (let i = 0; i < str.length; i++) {
-    let char = str[i];
-    if (char == "\n") new_str += "\\n";
-    else if (char == "\r") new_str += "\\r";
-    else if (char == "	") new_str += "\\t";
-    else if (char == "\f") new_str += "\\f";
-    else if (char == "\\") new_str += "\\\\";
-    else if (char == '"') new_str += '\\"';
-    else if (char < " " || char > "~" && char < "\xA0") {
-      new_str += "\\u{" + char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0") + "}";
-    } else {
-      new_str += char;
-    }
-  }
-  new_str += '"';
-  return new_str;
-}
-function echo$inspectDict3(map7) {
-  let body2 = "dict.from_list([";
-  let first2 = true;
-  let key_value_pairs = [];
-  map7.forEach((value3, key2) => {
-    key_value_pairs.push([key2, value3]);
-  });
-  key_value_pairs.sort();
-  key_value_pairs.forEach(([key2, value3]) => {
-    if (!first2) body2 = body2 + ", ";
-    body2 = body2 + "#(" + echo$inspect3(key2) + ", " + echo$inspect3(value3) + ")";
-    first2 = false;
-  });
-  return body2 + "])";
-}
-function echo$inspectCustomType3(record) {
-  const props = globalThis.Object.keys(record).map((label) => {
-    const value3 = echo$inspect3(record[label]);
-    return isNaN(parseInt(label)) ? `${label}: ${value3}` : value3;
-  }).join(", ");
-  return props ? `${record.constructor.name}(${props})` : record.constructor.name;
-}
-function echo$inspectObject3(v) {
-  const name2 = Object.getPrototypeOf(v)?.constructor?.name || "Object";
-  const props = [];
-  for (const k of Object.keys(v)) {
-    props.push(`${echo$inspect3(k)}: ${echo$inspect3(v[k])}`);
-  }
-  const body2 = props.length ? " " + props.join(", ") + " " : "";
-  const head = name2 === "Object" ? "" : name2 + " ";
-  return `//js(${head}{${body2}})`;
-}
-function echo$inspect3(v) {
-  const t = typeof v;
-  if (v === true) return "True";
-  if (v === false) return "False";
-  if (v === null) return "//js(null)";
-  if (v === void 0) return "Nil";
-  if (t === "string") return echo$inspectString3(v);
-  if (t === "bigint" || t === "number") return v.toString();
-  if (globalThis.Array.isArray(v))
-    return `#(${v.map(echo$inspect3).join(", ")})`;
-  if (v instanceof List)
-    return `[${v.toArray().map(echo$inspect3).join(", ")}]`;
-  if (v instanceof UtfCodepoint)
-    return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
-  if (v instanceof BitArray) return echo$inspectBitArray3(v);
-  if (v instanceof CustomType) return echo$inspectCustomType3(v);
-  if (echo$isDict3(v)) return echo$inspectDict3(v);
-  if (v instanceof Set)
-    return `//js(Set(${[...v].map(echo$inspect3).join(", ")}))`;
-  if (v instanceof RegExp) return `//js(${v})`;
-  if (v instanceof Date) return `//js(Date("${v.toISOString()}"))`;
-  if (v instanceof Function) {
-    const args = [];
-    for (const i of Array(v.length).keys())
-      args.push(String.fromCharCode(i + 97));
-    return `//fn(${args.join(", ")}) { ... }`;
-  }
-  return echo$inspectObject3(v);
-}
-function echo$inspectBitArray3(bitArray) {
-  let endOfAlignedBytes = bitArray.bitOffset + 8 * Math.trunc(bitArray.bitSize / 8);
-  let alignedBytes = bitArraySlice(
-    bitArray,
-    bitArray.bitOffset,
-    endOfAlignedBytes
-  );
-  let remainingUnalignedBits = bitArray.bitSize % 8;
-  if (remainingUnalignedBits > 0) {
-    let remainingBits = bitArraySliceToInt(
-      bitArray,
-      endOfAlignedBytes,
-      bitArray.bitSize,
-      false,
-      false
-    );
-    let alignedBytesArray = Array.from(alignedBytes.rawBuffer);
-    let suffix = `${remainingBits}:size(${remainingUnalignedBits})`;
-    if (alignedBytesArray.length === 0) {
-      return `<<${suffix}>>`;
-    } else {
-      return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}, ${suffix}>>`;
-    }
-  } else {
-    return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}>>`;
-  }
-}
-function echo$isDict3(value3) {
   try {
     return value3 instanceof Dict;
   } catch {
@@ -10558,7 +10482,11 @@ function reference_group_view(references, group_kind) {
               toList([
                 a(
                   toList([href("/" + reference.topic_id)]),
-                  toList([text3(reference.scoped_name)])
+                  toList([
+                    text3(
+                      contract_scope_to_string(reference.scope)
+                    )
+                  ])
                 )
               ])
             );
@@ -10893,7 +10821,7 @@ function get_message_classification_prefix(significance) {
   }
 }
 function update2(model, msg) {
-  echo4("update " + inspect2(msg), "src/o11a/ui/discussion.gleam", 106);
+  echo3("update " + inspect2(msg), "src/o11a/ui/discussion.gleam", 106);
   if (msg instanceof UserWroteNote) {
     let draft = msg[0];
     return [
@@ -10920,7 +10848,7 @@ function update2(model, msg) {
       new None3()
     ];
   } else if (msg instanceof UserSubmittedNote) {
-    echo4(
+    echo3(
       "Submitting note! " + model.current_note_draft + " " + model.topic_id,
       "src/o11a/ui/discussion.gleam",
       112
@@ -11414,7 +11342,7 @@ function overlay_view(model, notes, references) {
   let _pipe$1 = map_get(references, model.topic_id);
   _block$1 = unwrap2(_pipe$1, toList([]));
   let references$1 = _block$1;
-  echo4(
+  echo3(
     "references for " + model.topic_id + ": " + inspect2(
       references$1
     ),
@@ -11471,11 +11399,11 @@ function overlay_view(model, notes, references) {
     ])
   );
 }
-function echo4(value3, file, line2) {
+function echo3(value3, file, line2) {
   const grey = "\x1B[90m";
   const reset_color = "\x1B[39m";
   const file_line = `${file}:${line2}`;
-  const string_value = echo$inspect4(value3);
+  const string_value = echo$inspect3(value3);
   if (globalThis.process?.stderr?.write) {
     const string6 = `${grey}${file_line}${reset_color}
 ${string_value}
@@ -11493,7 +11421,7 @@ ${string_value}`;
   }
   return value3;
 }
-function echo$inspectString4(str) {
+function echo$inspectString3(str) {
   let new_str = '"';
   for (let i = 0; i < str.length; i++) {
     let char = str[i];
@@ -11512,7 +11440,7 @@ function echo$inspectString4(str) {
   new_str += '"';
   return new_str;
 }
-function echo$inspectDict4(map7) {
+function echo$inspectDict3(map7) {
   let body2 = "dict.from_list([";
   let first2 = true;
   let key_value_pairs = [];
@@ -11522,47 +11450,47 @@ function echo$inspectDict4(map7) {
   key_value_pairs.sort();
   key_value_pairs.forEach(([key2, value3]) => {
     if (!first2) body2 = body2 + ", ";
-    body2 = body2 + "#(" + echo$inspect4(key2) + ", " + echo$inspect4(value3) + ")";
+    body2 = body2 + "#(" + echo$inspect3(key2) + ", " + echo$inspect3(value3) + ")";
     first2 = false;
   });
   return body2 + "])";
 }
-function echo$inspectCustomType4(record) {
+function echo$inspectCustomType3(record) {
   const props = globalThis.Object.keys(record).map((label) => {
-    const value3 = echo$inspect4(record[label]);
+    const value3 = echo$inspect3(record[label]);
     return isNaN(parseInt(label)) ? `${label}: ${value3}` : value3;
   }).join(", ");
   return props ? `${record.constructor.name}(${props})` : record.constructor.name;
 }
-function echo$inspectObject4(v) {
+function echo$inspectObject3(v) {
   const name2 = Object.getPrototypeOf(v)?.constructor?.name || "Object";
   const props = [];
   for (const k of Object.keys(v)) {
-    props.push(`${echo$inspect4(k)}: ${echo$inspect4(v[k])}`);
+    props.push(`${echo$inspect3(k)}: ${echo$inspect3(v[k])}`);
   }
   const body2 = props.length ? " " + props.join(", ") + " " : "";
   const head = name2 === "Object" ? "" : name2 + " ";
   return `//js(${head}{${body2}})`;
 }
-function echo$inspect4(v) {
+function echo$inspect3(v) {
   const t = typeof v;
   if (v === true) return "True";
   if (v === false) return "False";
   if (v === null) return "//js(null)";
   if (v === void 0) return "Nil";
-  if (t === "string") return echo$inspectString4(v);
+  if (t === "string") return echo$inspectString3(v);
   if (t === "bigint" || t === "number") return v.toString();
   if (globalThis.Array.isArray(v))
-    return `#(${v.map(echo$inspect4).join(", ")})`;
+    return `#(${v.map(echo$inspect3).join(", ")})`;
   if (v instanceof List)
-    return `[${v.toArray().map(echo$inspect4).join(", ")}]`;
+    return `[${v.toArray().map(echo$inspect3).join(", ")}]`;
   if (v instanceof UtfCodepoint)
     return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
-  if (v instanceof BitArray) return echo$inspectBitArray4(v);
-  if (v instanceof CustomType) return echo$inspectCustomType4(v);
-  if (echo$isDict4(v)) return echo$inspectDict4(v);
+  if (v instanceof BitArray) return echo$inspectBitArray3(v);
+  if (v instanceof CustomType) return echo$inspectCustomType3(v);
+  if (echo$isDict3(v)) return echo$inspectDict3(v);
   if (v instanceof Set)
-    return `//js(Set(${[...v].map(echo$inspect4).join(", ")}))`;
+    return `//js(Set(${[...v].map(echo$inspect3).join(", ")}))`;
   if (v instanceof RegExp) return `//js(${v})`;
   if (v instanceof Date) return `//js(Date("${v.toISOString()}"))`;
   if (v instanceof Function) {
@@ -11571,9 +11499,9 @@ function echo$inspect4(v) {
       args.push(String.fromCharCode(i + 97));
     return `//fn(${args.join(", ")}) { ... }`;
   }
-  return echo$inspectObject4(v);
+  return echo$inspectObject3(v);
 }
-function echo$inspectBitArray4(bitArray) {
+function echo$inspectBitArray3(bitArray) {
   let endOfAlignedBytes = bitArray.bitOffset + 8 * Math.trunc(bitArray.bitSize / 8);
   let alignedBytes = bitArraySlice(
     bitArray,
@@ -11600,7 +11528,7 @@ function echo$inspectBitArray4(bitArray) {
     return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}>>`;
   }
 }
-function echo$isDict4(value3) {
+function echo$isDict3(value3) {
   try {
     return value3 instanceof Dict;
   } catch {
@@ -12916,8 +12844,8 @@ function parse_route(uri) {
   }
 }
 function on_url_change(uri) {
-  echo5("on_url_change", "src/o11a_client.gleam", 129);
-  echo5(uri, "src/o11a_client.gleam", 130);
+  echo4("on_url_change", "src/o11a_client.gleam", 129);
+  echo4(uri, "src/o11a_client.gleam", 130);
   let _pipe = parse_route(uri);
   return new OnRouteChange(_pipe);
 }
@@ -13256,7 +13184,6 @@ function update3(model, msg) {
   } else if (msg instanceof ClientFetchedDeclarations) {
     let audit_name = msg.audit_name;
     let declarations = msg.declarations;
-    echo5("cliend fetched declarations", "src/o11a_client.gleam", 315);
     if (declarations.isOk()) {
       console_log("Successfully fetched declarations " + audit_name);
     } else {
@@ -13499,10 +13426,10 @@ function update3(model, msg) {
     );
   } else if (msg instanceof UserUnselectedDiscussionEntry2) {
     let kind = msg.kind;
-    echo5(
+    echo4(
       "Unselecting discussion " + inspect2(kind),
       "src/o11a_client.gleam",
-      455
+      454
     );
     return [
       (() => {
@@ -13618,7 +13545,7 @@ function update3(model, msg) {
         return [model, none()];
       },
       (page_path) => {
-        echo5("User clicked inside discussion", "src/o11a_client.gleam", 519);
+        echo4("User clicked inside discussion", "src/o11a_client.gleam", 518);
         let _block;
         let $ = !isEqual(
           model.selected_discussion,
@@ -13707,7 +13634,7 @@ function update3(model, msg) {
       }
     );
   } else if (msg instanceof UserClickedOutsideDiscussion) {
-    echo5("User clicked outside discussion", "src/o11a_client.gleam", 548);
+    echo4("User clicked outside discussion", "src/o11a_client.gleam", 547);
     return [
       (() => {
         let _record = model;
@@ -13772,10 +13699,10 @@ function update3(model, msg) {
         } else if (discussion_effect instanceof FocusDiscussionInput) {
           let line_number$1 = discussion_effect.line_number;
           let column_number$1 = discussion_effect.column_number;
-          echo5(
+          echo4(
             "Focusing discussion input, user is typing",
             "src/o11a_client.gleam",
-            584
+            583
           );
           set_is_user_typing(true);
           return [
@@ -13829,7 +13756,7 @@ function update3(model, msg) {
             none()
           ];
         } else if (discussion_effect instanceof UnfocusDiscussionInput) {
-          echo5("Unfocusing discussion input", "src/o11a_client.gleam", 615);
+          echo4("Unfocusing discussion input", "src/o11a_client.gleam", 614);
           set_is_user_typing(false);
           return [model, none()];
         } else if (discussion_effect instanceof MaximizeDiscussion) {
@@ -14139,11 +14066,11 @@ function main() {
   let _pipe = application(init4, update3, view5);
   return start3(_pipe, "#app", void 0);
 }
-function echo5(value3, file, line2) {
+function echo4(value3, file, line2) {
   const grey = "\x1B[90m";
   const reset_color = "\x1B[39m";
   const file_line = `${file}:${line2}`;
-  const string_value = echo$inspect5(value3);
+  const string_value = echo$inspect4(value3);
   if (globalThis.process?.stderr?.write) {
     const string6 = `${grey}${file_line}${reset_color}
 ${string_value}
@@ -14161,7 +14088,7 @@ ${string_value}`;
   }
   return value3;
 }
-function echo$inspectString5(str) {
+function echo$inspectString4(str) {
   let new_str = '"';
   for (let i = 0; i < str.length; i++) {
     let char = str[i];
@@ -14180,7 +14107,7 @@ function echo$inspectString5(str) {
   new_str += '"';
   return new_str;
 }
-function echo$inspectDict5(map7) {
+function echo$inspectDict4(map7) {
   let body2 = "dict.from_list([";
   let first2 = true;
   let key_value_pairs = [];
@@ -14190,47 +14117,47 @@ function echo$inspectDict5(map7) {
   key_value_pairs.sort();
   key_value_pairs.forEach(([key2, value3]) => {
     if (!first2) body2 = body2 + ", ";
-    body2 = body2 + "#(" + echo$inspect5(key2) + ", " + echo$inspect5(value3) + ")";
+    body2 = body2 + "#(" + echo$inspect4(key2) + ", " + echo$inspect4(value3) + ")";
     first2 = false;
   });
   return body2 + "])";
 }
-function echo$inspectCustomType5(record) {
+function echo$inspectCustomType4(record) {
   const props = globalThis.Object.keys(record).map((label) => {
-    const value3 = echo$inspect5(record[label]);
+    const value3 = echo$inspect4(record[label]);
     return isNaN(parseInt(label)) ? `${label}: ${value3}` : value3;
   }).join(", ");
   return props ? `${record.constructor.name}(${props})` : record.constructor.name;
 }
-function echo$inspectObject5(v) {
+function echo$inspectObject4(v) {
   const name2 = Object.getPrototypeOf(v)?.constructor?.name || "Object";
   const props = [];
   for (const k of Object.keys(v)) {
-    props.push(`${echo$inspect5(k)}: ${echo$inspect5(v[k])}`);
+    props.push(`${echo$inspect4(k)}: ${echo$inspect4(v[k])}`);
   }
   const body2 = props.length ? " " + props.join(", ") + " " : "";
   const head = name2 === "Object" ? "" : name2 + " ";
   return `//js(${head}{${body2}})`;
 }
-function echo$inspect5(v) {
+function echo$inspect4(v) {
   const t = typeof v;
   if (v === true) return "True";
   if (v === false) return "False";
   if (v === null) return "//js(null)";
   if (v === void 0) return "Nil";
-  if (t === "string") return echo$inspectString5(v);
+  if (t === "string") return echo$inspectString4(v);
   if (t === "bigint" || t === "number") return v.toString();
   if (globalThis.Array.isArray(v))
-    return `#(${v.map(echo$inspect5).join(", ")})`;
+    return `#(${v.map(echo$inspect4).join(", ")})`;
   if (v instanceof List)
-    return `[${v.toArray().map(echo$inspect5).join(", ")}]`;
+    return `[${v.toArray().map(echo$inspect4).join(", ")}]`;
   if (v instanceof UtfCodepoint)
     return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
-  if (v instanceof BitArray) return echo$inspectBitArray5(v);
-  if (v instanceof CustomType) return echo$inspectCustomType5(v);
-  if (echo$isDict5(v)) return echo$inspectDict5(v);
+  if (v instanceof BitArray) return echo$inspectBitArray4(v);
+  if (v instanceof CustomType) return echo$inspectCustomType4(v);
+  if (echo$isDict4(v)) return echo$inspectDict4(v);
   if (v instanceof Set)
-    return `//js(Set(${[...v].map(echo$inspect5).join(", ")}))`;
+    return `//js(Set(${[...v].map(echo$inspect4).join(", ")}))`;
   if (v instanceof RegExp) return `//js(${v})`;
   if (v instanceof Date) return `//js(Date("${v.toISOString()}"))`;
   if (v instanceof Function) {
@@ -14239,9 +14166,9 @@ function echo$inspect5(v) {
       args.push(String.fromCharCode(i + 97));
     return `//fn(${args.join(", ")}) { ... }`;
   }
-  return echo$inspectObject5(v);
+  return echo$inspectObject4(v);
 }
-function echo$inspectBitArray5(bitArray) {
+function echo$inspectBitArray4(bitArray) {
   let endOfAlignedBytes = bitArray.bitOffset + 8 * Math.trunc(bitArray.bitSize / 8);
   let alignedBytes = bitArraySlice(
     bitArray,
@@ -14268,7 +14195,7 @@ function echo$inspectBitArray5(bitArray) {
     return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}>>`;
   }
 }
-function echo$isDict5(value3) {
+function echo$isDict4(value3) {
   try {
     return value3 instanceof Dict;
   } catch {

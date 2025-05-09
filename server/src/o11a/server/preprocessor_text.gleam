@@ -6,6 +6,7 @@ import filepath
 import gleam/dict
 import gleam/int
 import gleam/list
+import gleam/option
 import gleam/result
 import gleam/string
 import lib/snagx
@@ -84,7 +85,10 @@ pub fn enumerate_declarations(declarations, in ast: AST) {
 fn line_node_declaration(page_path, line_number_text) {
   declaration.Declaration(
     name: "L" <> line_number_text,
-    scope: filepath.base_name(page_path),
+    scope: declaration.Scope(
+      object: option.Some(filepath.base_name(page_path)),
+      member: option.None,
+    ),
     signature: filepath.base_name(page_path) <> "#L" <> line_number_text,
     topic_id: page_path <> "#L" <> line_number_text,
     kind: declaration.UnknownDeclaration,
