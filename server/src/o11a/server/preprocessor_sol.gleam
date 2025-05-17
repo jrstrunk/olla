@@ -1804,7 +1804,12 @@ fn node_to_source_element(node) {
       ..,
     ) -> {
       element.fragment([
-        html.span([attribute.class("type")], [html.text(type_string <> " ")]),
+        element.unsafe_raw_html(
+          "type",
+          "span",
+          [],
+          style_type_string(type_string) <> " ",
+        ),
         case visibility {
           "internal" -> element.fragment([])
           _ ->
@@ -1853,6 +1858,49 @@ fn node_to_source_element(node) {
     Identifier(name:, ..) -> html.text(name)
     _ -> html.text("...")
   }
+}
+
+fn style_type_string(typename) {
+  let assert Ok(operator_regex) = regexp.from_string("\\=\\>")
+
+  let typename =
+    regexp.match_map(operator_regex, typename, fn(match) {
+      html.span([attribute.class("operator")], [html.text(match.content)])
+      |> element.to_string
+    })
+
+  let assert Ok(keyword_regex) =
+    regexp.from_string(
+      "\\b(constructor|contract|modifier|new|fallback|indexed|override|mapping|immutable|interface|virtual|constant|library|abstract|event|error|require|revert|using|for|emit|function|if|else|returns|return|memory|calldata|public|private|external|view|pure|payable|internal|import|enum|struct|storage|is)\\b",
+    )
+
+  let typename =
+    regexp.match_map(keyword_regex, typename, fn(match) {
+      html.span([attribute.class("keyword")], [html.text(match.content)])
+      |> element.to_string
+    })
+
+  // A word with a capital letter at the beginning
+  let assert Ok(capitalized_word_regex) = regexp.from_string("\\b[A-Z]\\w+\\b")
+
+  let typename =
+    regexp.match_map(capitalized_word_regex, typename, fn(match) {
+      html.span([attribute.class("contract")], [html.text(match.content)])
+      |> element.to_string
+    })
+
+  let assert Ok(type_regex) =
+    regexp.from_string(
+      "\\b(address|bool|bytes|bytes\\d+|string|int|uint|int\\d+|uint\\d+)\\b",
+    )
+
+  let typename =
+    regexp.match_map(type_regex, typename, fn(match) {
+      html.span([attribute.class("type")], [html.text(match.content)])
+      |> element.to_string
+    })
+
+  typename
 }
 
 pub fn read_asts(for audit_name: String) {
