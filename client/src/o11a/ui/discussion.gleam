@@ -394,7 +394,12 @@ fn reference_header_view(model: Model, current_thread_notes) {
       [
         html.span([attribute.class("pt-[.1rem]")], [
           html.a([attribute.href("/" <> model.topic_id)], [
-            html.text(model.topic_title),
+            element.unsafe_raw_html(
+              "topic-title",
+              "span",
+              [],
+              model.topic_title,
+            ),
           ]),
         ]),
         html.button(
@@ -471,9 +476,20 @@ fn thread_header_view(model: Model, references) {
               case model.is_reference {
                 True ->
                   html.a([attribute.href("/" <> model.topic_id)], [
-                    html.text(model.topic_title),
+                    element.unsafe_raw_html(
+                      "topic-title",
+                      "span",
+                      [],
+                      model.topic_title,
+                    ),
                   ])
-                False -> html.text(model.topic_title)
+                False ->
+                  element.unsafe_raw_html(
+                    "topic-title",
+                    "span",
+                    [],
+                    model.topic_title,
+                  )
               },
             ]),
             html.div([], [

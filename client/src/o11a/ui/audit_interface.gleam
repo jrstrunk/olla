@@ -132,7 +132,12 @@ fn contract_members_view(
         ..list.map(items, fn(declaration) {
           html.p([attribute.class("ml-[1rem]")], [
             html.a([attribute.href("/" <> declaration.topic_id)], [
-              html.text(declaration.signature),
+              element.unsafe_raw_html(
+                "signature",
+                "span",
+                [],
+                declaration.signature,
+              ),
             ]),
           ])
         })

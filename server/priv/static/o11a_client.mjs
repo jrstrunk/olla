@@ -9905,7 +9905,14 @@ function contract_members_view(contract, title2, declarations) {
               toList([
                 a(
                   toList([href("/" + declaration.topic_id)]),
-                  toList([text3(declaration.signature)])
+                  toList([
+                    unsafe_raw_html(
+                      "signature",
+                      "span",
+                      toList([]),
+                      declaration.signature
+                    )
+                  ])
                 )
               ])
             );
@@ -10723,11 +10730,18 @@ function reference_header_view(model, current_thread_notes) {
         ]),
         toList([
           span(
-            toList([class$("pt-[.1rem] underline")]),
+            toList([class$("pt-[.1rem]")]),
             toList([
               a(
                 toList([href("/" + model.topic_id)]),
-                toList([text3(model.topic_title)])
+                toList([
+                  unsafe_raw_html(
+                    "topic-title",
+                    "span",
+                    toList([]),
+                    model.topic_title
+                  )
+                ])
               )
             ])
           ),
@@ -10903,10 +10917,22 @@ function thread_header_view(model, references) {
                   if ($1) {
                     return a(
                       toList([href("/" + model.topic_id)]),
-                      toList([text3(model.topic_title)])
+                      toList([
+                        unsafe_raw_html(
+                          "topic-title",
+                          "span",
+                          toList([]),
+                          model.topic_title
+                        )
+                      ])
                     );
                   } else {
-                    return text3(model.topic_title);
+                    return unsafe_raw_html(
+                      "topic-title",
+                      "span",
+                      toList([]),
+                      model.topic_title
+                    );
                   }
                 })()
               ])

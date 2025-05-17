@@ -1731,24 +1731,68 @@ fn do_count_node_references_multi(
 }
 
 fn node_to_source_string(node) {
+  node_to_source_element(node)
+  |> element.to_string
+}
+
+fn node_to_source_element(node) {
   case node {
-    ErrorDefinitionNode(name:, ..) -> "error " <> name
-    StructDefinition(name:, ..) -> "struct " <> name
-    EnumDefinition(name:, ..) -> "enum " <> name
-    EnumValue(name:, ..) -> "enum value " <> name
+    ErrorDefinitionNode(name:, ..) ->
+      element.fragment([
+        html.span([attribute.class("keyword")], [html.text("error ")]),
+        html.span([attribute.class("error")], [html.text(name)]),
+      ])
+    StructDefinition(name:, ..) ->
+      element.fragment([
+        html.span([attribute.class("keyword")], [html.text("struct ")]),
+        html.span([attribute.class("struct")], [html.text(name)]),
+      ])
+    EnumDefinition(name:, ..) ->
+      element.fragment([
+        html.span([attribute.class("keyword")], [html.text("enum ")]),
+        html.span([attribute.class("enum")], [html.text(name)]),
+      ])
+    EnumValue(name:, ..) ->
+      element.fragment([
+        html.span([attribute.class("keyword")], [html.text("enum value ")]),
+        html.span([attribute.class("enum value")], [html.text(name)]),
+      ])
     FunctionDefinitionNode(name:, function_kind:, ..) ->
       case function_kind {
-        declaration.Function -> "function " <> name
-        declaration.Constructor -> "constructor"
-        declaration.Fallback -> "fallback function"
-        declaration.Receive -> "receive function"
+        declaration.Function ->
+          element.fragment([
+            html.span([attribute.class("keyword")], [html.text("function ")]),
+            html.span([attribute.class("function")], [html.text(name)]),
+          ])
+        declaration.Constructor ->
+          html.span([attribute.class("keyword")], [html.text("constructor")])
+        declaration.Fallback ->
+          html.span([attribute.class("keyword")], [
+            html.text("fallback function"),
+          ])
+        declaration.Receive ->
+          html.span([attribute.class("keyword")], [
+            html.text("receive function"),
+          ])
       }
 
-    ModifierDefinitionNode(name:, ..) -> "modifier " <> name
-    ImportDirectiveNode(file:, ..) -> "import " <> file
+    ModifierDefinitionNode(name:, ..) ->
+      element.fragment([
+        html.span([attribute.class("keyword")], [html.text("modifier ")]),
+        html.span([attribute.class("modifier")], [html.text(name)]),
+      ])
     ContractDefinitionNode(name:, contract_kind:, ..) ->
-      declaration.contract_kind_to_string(contract_kind) <> " " <> name
-    EventDefinitionNode(name:, ..) -> "event " <> name
+      element.fragment([
+        html.span([attribute.class("keyword")], [
+          html.text(declaration.contract_kind_to_string(contract_kind) <> " "),
+        ]),
+        html.span([attribute.class("contract")], [html.text(name)]),
+      ])
+    EventDefinitionNode(name:, ..) ->
+      element.fragment([
+        html.span([attribute.class("keyword")], [html.text("event ")]),
+        html.span([attribute.class("event")], [html.text(name)]),
+      ])
 
     VariableDeclarationNode(
       type_string:,
@@ -1759,34 +1803,55 @@ fn node_to_source_string(node) {
       value:,
       ..,
     ) -> {
-      type_string
-      <> " "
-      <> visibility
-      <> " "
-      <> case mutability {
-        "mutable" -> ""
-        _ -> mutability <> " "
-      }
-      <> name
-      <> case constant, value {
-        True, option.Some(value) -> " = " <> node_to_source_string(value)
-        _, _ -> ""
-      }
+      element.fragment([
+        html.span([attribute.class("type")], [html.text(type_string <> " ")]),
+        case visibility {
+          "internal" -> element.fragment([])
+          _ ->
+            html.span([attribute.class("keyword")], [
+              html.text(visibility <> " "),
+            ])
+        },
+        case mutability {
+          "mutable" -> element.fragment([])
+          _ ->
+            html.span([attribute.class("keyword")], [
+              html.text(mutability <> " "),
+            ])
+        },
+        html.span([attribute.class("variable")], [html.text(name)]),
+        case constant, value {
+          True, option.Some(value) ->
+            element.fragment([
+              html.span([attribute.class("operator")], [html.text(" = ")]),
+              node_to_source_element(value),
+            ])
+
+          _, _ -> element.fragment([])
+        },
+      ])
     }
     Literal(kind:, value:, ..) ->
       case kind {
-        StringLiteral -> "\"" <> value <> "\""
-        NumberLiteral -> value
-        BoolLiteral -> value
-        HexStringLiteral -> value
+        StringLiteral ->
+          html.span([attribute.class("string")], [
+            html.text("\"" <> value <> "\""),
+          ])
+        NumberLiteral | BoolLiteral | HexStringLiteral ->
+          html.span([attribute.class("number")], [html.text(value)])
       }
     FunctionCall(expression: option.Some(expr), arguments:, ..) ->
-      node_to_source_string(expr)
-      <> "("
-      <> string.join(list.map(arguments, node_to_source_string), ", ")
-      <> ")"
-    Identifier(name:, ..) -> name
-    _ -> "..."
+      element.fragment([
+        node_to_source_element(expr),
+        html.text("("),
+        element.fragment(
+          list.map(arguments, node_to_source_element)
+          |> list.intersperse(html.text(", ")),
+        ),
+        html.text(")"),
+      ])
+    Identifier(name:, ..) -> html.text(name)
+    _ -> html.text("...")
   }
 }
 
