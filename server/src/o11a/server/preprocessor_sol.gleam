@@ -718,8 +718,6 @@ fn do_enumerate_node_declarations(
       })
     ImportDirectiveNode(..) | StructuredDocumentationNode(..) -> declarations
     ContractDefinitionNode(id:, name:, nodes:, contract_kind:, ..) -> {
-      let signature =
-        declaration.contract_kind_to_string(contract_kind) <> " " <> name
       let contract_id = parent_id <> "#" <> name
 
       let children_scope =
@@ -732,7 +730,7 @@ fn do_enumerate_node_declarations(
           name:,
           // The parent of a contract is the file it is defined in
           scope: parent_scope,
-          signature:,
+          signature: node_to_source_string(node),
           topic_id: contract_id,
           kind: declaration.ContractDeclaration(contract_kind),
           references: [],
@@ -757,13 +755,6 @@ fn do_enumerate_node_declarations(
       body:,
       ..,
     ) -> {
-      let signature = case function_kind {
-        declaration.Function -> "function " <> name
-        declaration.Constructor -> "constructor"
-        declaration.Fallback -> "fallback function"
-        declaration.Receive -> "receive function"
-      }
-
       let name = case function_kind {
         declaration.Function -> name
         declaration.Constructor -> "constructor"
@@ -783,7 +774,7 @@ fn do_enumerate_node_declarations(
           declaration.Declaration(
             name:,
             scope: parent_scope,
-            signature:,
+            signature: node_to_source_string(node),
             topic_id: function_id,
             kind: declaration.FunctionDeclaration(function_kind),
             references: [],
@@ -820,7 +811,6 @@ fn do_enumerate_node_declarations(
       }
     }
     ModifierDefinitionNode(id:, parameters:, nodes:, body:, name:, ..) -> {
-      let signature = "modifier " <> name
       let modifier_id = parent_id <> ":" <> name
 
       let children_scope =
@@ -833,7 +823,7 @@ fn do_enumerate_node_declarations(
           declaration.Declaration(
             name:,
             scope: parent_scope,
-            signature:,
+            signature: node_to_source_string(node),
             topic_id: modifier_id,
             kind: declaration.ModifierDeclaration,
             references: [],
@@ -875,7 +865,6 @@ fn do_enumerate_node_declarations(
       })
     }
     ErrorDefinitionNode(id:, name:, nodes:, parameters:, ..) -> {
-      let signature = "error " <> name
       let topic_id = parent_id <> ":" <> name
       let childern_scope =
         declaration.Scope(..parent_scope, member: option.Some(name))
@@ -886,7 +875,7 @@ fn do_enumerate_node_declarations(
         declaration.Declaration(
           name:,
           scope: parent_scope,
-          signature:,
+          signature: node_to_source_string(node),
           topic_id:,
           kind: declaration.ErrorDeclaration,
           references: [],
@@ -903,7 +892,6 @@ fn do_enumerate_node_declarations(
       |> do_enumerate_node_declarations(parameters, parent_id, childern_scope)
     }
     EventDefinitionNode(id:, name:, nodes:, parameters:, ..) -> {
-      let signature = "event " <> name
       let topic_id = parent_id <> ":" <> name
       let childern_scope =
         declaration.Scope(..parent_scope, member: option.Some(name))
@@ -914,7 +902,7 @@ fn do_enumerate_node_declarations(
         declaration.Declaration(
           name:,
           scope: parent_scope,
-          signature:,
+          signature: node_to_source_string(node),
           topic_id:,
           kind: declaration.EventDeclaration,
           references: [],
@@ -930,15 +918,7 @@ fn do_enumerate_node_declarations(
       })
       |> do_enumerate_node_declarations(parameters, parent_id, childern_scope)
     }
-    VariableDeclarationNode(id:, name:, constant:, type_string:, ..) -> {
-      let signature =
-        case constant {
-          True -> "constant "
-          False -> ""
-        }
-        <> type_string
-        <> " "
-        <> name
+    VariableDeclarationNode(id:, name:, constant:, ..) -> {
       let topic_id = parent_id <> ":" <> name
 
       dict.insert(
@@ -947,7 +927,7 @@ fn do_enumerate_node_declarations(
         declaration.Declaration(
           name:,
           scope: parent_scope,
-          signature:,
+          signature: node_to_source_string(node),
           topic_id:,
           kind: case constant {
             True -> declaration.ConstantDeclaration
@@ -1028,7 +1008,6 @@ fn do_enumerate_node_declarations(
       )
     }
     EnumDefinition(id:, name:, members:, nodes:, ..) -> {
-      let signature = "enum " <> name
       let enum_id = parent_id <> ":" <> name
 
       let children_scope =
@@ -1040,7 +1019,7 @@ fn do_enumerate_node_declarations(
         declaration.Declaration(
           name:,
           scope: parent_scope,
-          signature:,
+          signature: node_to_source_string(node),
           topic_id: enum_id,
           kind: declaration.EnumDeclaration,
           references: [],
@@ -1064,7 +1043,6 @@ fn do_enumerate_node_declarations(
       })
     }
     EnumValue(id:, name:, ..) -> {
-      let signature = "enum value " <> name
       let topic_id = parent_id <> ":" <> name
 
       dict.insert(
@@ -1073,7 +1051,7 @@ fn do_enumerate_node_declarations(
         declaration.Declaration(
           name:,
           scope: parent_scope,
-          signature:,
+          signature: node_to_source_string(node),
           topic_id:,
           kind: declaration.EnumValueDeclaration,
           references: [],
@@ -1081,7 +1059,6 @@ fn do_enumerate_node_declarations(
       )
     }
     StructDefinition(id:, name:, members:, nodes:, ..) -> {
-      let signature = "struct " <> name
       let struct_id = parent_id <> ":" <> name
       let children_scope =
         declaration.Scope(..parent_scope, member: option.Some(name))
@@ -1092,7 +1069,7 @@ fn do_enumerate_node_declarations(
         declaration.Declaration(
           name:,
           scope: parent_scope,
-          signature:,
+          signature: node_to_source_string(node),
           topic_id: struct_id,
           kind: declaration.StructDeclaration,
           references: [],
@@ -1751,6 +1728,66 @@ fn do_count_node_references_multi(
       parent_reference_kind,
     )
   })
+}
+
+fn node_to_source_string(node) {
+  case node {
+    ErrorDefinitionNode(name:, ..) -> "error " <> name
+    StructDefinition(name:, ..) -> "struct " <> name
+    EnumDefinition(name:, ..) -> "enum " <> name
+    EnumValue(name:, ..) -> "enum value " <> name
+    FunctionDefinitionNode(name:, function_kind:, ..) ->
+      case function_kind {
+        declaration.Function -> "function " <> name
+        declaration.Constructor -> "constructor"
+        declaration.Fallback -> "fallback function"
+        declaration.Receive -> "receive function"
+      }
+
+    ModifierDefinitionNode(name:, ..) -> "modifier " <> name
+    ImportDirectiveNode(file:, ..) -> "import " <> file
+    ContractDefinitionNode(name:, contract_kind:, ..) ->
+      declaration.contract_kind_to_string(contract_kind) <> " " <> name
+    EventDefinitionNode(name:, ..) -> "event " <> name
+
+    VariableDeclarationNode(
+      type_string:,
+      visibility:,
+      mutability:,
+      constant:,
+      name:,
+      value:,
+      ..,
+    ) -> {
+      type_string
+      <> " "
+      <> visibility
+      <> " "
+      <> case mutability {
+        "mutable" -> ""
+        _ -> mutability <> " "
+      }
+      <> name
+      <> case constant, value {
+        True, option.Some(value) -> " = " <> node_to_source_string(value)
+        _, _ -> ""
+      }
+    }
+    Literal(kind:, value:, ..) ->
+      case kind {
+        StringLiteral -> "\"" <> value <> "\""
+        NumberLiteral -> value
+        BoolLiteral -> value
+        HexStringLiteral -> value
+      }
+    FunctionCall(expression: option.Some(expr), arguments:, ..) ->
+      node_to_source_string(expr)
+      <> "("
+      <> string.join(list.map(arguments, node_to_source_string), ", ")
+      <> ")"
+    Identifier(name:, ..) -> name
+    _ -> "..."
+  }
 }
 
 pub fn read_asts(for audit_name: String) {
