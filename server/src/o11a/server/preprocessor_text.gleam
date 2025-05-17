@@ -86,7 +86,8 @@ fn line_node_declaration(page_path, line_number_text) {
   declaration.Declaration(
     name: "L" <> line_number_text,
     scope: declaration.Scope(
-      object: option.Some(filepath.base_name(page_path)),
+      file: filepath.base_name(page_path),
+      contract: option.None,
       member: option.None,
     ),
     signature: filepath.base_name(page_path) <> "#L" <> line_number_text,

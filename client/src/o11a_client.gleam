@@ -27,6 +27,7 @@ import o11a/events
 import o11a/note
 import o11a/preprocessor
 import o11a/ui/audit_dashboard
+import o11a/ui/audit_interface
 import o11a/ui/audit_page
 import o11a/ui/audit_page_dashboard
 import o11a/ui/audit_tree
@@ -64,6 +65,10 @@ pub type Model {
         lustre_http.HttpError,
       ),
     ),
+    audit_interface: dict.Dict(
+      String,
+      Result(audit_interface.InterfaceData, lustre_http.HttpError),
+    ),
     discussions: dict.Dict(
       String,
       dict.Dict(String, List(computed_note.ComputedNote)),
@@ -80,6 +85,7 @@ pub type Model {
 pub type Route {
   O11aHomeRoute
   AuditDashboardRoute(audit_name: String)
+  AuditInterfaceRoute(audit_name: String)
   AuditPageRoute(audit_name: String, page_path: String)
 }
 
@@ -103,6 +109,7 @@ fn init(_) -> #(Model, Effect(Msg)) {
       discussions: dict.new(),
       audit_references: dict.new(),
       discussion_models: dict.new(),
+      audit_interface: dict.new(),
       keyboard_model: page_navigation.init(),
       selected_discussion: option.None,
       selected_node_id: option.None,
@@ -137,6 +144,8 @@ fn parse_route(uri: Uri) -> Route {
 
     [audit_name] | [audit_name, "dashboard"] -> AuditDashboardRoute(audit_name:)
 
+    [audit_name, "interfaces"] -> AuditInterfaceRoute(audit_name:)
+
     [audit_name, _, ..] ->
       AuditPageRoute(
         audit_name:,
@@ -157,19 +166,27 @@ fn file_tree_from_route(
     O11aHomeRoute -> dict.new()
 
     AuditDashboardRoute(audit_name:) -> {
-      let in_scope_files =
-        dict.get(audit_metadata, audit_name)
-        |> result.map(fn(audit_metadata) {
-          case audit_metadata {
-            Ok(audit_metadata) -> audit_metadata.in_scope_files
-            Error(..) -> []
-          }
-        })
-        |> result.unwrap([])
+      let in_scope_files = case dict.get(audit_metadata, audit_name) {
+        Ok(Ok(audit_metadata)) -> audit_metadata.in_scope_files
+        _ -> []
+      }
 
       audit_tree.group_files_by_parent(
         in_scope_files:,
         current_file_path: audit_tree.dashboard_path(for: audit_name),
+        audit_name:,
+      )
+    }
+
+    AuditInterfaceRoute(audit_name:) -> {
+      let in_scope_files = case dict.get(audit_metadata, audit_name) {
+        Ok(Ok(audit_metadata)) -> audit_metadata.in_scope_files
+        _ -> []
+      }
+
+      audit_tree.group_files_by_parent(
+        in_scope_files:,
+        current_file_path: audit_tree.interfaces_path(for: audit_name),
         audit_name:,
       )
     }
@@ -197,6 +214,7 @@ fn file_tree_from_route(
 fn get_page_route_from_model(model: Model) {
   case model.route {
     AuditDashboardRoute(..) -> Error(Nil)
+    AuditInterfaceRoute(..) -> Error(Nil)
     AuditPageRoute(page_path:, ..) -> Ok(page_path)
     O11aHomeRoute -> Error(Nil)
   }
@@ -205,6 +223,7 @@ fn get_page_route_from_model(model: Model) {
 fn get_audit_name_from_model(model: Model) {
   case model.route {
     AuditDashboardRoute(audit_name:) -> Ok(audit_name)
+    AuditInterfaceRoute(audit_name:) -> Ok(audit_name)
     AuditPageRoute(audit_name:, ..) -> Ok(audit_name)
     O11aHomeRoute -> Error(Nil)
   }
@@ -274,10 +293,23 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     ClientFetchedAuditMetadata(audit_name, metadata) -> {
       let updated_audit_metadata =
         dict.insert(model.audit_metadata, audit_name, metadata)
+
       #(
         Model(
           ..model,
           audit_metadata: updated_audit_metadata,
+          audit_interface: dict.insert(
+            model.audit_interface,
+            audit_name,
+            result.map(metadata, fn(metadata) {
+              audit_interface.gather_interface_data(
+                dict.get(model.audit_declarations, audit_name)
+                  |> result.unwrap(Ok([]))
+                  |> result.unwrap([]),
+                metadata.in_scope_files,
+              )
+            }),
+          ),
           file_tree: file_tree_from_route(model.route, updated_audit_metadata),
         ),
         effect.none(),
@@ -340,6 +372,23 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
                   |> list.flatten
                 })
               }),
+          ),
+          audit_interface: dict.insert(
+            model.audit_interface,
+            audit_name,
+            result.map(declarations, fn(declarations) {
+              audit_interface.gather_interface_data(
+                declarations,
+                dict.get(model.audit_metadata, audit_name)
+                  |> result.map(fn(metadata) {
+                    case metadata {
+                      Ok(metadata) -> metadata.in_scope_files
+                      Error(..) -> []
+                    }
+                  })
+                  |> result.unwrap([]),
+              )
+            }),
           ),
         ),
         effect.none(),
@@ -567,7 +616,9 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         discussion.SubmitNote(note_submission, topic_id) -> #(
           model,
           case model.route {
-            AuditPageRoute(audit_name:, ..) | AuditDashboardRoute(audit_name:) -> {
+            AuditPageRoute(audit_name:, ..)
+            | AuditDashboardRoute(audit_name:)
+            | AuditInterfaceRoute(audit_name:) -> {
               submit_note(
                 audit_name,
                 topic_id,
@@ -663,7 +714,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
 fn route_change_effect(model, new_route route: Route) {
   case route {
-    AuditDashboardRoute(audit_name:) ->
+    AuditDashboardRoute(audit_name:) | AuditInterfaceRoute(audit_name:) ->
       effect.batch([
         fetch_metadata(model, audit_name),
         fetch_declarations(audit_name),
@@ -770,6 +821,27 @@ fn view(model: Model) {
           model.file_tree,
           audit_name,
           audit_tree.dashboard_path(for: audit_name),
+        ),
+      ])
+    }
+
+    AuditInterfaceRoute(audit_name:) -> {
+      let interface_data = case dict.get(model.audit_interface, audit_name) {
+        Ok(Ok(data)) -> data
+        _ -> audit_interface.empty_interface_data()
+      }
+
+      html.div([], [
+        server_component.element(
+          [server_component.route("/component-discussion/" <> audit_name)],
+          [],
+        ),
+        audit_tree.view(
+          audit_interface.view(interface_data),
+          option.None,
+          model.file_tree,
+          audit_name,
+          audit_tree.interfaces_path(for: audit_name),
         ),
       ])
     }

@@ -50,23 +50,28 @@ pub fn declaration_decoder() -> decode.Decoder(Declaration) {
 pub const unknown_declaration = Declaration(
   "",
   "",
-  Scope(option.None, option.None),
+  Scope("", option.None, option.None),
   "",
   UnknownDeclaration,
   [],
 )
 
 pub type Scope {
-  Scope(object: option.Option(String), member: option.Option(String))
+  Scope(
+    file: String,
+    contract: option.Option(String),
+    member: option.Option(String),
+  )
 }
 
 fn encode_scope(scope: Scope) -> json.Json {
-  let Scope(object:, member:) = scope
+  let Scope(file:, contract:, member:) = scope
   json.object(
     [
-      case object {
+      [#("f", json.string(file))],
+      case contract {
         option.None -> []
-        option.Some(object) -> [#("o", json.string(object))]
+        option.Some(contract) -> [#("c", json.string(contract))]
       },
       case member {
         option.None -> []
@@ -78,8 +83,9 @@ fn encode_scope(scope: Scope) -> json.Json {
 }
 
 fn scope_decoder() -> decode.Decoder(Scope) {
-  use object <- decode.optional_field(
-    "o",
+  use file <- decode.field("f", decode.string)
+  use contract <- decode.optional_field(
+    "c",
     option.None,
     decode.optional(decode.string),
   )
@@ -88,11 +94,11 @@ fn scope_decoder() -> decode.Decoder(Scope) {
     option.None,
     decode.optional(decode.string),
   )
-  decode.success(Scope(object:, member:))
+  decode.success(Scope(file:, contract:, member:))
 }
 
 pub fn contract_scope_to_string(scope: Scope) {
-  scope.object
+  scope.contract
   |> option.unwrap("")
   <> option.map(scope.member, fn(member) { "." <> member })
   |> option.unwrap("")

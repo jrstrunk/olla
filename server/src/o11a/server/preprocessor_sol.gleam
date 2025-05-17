@@ -682,7 +682,11 @@ pub fn enumerate_declarations(declarations, in ast: AST) {
       declarations,
       node,
       ast.absolute_path,
-      parent_scope: declaration.Scope(object: option.None, member: option.None),
+      parent_scope: declaration.Scope(
+        file: filepath.base_name(ast.absolute_path),
+        contract: option.None,
+        member: option.None,
+      ),
     )
   })
 }
@@ -719,7 +723,7 @@ fn do_enumerate_node_declarations(
       let contract_id = parent_id <> "#" <> name
 
       let children_scope =
-        declaration.Scope(object: option.Some(name), member: option.None)
+        declaration.Scope(..parent_scope, contract: option.Some(name))
 
       dict.insert(
         declarations,
@@ -873,6 +877,8 @@ fn do_enumerate_node_declarations(
     ErrorDefinitionNode(id:, name:, nodes:, parameters:, ..) -> {
       let signature = "error " <> name
       let topic_id = parent_id <> ":" <> name
+      let childern_scope =
+        declaration.Scope(..parent_scope, member: option.Some(name))
 
       declarations
       |> dict.insert(
@@ -891,14 +897,16 @@ fn do_enumerate_node_declarations(
           declarations,
           node,
           parent_id,
-          parent_scope,
+          childern_scope,
         )
       })
-      |> do_enumerate_node_declarations(parameters, parent_id, parent_scope)
+      |> do_enumerate_node_declarations(parameters, parent_id, childern_scope)
     }
     EventDefinitionNode(id:, name:, nodes:, parameters:, ..) -> {
       let signature = "event " <> name
       let topic_id = parent_id <> ":" <> name
+      let childern_scope =
+        declaration.Scope(..parent_scope, member: option.Some(name))
 
       declarations
       |> dict.insert(
@@ -917,10 +925,10 @@ fn do_enumerate_node_declarations(
           declarations,
           node,
           parent_id,
-          parent_scope,
+          childern_scope,
         )
       })
-      |> do_enumerate_node_declarations(parameters, parent_id, parent_scope)
+      |> do_enumerate_node_declarations(parameters, parent_id, childern_scope)
     }
     VariableDeclarationNode(id:, name:, constant:, type_string:, ..) -> {
       let signature =
@@ -1117,7 +1125,11 @@ pub fn count_references(declarations, in ast: AST) {
     do_count_node_references(
       declarations,
       node,
-      declaration.Scope(object: option.None, member: option.None),
+      declaration.Scope(
+        file: filepath.base_name(ast.absolute_path),
+        contract: option.None,
+        member: option.None,
+      ),
       ast.absolute_path,
       declaration.AccessReference,
     )
@@ -1157,7 +1169,7 @@ fn do_count_node_references(
 
     ContractDefinitionNode(nodes:, base_contracts:, name:, ..) -> {
       let children_scope =
-        declaration.Scope(object: option.Some(name), member: option.None)
+        declaration.Scope(..parent_scope, contract: option.Some(name))
       let contract_id = parent_topic_id <> "#" <> name
 
       do_count_node_references_multi(

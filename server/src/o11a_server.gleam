@@ -82,8 +82,9 @@ fn handler(req, context: Context) {
   case request.path_segments(req) {
     ["favicon.ico"] -> serve_favicon(context.config)
 
-    ["styles.css" as stylesheet] | ["line_discussion.min.css" as stylesheet] ->
-      serve_css(stylesheet, context.config)
+    ["styles.css" as stylesheet]
+    | ["line_discussion.min.css" as stylesheet]
+    | ["o11a_client.css" as stylesheet] -> serve_css(stylesheet, context.config)
 
     ["lustre-server-component.mjs"] ->
       serve_lustre_server_component(context.config)
@@ -264,6 +265,10 @@ fn handle_wisp_request(req, context: Context) {
           html.link([
             attribute.rel("stylesheet"),
             attribute.href("/line_discussion.min.css"),
+          ]),
+          html.link([
+            attribute.rel("stylesheet"),
+            attribute.href("/o11a_client.css"),
           ]),
           html.link([attribute.rel("stylesheet"), attribute.href("/styles.css")]),
         ]),

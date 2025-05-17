@@ -17,20 +17,6 @@ const style = "
 .dashboard-link:hover {
   text-decoration: underline;
 }
-
-h1 {
-  font-size: 2rem;
-  font-weight: bold;
-  margin-top: 1rem;
-  margin-bottom: 1rem;
-}
-
-h2 {
-  font-size: 1.5rem;
-  font-weight: bold;
-  margin-top: 1rem;
-  margin-bottom: 1rem;
-}
 "
 
 pub fn view(notes, audit_name) {

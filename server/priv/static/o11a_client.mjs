@@ -6202,10 +6202,10 @@ var virtualise_attribute = (attr) => {
 var is_browser = () => !!document2;
 var is_reference_equal = (a2, b) => a2 === b;
 var Runtime = class {
-  constructor(root3, [model, effects], view6, update4) {
+  constructor(root3, [model, effects], view7, update4) {
     this.root = root3;
     this.#model = model;
-    this.#view = view6;
+    this.#view = view7;
     this.#update = update4;
     this.#reconciler = new Reconciler(this.root, (event4, path2, name2) => {
       const [events, msg] = handle(this.#events, path2, name2, event4);
@@ -6793,15 +6793,15 @@ function new$6(options) {
 
 // build/dev/javascript/lustre/lustre/runtime/client/spa.ffi.mjs
 var Spa = class _Spa {
-  static start({ init: init5, update: update4, view: view6 }, selector, flags) {
+  static start({ init: init5, update: update4, view: view7 }, selector, flags) {
     if (!is_browser()) return new Error(new NotABrowser());
     const root3 = selector instanceof HTMLElement ? selector : document2.querySelector(selector);
     if (!root3) return new Error(new ElementNotFound(selector));
-    return new Ok(new _Spa(root3, init5(flags), update4, view6));
+    return new Ok(new _Spa(root3, init5(flags), update4, view7));
   }
   #runtime;
-  constructor(root3, [init5, effects], update4, view6) {
-    this.#runtime = new Runtime(root3, [init5, effects], view6, update4);
+  constructor(root3, [init5, effects], update4, view7) {
+    this.#runtime = new Runtime(root3, [init5, effects], view7, update4);
   }
   send(message) {
     switch (message.constructor) {
@@ -6828,11 +6828,11 @@ var start = Spa.start;
 
 // build/dev/javascript/lustre/lustre.mjs
 var App = class extends CustomType {
-  constructor(init5, update4, view6, config) {
+  constructor(init5, update4, view7, config) {
     super();
     this.init = init5;
     this.update = update4;
-    this.view = view6;
+    this.view = view7;
     this.config = config;
   }
 };
@@ -6844,8 +6844,8 @@ var ElementNotFound = class extends CustomType {
 };
 var NotABrowser = class extends CustomType {
 };
-function application(init5, update4, view6) {
-  return new App(init5, update4, view6, new$6(empty_list));
+function application(init5, update4, view7) {
+  return new App(init5, update4, view7, new$6(empty_list));
 }
 function start3(app, selector, start_args) {
   return guard(
@@ -8156,9 +8156,10 @@ var Declaration = class extends CustomType {
   }
 };
 var Scope = class extends CustomType {
-  constructor(object4, member) {
+  constructor(file, contract, member) {
     super();
-    this.object = object4;
+    this.file = file;
+    this.contract = contract;
     this.member = member;
   }
 };
@@ -8231,17 +8232,23 @@ var UsingReference = class extends CustomType {
 var TypeReference = class extends CustomType {
 };
 function scope_decoder() {
-  return optional_field(
-    "o",
-    new None(),
-    optional(string3),
-    (object4) => {
+  return field(
+    "f",
+    string3,
+    (file) => {
       return optional_field(
-        "m",
+        "c",
         new None(),
         optional(string3),
-        (member) => {
-          return success(new Scope(object4, member));
+        (contract) => {
+          return optional_field(
+            "m",
+            new None(),
+            optional(string3),
+            (member) => {
+              return success(new Scope(file, contract, member));
+            }
+          );
         }
       );
     }
@@ -8249,7 +8256,7 @@ function scope_decoder() {
 }
 function contract_scope_to_string(scope) {
   return (() => {
-    let _pipe = scope.object;
+    let _pipe = scope.contract;
     return unwrap(_pipe, "");
   })() + (() => {
     let _pipe = map(scope.member, (member) => {
@@ -9794,7 +9801,7 @@ function find_open_notes(notes, page_path) {
     confirmed_findings
   ];
 }
-var style3 = "\n.dashboard-link {\n  text-decoration: none;\n  color: var(--text-color);\n}\n\n.dashboard-link:hover {\n  text-decoration: underline;\n}\n\nh1 {\n  font-size: 2rem;\n  font-weight: bold;\n  margin-top: 1rem;\n  margin-bottom: 1rem;\n}\n\nh2 {\n  font-size: 1.5rem;\n  font-weight: bold;\n  margin-top: 1rem;\n  margin-bottom: 1rem;\n}\n";
+var style3 = "\n.dashboard-link {\n  text-decoration: none;\n  color: var(--text-color);\n}\n\n.dashboard-link:hover {\n  text-decoration: underline;\n}\n";
 function view(notes, audit_name) {
   let $ = find_open_notes(notes, new None());
   let incomplete_todos = $[0];
@@ -9830,6 +9837,326 @@ function view(notes, audit_name) {
         ])
       )
     ])
+  );
+}
+
+// build/dev/javascript/o11a_client/o11a/ui/audit_interface.mjs
+var InterfaceData = class extends CustomType {
+  constructor(file_contracts, contract_constants, contract_variables, contract_structs, contract_enums, contract_events, contract_errors, contract_functions, contract_modifiers) {
+    super();
+    this.file_contracts = file_contracts;
+    this.contract_constants = contract_constants;
+    this.contract_variables = contract_variables;
+    this.contract_structs = contract_structs;
+    this.contract_enums = contract_enums;
+    this.contract_events = contract_events;
+    this.contract_errors = contract_errors;
+    this.contract_functions = contract_functions;
+    this.contract_modifiers = contract_modifiers;
+  }
+};
+var FileContract = class extends CustomType {
+  constructor(file_name, contracts) {
+    super();
+    this.file_name = file_name;
+    this.contracts = contracts;
+  }
+};
+var ContractDeclaration2 = class extends CustomType {
+  constructor(contract, dec) {
+    super();
+    this.contract = contract;
+    this.dec = dec;
+  }
+};
+function empty_interface_data() {
+  return new InterfaceData(
+    toList([]),
+    toList([]),
+    toList([]),
+    toList([]),
+    toList([]),
+    toList([]),
+    toList([]),
+    toList([]),
+    toList([])
+  );
+}
+function contract_members_view(contract, title2, declarations) {
+  let items = filter(
+    declarations,
+    (declaration) => {
+      return unwrap(declaration.scope.contract, "") === contract;
+    }
+  );
+  if (items.hasLength(0)) {
+    return fragment2(toList([]));
+  } else {
+    let items$1 = items;
+    return div(
+      toList([class$("ml-[1rem] mb-[1rem]")]),
+      prepend(
+        p(toList([]), toList([text3(title2)])),
+        map2(
+          items$1,
+          (declaration) => {
+            return p(
+              toList([class$("ml-[1rem]")]),
+              toList([
+                a(
+                  toList([href("/" + declaration.topic_id)]),
+                  toList([text3(declaration.signature)])
+                )
+              ])
+            );
+          }
+        )
+      )
+    );
+  }
+}
+function view2(interface_data) {
+  return div(
+    toList([class$("p-[1rem]")]),
+    prepend(
+      h1(toList([]), toList([text3("Interfaces")])),
+      map2(
+        interface_data.file_contracts,
+        (contract_file) => {
+          return div(
+            toList([class$("mt-[1rem]")]),
+            prepend(
+              p(toList([]), toList([text3(contract_file.file_name)])),
+              map2(
+                contract_file.contracts,
+                (contract) => {
+                  return div(
+                    toList([class$("ml-[1rem]")]),
+                    toList([
+                      p(
+                        toList([]),
+                        toList([
+                          a(
+                            toList([href("/" + contract.topic_id)]),
+                            toList([text3(contract.name)])
+                          )
+                        ])
+                      ),
+                      contract_members_view(
+                        contract.name,
+                        "Constants",
+                        interface_data.contract_constants
+                      ),
+                      contract_members_view(
+                        contract.name,
+                        "State Variables",
+                        interface_data.contract_variables
+                      ),
+                      contract_members_view(
+                        contract.name,
+                        "Structs",
+                        interface_data.contract_structs
+                      ),
+                      contract_members_view(
+                        contract.name,
+                        "Enums",
+                        interface_data.contract_enums
+                      ),
+                      contract_members_view(
+                        contract.name,
+                        "Events",
+                        interface_data.contract_events
+                      ),
+                      contract_members_view(
+                        contract.name,
+                        "Errors",
+                        interface_data.contract_errors
+                      ),
+                      contract_members_view(
+                        contract.name,
+                        "Functions",
+                        interface_data.contract_functions
+                      ),
+                      contract_members_view(
+                        contract.name,
+                        "Modifiers",
+                        interface_data.contract_modifiers
+                      )
+                    ])
+                  );
+                }
+              )
+            )
+          );
+        }
+      )
+    )
+  );
+}
+function gather_interface_data(declarations, in_scope_files) {
+  let _block;
+  let _pipe = in_scope_files;
+  _block = map2(_pipe, base_name);
+  let in_scope_file_names = _block;
+  let _block$1;
+  let _pipe$1 = declarations;
+  _block$1 = filter(
+    _pipe$1,
+    (declaration) => {
+      return contains(in_scope_file_names, declaration.scope.file);
+    }
+  );
+  let declarations_in_scope = _block$1;
+  let _block$2;
+  let _pipe$2 = declarations_in_scope;
+  _block$2 = filter_map(
+    _pipe$2,
+    (declaration) => {
+      let $ = declaration.scope.contract;
+      let $1 = declaration.scope.member;
+      if ($ instanceof Some && $1 instanceof None) {
+        let contract = $[0];
+        return new Ok(new ContractDeclaration2(contract, declaration));
+      } else {
+        return new Error(void 0);
+      }
+    }
+  );
+  let contract_member_declarations_in_scope = _block$2;
+  let _block$3;
+  let _pipe$3 = declarations_in_scope;
+  let _pipe$4 = filter(
+    _pipe$3,
+    (declaration) => {
+      let $ = declaration.kind;
+      if ($ instanceof ContractDeclaration) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  );
+  let _pipe$5 = group(
+    _pipe$4,
+    (declaration) => {
+      return declaration.scope.file;
+    }
+  );
+  let _pipe$6 = map_values(
+    _pipe$5,
+    (_, value3) => {
+      let _pipe$62 = map2(value3, (declaration) => {
+        return declaration;
+      });
+      return unique(_pipe$62);
+    }
+  );
+  let _pipe$7 = map_to_list(_pipe$6);
+  _block$3 = map2(
+    _pipe$7,
+    (contracts) => {
+      return new FileContract(contracts[0], contracts[1]);
+    }
+  );
+  let file_contracts = _block$3;
+  let contract_constants = filter_map(
+    contract_member_declarations_in_scope,
+    (declaration) => {
+      let $ = declaration.dec.kind;
+      if ($ instanceof ConstantDeclaration) {
+        return new Ok(declaration.dec);
+      } else {
+        return new Error(void 0);
+      }
+    }
+  );
+  let contract_variables = filter_map(
+    contract_member_declarations_in_scope,
+    (declaration) => {
+      let $ = declaration.dec.kind;
+      if ($ instanceof VariableDeclaration) {
+        return new Ok(declaration.dec);
+      } else {
+        return new Error(void 0);
+      }
+    }
+  );
+  let contract_structs = filter_map(
+    contract_member_declarations_in_scope,
+    (declaration) => {
+      let $ = declaration.dec.kind;
+      if ($ instanceof StructDeclaration) {
+        return new Ok(declaration.dec);
+      } else {
+        return new Error(void 0);
+      }
+    }
+  );
+  let contract_enums = filter_map(
+    contract_member_declarations_in_scope,
+    (declaration) => {
+      let $ = declaration.dec.kind;
+      if ($ instanceof EnumDeclaration) {
+        return new Ok(declaration.dec);
+      } else {
+        return new Error(void 0);
+      }
+    }
+  );
+  let contract_events = filter_map(
+    contract_member_declarations_in_scope,
+    (declaration) => {
+      let $ = declaration.dec.kind;
+      if ($ instanceof EventDeclaration) {
+        return new Ok(declaration.dec);
+      } else {
+        return new Error(void 0);
+      }
+    }
+  );
+  let contract_errors = filter_map(
+    contract_member_declarations_in_scope,
+    (declaration) => {
+      let $ = declaration.dec.kind;
+      if ($ instanceof ErrorDeclaration) {
+        return new Ok(declaration.dec);
+      } else {
+        return new Error(void 0);
+      }
+    }
+  );
+  let contract_functions = filter_map(
+    contract_member_declarations_in_scope,
+    (declaration) => {
+      let $ = declaration.dec.kind;
+      if ($ instanceof FunctionDeclaration) {
+        return new Ok(declaration.dec);
+      } else {
+        return new Error(void 0);
+      }
+    }
+  );
+  let contract_modifiers = filter_map(
+    contract_member_declarations_in_scope,
+    (declaration) => {
+      let $ = declaration.dec.kind;
+      if ($ instanceof ModifierDeclaration) {
+        return new Ok(declaration.dec);
+      } else {
+        return new Error(void 0);
+      }
+    }
+  );
+  return new InterfaceData(
+    file_contracts,
+    contract_constants,
+    contract_variables,
+    contract_structs,
+    contract_enums,
+    contract_events,
+    contract_errors,
+    contract_functions,
+    contract_modifiers
   );
 }
 
@@ -12297,7 +12624,7 @@ function loc_view(discussion, references, loc, selected_discussion) {
     );
   }
 }
-function view2(preprocessed_source, discussion, references, selected_discussion) {
+function view3(preprocessed_source, discussion, references, selected_discussion) {
   return div(
     toList([
       id("audit-page"),
@@ -12355,7 +12682,7 @@ function notes_view2(notes) {
     })()
   );
 }
-function view3(notes, page_path) {
+function view4(notes, page_path) {
   let $ = find_open_notes(notes, new Some(page_path));
   let incomplete_todos = $[0];
   let unanswered_questions = $[1];
@@ -12528,7 +12855,7 @@ function audit_file_tree_view(grouped_files, audit_name, current_file_path) {
     ])
   );
 }
-function view4(file_contents, side_panel, grouped_files, audit_name, current_file_path) {
+function view5(file_contents, side_panel, grouped_files, audit_name, current_file_path) {
   return div(
     toList([id("tree-grid")]),
     toList([
@@ -12569,6 +12896,12 @@ function view4(file_contents, side_panel, grouped_files, audit_name, current_fil
     ])
   );
 }
+function dashboard_path(audit_name) {
+  return audit_name + "/dashboard";
+}
+function interfaces_path(audit_name) {
+  return audit_name + "/interfaces";
+}
 function get_all_parents(path2) {
   let _pipe = path2;
   let _pipe$1 = split2(_pipe, "/");
@@ -12590,82 +12923,68 @@ function get_all_parents(path2) {
   );
   return reverse(_pipe$3);
 }
-function dashboard_path(audit_name) {
-  return audit_name + "/dashboard";
-}
 function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
   let dashboard_path$1 = dashboard_path(audit_name);
+  let interfaces_path$1 = interfaces_path(audit_name);
+  let in_scope_files$1 = prepend(
+    dashboard_path$1,
+    prepend(interfaces_path$1, in_scope_files)
+  );
   let _block;
-  let $ = current_file_path === dashboard_path$1;
+  let $ = contains(in_scope_files$1, current_file_path);
   if ($) {
-    _block = prepend(current_file_path, in_scope_files);
+    _block = in_scope_files$1;
   } else {
-    let $12 = contains(in_scope_files, current_file_path);
-    if ($12) {
-      _block = prepend(dashboard_path$1, in_scope_files);
-    } else {
-      _block = prepend(
-        current_file_path,
-        prepend(dashboard_path$1, in_scope_files)
-      );
-    }
+    _block = prepend(current_file_path, in_scope_files$1);
   }
-  let in_scope_files$1 = _block;
+  let in_scope_files$2 = _block;
   let _block$1;
-  let $1 = contains(in_scope_files$1, dashboard_path$1);
-  if ($1) {
-    _block$1 = in_scope_files$1;
-  } else {
-    _block$1 = prepend(dashboard_path$1, in_scope_files$1);
-  }
-  let in_scope_files$2 = _block$1;
-  let _block$2;
   let _pipe = in_scope_files$2;
   let _pipe$1 = flat_map(_pipe, get_all_parents);
-  _block$2 = unique(_pipe$1);
-  let parents = _block$2;
+  _block$1 = unique(_pipe$1);
+  let parents = _block$1;
   let _pipe$2 = parents;
   let _pipe$3 = map2(
     _pipe$2,
     (parent) => {
       let parent_prefix = parent + "/";
-      let _block$3;
+      let _block$2;
       let _pipe$32 = in_scope_files$2;
-      _block$3 = filter(
+      _block$2 = filter(
         _pipe$32,
         (path2) => {
           return starts_with(path2, parent_prefix);
         }
       );
-      let items = _block$3;
-      let _block$4;
+      let items = _block$2;
+      let _block$3;
       let _pipe$4 = items;
-      _block$4 = partition(
+      _block$3 = partition(
         _pipe$4,
         (path2) => {
           let relative2 = replace(path2, parent_prefix, "");
           return contains_string(relative2, "/");
         }
       );
-      let $2 = _block$4;
-      let dirs = $2[0];
-      let direct_files = $2[1];
-      let _block$5;
+      let $1 = _block$3;
+      let dirs = $1[0];
+      let direct_files = $1[1];
+      let _block$4;
       let _pipe$5 = dirs;
       let _pipe$6 = map2(
         _pipe$5,
         (dir) => {
           let relative2 = replace(dir, parent_prefix, "");
-          let _block$6;
+          let _block$5;
           let _pipe$62 = split2(relative2, "/");
           let _pipe$7 = first(_pipe$62);
-          _block$6 = unwrap2(_pipe$7, "");
-          let first_dir = _block$6;
+          _block$5 = unwrap2(_pipe$7, "");
+          let first_dir = _block$5;
           return parent_prefix + first_dir;
         }
       );
-      _block$5 = unique(_pipe$6);
-      let subdirs = _block$5;
+      _block$4 = unique(_pipe$6);
+      let subdirs = _block$4;
       return [parent, [subdirs, direct_files]];
     }
   );
@@ -12674,7 +12993,7 @@ function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
 
 // build/dev/javascript/o11a_client/o11a_client.mjs
 var Model3 = class extends CustomType {
-  constructor(route2, file_tree, audit_metadata, source_files, audit_declarations, audit_references, discussions, discussion_models, keyboard_model, selected_discussion, selected_node_id, focused_discussion, clicked_discussion) {
+  constructor(route2, file_tree, audit_metadata, source_files, audit_declarations, audit_references, audit_interface, discussions, discussion_models, keyboard_model, selected_discussion, selected_node_id, focused_discussion, clicked_discussion) {
     super();
     this.route = route2;
     this.file_tree = file_tree;
@@ -12682,6 +13001,7 @@ var Model3 = class extends CustomType {
     this.source_files = source_files;
     this.audit_declarations = audit_declarations;
     this.audit_references = audit_references;
+    this.audit_interface = audit_interface;
     this.discussions = discussions;
     this.discussion_models = discussion_models;
     this.keyboard_model = keyboard_model;
@@ -12694,6 +13014,12 @@ var Model3 = class extends CustomType {
 var O11aHomeRoute = class extends CustomType {
 };
 var AuditDashboardRoute = class extends CustomType {
+  constructor(audit_name) {
+    super();
+    this.audit_name = audit_name;
+  }
+};
+var AuditInterfaceRoute = class extends CustomType {
   constructor(audit_name) {
     super();
     this.audit_name = audit_name;
@@ -12832,6 +13158,9 @@ function parse_route(uri) {
   } else if ($.hasLength(2) && $.tail.head === "dashboard") {
     let audit_name = $.head;
     return new AuditDashboardRoute(audit_name);
+  } else if ($.hasLength(2) && $.tail.head === "interfaces") {
+    let audit_name = $.head;
+    return new AuditInterfaceRoute(audit_name);
   } else {
     let audit_name = $.head;
     return new AuditPageRoute(
@@ -12844,8 +13173,8 @@ function parse_route(uri) {
   }
 }
 function on_url_change(uri) {
-  echo4("on_url_change", "src/o11a_client.gleam", 129);
-  echo4(uri, "src/o11a_client.gleam", 130);
+  echo4("on_url_change", "src/o11a_client.gleam", 136);
+  echo4(uri, "src/o11a_client.gleam", 137);
   let _pipe = parse_route(uri);
   return new OnRouteChange(_pipe);
 }
@@ -12855,23 +13184,33 @@ function file_tree_from_route(route2, audit_metadata) {
   } else if (route2 instanceof AuditDashboardRoute) {
     let audit_name = route2.audit_name;
     let _block;
-    let _pipe = map_get(audit_metadata, audit_name);
-    let _pipe$1 = map3(
-      _pipe,
-      (audit_metadata2) => {
-        if (audit_metadata2.isOk()) {
-          let audit_metadata$1 = audit_metadata2[0];
-          return audit_metadata$1.in_scope_files;
-        } else {
-          return toList([]);
-        }
-      }
-    );
-    _block = unwrap2(_pipe$1, toList([]));
+    let $ = map_get(audit_metadata, audit_name);
+    if ($.isOk() && $[0].isOk()) {
+      let audit_metadata$1 = $[0][0];
+      _block = audit_metadata$1.in_scope_files;
+    } else {
+      _block = toList([]);
+    }
     let in_scope_files = _block;
     return group_files_by_parent(
       in_scope_files,
       dashboard_path(audit_name),
+      audit_name
+    );
+  } else if (route2 instanceof AuditInterfaceRoute) {
+    let audit_name = route2.audit_name;
+    let _block;
+    let $ = map_get(audit_metadata, audit_name);
+    if ($.isOk() && $[0].isOk()) {
+      let audit_metadata$1 = $[0][0];
+      _block = audit_metadata$1.in_scope_files;
+    } else {
+      _block = toList([]);
+    }
+    let in_scope_files = _block;
+    return group_files_by_parent(
+      in_scope_files,
+      interfaces_path(audit_name),
       audit_name
     );
   } else {
@@ -12903,6 +13242,8 @@ function get_page_route_from_model(model) {
   let $ = model.route;
   if ($ instanceof AuditDashboardRoute) {
     return new Error(void 0);
+  } else if ($ instanceof AuditInterfaceRoute) {
+    return new Error(void 0);
   } else if ($ instanceof AuditPageRoute) {
     let page_path = $.page_path;
     return new Ok(page_path);
@@ -12913,6 +13254,9 @@ function get_page_route_from_model(model) {
 function get_audit_name_from_model(model) {
   let $ = model.route;
   if ($ instanceof AuditDashboardRoute) {
+    let audit_name = $.audit_name;
+    return new Ok(audit_name);
+  } else if ($ instanceof AuditInterfaceRoute) {
     let audit_name = $.audit_name;
     return new Ok(audit_name);
   } else if ($ instanceof AuditPageRoute) {
@@ -12986,6 +13330,15 @@ function route_change_effect(model, route2) {
         fetch_discussion(audit_name)
       ])
     );
+  } else if (route2 instanceof AuditInterfaceRoute) {
+    let audit_name = route2.audit_name;
+    return batch(
+      toList([
+        fetch_metadata(model, audit_name),
+        fetch_declarations(audit_name),
+        fetch_discussion(audit_name)
+      ])
+    );
   } else if (route2 instanceof AuditPageRoute) {
     let audit_name = route2.audit_name;
     let page_path = route2.page_path;
@@ -13013,6 +13366,7 @@ function init4(_) {
   let route2 = _block;
   let init_model = new Model3(
     route2,
+    new_map(),
     new_map(),
     new_map(),
     new_map(),
@@ -13092,6 +13446,7 @@ function update3(model, msg) {
           _record.source_files,
           _record.audit_declarations,
           _record.audit_references,
+          _record.audit_interface,
           _record.discussions,
           _record.discussion_models,
           _record.keyboard_model,
@@ -13121,6 +13476,23 @@ function update3(model, msg) {
           _record.source_files,
           _record.audit_declarations,
           _record.audit_references,
+          insert(
+            model.audit_interface,
+            audit_name,
+            map3(
+              metadata,
+              (metadata2) => {
+                return gather_interface_data(
+                  (() => {
+                    let _pipe = map_get(model.audit_declarations, audit_name);
+                    let _pipe$1 = unwrap2(_pipe, new Ok(toList([])));
+                    return unwrap2(_pipe$1, toList([]));
+                  })(),
+                  metadata2.in_scope_files
+                );
+              }
+            )
+          ),
           _record.discussions,
           _record.discussion_models,
           _record.keyboard_model,
@@ -13155,6 +13527,7 @@ function update3(model, msg) {
           insert(model.source_files, page_path, source_files),
           _record.audit_declarations,
           _record.audit_references,
+          _record.audit_interface,
           _record.discussions,
           _record.discussion_models,
           (() => {
@@ -13229,6 +13602,33 @@ function update3(model, msg) {
               );
             })()
           ),
+          insert(
+            model.audit_interface,
+            audit_name,
+            map3(
+              declarations,
+              (declarations2) => {
+                return gather_interface_data(
+                  declarations2,
+                  (() => {
+                    let _pipe = map_get(model.audit_metadata, audit_name);
+                    let _pipe$1 = map3(
+                      _pipe,
+                      (metadata) => {
+                        if (metadata.isOk()) {
+                          let metadata$1 = metadata[0];
+                          return metadata$1.in_scope_files;
+                        } else {
+                          return toList([]);
+                        }
+                      }
+                    );
+                    return unwrap2(_pipe$1, toList([]));
+                  })()
+                );
+              }
+            )
+          ),
           _record.discussions,
           _record.discussion_models,
           _record.keyboard_model,
@@ -13255,6 +13655,7 @@ function update3(model, msg) {
             _record.source_files,
             _record.audit_declarations,
             _record.audit_references,
+            _record.audit_interface,
             insert(
               model.discussions,
               audit_name,
@@ -13301,6 +13702,7 @@ function update3(model, msg) {
           _record.source_files,
           _record.audit_declarations,
           _record.audit_references,
+          _record.audit_interface,
           _record.discussions,
           _record.discussion_models,
           keyboard_model,
@@ -13381,6 +13783,7 @@ function update3(model, msg) {
                         _record.source_files,
                         _record.audit_declarations,
                         _record.audit_references,
+                        _record.audit_interface,
                         _record.discussions,
                         discussion_models,
                         _record.keyboard_model,
@@ -13398,6 +13801,7 @@ function update3(model, msg) {
                         _record.source_files,
                         _record.audit_declarations,
                         _record.audit_references,
+                        _record.audit_interface,
                         _record.discussions,
                         discussion_models,
                         (() => {
@@ -13429,7 +13833,7 @@ function update3(model, msg) {
     echo4(
       "Unselecting discussion " + inspect2(kind),
       "src/o11a_client.gleam",
-      454
+      503
     );
     return [
       (() => {
@@ -13442,6 +13846,7 @@ function update3(model, msg) {
             _record.source_files,
             _record.audit_declarations,
             _record.audit_references,
+            _record.audit_interface,
             _record.discussions,
             _record.discussion_models,
             _record.keyboard_model,
@@ -13459,6 +13864,7 @@ function update3(model, msg) {
             _record.source_files,
             _record.audit_declarations,
             _record.audit_references,
+            _record.audit_interface,
             _record.discussions,
             _record.discussion_models,
             _record.keyboard_model,
@@ -13490,6 +13896,7 @@ function update3(model, msg) {
               _record.source_files,
               _record.audit_declarations,
               _record.audit_references,
+              _record.audit_interface,
               _record.discussions,
               _record.discussion_models,
               _record.keyboard_model,
@@ -13545,7 +13952,7 @@ function update3(model, msg) {
         return [model, none()];
       },
       (page_path) => {
-        echo4("User clicked inside discussion", "src/o11a_client.gleam", 518);
+        echo4("User clicked inside discussion", "src/o11a_client.gleam", 567);
         let _block;
         let $ = !isEqual(
           model.selected_discussion,
@@ -13562,6 +13969,7 @@ function update3(model, msg) {
             _record.source_files,
             _record.audit_declarations,
             _record.audit_references,
+            _record.audit_interface,
             _record.discussions,
             _record.discussion_models,
             _record.keyboard_model,
@@ -13590,6 +13998,7 @@ function update3(model, msg) {
             _record.source_files,
             _record.audit_declarations,
             _record.audit_references,
+            _record.audit_interface,
             _record.discussions,
             _record.discussion_models,
             _record.keyboard_model,
@@ -13618,6 +14027,7 @@ function update3(model, msg) {
             _record.source_files,
             _record.audit_declarations,
             _record.audit_references,
+            _record.audit_interface,
             _record.discussions,
             _record.discussion_models,
             _record.keyboard_model,
@@ -13634,7 +14044,7 @@ function update3(model, msg) {
       }
     );
   } else if (msg instanceof UserClickedOutsideDiscussion) {
-    echo4("User clicked outside discussion", "src/o11a_client.gleam", 547);
+    echo4("User clicked outside discussion", "src/o11a_client.gleam", 596);
     return [
       (() => {
         let _record = model;
@@ -13645,6 +14055,7 @@ function update3(model, msg) {
           _record.source_files,
           _record.audit_declarations,
           _record.audit_references,
+          _record.audit_interface,
           _record.discussions,
           _record.discussion_models,
           _record.keyboard_model,
@@ -13691,6 +14102,14 @@ function update3(model, msg) {
                   note_submission,
                   discussion_model
                 );
+              } else if ($ instanceof AuditInterfaceRoute) {
+                let audit_name = $.audit_name;
+                return submit_note(
+                  audit_name,
+                  topic_id,
+                  note_submission,
+                  discussion_model
+                );
               } else {
                 return none();
               }
@@ -13702,7 +14121,7 @@ function update3(model, msg) {
           echo4(
             "Focusing discussion input, user is typing",
             "src/o11a_client.gleam",
-            583
+            634
           );
           set_is_user_typing(true);
           return [
@@ -13715,6 +14134,7 @@ function update3(model, msg) {
                 _record.source_files,
                 _record.audit_declarations,
                 _record.audit_references,
+                _record.audit_interface,
                 _record.discussions,
                 _record.discussion_models,
                 _record.keyboard_model,
@@ -13742,6 +14162,7 @@ function update3(model, msg) {
                 _record.source_files,
                 _record.audit_declarations,
                 _record.audit_references,
+                _record.audit_interface,
                 _record.discussions,
                 _record.discussion_models,
                 _record.keyboard_model,
@@ -13756,7 +14177,7 @@ function update3(model, msg) {
             none()
           ];
         } else if (discussion_effect instanceof UnfocusDiscussionInput) {
-          echo4("Unfocusing discussion input", "src/o11a_client.gleam", 614);
+          echo4("Unfocusing discussion input", "src/o11a_client.gleam", 665);
           set_is_user_typing(false);
           return [model, none()];
         } else if (discussion_effect instanceof MaximizeDiscussion) {
@@ -13770,6 +14191,7 @@ function update3(model, msg) {
                 _record.source_files,
                 _record.audit_declarations,
                 _record.audit_references,
+                _record.audit_interface,
                 _record.discussions,
                 insert(
                   model.discussion_models,
@@ -13796,6 +14218,7 @@ function update3(model, msg) {
                 _record.source_files,
                 _record.audit_declarations,
                 _record.audit_references,
+                _record.audit_interface,
                 _record.discussions,
                 insert(
                   model.discussion_models,
@@ -13832,6 +14255,7 @@ function update3(model, msg) {
               _record.source_files,
               _record.audit_declarations,
               _record.audit_references,
+              _record.audit_interface,
               _record.discussions,
               insert(
                 model.discussion_models,
@@ -13978,7 +14402,7 @@ function map_audit_page_msg(msg) {
     return new UserCtrlClickedNode2(uri);
   }
 }
-function view5(model) {
+function view6(model) {
   let $ = model.route;
   if ($ instanceof AuditDashboardRoute) {
     let audit_name = $.audit_name;
@@ -13995,12 +14419,41 @@ function view5(model) {
           ]),
           toList([])
         ),
-        view4(
+        view5(
           view(discussion, audit_name),
           new None(),
           model.file_tree,
           audit_name,
           dashboard_path(audit_name)
+        )
+      ])
+    );
+  } else if ($ instanceof AuditInterfaceRoute) {
+    let audit_name = $.audit_name;
+    let _block;
+    let $1 = map_get(model.audit_interface, audit_name);
+    if ($1.isOk() && $1[0].isOk()) {
+      let data2 = $1[0][0];
+      _block = data2;
+    } else {
+      _block = empty_interface_data();
+    }
+    let interface_data = _block;
+    return div(
+      toList([]),
+      toList([
+        element3(
+          toList([
+            route("/component-discussion/" + audit_name)
+          ]),
+          toList([])
+        ),
+        view5(
+          view2(interface_data),
+          new None(),
+          model.file_tree,
+          audit_name,
+          interfaces_path(audit_name)
         )
       ])
     );
@@ -14037,9 +14490,9 @@ function view5(model) {
           ]),
           toList([])
         ),
-        view4(
+        view5(
           (() => {
-            let _pipe$5 = view2(
+            let _pipe$5 = view3(
               preprocessed_source,
               discussion,
               references,
@@ -14048,7 +14501,7 @@ function view5(model) {
             return map5(_pipe$5, map_audit_page_msg);
           })(),
           (() => {
-            let _pipe$5 = view3(discussion, page_path);
+            let _pipe$5 = view4(discussion, page_path);
             return new Some(_pipe$5);
           })(),
           model.file_tree,
@@ -14063,7 +14516,7 @@ function view5(model) {
 }
 function main() {
   console_log("Starting client controller");
-  let _pipe = application(init4, update3, view5);
+  let _pipe = application(init4, update3, view6);
   return start3(_pipe, "#app", void 0);
 }
 function echo4(value3, file, line2) {

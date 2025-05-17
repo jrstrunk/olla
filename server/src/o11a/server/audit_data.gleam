@@ -256,7 +256,8 @@ fn preprocess_audit_source(for audit_name) {
               declaration.Declaration(
                 name: "L" <> line_number_text,
                 scope: declaration.Scope(
-                  object: option.Some(filepath.base_name(source_file.0)),
+                  file: filepath.base_name(source_file.0),
+                  contract: option.None,
                   member: option.None,
                 ),
                 signature: "line " <> line_number_text,
@@ -271,7 +272,8 @@ fn preprocess_audit_source(for audit_name) {
               declaration.Declaration(
                 name: "L" <> line_number_text,
                 scope: declaration.Scope(
-                  object: option.Some(filepath.base_name(source_file.0)),
+                  file: filepath.base_name(source_file.0),
+                  contract: option.None,
                   member: option.None,
                 ),
                 signature: "line " <> line_number_text,

@@ -584,8 +584,16 @@ video {
   margin-bottom: .75rem;
 }
 
+.mb-\[1rem\] {
+  margin-bottom: 1rem;
+}
+
 .mb-\[2rem\] {
   margin-bottom: 2rem;
+}
+
+.ml-\[1rem\] {
+  margin-left: 1rem;
 }
 
 .mr-\[\.5rem\] {
@@ -598,6 +606,10 @@ video {
 
 .mt-\[\.5rem\] {
   margin-top: .5rem;
+}
+
+.mt-\[1rem\] {
+  margin-top: 1rem;
 }
 
 .inline-block {
@@ -704,6 +716,10 @@ video {
 
 .p-\[0\.3rem\] {
   padding: 0.3rem;
+}
+
+.p-\[1rem\] {
+  padding: 1rem;
 }
 
 .px-\[0\.5rem\] {

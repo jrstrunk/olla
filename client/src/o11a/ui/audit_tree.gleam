@@ -117,6 +117,14 @@ fn sub_file_tree_view(
   ])
 }
 
+pub fn dashboard_path(for audit_name) {
+  audit_name <> "/dashboard"
+}
+
+pub fn interfaces_path(for audit_name) {
+  audit_name <> "/interfaces"
+}
+
 /// Thanks Claude ;)
 /// Helper to get all parent directories of a path
 fn get_all_parents(path) {
@@ -135,30 +143,21 @@ fn get_all_parents(path) {
   |> list.reverse
 }
 
-pub fn dashboard_path(for audit_name) {
-  audit_name <> "/dashboard"
-}
-
 pub fn group_files_by_parent(
   in_scope_files in_scope_files,
   current_file_path current_file_path,
   audit_name audit_name,
 ) {
-  // Make sure the file tree always contains the current file path and the
-  // dashboard path
+  // Make sure the file tree always contains the current file path, the
+  // dashboard path, and the interfaces path
   let dashboard_path = dashboard_path(for: audit_name)
+  let interfaces_path = interfaces_path(for: audit_name)
 
-  let in_scope_files = case current_file_path == dashboard_path {
-    True -> [current_file_path, ..in_scope_files]
-    False ->
-      case list.contains(in_scope_files, current_file_path) {
-        True -> [dashboard_path, ..in_scope_files]
-        False -> [current_file_path, dashboard_path, ..in_scope_files]
-      }
-  }
-  let in_scope_files = case list.contains(in_scope_files, dashboard_path) {
+  let in_scope_files = [dashboard_path, interfaces_path, ..in_scope_files]
+
+  let in_scope_files = case list.contains(in_scope_files, current_file_path) {
     True -> in_scope_files
-    False -> [dashboard_path, ..in_scope_files]
+    False -> [current_file_path, ..in_scope_files]
   }
 
   // Get all unique parents including intermediate ones

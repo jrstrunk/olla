@@ -151,6 +151,20 @@ p.loc {
   margin-left: 2.5rem;
 }
 
+h1 {
+  font-size: 2rem;
+  font-weight: bold;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+h2 {
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
 /* Delay the overlay transitions by 1ms so they are done last, and any 
   actions on them can be done first (like focusing the input) */
 
@@ -219,6 +233,10 @@ line-discussion:focus-within {
 
 .mb-\[\.75rem\] {
   margin-bottom: 0.75rem;
+}
+
+.ml-\[1rem\] {
+  margin-left: 1rem;
 }
 
 .font-size-\[\.9rem\] {
