@@ -224,8 +224,6 @@ pub fn from_note(original_note: note.Note, thread_notes: List(note.Note)) {
       thread_note.modifier == note.Edit
     })
 
-  echo " found edit " <> string.inspect(edited_note)
-
   // Update the note with the most recent edited messages, if any
   let #(note, edited) = case edited_note {
     Ok(edit) -> #(

@@ -8337,7 +8337,7 @@ function declaration_kind_to_string(kind) {
   } else if (kind instanceof EnumDeclaration) {
     return "enum";
   } else if (kind instanceof EnumValueDeclaration) {
-    return "enum_value";
+    return "enum value";
   } else if (kind instanceof StructDeclaration) {
     return "struct";
   } else if (kind instanceof ErrorDeclaration) {

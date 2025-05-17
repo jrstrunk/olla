@@ -195,7 +195,7 @@ pub fn declaration_kind_to_string(kind) {
     VariableDeclaration -> "variable"
     ConstantDeclaration -> "constant"
     EnumDeclaration -> "enum"
-    EnumValueDeclaration -> "enum_value"
+    EnumValueDeclaration -> "enum value"
     StructDeclaration -> "struct"
     ErrorDeclaration -> "error"
     EventDeclaration -> "event"

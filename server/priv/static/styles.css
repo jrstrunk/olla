@@ -73,7 +73,6 @@ body {
 
 .struct,
 .enum,
-.enum-value,
 .error,
 .event {
   color: var(--custom-type-color);
