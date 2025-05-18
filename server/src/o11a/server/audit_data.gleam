@@ -9,7 +9,6 @@ import gleam/option
 import gleam/result
 import gleam/string
 import gleam/string_tree
-import lib/snagx
 import o11a/audit_metadata
 import o11a/config
 import o11a/declaration
@@ -27,6 +26,7 @@ pub opaque type AuditData {
     source_file_provider: AuditSourceFileProvider,
     metadata_provider: AuditMetadataProvider,
     declarations_provider: AuditDeclarationsProvider,
+    declaration_links_provider: AuditDeclarationLinksProvider,
   )
 }
 
@@ -34,11 +34,15 @@ pub fn build() {
   use source_file_provider <- result.try(build_source_file_provider())
   use metadata_provider <- result.try(build_audit_metadata_provider())
   use declarations_provider <- result.try(build_declarations_provider())
+  use declaration_links_provider <- result.try(
+    build_declaration_links_provider(),
+  )
 
   Ok(AuditData(
     source_file_provider:,
     metadata_provider:,
     declarations_provider:,
+    declaration_links_provider:,
   ))
 }
 
@@ -100,7 +104,7 @@ fn gather_audit_data(audit_data: AuditData, for audit_name) {
 }
 
 fn do_gather_audit_data(audit_data: AuditData, for audit_name) {
-  use #(source_files, declarations, addressable_lines) <- result.try(
+  use #(source_files, declarations, addressable_lines, declaration_links) <- result.try(
     preprocess_audit_source(for: audit_name),
   )
 
@@ -132,6 +136,13 @@ fn do_gather_audit_data(audit_data: AuditData, for audit_name) {
       list.append(declarations, addressable_lines),
       declaration.encode_declaration,
     )
+      |> json.to_string_tree,
+  ))
+
+  use Nil <- result.try(pcd.insert(
+    audit_data.declaration_links_provider.pcd,
+    audit_name,
+    declaration.encode_declaration_links(declaration_links)
       |> json.to_string_tree,
   ))
 
@@ -169,6 +180,10 @@ fn preprocess_audit_source(for audit_name) {
     preprocessor_sol.read_asts(audit_name)
     |> snag.context("Unable to read sol asts for " <> audit_name),
   )
+  use text_asts <- result.try(
+    preprocessor_text.read_asts(audit_name)
+    |> snag.context("Unable to read text asts for " <> audit_name),
+  )
 
   let page_paths = config.get_all_audit_page_paths()
 
@@ -176,63 +191,116 @@ fn preprocess_audit_source(for audit_name) {
     list.map(sol_asts, fn(ast) { #(ast.absolute_path, ast) })
     |> dict.from_list
 
-  let sol_declarations =
-    dict.new()
+  let file_to_text_ast =
+    list.map(text_asts, fn(ast) { #(ast.absolute_path, ast) })
+    |> dict.from_list
+
+  let #(max_topic_id, sol_declarations_and_links) =
+    #(1, dict.new())
     |> list.fold(sol_asts, _, fn(declarations, ast) {
       preprocessor_sol.enumerate_declarations(declarations, ast)
     })
+
+  let sol_declaration_links =
+    dict.map_values(sol_declarations_and_links, fn(_key, dec) { dec.0 })
+
+  let sol_declarations =
+    dict.map_values(sol_declarations_and_links, fn(_key, dec) { dec.1 })
+
+  let sol_declarations =
+    sol_declarations
     |> list.fold(sol_asts, _, fn(declarations, ast) {
       preprocessor_sol.count_references(declarations, ast)
     })
 
-  use source_files <- result.map(
+  let #(max_topic_id, text_declarations_and_links) =
+    #(max_topic_id, dict.new())
+    |> list.fold(text_asts, _, fn(declarations, ast) {
+      preprocessor_text.enumerate_declarations(declarations, ast)
+    })
+
+  let text_declaration_links =
+    dict.map_values(text_declarations_and_links, fn(_key, dec) { dec.0 })
+
+  let text_declarations =
+    dict.map_values(text_declarations_and_links, fn(_key, dec) { dec.1 })
+
+  use #(_max_topic_id, source_files) <- result.map(
     dict.get(page_paths, audit_name)
     |> result.unwrap([])
-    |> list.map(fn(page_path) {
-      case
-        preprocessor.classify_source_kind(path: page_path),
-        config.get_full_page_path(for: page_path) |> simplifile.read,
-        dict.get(file_to_sol_ast, page_path)
-      {
-        // Solidity source file with an AST
-        Ok(preprocessor.Solidity), Ok(source), Ok(nodes) -> {
-          let nodes = preprocessor_sol.linearize_nodes(nodes)
+    |> list.fold(Ok(#(max_topic_id, [])), fn(acc, page_path) {
+      use #(max_topic_id, source_files) <- result.try(acc)
 
-          let preprocessed_source =
-            preprocessor_sol.preprocess_source(
-              source:,
-              nodes:,
-              declarations: sol_declarations,
-              page_path:,
-              audit_name:,
-            )
+      use #(new_max_topic_id, source_file) <- result.map(
+        case preprocessor.classify_source_kind(path: page_path) {
+          // Solidity source file
+          Ok(preprocessor.Solidity) ->
+            case
+              config.get_full_page_path(for: page_path) |> simplifile.read,
+              dict.get(file_to_sol_ast, page_path)
+            {
+              Ok(source), Ok(ast) -> {
+                let nodes = preprocessor_sol.linearize_nodes(ast)
 
-          Ok(option.Some(#(page_path, preprocessed_source)))
-        }
+                let #(max_topic_id, preprocessed_source) =
+                  preprocessor_sol.preprocess_source(
+                    source:,
+                    nodes:,
+                    declarations: sol_declarations,
+                    max_topic_id:,
+                    page_path:,
+                    audit_name:,
+                  )
 
-        // Text file 
-        Ok(preprocessor.Text), Ok(text), _ast -> {
-          let preprocessed_source =
-            preprocessor_text.preprocess_source(source: text, page_path:)
+                Ok(#(
+                  max_topic_id,
+                  option.Some(#(page_path, preprocessed_source)),
+                ))
+              }
+              // Solidity source file without an AST (unused project dependencies)
+              Ok(_source), Error(Nil) -> {
+                Ok(#(max_topic_id, option.None))
+              }
 
-          Ok(option.Some(#(page_path, preprocessed_source)))
-        }
+              Error(msg), _ ->
+                snag.error(msg |> simplifile.describe_error)
+                |> snag.context(
+                  "Failed to preprocess page source for " <> page_path,
+                )
+            }
 
-        // Supported source file without an AST (unused project dependencies)
-        Ok(_file_kind), Ok(_source), Error(Nil) -> {
-          Ok(option.None)
-        }
+          // Text file 
+          Ok(preprocessor.Text) ->
+            case dict.get(file_to_text_ast, page_path) {
+              Ok(ast) -> {
+                let nodes = preprocessor_text.linearize_nodes(ast)
 
-        // If we get a unsupported file type, just ignore it. (Eventually we could 
-        // handle image files, etc.)
-        Error(Nil), _source, _ast -> Ok(option.None)
+                // A text file will never increase the max topic id at this stage
+                let preprocessed_source =
+                  preprocessor_text.preprocess_source(
+                    declarations: text_declarations,
+                    nodes:,
+                    page_path:,
+                  )
 
-        Ok(_file_kind), Error(msg), _ast ->
-          snag.error(msg |> simplifile.describe_error)
-          |> snag.context("Failed to preprocess page source for " <> page_path)
-      }
-    })
-    |> snagx.collect_errors,
+                Ok(#(
+                  max_topic_id,
+                  option.Some(#(page_path, preprocessed_source)),
+                ))
+              }
+
+              // Text file without an AST (unsupported text file)
+              Error(Nil) -> Ok(#(max_topic_id, option.None))
+            }
+
+          // If we get a unsupported file type, just ignore it. (Eventually we could 
+          // handle image files, etc.)
+          Error(Nil) -> Ok(#(max_topic_id, option.None))
+        },
+      )
+
+      #(new_max_topic_id, [source_file, ..source_files])
+    }),
   )
 
   let source_files =
@@ -250,47 +318,40 @@ fn preprocess_audit_source(for audit_name) {
       list.index_map(source_file.1, fn(line, index) {
         let line_number_text = int.to_string(index + 1)
 
-        case line.significance {
-          preprocessor.SingleDeclarationLine(topic_id:, ..) ->
-            Ok(
-              declaration.Declaration(
-                name: "L" <> line_number_text,
-                scope: declaration.Scope(
-                  file: filepath.base_name(source_file.0),
-                  contract: option.None,
-                  member: option.None,
-                ),
-                signature: "line " <> line_number_text,
-                topic_id:,
-                kind: declaration.LineDeclaration,
-                references: [],
-              ),
-            )
+        case line.kind {
+          preprocessor.SoliditySourceLine ->
+            case line.significance {
+              preprocessor.SingleDeclarationLine(topic_id:, ..)
+              | preprocessor.NonEmptyLine(topic_id:) ->
+                Ok(
+                  declaration.Declaration(
+                    name: "L" <> line_number_text,
+                    scope: declaration.Scope(
+                      file: filepath.base_name(source_file.0),
+                      contract: option.None,
+                      member: option.None,
+                    ),
+                    signature: "line " <> line_number_text,
+                    topic_id:,
+                    kind: declaration.LineDeclaration,
+                    references: [],
+                  ),
+                )
 
-          preprocessor.NonEmptyLine ->
-            Ok(
-              declaration.Declaration(
-                name: "L" <> line_number_text,
-                scope: declaration.Scope(
-                  file: filepath.base_name(source_file.0),
-                  contract: option.None,
-                  member: option.None,
-                ),
-                signature: "line " <> line_number_text,
-                kind: declaration.LineDeclaration,
-                topic_id: source_file.0 <> "#L" <> line_number_text,
-                references: [],
-              ),
-            )
+              preprocessor.EmptyLine -> Error(Nil)
+            }
 
-          preprocessor.EmptyLine -> Error(Nil)
+          _ -> Error(Nil)
         }
       })
       |> list.filter_map(fn(result) { result })
     })
     |> list.flatten
 
-  #(source_files, declarations, addressable_lines)
+  let declaration_links =
+    dict.merge(sol_declaration_links, text_declaration_links)
+
+  #(source_files, declarations, addressable_lines, declaration_links)
 }
 
 // AuditMetadataProvider -------------------------------------------------------
@@ -380,4 +441,30 @@ fn build_declarations_provider() {
   )
 
   AuditDeclarationsProvider(pcd:)
+}
+
+// AuditDeclarationLinksProvider -----------------------------------------------
+
+type AuditDeclarationLinksProvider {
+  AuditDeclarationLinksProvider(
+    pcd: pcd.PersistentConcurrentDict(String, string_tree.StringTree),
+  )
+}
+
+fn build_declaration_links_provider() {
+  use pcd <- result.map(
+    pcd.build(
+      config.get_persist_path(for: "audit_declaration_links"),
+      key_encoder: function.identity,
+      key_decoder: function.identity,
+      val_encoder: fn(val) {
+        val |> string_tree.to_string |> string.replace("'", "''")
+      },
+      val_decoder: fn(val) {
+        val |> string.replace("''", "'") |> string_tree.from_string
+      },
+    ),
+  )
+
+  AuditDeclarationLinksProvider(pcd:)
 }

@@ -1,3 +1,4 @@
+import gleam/dict
 import gleam/dynamic/decode
 import gleam/json
 import gleam/list
@@ -10,7 +11,7 @@ pub type Declaration {
     name: String,
     signature: String,
     scope: Scope,
-    topic_id: String,
+    topic_id: Int,
     kind: DeclarationKind,
     references: List(Reference),
   )
@@ -22,7 +23,7 @@ pub fn encode_declaration(declaration: Declaration) -> json.Json {
       json.object([
         #("n", json.string(name)),
         #("s", encode_scope(scope)),
-        #("t", json.string(topic_id)),
+        #("t", json.int(topic_id)),
         #("g", json.string(signature)),
         #("k", encode_declaration_kind(kind)),
         #("r", json.array(references, encode_reference)),
@@ -33,7 +34,7 @@ pub fn encode_declaration(declaration: Declaration) -> json.Json {
 pub fn declaration_decoder() -> decode.Decoder(Declaration) {
   use name <- decode.field("n", decode.string)
   use scope <- decode.field("s", scope_decoder())
-  use topic_id <- decode.field("t", decode.string)
+  use topic_id <- decode.field("t", decode.int)
   use signature <- decode.field("g", decode.string)
   use kind <- decode.field("k", decode_declaration_kind())
   use references <- decode.field("r", decode.list(reference_decoder()))
@@ -51,7 +52,7 @@ pub const unknown_declaration = Declaration(
   "",
   "",
   Scope("", option.None, option.None),
-  "",
+  0,
   UnknownDeclaration,
   [],
 )
@@ -316,5 +317,14 @@ pub fn get_references(in message: String, with declarations: List(Declaration)) 
       list.find(declarations, fn(dec) { dec.name == ref })
     })
     |> result.map(fn(dec) { dec.topic_id })
+  })
+}
+
+pub fn encode_declaration_links(declaration_links: dict.Dict(Int, String)) {
+  json.array(declaration_links |> dict.to_list, fn(declaration_link) {
+    json.object([
+      #("d", json.int(declaration_link.0)),
+      #("l", json.string(declaration_link.1)),
+    ])
   })
 }

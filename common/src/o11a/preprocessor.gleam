@@ -19,6 +19,11 @@ pub fn classify_source_kind(path path: String) {
   }
 }
 
+pub type AST(solidity_ast, text_ast) {
+  SolidityAST(solidity_ast)
+  TextAST(text_ast)
+}
+
 pub type PreProcessedLine {
   PreProcessedLine(
     significance: PreProcessedLineSignificance,
@@ -29,6 +34,7 @@ pub type PreProcessedLine {
     leading_spaces: Int,
     elements: List(PreProcessedNode),
     columns: Int,
+    kind: PreProcessedLineKind,
   )
 }
 
@@ -45,6 +51,7 @@ pub fn encode_pre_processed_line(
     #("l", json.int(pre_processed_line.leading_spaces)),
     #("e", json.array(pre_processed_line.elements, encode_pre_processed_node)),
     #("c", json.int(pre_processed_line.columns)),
+    #("k", encode_pre_processed_line_kind(pre_processed_line.kind)),
   ])
 }
 
@@ -59,6 +66,7 @@ pub fn pre_processed_line_decoder() -> decode.Decoder(PreProcessedLine) {
   use elements <- decode.field("e", decode.list(pre_processed_node_decoder()))
   use columns <- decode.field("c", decode.int)
   let line_number_text = line_number |> int.to_string
+  use kind <- decode.field("k", pre_processed_line_kind_decoder())
   decode.success(PreProcessedLine(
     significance:,
     line_number:,
@@ -68,12 +76,13 @@ pub fn pre_processed_line_decoder() -> decode.Decoder(PreProcessedLine) {
     leading_spaces:,
     elements:,
     columns:,
+    kind:,
   ))
 }
 
 pub type PreProcessedLineSignificance {
-  SingleDeclarationLine(signature: String, topic_id: String)
-  NonEmptyLine
+  SingleDeclarationLine(signature: String, topic_id: Int)
+  NonEmptyLine(topic_id: Int)
   EmptyLine
 }
 
@@ -85,9 +94,10 @@ fn encode_pre_processed_line_significance(
       json.object([
         #("v", json.string("sdl")),
         #("g", json.string(signature)),
-        #("t", json.string(topic_id)),
+        #("t", json.int(topic_id)),
       ])
-    NonEmptyLine -> json.object([#("v", json.string("nel"))])
+    NonEmptyLine(topic_id:) ->
+      json.object([#("v", json.string("nel")), #("t", json.int(topic_id))])
     EmptyLine -> json.object([#("v", json.string("el"))])
   }
 }
@@ -99,12 +109,38 @@ fn pre_processed_line_significance_decoder() -> decode.Decoder(
   case variant {
     "sdl" -> {
       use signature <- decode.field("g", decode.string)
-      use topic_id <- decode.field("t", decode.string)
+      use topic_id <- decode.field("t", decode.int)
       decode.success(SingleDeclarationLine(signature:, topic_id:))
     }
-    "nel" -> decode.success(NonEmptyLine)
+    "nel" -> {
+      use topic_id <- decode.field("t", decode.int)
+      decode.success(NonEmptyLine(topic_id:))
+    }
     "el" -> decode.success(EmptyLine)
     _ -> decode.failure(EmptyLine, "PreProcessedLineSignificance")
+  }
+}
+
+pub type PreProcessedLineKind {
+  SoliditySourceLine
+  TextLine
+}
+
+fn encode_pre_processed_line_kind(
+  pre_processed_line_kind: PreProcessedLineKind,
+) -> json.Json {
+  case pre_processed_line_kind {
+    SoliditySourceLine -> json.string("s")
+    TextLine -> json.string("t")
+  }
+}
+
+fn pre_processed_line_kind_decoder() -> decode.Decoder(PreProcessedLineKind) {
+  use variant <- decode.then(decode.string)
+  case variant {
+    "s" -> decode.success(SoliditySourceLine)
+    "t" -> decode.success(TextLine)
+    _ -> decode.failure(TextLine, "PreProcessedLineKind")
   }
 }
 
