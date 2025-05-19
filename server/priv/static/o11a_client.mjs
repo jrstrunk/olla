@@ -11748,27 +11748,10 @@ function overlay_view(model, notes, references) {
   let _pipe = map_get(notes, model.current_thread_id);
   _block = unwrap2(_pipe, toList([]));
   let current_thread_notes = _block;
-  echo3(
-    "current_thread_id: " + model.current_thread_id,
-    "src/o11a/ui/discussion.gleam",
-    316
-  );
-  echo3(
-    "current_thread_notes: " + inspect2(current_thread_notes),
-    "src/o11a/ui/discussion.gleam",
-    317
-  );
   let _block$1;
   let _pipe$1 = map_get(references, model.topic_id);
   _block$1 = unwrap2(_pipe$1, toList([]));
   let references$1 = _block$1;
-  echo3(
-    "references for " + model.topic_id + ": " + inspect2(
-      references$1
-    ),
-    "src/o11a/ui/discussion.gleam",
-    323
-  );
   return div(
     toList([
       class$(

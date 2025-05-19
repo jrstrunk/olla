@@ -313,14 +313,9 @@ pub fn overlay_view(
     dict.get(notes, model.current_thread_id)
     |> result.unwrap([])
 
-  echo "current_thread_id: " <> model.current_thread_id
-  echo "current_thread_notes: " <> string.inspect(current_thread_notes)
-
   let references =
     dict.get(references, model.topic_id)
     |> result.unwrap([])
-
-  echo "references for " <> model.topic_id <> ": " <> string.inspect(references)
 
   html.div(
     [

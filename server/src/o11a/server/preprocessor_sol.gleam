@@ -1675,53 +1675,112 @@ fn node_to_source_string(node) {
 }
 
 fn node_to_source_element(node) {
+  do_node_to_source_element(node, True)
+}
+
+fn do_node_to_source_element(node, top_level) {
   case node {
     ErrorDefinitionNode(name:, parameters:, ..) ->
       element.fragment([
         html.span([attribute.class("keyword")], [html.text("error ")]),
         html.span([attribute.class("error")], [html.text(name)]),
         html.text("("),
-        node_to_source_element(parameters),
+        do_node_to_source_element(parameters, False),
         html.text(")"),
       ])
-    StructDefinition(name:, ..) ->
+    StructDefinition(name:, members:, ..) ->
       element.fragment([
         html.span([attribute.class("keyword")], [html.text("struct ")]),
         html.span([attribute.class("struct")], [html.text(name)]),
+        html.text(" { "),
+        element.fragment(
+          list.map(members, do_node_to_source_element(_, False))
+          |> list.intersperse(html.text("; ")),
+        ),
+        html.text(" }"),
       ])
-    EnumDefinition(name:, ..) ->
+    EnumDefinition(name:, members:, ..) ->
       element.fragment([
         html.span([attribute.class("keyword")], [html.text("enum ")]),
         html.span([attribute.class("enum")], [html.text(name)]),
+        html.text(" { "),
+        element.fragment(
+          list.map(members, do_node_to_source_element(_, False))
+          |> list.intersperse(html.text(", ")),
+        ),
+        html.text(" }"),
       ])
-    EnumValue(name:, ..) ->
-      element.fragment([
-        html.span([attribute.class("keyword")], [html.text("enum value ")]),
-        html.span([attribute.class("enum value")], [html.text(name)]),
-      ])
-    FunctionDefinitionNode(name:, function_kind:, ..) ->
-      case function_kind {
-        declaration.Function ->
-          element.fragment([
-            html.span([attribute.class("keyword")], [html.text("function ")]),
-            html.span([attribute.class("function")], [html.text(name)]),
-          ])
-        declaration.Constructor ->
-          html.span([attribute.class("keyword")], [html.text("constructor")])
-        declaration.Fallback ->
-          html.span([attribute.class("keyword")], [
-            html.text("fallback function"),
-          ])
-        declaration.Receive ->
-          html.span([attribute.class("keyword")], [
-            html.text("receive function"),
-          ])
-      }
 
-    ModifierDefinitionNode(name:, ..) ->
+    EnumValue(name:, ..) ->
+      case top_level {
+        True ->
+          element.fragment([
+            html.span([attribute.class("keyword")], [html.text("enum value ")]),
+            html.span([attribute.class("enum value")], [html.text(name)]),
+          ])
+        False -> html.span([attribute.class("enum value")], [html.text(name)])
+      }
+    FunctionDefinitionNode(
+      name:,
+      function_kind:,
+      parameters:,
+      return_parameters:,
+      visibility:,
+      state_mutability:,
+      modifiers:,
+      ..,
+    ) ->
+      element.fragment([
+        case function_kind {
+          declaration.Function ->
+            element.fragment([
+              html.span([attribute.class("keyword")], [html.text("function ")]),
+              html.span([attribute.class("function")], [html.text(name)]),
+            ])
+          declaration.Constructor ->
+            html.span([attribute.class("keyword")], [html.text("constructor")])
+          declaration.Fallback ->
+            html.span([attribute.class("keyword")], [
+              html.text("fallback function"),
+            ])
+          declaration.Receive ->
+            html.span([attribute.class("keyword")], [
+              html.text("receive function"),
+            ])
+        },
+        html.text("("),
+        do_node_to_source_element(parameters, False),
+        html.text(") "),
+        html.span([attribute.class("keyword")], [html.text(visibility <> " ")]),
+        html.span([attribute.class("keyword")], [html.text(state_mutability)]),
+        case modifiers |> list.length > 0 {
+          True ->
+            element.fragment([
+              html.text(" "),
+              ..list.map(modifiers, do_node_to_source_element(_, False))
+              |> list.intersperse(html.text(" "))
+            ])
+          False -> element.fragment([])
+        },
+        case return_parameters {
+          ParameterListNode(parameters: [_, ..], ..) ->
+            element.fragment([
+              html.span([attribute.class("keyword")], [html.text(" returns ")]),
+              html.text("("),
+              do_node_to_source_element(return_parameters, False),
+              html.text(")"),
+            ])
+          _ -> element.fragment([])
+        },
+      ])
+
+    ModifierDefinitionNode(name:, parameters:, ..) ->
       element.fragment([
         html.span([attribute.class("keyword")], [html.text("modifier ")]),
         html.span([attribute.class("modifier")], [html.text(name)]),
+        html.text("("),
+        do_node_to_source_element(parameters, False),
+        html.text(")"),
       ])
     ContractDefinitionNode(name:, contract_kind:, ..) ->
       element.fragment([
@@ -1735,13 +1794,13 @@ fn node_to_source_element(node) {
         html.span([attribute.class("keyword")], [html.text("event ")]),
         html.span([attribute.class("event")], [html.text(name)]),
         html.text("("),
-        node_to_source_element(parameters),
+        do_node_to_source_element(parameters, False),
         html.text(")"),
       ])
 
     ParameterListNode(parameters:, ..) ->
       element.fragment(
-        list.map(parameters, node_to_source_element)
+        list.map(parameters, do_node_to_source_element(_, False))
         |> list.intersperse(html.text(", ")),
       )
 
@@ -1759,28 +1818,28 @@ fn node_to_source_element(node) {
           "type",
           "span",
           [],
-          style_type_string(type_string) <> " ",
+          style_type_string(type_string),
         ),
         case visibility {
           "internal" -> element.fragment([])
           _ ->
             html.span([attribute.class("keyword")], [
-              html.text(visibility <> " "),
+              html.text(" " <> visibility),
             ])
         },
         case mutability {
           "mutable" -> element.fragment([])
           _ ->
             html.span([attribute.class("keyword")], [
-              html.text(mutability <> " "),
+              html.text(" " <> mutability),
             ])
         },
-        html.span([attribute.class("variable")], [html.text(name)]),
+        html.span([attribute.class("variable")], [html.text(" " <> name)]),
         case constant, value {
           True, option.Some(value) ->
             element.fragment([
               html.span([attribute.class("operator")], [html.text(" = ")]),
-              node_to_source_element(value),
+              do_node_to_source_element(value, False),
             ])
 
           _, _ -> element.fragment([])
@@ -1798,7 +1857,7 @@ fn node_to_source_element(node) {
       }
     FunctionCall(expression: option.Some(expr), arguments:, ..) ->
       element.fragment([
-        node_to_source_element(expr),
+        do_node_to_source_element(expr, False),
         html.text("("),
         element.fragment(
           list.map(arguments, node_to_source_element)
@@ -1807,6 +1866,22 @@ fn node_to_source_element(node) {
         html.text(")"),
       ])
     Identifier(name:, ..) -> html.text(name)
+    Modifier(name:, arguments:, ..) ->
+      element.fragment([
+        html.span([attribute.class("function")], [html.text(name)]),
+        case arguments {
+          Some(args) ->
+            element.fragment([
+              html.text("("),
+              element.fragment(
+                list.map(args, do_node_to_source_element(_, False))
+                |> list.intersperse(html.text(", ")),
+              ),
+              html.text(")"),
+            ])
+          option.None -> element.fragment([])
+        },
+      ])
     _ -> html.text("...")
   }
 }
@@ -1975,6 +2050,8 @@ pub type Node {
     nodes: List(Node),
     body: option.Option(Node),
     documentation: option.Option(Node),
+    visibility: String,
+    state_mutability: String,
   )
   ModifierDefinitionNode(
     id: Int,
@@ -2327,6 +2404,8 @@ fn node_decoder() -> decode.Decoder(Node) {
       use parameters <- decode.field("parameters", node_decoder())
       use modifiers <- decode.field("modifiers", decode.list(node_decoder()))
       use return_parameters <- decode.field("returnParameters", node_decoder())
+      use visibility <- decode.field("visibility", decode.string)
+      use state_mutability <- decode.field("stateMutability", decode.string)
       use nodes <- decode.optional_field(
         "nodes",
         [],
@@ -2368,6 +2447,8 @@ fn node_decoder() -> decode.Decoder(Node) {
         nodes:,
         body:,
         documentation:,
+        visibility:,
+        state_mutability:,
       ))
     }
     "ModifierDefinition" -> {
