@@ -144,7 +144,7 @@ fn parse_route(uri: Uri) -> Route {
 
     [audit_name] | [audit_name, "dashboard"] -> AuditDashboardRoute(audit_name:)
 
-    [audit_name, "interfaces"] -> AuditInterfaceRoute(audit_name:)
+    [audit_name, "interface"] -> AuditInterfaceRoute(audit_name:)
 
     [audit_name, _, ..] ->
       AuditPageRoute(
@@ -186,7 +186,7 @@ fn file_tree_from_route(
 
       audit_tree.group_files_by_parent(
         in_scope_files:,
-        current_file_path: audit_tree.interfaces_path(for: audit_name),
+        current_file_path: audit_tree.interface_path(for: audit_name),
         audit_name:,
       )
     }
@@ -840,11 +840,11 @@ fn view(model: Model) {
           [],
         ),
         audit_tree.view(
-          audit_interface.view(interface_data),
+          audit_interface.view(interface_data, audit_name),
           option.None,
           model.file_tree,
           audit_name,
-          audit_tree.interfaces_path(for: audit_name),
+          audit_tree.interface_path(for: audit_name),
         ),
       ])
     }

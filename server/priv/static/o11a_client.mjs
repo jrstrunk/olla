@@ -9892,7 +9892,7 @@ function view(notes, audit_name) {
                 (() => {
                   let _pipe = audit_name;
                   return capitalise(_pipe);
-                })() + " audit dashboard"
+                })() + " Audit Dashboard"
               )
             ])
           ),
@@ -9996,11 +9996,21 @@ function contract_members_view(contract, title2, declarations) {
     );
   }
 }
-function view2(interface_data) {
+function view2(interface_data, audit_name) {
   return div(
     toList([class$("p-[1rem]")]),
     prepend(
-      h1(toList([]), toList([text3("Interfaces")])),
+      h1(
+        toList([]),
+        toList([
+          text3(
+            (() => {
+              let _pipe = audit_name;
+              return capitalise(_pipe);
+            })() + " Audit Interface"
+          )
+        ])
+      ),
       map2(
         interface_data.file_contracts,
         (contract_file) => {
@@ -12957,8 +12967,8 @@ function view5(file_contents, side_panel, grouped_files, audit_name, current_fil
 function dashboard_path(audit_name) {
   return audit_name + "/dashboard";
 }
-function interfaces_path(audit_name) {
-  return audit_name + "/interfaces";
+function interface_path(audit_name) {
+  return audit_name + "/interface";
 }
 function get_all_parents(path2) {
   let _pipe = path2;
@@ -12983,10 +12993,10 @@ function get_all_parents(path2) {
 }
 function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
   let dashboard_path$1 = dashboard_path(audit_name);
-  let interfaces_path$1 = interfaces_path(audit_name);
+  let interfaces_path = interface_path(audit_name);
   let in_scope_files$1 = prepend(
     dashboard_path$1,
-    prepend(interfaces_path$1, in_scope_files)
+    prepend(interfaces_path, in_scope_files)
   );
   let _block;
   let $ = contains(in_scope_files$1, current_file_path);
@@ -13216,7 +13226,7 @@ function parse_route(uri) {
   } else if ($.hasLength(2) && $.tail.head === "dashboard") {
     let audit_name = $.head;
     return new AuditDashboardRoute(audit_name);
-  } else if ($.hasLength(2) && $.tail.head === "interfaces") {
+  } else if ($.hasLength(2) && $.tail.head === "interface") {
     let audit_name = $.head;
     return new AuditInterfaceRoute(audit_name);
   } else {
@@ -13268,7 +13278,7 @@ function file_tree_from_route(route2, audit_metadata) {
     let in_scope_files = _block;
     return group_files_by_parent(
       in_scope_files,
-      interfaces_path(audit_name),
+      interface_path(audit_name),
       audit_name
     );
   } else {
@@ -14507,11 +14517,11 @@ function view6(model) {
           toList([])
         ),
         view5(
-          view2(interface_data),
+          view2(interface_data, audit_name),
           new None(),
           model.file_tree,
           audit_name,
-          interfaces_path(audit_name)
+          interface_path(audit_name)
         )
       ])
     );

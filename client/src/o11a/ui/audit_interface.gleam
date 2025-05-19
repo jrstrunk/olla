@@ -1,6 +1,7 @@
 import gleam/dict
 import gleam/list
 import gleam/option
+import gleam/string
 import lustre/attribute
 import lustre/element
 import lustre/element/html
@@ -42,10 +43,12 @@ pub type ContractDeclaration {
   ContractDeclaration(contract: String, dec: declaration.Declaration)
 }
 
-pub fn view(interface_data: InterfaceData) {
+pub fn view(interface_data: InterfaceData, audit_name) {
   html.div([attribute.class("p-[1rem]")], [
     // Page header
-    html.h1([], [html.text("Interfaces")]),
+    html.h1([], [
+      html.text(audit_name |> string.capitalise <> " Audit Interface"),
+    ]),
     // List of files in scope
     ..list.map(interface_data.file_contracts, fn(contract_file) {
       html.div([attribute.class("mt-[1rem]")], [

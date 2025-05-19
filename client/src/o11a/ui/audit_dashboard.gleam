@@ -31,7 +31,7 @@ pub fn view(notes, audit_name) {
     html.style([], style),
     html.div([attribute.style("width", "40rem")], [
       html.h1([], [
-        html.text(audit_name |> string.capitalise <> " audit dashboard"),
+        html.text(audit_name |> string.capitalise <> " Audit Dashboard"),
       ]),
       html.h2([], [html.text("Incomplete todos")]),
       notes_view(incomplete_todos),

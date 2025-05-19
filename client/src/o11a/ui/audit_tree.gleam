@@ -121,8 +121,8 @@ pub fn dashboard_path(for audit_name) {
   audit_name <> "/dashboard"
 }
 
-pub fn interfaces_path(for audit_name) {
-  audit_name <> "/interfaces"
+pub fn interface_path(for audit_name) {
+  audit_name <> "/interface"
 }
 
 /// Thanks Claude ;)
@@ -151,7 +151,7 @@ pub fn group_files_by_parent(
   // Make sure the file tree always contains the current file path, the
   // dashboard path, and the interfaces path
   let dashboard_path = dashboard_path(for: audit_name)
-  let interfaces_path = interfaces_path(for: audit_name)
+  let interfaces_path = interface_path(for: audit_name)
 
   let in_scope_files = [dashboard_path, interfaces_path, ..in_scope_files]
 
