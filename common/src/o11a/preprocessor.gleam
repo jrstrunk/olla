@@ -30,7 +30,6 @@ pub type PreProcessedLine {
     line_number: Int,
     line_number_text: String,
     line_tag: String,
-    line_id: String,
     leading_spaces: Int,
     elements: List(PreProcessedNode),
     columns: Int,
@@ -47,7 +46,6 @@ pub fn encode_pre_processed_line(
       encode_pre_processed_line_significance(pre_processed_line.significance),
     ),
     #("n", json.int(pre_processed_line.line_number)),
-    #("i", json.string(pre_processed_line.line_id)),
     #("l", json.int(pre_processed_line.leading_spaces)),
     #("e", json.array(pre_processed_line.elements, encode_pre_processed_node)),
     #("c", json.int(pre_processed_line.columns)),
@@ -61,7 +59,6 @@ pub fn pre_processed_line_decoder() -> decode.Decoder(PreProcessedLine) {
     pre_processed_line_significance_decoder(),
   )
   use line_number <- decode.field("n", decode.int)
-  use line_id <- decode.field("i", decode.string)
   use leading_spaces <- decode.field("l", decode.int)
   use elements <- decode.field("e", decode.list(pre_processed_node_decoder()))
   use columns <- decode.field("c", decode.int)
@@ -72,7 +69,6 @@ pub fn pre_processed_line_decoder() -> decode.Decoder(PreProcessedLine) {
     line_number:,
     line_number_text:,
     line_tag: "L" <> line_number_text,
-    line_id:,
     leading_spaces:,
     elements:,
     columns:,
@@ -81,8 +77,8 @@ pub fn pre_processed_line_decoder() -> decode.Decoder(PreProcessedLine) {
 }
 
 pub type PreProcessedLineSignificance {
-  SingleDeclarationLine(signature: String, topic_id: Int)
-  NonEmptyLine(topic_id: Int)
+  SingleDeclarationLine(signature: String, topic_id: String)
+  NonEmptyLine(topic_id: String)
   EmptyLine
 }
 
@@ -94,10 +90,10 @@ fn encode_pre_processed_line_significance(
       json.object([
         #("v", json.string("sdl")),
         #("g", json.string(signature)),
-        #("t", json.int(topic_id)),
+        #("t", json.string(topic_id)),
       ])
     NonEmptyLine(topic_id:) ->
-      json.object([#("v", json.string("nel")), #("t", json.int(topic_id))])
+      json.object([#("v", json.string("nel")), #("t", json.string(topic_id))])
     EmptyLine -> json.object([#("v", json.string("el"))])
   }
 }
@@ -109,11 +105,11 @@ fn pre_processed_line_significance_decoder() -> decode.Decoder(
   case variant {
     "sdl" -> {
       use signature <- decode.field("g", decode.string)
-      use topic_id <- decode.field("t", decode.int)
+      use topic_id <- decode.field("t", decode.string)
       decode.success(SingleDeclarationLine(signature:, topic_id:))
     }
     "nel" -> {
-      use topic_id <- decode.field("t", decode.int)
+      use topic_id <- decode.field("t", decode.string)
       decode.success(NonEmptyLine(topic_id:))
     }
     "el" -> decode.success(EmptyLine)

@@ -1,5 +1,6 @@
 import gleam/dict
 import gleam/dynamic/decode
+import gleam/int
 import gleam/json
 import gleam/list
 import gleam/option
@@ -8,10 +9,10 @@ import gleam/string
 
 pub type Declaration {
   Declaration(
+    topic_id: String,
     name: String,
     signature: String,
     scope: Scope,
-    topic_id: Int,
     kind: DeclarationKind,
     references: List(Reference),
   )
@@ -21,9 +22,9 @@ pub fn encode_declaration(declaration: Declaration) -> json.Json {
   case declaration {
     Declaration(name:, scope:, topic_id:, signature:, kind:, references:) ->
       json.object([
+        #("t", json.string(topic_id)),
         #("n", json.string(name)),
         #("s", encode_scope(scope)),
-        #("t", json.int(topic_id)),
         #("g", json.string(signature)),
         #("k", encode_declaration_kind(kind)),
         #("r", json.array(references, encode_reference)),
@@ -32,9 +33,9 @@ pub fn encode_declaration(declaration: Declaration) -> json.Json {
 }
 
 pub fn declaration_decoder() -> decode.Decoder(Declaration) {
+  use topic_id <- decode.field("t", decode.string)
   use name <- decode.field("n", decode.string)
   use scope <- decode.field("s", scope_decoder())
-  use topic_id <- decode.field("t", decode.int)
   use signature <- decode.field("g", decode.string)
   use kind <- decode.field("k", decode_declaration_kind())
   use references <- decode.field("r", decode.list(reference_decoder()))
@@ -49,10 +50,10 @@ pub fn declaration_decoder() -> decode.Decoder(Declaration) {
 }
 
 pub const unknown_declaration = Declaration(
+  "D0",
   "",
   "",
   Scope("", option.None, option.None),
-  0,
   UnknownDeclaration,
   [],
 )
@@ -103,6 +104,37 @@ pub fn contract_scope_to_string(scope: Scope) {
   |> option.unwrap("")
   <> option.map(scope.member, fn(member) { "." <> member })
   |> option.unwrap("")
+}
+
+pub fn declaration_to_link(decaration: Declaration) {
+  "/" <> decaration.scope.file <> "#" <> declaration_to_id(decaration)
+}
+
+pub fn declaration_to_id(decaration: Declaration) {
+  case decaration.scope.contract {
+    option.Some(contract) ->
+      contract
+      <> case decaration.scope.member {
+        option.Some(member) -> "." <> member <> ":" <> decaration.name
+        option.None -> "." <> decaration.name
+      }
+    option.None -> decaration.name
+  }
+}
+
+pub fn reference_to_link(reference: Reference) {
+  "/"
+  <> reference.scope.file
+  <> "#"
+  <> case reference.scope.contract {
+    option.Some(contract) ->
+      contract
+      <> case reference.scope.member {
+        option.Some(member) -> "." <> member
+        option.None -> ""
+      }
+    option.None -> ""
+  }
 }
 
 pub type DeclarationKind {
@@ -244,14 +276,14 @@ pub type Reference {
 pub fn encode_reference(node_reference: Reference) {
   json.object([
     #("s", encode_scope(node_reference.scope)),
-    #("i", json.string(node_reference.topic_id)),
+    #("t", json.string(node_reference.topic_id)),
     #("k", encode_node_reference_kind(node_reference.kind)),
   ])
 }
 
 pub fn reference_decoder() {
   use scope <- decode.field("s", scope_decoder())
-  use topic_id <- decode.field("i", decode.string)
+  use topic_id <- decode.field("t", decode.string)
   use kind <- decode.field("k", node_reference_kind_decoder())
   decode.success(Reference(scope:, topic_id:, kind:))
 }
@@ -327,4 +359,8 @@ pub fn encode_declaration_links(declaration_links: dict.Dict(Int, String)) {
       #("l", json.string(declaration_link.1)),
     ])
   })
+}
+
+pub fn declaration_id_to_topic_id(declaration_id) {
+  "D" <> int.to_string(declaration_id)
 }

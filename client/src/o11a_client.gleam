@@ -320,7 +320,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       case source_files {
         Ok(..) -> io.println("Successfully fetched source file " <> page_path)
         Error(e) ->
-          io.println(
+          io.println_error(
             "Failed to fetch source file "
             <> page_path
             <> ": "
@@ -347,7 +347,9 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       case declarations {
         Ok(..) -> io.println("Successfully fetched declarations " <> audit_name)
         Error(e) ->
-          io.println("Failed to fetch declarations: " <> string.inspect(e))
+          io.println_error(
+            "Failed to fetch declarations: " <> string.inspect(e),
+          )
       }
       #(
         Model(
@@ -364,6 +366,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               |> result.map(fn(declarations) {
                 // Multiple declarations can have the same topic_id, so we need
                 // to group them by topic_id first, then flatten the result
+                // This the above still true?
                 list.group(declarations, by: fn(declaration) {
                   declaration.topic_id
                 })
@@ -410,7 +413,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           effect.none(),
         )
         Error(e) -> {
-          io.println("Failed to fetch discussion: " <> string.inspect(e))
+          io.println_error("Failed to fetch discussion: " <> string.inspect(e))
           #(model, effect.none())
         }
       }

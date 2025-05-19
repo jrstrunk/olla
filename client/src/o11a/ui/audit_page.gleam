@@ -116,12 +116,12 @@ fn loc_view(
         selected_discussion:,
       )
 
-    preprocessor.NonEmptyLine ->
+    preprocessor.NonEmptyLine(topic_id:) ->
       line_container_view(
         discussion:,
         references:,
         loc:,
-        line_topic_id: loc.line_id,
+        line_topic_id: topic_id,
         line_topic_title: loc.line_tag,
         selected_discussion:,
       )
@@ -427,10 +427,7 @@ fn declaration_node_view(
     [
       html.span(
         [
-          attribute.id(case string.split_once(node_declaration.topic_id, "#") {
-            Ok(#(_page_path, page_id)) -> page_id
-            Error(..) -> node_declaration.topic_id
-          }),
+          attribute.id(declaration.declaration_to_id(node_declaration)),
           attribute.class(declaration.declaration_kind_to_string(
             node_declaration.kind,
           )),
@@ -438,9 +435,6 @@ fn declaration_node_view(
           attribute.class(classes.discussion_entry),
           attribute.class(classes.discussion_entry_hover),
           attribute.attribute("tabindex", "0"),
-          attributes.encode_topic_id_data(node_declaration.topic_id),
-          attributes.encode_topic_title_data(node_declaration.signature),
-          attributes.encode_is_reference_data(False),
           event.on_focus(UserSelectedDiscussionEntry(
             kind: EntryFocus,
             line_number: element_line_number,
@@ -461,13 +455,10 @@ fn declaration_node_view(
             is_reference: False,
           )),
           event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: EntryHover)),
-          eventx.on_ctrl_click(
-            ctrl_click: UserCtrlClickedNode(uri: node_declaration.topic_id),
-            non_ctrl_click: option.Some(UserClickedDiscussionEntry(
-              line_number: element_line_number,
-              column_number: element_column_number,
-            )),
-          )
+          event.on_click(UserClickedDiscussionEntry(
+            line_number: element_line_number,
+            column_number: element_column_number,
+          ))
             |> event.stop_propagation,
         ],
         [html.text(tokens)],
@@ -520,11 +511,6 @@ fn reference_node_view(
           attribute.class(classes.discussion_entry),
           attribute.class(classes.discussion_entry_hover),
           attribute.attribute("tabindex", "0"),
-          attributes.encode_topic_id_data(referenced_node_declaration.topic_id),
-          attributes.encode_topic_title_data(
-            referenced_node_declaration.signature,
-          ),
-          attributes.encode_is_reference_data(True),
           event.on_focus(UserSelectedDiscussionEntry(
             kind: EntryFocus,
             line_number: element_line_number,
@@ -547,7 +533,7 @@ fn reference_node_view(
           event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: EntryHover)),
           eventx.on_ctrl_click(
             ctrl_click: UserCtrlClickedNode(
-              uri: referenced_node_declaration.topic_id,
+              uri: declaration.declaration_to_link(referenced_node_declaration),
             ),
             non_ctrl_click: option.Some(UserClickedDiscussionEntry(
               line_number: element_line_number,

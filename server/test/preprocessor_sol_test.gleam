@@ -57,14 +57,7 @@ pub fn preprocess_source_test() {
 
   let nodes = preprocessor_sol.linearize_nodes(ast)
 
-  preprocessor_sol.preprocess_source(
-    src,
-    nodes,
-    dict.new(),
-    0,
-    "thorwallet",
-    "",
-  )
+  preprocessor_sol.preprocess_source(src, nodes, dict.new(), 0, "thorwallet")
 }
 
 const src = "// SPDX-License-Identifier: MIT

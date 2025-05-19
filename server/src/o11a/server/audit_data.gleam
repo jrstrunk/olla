@@ -26,7 +26,6 @@ pub opaque type AuditData {
     source_file_provider: AuditSourceFileProvider,
     metadata_provider: AuditMetadataProvider,
     declarations_provider: AuditDeclarationsProvider,
-    declaration_links_provider: AuditDeclarationLinksProvider,
   )
 }
 
@@ -34,15 +33,11 @@ pub fn build() {
   use source_file_provider <- result.try(build_source_file_provider())
   use metadata_provider <- result.try(build_audit_metadata_provider())
   use declarations_provider <- result.try(build_declarations_provider())
-  use declaration_links_provider <- result.try(
-    build_declaration_links_provider(),
-  )
 
   Ok(AuditData(
     source_file_provider:,
     metadata_provider:,
     declarations_provider:,
-    declaration_links_provider:,
   ))
 }
 
@@ -104,7 +99,7 @@ fn gather_audit_data(audit_data: AuditData, for audit_name) {
 }
 
 fn do_gather_audit_data(audit_data: AuditData, for audit_name) {
-  use #(source_files, declarations, addressable_lines, declaration_links) <- result.try(
+  use #(source_files, declarations, addressable_lines) <- result.try(
     preprocess_audit_source(for: audit_name),
   )
 
@@ -136,13 +131,6 @@ fn do_gather_audit_data(audit_data: AuditData, for audit_name) {
       list.append(declarations, addressable_lines),
       declaration.encode_declaration,
     )
-      |> json.to_string_tree,
-  ))
-
-  use Nil <- result.try(pcd.insert(
-    audit_data.declaration_links_provider.pcd,
-    audit_name,
-    declaration.encode_declaration_links(declaration_links)
       |> json.to_string_tree,
   ))
 
@@ -195,17 +183,11 @@ fn preprocess_audit_source(for audit_name) {
     list.map(text_asts, fn(ast) { #(ast.absolute_path, ast) })
     |> dict.from_list
 
-  let #(max_topic_id, sol_declarations_and_links) =
+  let #(max_topic_id, sol_declarations) =
     #(1, dict.new())
     |> list.fold(sol_asts, _, fn(declarations, ast) {
       preprocessor_sol.enumerate_declarations(declarations, ast)
     })
-
-  let sol_declaration_links =
-    dict.map_values(sol_declarations_and_links, fn(_key, dec) { dec.0 })
-
-  let sol_declarations =
-    dict.map_values(sol_declarations_and_links, fn(_key, dec) { dec.1 })
 
   let sol_declarations =
     sol_declarations
@@ -213,17 +195,11 @@ fn preprocess_audit_source(for audit_name) {
       preprocessor_sol.count_references(declarations, ast)
     })
 
-  let #(max_topic_id, text_declarations_and_links) =
+  let #(max_topic_id, text_declarations) =
     #(max_topic_id, dict.new())
     |> list.fold(text_asts, _, fn(declarations, ast) {
       preprocessor_text.enumerate_declarations(declarations, ast)
     })
-
-  let text_declaration_links =
-    dict.map_values(text_declarations_and_links, fn(_key, dec) { dec.0 })
-
-  let text_declarations =
-    dict.map_values(text_declarations_and_links, fn(_key, dec) { dec.1 })
 
   use #(_max_topic_id, source_files) <- result.map(
     dict.get(page_paths, audit_name)
@@ -248,7 +224,6 @@ fn preprocess_audit_source(for audit_name) {
                     nodes:,
                     declarations: sol_declarations,
                     max_topic_id:,
-                    page_path:,
                     audit_name:,
                   )
 
@@ -280,7 +255,6 @@ fn preprocess_audit_source(for audit_name) {
                   preprocessor_text.preprocess_source(
                     declarations: text_declarations,
                     nodes:,
-                    page_path:,
                   )
 
                 Ok(#(
@@ -348,10 +322,7 @@ fn preprocess_audit_source(for audit_name) {
     })
     |> list.flatten
 
-  let declaration_links =
-    dict.merge(sol_declaration_links, text_declaration_links)
-
-  #(source_files, declarations, addressable_lines, declaration_links)
+  #(source_files, declarations, addressable_lines)
 }
 
 // AuditMetadataProvider -------------------------------------------------------
@@ -441,30 +412,4 @@ fn build_declarations_provider() {
   )
 
   AuditDeclarationsProvider(pcd:)
-}
-
-// AuditDeclarationLinksProvider -----------------------------------------------
-
-type AuditDeclarationLinksProvider {
-  AuditDeclarationLinksProvider(
-    pcd: pcd.PersistentConcurrentDict(String, string_tree.StringTree),
-  )
-}
-
-fn build_declaration_links_provider() {
-  use pcd <- result.map(
-    pcd.build(
-      config.get_persist_path(for: "audit_declaration_links"),
-      key_encoder: function.identity,
-      key_decoder: function.identity,
-      val_encoder: fn(val) {
-        val |> string_tree.to_string |> string.replace("'", "''")
-      },
-      val_decoder: fn(val) {
-        val |> string.replace("''", "'") |> string_tree.from_string
-      },
-    ),
-  )
-
-  AuditDeclarationLinksProvider(pcd:)
 }

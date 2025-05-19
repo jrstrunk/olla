@@ -15,17 +15,12 @@ import o11a/preprocessor
 import simplifile
 import snag
 
-pub fn preprocess_source(
-  nodes nodes: List(Node),
-  declarations declarations,
-  page_path page_path: String,
-) {
+pub fn preprocess_source(nodes nodes: List(Node), declarations declarations) {
   use line, index <- list.index_map(consume_source(nodes:, declarations:))
 
   let line_number = index + 1
   let line_number_text = int.to_string(line_number)
   let line_tag = "L" <> line_number_text
-  let line_id = page_path <> "#" <> line_tag
 
   let significance = case line {
     preprocessor.PreProcessedDeclaration(node_declaration:, ..) ->
@@ -41,7 +36,6 @@ pub fn preprocess_source(
     line_number:,
     line_number_text:,
     line_tag:,
-    line_id:,
     leading_spaces: 0,
     elements: [line],
     columns: 1,
@@ -83,8 +77,9 @@ pub fn enumerate_declarations(declarations, in ast: AST) {
         let #(id_acc, declarations) = declarations
         #(
           id_acc + 1,
-          dict.insert(declarations, id, #(
-            page_path <> "#L" <> line_number_text,
+          dict.insert(
+            declarations,
+            id,
             declaration.Declaration(
               name: "L" <> line_number_text,
               scope: declaration.Scope(
@@ -95,11 +90,11 @@ pub fn enumerate_declarations(declarations, in ast: AST) {
               signature: filepath.base_name(page_path)
                 <> "#L"
                 <> line_number_text,
-              topic_id: id_acc,
+              topic_id: declaration.declaration_id_to_topic_id(id_acc),
               kind: declaration.LineDeclaration,
               references: [],
             ),
-          )),
+          ),
         )
       }
     }

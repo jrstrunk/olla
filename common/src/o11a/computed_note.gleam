@@ -53,8 +53,8 @@ pub fn computed_note_decoder() -> decode.Decoder(ComputedNote) {
   use expanded_message <- decode.field("x", decode.optional(decode.string))
   use time <- decode.field("t", decode.int)
   use edited <- decode.field("e", decode.bool)
-  use referenced_topic_ids <- decode.field("rs", decode.list(decode.string))
-  use referee_topic_id <- decode.field("r", decode.optional(decode.string))
+  use referenced_topic_ids <- decode.field("r", decode.list(decode.string))
+  use referee_topic_id <- decode.field("f", decode.optional(decode.string))
 
   decode.success(ComputedNote(
     note_id:,

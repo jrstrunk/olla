@@ -103,7 +103,6 @@ pub type Effect {
 }
 
 pub fn update(model: Model, msg: Msg) {
-  echo "update " <> string.inspect(msg)
   case msg {
     UserWroteNote(draft) -> {
       #(Model(..model, current_note_draft: draft), None)
@@ -113,7 +112,8 @@ pub fn update(model: Model, msg: Msg) {
       <> model.current_note_draft
       <> " "
       <> model.topic_id
-      let current_note_draft = model.current_note_draft |> string.trim_start
+
+      let current_note_draft = model.current_note_draft |> string.trim
 
       let #(significance, message) =
         note.classify_message(
@@ -312,6 +312,9 @@ pub fn overlay_view(
   let current_thread_notes =
     dict.get(notes, model.current_thread_id)
     |> result.unwrap([])
+
+  echo "current_thread_id: " <> model.current_thread_id
+  echo "current_thread_notes: " <> string.inspect(current_thread_notes)
 
   let references =
     dict.get(references, model.topic_id)
@@ -544,7 +547,7 @@ fn reference_group_view(references: List(declaration.Reference), group_kind) {
         ]),
         ..list.map(references, fn(reference) {
           html.p([attribute.class("pl-[.25rem]")], [
-            html.a([attribute.href("/" <> reference.topic_id)], [
+            html.a([attribute.href(declaration.reference_to_link(reference))], [
               html.text(declaration.contract_scope_to_string(reference.scope)),
             ]),
           ])

@@ -1,4 +1,3 @@
-import filepath
 import gleam/dict
 import gleam/list
 import gleam/option
@@ -55,9 +54,10 @@ pub fn view(interface_data: InterfaceData) {
         ..list.map(contract_file.contracts, fn(contract) {
           html.div([attribute.class("ml-[1rem]")], [
             html.p([], [
-              html.a([attribute.href("/" <> contract.topic_id)], [
-                html.text(contract.name),
-              ]),
+              html.a(
+                [attribute.href(declaration.declaration_to_link(contract))],
+                [html.text(contract.name)],
+              ),
             ]),
             // List of constants in contract
             contract_members_view(
@@ -131,14 +131,17 @@ fn contract_members_view(
         html.p([], [html.text(title)]),
         ..list.map(items, fn(declaration) {
           html.p([attribute.class("ml-[1rem]")], [
-            html.a([attribute.href("/" <> declaration.topic_id)], [
-              element.unsafe_raw_html(
-                "signature",
-                "span",
-                [],
-                declaration.signature,
-              ),
-            ]),
+            html.a(
+              [attribute.href(declaration.declaration_to_link(declaration))],
+              [
+                element.unsafe_raw_html(
+                  "signature",
+                  "span",
+                  [],
+                  declaration.signature,
+                ),
+              ],
+            ),
           ])
         })
       ])
@@ -149,12 +152,10 @@ pub fn gather_interface_data(
   declarations: List(declaration.Declaration),
   in_scope_files,
 ) {
-  let in_scope_file_names = in_scope_files |> list.map(filepath.base_name)
-
   let declarations_in_scope =
     declarations
     |> list.filter(fn(declaration) {
-      list.contains(in_scope_file_names, declaration.scope.file)
+      list.contains(in_scope_files, declaration.scope.file)
     })
 
   let contract_member_declarations_in_scope =

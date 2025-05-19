@@ -27,7 +27,6 @@ pub fn preprocess_source(
   nodes nodes: List(Node),
   declarations declarations: dict.Dict(Int, declaration.Declaration),
   max_topic_id max_topic_id,
-  page_path page_path: String,
   audit_name audit_name: String,
 ) {
   let data = {
@@ -42,7 +41,6 @@ pub fn preprocess_source(
     let line_number = new_index
     let line_number_text = int.to_string(line_number)
     let line_tag = "L" <> line_number_text
-    let line_id = page_path <> "#" <> line_tag
     let leading_spaces = case line {
       [preprocessor.PreProcessedGapNode(leading_spaces:, ..), ..] ->
         leading_spaces
@@ -92,7 +90,12 @@ pub fn preprocess_source(
       0, 0 -> #(max_topic_id, preprocessor.EmptyLine)
       _, _ -> {
         let new_max_topic_id = max_topic_id + 1
-        #(new_max_topic_id, preprocessor.NonEmptyLine(new_max_topic_id))
+        #(
+          new_max_topic_id,
+          preprocessor.NonEmptyLine(declaration.declaration_id_to_topic_id(
+            new_max_topic_id,
+          )),
+        )
       }
     }
 
@@ -109,7 +112,6 @@ pub fn preprocess_source(
     #(new_index, new_max_topic_id, [
       preprocessor.PreProcessedLine(
         significance:,
-        line_id:,
         line_number:,
         line_number_text:,
         line_tag:,
@@ -123,7 +125,7 @@ pub fn preprocess_source(
   }
 
   let #(_index, max_topic_id, lines) = data
-  #(max_topic_id, lines)
+  #(max_topic_id, lines |> list.reverse)
 }
 
 pub fn consume_source(
@@ -704,9 +706,8 @@ pub fn enumerate_declarations(declarations, in ast: AST) {
     do_enumerate_node_declarations(
       declarations,
       node,
-      ast.absolute_path,
       parent_scope: declaration.Scope(
-        file: filepath.base_name(ast.absolute_path),
+        file: ast.absolute_path,
         contract: option.None,
         member: option.None,
       ),
@@ -717,59 +718,42 @@ pub fn enumerate_declarations(declarations, in ast: AST) {
 fn do_enumerate_node_declarations(
   declarations,
   node: Node,
-  parent_id: String,
   parent_scope parent_scope: declaration.Scope,
 ) {
   case node {
     Node(nodes:, ..) ->
       list.fold(nodes, declarations, fn(declarations, node) {
-        do_enumerate_node_declarations(
-          declarations,
-          node,
-          parent_id,
-          parent_scope,
-        )
+        do_enumerate_node_declarations(declarations, node, parent_scope)
       })
     NamedNode(nodes:, ..) ->
       list.fold(nodes, declarations, fn(declarations, node) {
-        do_enumerate_node_declarations(
-          declarations,
-          node,
-          parent_id,
-          parent_scope,
-        )
+        do_enumerate_node_declarations(declarations, node, parent_scope)
       })
     ImportDirectiveNode(..) | StructuredDocumentationNode(..) -> declarations
     ContractDefinitionNode(id:, name:, nodes:, contract_kind:, ..) -> {
-      let contract_id = parent_id <> "#" <> name
-
       let children_scope =
         declaration.Scope(..parent_scope, contract: option.Some(name))
 
       let #(id_acc, declarations) = declarations
       let declarations = #(
         id_acc + 1,
-        dict.insert(declarations, id, #(
-          contract_id,
+        dict.insert(
+          declarations,
+          id,
           declaration.Declaration(
             name:,
             // The parent of a contract is the file it is defined in
             scope: parent_scope,
             signature: node_to_source_string(node),
-            topic_id: id_acc,
+            topic_id: declaration.declaration_id_to_topic_id(id_acc),
             kind: declaration.ContractDeclaration(contract_kind),
             references: [],
           ),
-        )),
+        ),
       )
 
       list.fold(nodes, declarations, fn(declarations, node) {
-        do_enumerate_node_declarations(
-          declarations,
-          node,
-          contract_id,
-          children_scope,
-        )
+        do_enumerate_node_declarations(declarations, node, children_scope)
       })
     }
     FunctionDefinitionNode(
@@ -788,207 +772,156 @@ fn do_enumerate_node_declarations(
         declaration.Fallback -> "fallback"
         declaration.Receive -> "receive"
       }
-
-      let function_id = parent_id <> ":" <> name
-
       let children_scope =
         declaration.Scope(..parent_scope, member: option.Some(name))
 
       let #(id_acc, declarations) = declarations
       let declarations = #(
         id_acc + 1,
-        dict.insert(declarations, id, #(
-          function_id,
+        dict.insert(
+          declarations,
+          id,
           declaration.Declaration(
             name:,
             scope: parent_scope,
             signature: node_to_source_string(node),
-            topic_id: id_acc,
+            topic_id: declaration.declaration_id_to_topic_id(id_acc),
             kind: declaration.FunctionDeclaration(function_kind),
             references: [],
           ),
-        )),
+        ),
       )
 
-      list.fold(nodes, declarations, fn(declarations, node) {
-        do_enumerate_node_declarations(
-          declarations,
-          node,
-          function_id,
-          children_scope,
-        )
-      })
-      |> do_enumerate_node_declarations(parameters, function_id, children_scope)
-      |> do_enumerate_node_declarations(
-        return_parameters,
-        function_id,
-        children_scope,
-      )
+      let declarations =
+        list.fold(nodes, declarations, fn(declarations, node) {
+          do_enumerate_node_declarations(declarations, node, children_scope)
+        })
+        |> do_enumerate_node_declarations(parameters, children_scope)
+        |> do_enumerate_node_declarations(return_parameters, children_scope)
 
       case body {
         Some(body) ->
-          do_enumerate_node_declarations(
-            declarations,
-            body,
-            function_id,
-            children_scope,
-          )
+          do_enumerate_node_declarations(declarations, body, children_scope)
         option.None -> declarations
       }
     }
     ModifierDefinitionNode(id:, parameters:, nodes:, body:, name:, ..) -> {
-      let modifier_id = parent_id <> ":" <> name
-
       let children_scope =
         declaration.Scope(..parent_scope, member: option.Some(name))
 
       let #(id_acc, declarations) = declarations
       let declarations = #(
         id_acc + 1,
-        dict.insert(declarations, id, #(
-          modifier_id,
+        dict.insert(
+          declarations,
+          id,
           declaration.Declaration(
             name:,
             scope: parent_scope,
             signature: node_to_source_string(node),
-            topic_id: id_acc,
+            topic_id: declaration.declaration_id_to_topic_id(id_acc),
             kind: declaration.ModifierDeclaration,
             references: [],
           ),
-        )),
+        ),
       )
 
-      list.fold(nodes, declarations, fn(declarations, node) {
-        do_enumerate_node_declarations(
-          declarations,
-          node,
-          modifier_id,
-          children_scope,
-        )
-      })
-      |> do_enumerate_node_declarations(parameters, modifier_id, children_scope)
+      let declarations =
+        list.fold(nodes, declarations, fn(declarations, node) {
+          do_enumerate_node_declarations(declarations, node, children_scope)
+        })
+        |> do_enumerate_node_declarations(parameters, children_scope)
 
       case body {
         Some(body) ->
-          do_enumerate_node_declarations(
-            declarations,
-            body,
-            modifier_id,
-            children_scope,
-          )
+          do_enumerate_node_declarations(declarations, body, children_scope)
         option.None -> declarations
       }
     }
     ParameterListNode(parameters:, ..) -> {
       list.fold(parameters, declarations, fn(declarations, parameter) {
-        do_enumerate_node_declarations(
-          declarations,
-          parameter,
-          parent_id,
-          parent_scope,
-        )
+        do_enumerate_node_declarations(declarations, parameter, parent_scope)
       })
     }
     ErrorDefinitionNode(id:, name:, nodes:, parameters:, ..) -> {
-      let topic_id = parent_id <> ":" <> name
       let childern_scope =
         declaration.Scope(..parent_scope, member: option.Some(name))
 
       let #(id_acc, declarations) = declarations
       let declarations = #(
         id_acc + 1,
-        dict.insert(declarations, id, #(
-          topic_id,
+        dict.insert(
+          declarations,
+          id,
           declaration.Declaration(
             name:,
             scope: parent_scope,
             signature: node_to_source_string(node),
-            topic_id: id_acc,
+            topic_id: declaration.declaration_id_to_topic_id(id_acc),
             kind: declaration.ErrorDeclaration,
             references: [],
           ),
-        )),
+        ),
       )
 
       list.fold(nodes, declarations, fn(declarations, node) {
-        do_enumerate_node_declarations(
-          declarations,
-          node,
-          parent_id,
-          childern_scope,
-        )
+        do_enumerate_node_declarations(declarations, node, childern_scope)
       })
-      |> do_enumerate_node_declarations(parameters, parent_id, childern_scope)
+      |> do_enumerate_node_declarations(parameters, childern_scope)
     }
     EventDefinitionNode(id:, name:, nodes:, parameters:, ..) -> {
-      let topic_id = parent_id <> ":" <> name
       let childern_scope =
         declaration.Scope(..parent_scope, member: option.Some(name))
 
       let #(id_acc, declarations) = declarations
       let declarations = #(
         id_acc + 1,
-        dict.insert(declarations, id, #(
-          topic_id,
+        dict.insert(
+          declarations,
+          id,
           declaration.Declaration(
             name:,
             scope: parent_scope,
             signature: node_to_source_string(node),
-            topic_id: id_acc,
+            topic_id: declaration.declaration_id_to_topic_id(id_acc),
             kind: declaration.EventDeclaration,
             references: [],
           ),
-        )),
+        ),
       )
 
       list.fold(nodes, declarations, fn(declarations, node) {
-        do_enumerate_node_declarations(
-          declarations,
-          node,
-          parent_id,
-          childern_scope,
-        )
+        do_enumerate_node_declarations(declarations, node, childern_scope)
       })
-      |> do_enumerate_node_declarations(parameters, parent_id, childern_scope)
+      |> do_enumerate_node_declarations(parameters, childern_scope)
     }
     VariableDeclarationNode(id:, name:, constant:, ..) -> {
-      let topic_id = parent_id <> ":" <> name
-
       let #(id_acc, declarations) = declarations
       #(
         id_acc + 1,
-        dict.insert(declarations, id, #(
-          topic_id,
+        dict.insert(
+          declarations,
+          id,
           declaration.Declaration(
             name:,
             scope: parent_scope,
             signature: node_to_source_string(node),
-            topic_id: id_acc,
+            topic_id: declaration.declaration_id_to_topic_id(id_acc),
             kind: case constant {
               True -> declaration.ConstantDeclaration
               False -> declaration.VariableDeclaration
             },
             references: [],
           ),
-        )),
+        ),
       )
     }
     BlockNode(nodes:, statements:, ..) -> {
       list.fold(nodes, declarations, fn(declarations, node) {
-        do_enumerate_node_declarations(
-          declarations,
-          node,
-          parent_id,
-          parent_scope,
-        )
+        do_enumerate_node_declarations(declarations, node, parent_scope)
       })
       |> list.fold(statements, _, fn(declarations, statement) {
-        do_enumerate_node_declarations(
-          declarations,
-          statement,
-          parent_id,
-          parent_scope,
-        )
+        do_enumerate_node_declarations(declarations, statement, parent_scope)
       })
     }
     VariableDeclarationStatementNode(declarations: declaration_nodes, ..) ->
@@ -998,7 +931,6 @@ fn do_enumerate_node_declarations(
             do_enumerate_node_declarations(
               declarations,
               declaration,
-              parent_id,
               parent_scope,
             )
           option.None -> declarations
@@ -1006,137 +938,95 @@ fn do_enumerate_node_declarations(
       })
     IfStatementNode(true_body:, false_body:, ..) -> {
       let declarations =
-        do_enumerate_node_declarations(
-          declarations,
-          true_body,
-          parent_id,
-          parent_scope,
-        )
+        do_enumerate_node_declarations(declarations, true_body, parent_scope)
 
       case false_body {
         Some(false_body) ->
-          do_enumerate_node_declarations(
-            declarations,
-            false_body,
-            parent_id,
-            parent_scope,
-          )
+          do_enumerate_node_declarations(declarations, false_body, parent_scope)
         option.None -> declarations
       }
     }
     ForStatementNode(initialization_expression:, body:, ..) -> {
       let declarations = case initialization_expression {
         option.Some(init) ->
-          do_enumerate_node_declarations(
-            declarations,
-            init,
-            parent_id,
-            parent_scope,
-          )
+          do_enumerate_node_declarations(declarations, init, parent_scope)
         option.None -> declarations
       }
 
-      do_enumerate_node_declarations(
-        declarations,
-        body,
-        parent_id,
-        parent_scope,
-      )
+      do_enumerate_node_declarations(declarations, body, parent_scope)
     }
     EnumDefinition(id:, name:, members:, nodes:, ..) -> {
-      let enum_id = parent_id <> ":" <> name
-
       let children_scope =
         declaration.Scope(..parent_scope, member: option.Some(name))
 
       let #(id_acc, declarations) = declarations
       let declarations = #(
         id_acc + 1,
-        dict.insert(declarations, id, #(
-          enum_id,
+        dict.insert(
+          declarations,
+          id,
           declaration.Declaration(
             name:,
             scope: parent_scope,
             signature: node_to_source_string(node),
-            topic_id: id_acc,
+            topic_id: declaration.declaration_id_to_topic_id(id_acc),
             kind: declaration.EnumDeclaration,
             references: [],
           ),
-        )),
+        ),
       )
 
       list.fold(nodes, declarations, fn(declarations, statement) {
-        do_enumerate_node_declarations(
-          declarations,
-          statement,
-          enum_id,
-          children_scope,
-        )
+        do_enumerate_node_declarations(declarations, statement, children_scope)
       })
       |> list.fold(members, _, fn(declarations, statement) {
-        do_enumerate_node_declarations(
-          declarations,
-          statement,
-          enum_id,
-          children_scope,
-        )
+        do_enumerate_node_declarations(declarations, statement, children_scope)
       })
     }
     EnumValue(id:, name:, ..) -> {
-      let topic_id = parent_id <> ":" <> name
-
       let #(id_acc, declarations) = declarations
       #(
         id_acc + 1,
-        dict.insert(declarations, id, #(
-          topic_id,
+        dict.insert(
+          declarations,
+          id,
           declaration.Declaration(
             name:,
             scope: parent_scope,
             signature: node_to_source_string(node),
-            topic_id: id_acc,
+            topic_id: declaration.declaration_id_to_topic_id(id_acc),
             kind: declaration.EnumValueDeclaration,
             references: [],
           ),
-        )),
+        ),
       )
     }
     StructDefinition(id:, name:, members:, nodes:, ..) -> {
-      let struct_id = parent_id <> ":" <> name
       let children_scope =
         declaration.Scope(..parent_scope, member: option.Some(name))
 
       let #(id_acc, declarations) = declarations
       let declarations = #(
         id_acc + 1,
-        dict.insert(declarations, id, #(
-          struct_id,
+        dict.insert(
+          declarations,
+          id,
           declaration.Declaration(
             name:,
             scope: parent_scope,
             signature: node_to_source_string(node),
-            topic_id: id_acc,
+            topic_id: declaration.declaration_id_to_topic_id(id_acc),
             kind: declaration.StructDeclaration,
             references: [],
           ),
-        )),
+        ),
       )
 
       list.fold(nodes, declarations, fn(declarations, statement) {
-        do_enumerate_node_declarations(
-          declarations,
-          statement,
-          struct_id,
-          children_scope,
-        )
+        do_enumerate_node_declarations(declarations, statement, children_scope)
       })
       |> list.fold(members, _, fn(declarations, statement) {
-        do_enumerate_node_declarations(
-          declarations,
-          statement,
-          struct_id,
-          children_scope,
-        )
+        do_enumerate_node_declarations(declarations, statement, children_scope)
       })
     }
 
@@ -1150,18 +1040,18 @@ pub fn count_references(declarations, in ast: AST) {
       declarations,
       node,
       declaration.Scope(
-        file: filepath.base_name(ast.absolute_path),
+        file: ast.absolute_path,
         contract: option.None,
         member: option.None,
       ),
-      ast.absolute_path,
+      "",
       declaration.AccessReference,
     )
   })
 }
 
 fn do_count_node_references(
-  declarations,
+  declarations: dict.Dict(Int, declaration.Declaration),
   node: Node,
   parent_scope: declaration.Scope,
   parent_topic_id: String,
@@ -1191,27 +1081,31 @@ fn do_count_node_references(
     | EnumValue(..)
     | Literal(..) -> declarations
 
-    ContractDefinitionNode(nodes:, base_contracts:, name:, ..) -> {
+    ContractDefinitionNode(id:, nodes:, base_contracts:, name:, ..) -> {
       let children_scope =
         declaration.Scope(..parent_scope, contract: option.Some(name))
-      let contract_id = parent_topic_id <> "#" <> name
+      let contract_topic_id =
+        dict.get(declarations, id)
+        |> result.map(fn(dec) { dec.topic_id })
+        |> result.unwrap("D0")
 
       do_count_node_references_multi(
         declarations,
         nodes,
         children_scope,
-        contract_id,
+        contract_topic_id,
         parent_reference_kind,
       )
       |> do_count_node_references_multi(
         base_contracts,
         children_scope,
-        contract_id,
+        contract_topic_id,
         parent_reference_kind,
       )
     }
 
     FunctionDefinitionNode(
+      id:,
       nodes:,
       parameters:,
       modifiers:,
@@ -1231,15 +1125,10 @@ fn do_count_node_references(
             declaration.Receive -> "receive"
           }),
         )
-      let function_id =
-        parent_topic_id
-        <> ":"
-        <> case function_kind {
-          declaration.Function -> name
-          declaration.Constructor -> "constructor"
-          declaration.Fallback -> "fallback"
-          declaration.Receive -> "receive"
-        }
+      let function_topic_id =
+        dict.get(declarations, id)
+        |> result.map(fn(dec) { dec.topic_id })
+        |> result.unwrap("D0")
 
       let declarations =
         list.fold(nodes, declarations, fn(declarations, node) {
@@ -1247,26 +1136,26 @@ fn do_count_node_references(
             declarations,
             node,
             children_scope,
-            function_id,
+            function_topic_id,
             parent_reference_kind,
           )
         })
         |> do_count_node_references(
           parameters,
           children_scope,
-          function_id,
+          function_topic_id,
           parent_reference_kind,
         )
         |> do_count_node_references(
           return_parameters,
           children_scope,
-          function_id,
+          function_topic_id,
           parent_reference_kind,
         )
         |> do_count_node_references_multi(
           modifiers,
           children_scope,
-          function_id,
+          function_topic_id,
           parent_reference_kind,
         )
 
@@ -1276,16 +1165,19 @@ fn do_count_node_references(
             declarations,
             body,
             children_scope,
-            function_id,
+            function_topic_id,
             parent_reference_kind,
           )
         option.None -> declarations
       }
     }
-    ModifierDefinitionNode(nodes:, parameters:, body:, name:, ..) -> {
+    ModifierDefinitionNode(id:, nodes:, parameters:, body:, name:, ..) -> {
       let children_scope =
         declaration.Scope(..parent_scope, member: option.Some(name))
-      let modifier_id = parent_topic_id <> ":" <> name
+      let modifier_id =
+        dict.get(declarations, id)
+        |> result.map(fn(dec) { dec.topic_id })
+        |> result.unwrap("D0")
 
       let declarations =
         do_count_node_references_multi(

@@ -1833,6 +1833,9 @@ function trim_end(string6) {
 function console_log(term) {
   console.log(term);
 }
+function console_error(term) {
+  console.error(term);
+}
 function print(string6) {
   if (typeof process === "object" && process.stdout?.write) {
     process.stdout.write(string6);
@@ -8020,11 +8023,11 @@ function computed_note_decoder() {
                                 bool,
                                 (edited) => {
                                   return field(
-                                    "rs",
+                                    "r",
                                     list2(string3),
                                     (referenced_topic_ids) => {
                                       return field(
-                                        "r",
+                                        "f",
                                         optional(string3),
                                         (referee_topic_id) => {
                                           return success(
@@ -8145,12 +8148,12 @@ function is_significance_threadable(note_significance) {
 
 // build/dev/javascript/o11a_common/o11a/declaration.mjs
 var Declaration = class extends CustomType {
-  constructor(name2, signature, scope, topic_id, kind, references) {
+  constructor(topic_id, name2, signature, scope, kind, references) {
     super();
+    this.topic_id = topic_id;
     this.name = name2;
     this.signature = signature;
     this.scope = scope;
-    this.topic_id = topic_id;
     this.kind = kind;
     this.references = references;
   }
@@ -8263,6 +8266,45 @@ function contract_scope_to_string(scope) {
       return "." + member;
     });
     return unwrap(_pipe, "");
+  })();
+}
+function declaration_to_id(decaration) {
+  let $ = decaration.scope.contract;
+  if ($ instanceof Some) {
+    let contract = $[0];
+    return contract + (() => {
+      let $1 = decaration.scope.member;
+      if ($1 instanceof Some) {
+        let member = $1[0];
+        return "." + member + ":" + decaration.name;
+      } else {
+        return "." + decaration.name;
+      }
+    })();
+  } else {
+    return decaration.name;
+  }
+}
+function declaration_to_link(decaration) {
+  return "/" + decaration.scope.file + "#" + declaration_to_id(decaration);
+}
+function reference_to_link(reference) {
+  return "/" + reference.scope.file + "#" + (() => {
+    let $ = reference.scope.contract;
+    if ($ instanceof Some) {
+      let contract = $[0];
+      return contract + (() => {
+        let $1 = reference.scope.member;
+        if ($1 instanceof Some) {
+          let member = $1[0];
+          return "." + member;
+        } else {
+          return "";
+        }
+      })();
+    } else {
+      return "";
+    }
   })();
 }
 function decode_declaration_kind() {
@@ -8378,7 +8420,7 @@ function reference_decoder() {
     scope_decoder(),
     (scope) => {
       return field(
-        "i",
+        "t",
         string3,
         (topic_id) => {
           return field(
@@ -8395,17 +8437,17 @@ function reference_decoder() {
 }
 function declaration_decoder() {
   return field(
-    "n",
+    "t",
     string3,
-    (name2) => {
+    (topic_id) => {
       return field(
-        "s",
-        scope_decoder(),
-        (scope) => {
+        "n",
+        string3,
+        (name2) => {
           return field(
-            "t",
-            string3,
-            (topic_id) => {
+            "s",
+            scope_decoder(),
+            (scope) => {
               return field(
                 "g",
                 string3,
@@ -8420,10 +8462,10 @@ function declaration_decoder() {
                         (references) => {
                           return success(
                             new Declaration(
+                              topic_id,
                               name2,
                               signature,
                               scope,
-                              topic_id,
                               kind,
                               references
                             )
@@ -8593,16 +8635,16 @@ function base_name(path2) {
 
 // build/dev/javascript/o11a_common/o11a/preprocessor.mjs
 var PreProcessedLine = class extends CustomType {
-  constructor(significance, line_number, line_number_text, line_tag, line_id, leading_spaces, elements, columns) {
+  constructor(significance, line_number, line_number_text, line_tag, leading_spaces, elements, columns, kind) {
     super();
     this.significance = significance;
     this.line_number = line_number;
     this.line_number_text = line_number_text;
     this.line_tag = line_tag;
-    this.line_id = line_id;
     this.leading_spaces = leading_spaces;
     this.elements = elements;
     this.columns = columns;
+    this.kind = kind;
   }
 };
 var SingleDeclarationLine = class extends CustomType {
@@ -8613,8 +8655,16 @@ var SingleDeclarationLine = class extends CustomType {
   }
 };
 var NonEmptyLine = class extends CustomType {
+  constructor(topic_id) {
+    super();
+    this.topic_id = topic_id;
+  }
 };
 var EmptyLine = class extends CustomType {
+};
+var SoliditySourceLine = class extends CustomType {
+};
+var TextLine = class extends CustomType {
 };
 var PreProcessedDeclaration = class extends CustomType {
   constructor(node_id, node_declaration, tokens) {
@@ -8667,11 +8717,31 @@ function pre_processed_line_significance_decoder() {
           }
         );
       } else if (variant === "nel") {
-        return success(new NonEmptyLine());
+        return field(
+          "t",
+          string3,
+          (topic_id) => {
+            return success(new NonEmptyLine(topic_id));
+          }
+        );
       } else if (variant === "el") {
         return success(new EmptyLine());
       } else {
         return failure(new EmptyLine(), "PreProcessedLineSignificance");
+      }
+    }
+  );
+}
+function pre_processed_line_kind_decoder() {
+  return then$2(
+    string3,
+    (variant) => {
+      if (variant === "s") {
+        return success(new SoliditySourceLine());
+      } else if (variant === "t") {
+        return success(new TextLine());
+      } else {
+        return failure(new TextLine(), "PreProcessedLineKind");
       }
     }
   );
@@ -8773,35 +8843,35 @@ function pre_processed_line_decoder() {
         int2,
         (line_number) => {
           return field(
-            "i",
-            string3,
-            (line_id) => {
+            "l",
+            int2,
+            (leading_spaces) => {
               return field(
-                "l",
-                int2,
-                (leading_spaces) => {
+                "e",
+                list2(pre_processed_node_decoder()),
+                (elements) => {
                   return field(
-                    "e",
-                    list2(pre_processed_node_decoder()),
-                    (elements) => {
+                    "c",
+                    int2,
+                    (columns) => {
+                      let _block;
+                      let _pipe = line_number;
+                      _block = to_string(_pipe);
+                      let line_number_text = _block;
                       return field(
-                        "c",
-                        int2,
-                        (columns) => {
-                          let _block;
-                          let _pipe = line_number;
-                          _block = to_string(_pipe);
-                          let line_number_text = _block;
+                        "k",
+                        pre_processed_line_kind_decoder(),
+                        (kind) => {
                           return success(
                             new PreProcessedLine(
                               significance,
                               line_number,
                               line_number_text,
                               "L" + line_number_text,
-                              line_id,
                               leading_spaces,
                               elements,
-                              columns
+                              columns,
+                              kind
                             )
                           );
                         }
@@ -9904,7 +9974,11 @@ function contract_members_view(contract, title2, declarations) {
               toList([class$("ml-[1rem]")]),
               toList([
                 a(
-                  toList([href("/" + declaration.topic_id)]),
+                  toList([
+                    href(
+                      declaration_to_link(declaration)
+                    )
+                  ]),
                   toList([
                     unsafe_raw_html(
                       "signature",
@@ -9944,7 +10018,11 @@ function view2(interface_data) {
                         toList([]),
                         toList([
                           a(
-                            toList([href("/" + contract.topic_id)]),
+                            toList([
+                              href(
+                                declaration_to_link(contract)
+                              )
+                            ]),
                             toList([text3(contract.name)])
                           )
                         ])
@@ -10002,22 +10080,18 @@ function view2(interface_data) {
 }
 function gather_interface_data(declarations, in_scope_files) {
   let _block;
-  let _pipe = in_scope_files;
-  _block = map2(_pipe, base_name);
-  let in_scope_file_names = _block;
-  let _block$1;
-  let _pipe$1 = declarations;
-  _block$1 = filter(
-    _pipe$1,
+  let _pipe = declarations;
+  _block = filter(
+    _pipe,
     (declaration) => {
-      return contains(in_scope_file_names, declaration.scope.file);
+      return contains(in_scope_files, declaration.scope.file);
     }
   );
-  let declarations_in_scope = _block$1;
-  let _block$2;
-  let _pipe$2 = declarations_in_scope;
-  _block$2 = filter_map(
-    _pipe$2,
+  let declarations_in_scope = _block;
+  let _block$1;
+  let _pipe$1 = declarations_in_scope;
+  _block$1 = filter_map(
+    _pipe$1,
     (declaration) => {
       let $ = declaration.scope.contract;
       let $1 = declaration.scope.member;
@@ -10029,11 +10103,11 @@ function gather_interface_data(declarations, in_scope_files) {
       }
     }
   );
-  let contract_member_declarations_in_scope = _block$2;
-  let _block$3;
-  let _pipe$3 = declarations_in_scope;
-  let _pipe$4 = filter(
-    _pipe$3,
+  let contract_member_declarations_in_scope = _block$1;
+  let _block$2;
+  let _pipe$2 = declarations_in_scope;
+  let _pipe$3 = filter(
+    _pipe$2,
     (declaration) => {
       let $ = declaration.kind;
       if ($ instanceof ContractDeclaration) {
@@ -10043,29 +10117,29 @@ function gather_interface_data(declarations, in_scope_files) {
       }
     }
   );
-  let _pipe$5 = group(
-    _pipe$4,
+  let _pipe$4 = group(
+    _pipe$3,
     (declaration) => {
       return declaration.scope.file;
     }
   );
-  let _pipe$6 = map_values(
-    _pipe$5,
+  let _pipe$5 = map_values(
+    _pipe$4,
     (_, value3) => {
-      let _pipe$62 = map2(value3, (declaration) => {
+      let _pipe$52 = map2(value3, (declaration) => {
         return declaration;
       });
-      return unique(_pipe$62);
+      return unique(_pipe$52);
     }
   );
-  let _pipe$7 = map_to_list(_pipe$6);
-  _block$3 = map2(
-    _pipe$7,
+  let _pipe$6 = map_to_list(_pipe$5);
+  _block$2 = map2(
+    _pipe$6,
     (contracts) => {
       return new FileContract(contracts[0], contracts[1]);
     }
   );
-  let file_contracts = _block$3;
+  let file_contracts = _block$2;
   let contract_constants = filter_map(
     contract_member_declarations_in_scope,
     (declaration) => {
@@ -10240,24 +10314,6 @@ function translate_number_to_letter(loop$number) {
 // build/dev/javascript/o11a_common/o11a/attributes.mjs
 function encode_grid_location_data(line_number, column_number) {
   return class$("dl" + line_number + " dc" + column_number);
-}
-function encode_topic_id_data(topic_id) {
-  return data("i", topic_id);
-}
-function encode_topic_title_data(topic_title) {
-  return data("t", topic_title);
-}
-function encode_is_reference_data(is_reference) {
-  return data(
-    "r",
-    (() => {
-      if (is_reference) {
-        return "1";
-      } else {
-        return "0";
-      }
-    })()
-  );
 }
 
 // build/dev/javascript/o11a_client/lib/eventx.mjs
@@ -10822,7 +10878,9 @@ function reference_group_view(references, group_kind) {
               toList([class$("pl-[.25rem]")]),
               toList([
                 a(
-                  toList([href("/" + reference.topic_id)]),
+                  toList([
+                    href(reference_to_link(reference))
+                  ]),
                   toList([
                     text3(
                       contract_scope_to_string(reference.scope)
@@ -11174,7 +11232,6 @@ function get_message_classification_prefix(significance) {
   }
 }
 function update2(model, msg) {
-  echo3("update " + inspect2(msg), "src/o11a/ui/discussion.gleam", 106);
   if (msg instanceof UserWroteNote) {
     let draft = msg[0];
     return [
@@ -11204,11 +11261,11 @@ function update2(model, msg) {
     echo3(
       "Submitting note! " + model.current_note_draft + " " + model.topic_id,
       "src/o11a/ui/discussion.gleam",
-      112
+      111
     );
     let _block;
     let _pipe = model.current_note_draft;
-    _block = trim_start(_pipe);
+    _block = trim(_pipe);
     let current_note_draft = _block;
     let $ = classify_message(
       current_note_draft,
@@ -11691,6 +11748,16 @@ function overlay_view(model, notes, references) {
   let _pipe = map_get(notes, model.current_thread_id);
   _block = unwrap2(_pipe, toList([]));
   let current_thread_notes = _block;
+  echo3(
+    "current_thread_id: " + model.current_thread_id,
+    "src/o11a/ui/discussion.gleam",
+    316
+  );
+  echo3(
+    "current_thread_notes: " + inspect2(current_thread_notes),
+    "src/o11a/ui/discussion.gleam",
+    317
+  );
   let _block$1;
   let _pipe$1 = map_get(references, model.topic_id);
   _block$1 = unwrap2(_pipe$1, toList([]));
@@ -11700,7 +11767,7 @@ function overlay_view(model, notes, references) {
       references$1
     ),
     "src/o11a/ui/discussion.gleam",
-    320
+    323
   );
   return div(
     toList([
@@ -12190,17 +12257,7 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, re
     toList([
       span(
         toList([
-          id(
-            (() => {
-              let $ = split_once(node_declaration.topic_id, "#");
-              if ($.isOk()) {
-                let page_id = $[0][1];
-                return page_id;
-              } else {
-                return node_declaration.topic_id;
-              }
-            })()
-          ),
+          id(declaration_to_id(node_declaration)),
           class$(
             declaration_kind_to_string(node_declaration.kind)
           ),
@@ -12208,9 +12265,6 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, re
           class$(discussion_entry),
           class$(discussion_entry_hover),
           attribute2("tabindex", "0"),
-          encode_topic_id_data(node_declaration.topic_id),
-          encode_topic_title_data(node_declaration.signature),
-          encode_is_reference_data(false),
           on_focus(
             new UserSelectedDiscussionEntry(
               new EntryFocus(),
@@ -12238,13 +12292,10 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, re
             new UserUnselectedDiscussionEntry(new EntryHover())
           ),
           (() => {
-            let _pipe = on_ctrl_click(
-              new UserCtrlClickedNode(node_declaration.topic_id),
-              new Some(
-                new UserClickedDiscussionEntry(
-                  element_line_number,
-                  element_column_number
-                )
+            let _pipe = on_click(
+              new UserClickedDiscussionEntry(
+                element_line_number,
+                element_column_number
               )
             );
             return stop_propagation(_pipe);
@@ -12302,11 +12353,6 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
           class$(discussion_entry),
           class$(discussion_entry_hover),
           attribute2("tabindex", "0"),
-          encode_topic_id_data(referenced_node_declaration.topic_id),
-          encode_topic_title_data(
-            referenced_node_declaration.signature
-          ),
-          encode_is_reference_data(true),
           on_focus(
             new UserSelectedDiscussionEntry(
               new EntryFocus(),
@@ -12335,7 +12381,9 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
           ),
           (() => {
             let _pipe = on_ctrl_click(
-              new UserCtrlClickedNode(referenced_node_declaration.topic_id),
+              new UserCtrlClickedNode(
+                declaration_to_link(referenced_node_declaration)
+              ),
               new Some(
                 new UserClickedDiscussionEntry(
                   element_line_number,
@@ -12640,11 +12688,12 @@ function loc_view(discussion, references, loc, selected_discussion) {
       selected_discussion
     );
   } else {
+    let topic_id = $.topic_id;
     return line_container_view(
       discussion,
       references,
       loc,
-      loc.line_id,
+      topic_id,
       loc.line_tag,
       selected_discussion
     );
@@ -13537,7 +13586,7 @@ function update3(model, msg) {
       console_log("Successfully fetched source file " + page_path);
     } else {
       let e = source_files[0];
-      console_log(
+      console_error(
         "Failed to fetch source file " + page_path + ": " + inspect2(
           e
         )
@@ -13587,7 +13636,7 @@ function update3(model, msg) {
       console_log("Successfully fetched declarations " + audit_name);
     } else {
       let e = declarations[0];
-      console_log("Failed to fetch declarations: " + inspect2(e));
+      console_error("Failed to fetch declarations: " + inspect2(e));
     }
     return [
       (() => {
@@ -13704,7 +13753,7 @@ function update3(model, msg) {
       ];
     } else {
       let e = discussion[0];
-      console_log("Failed to fetch discussion: " + inspect2(e));
+      console_error("Failed to fetch discussion: " + inspect2(e));
       return [model, none()];
     }
   } else if (msg instanceof ServerUpdatedDiscussion) {
@@ -13859,7 +13908,7 @@ function update3(model, msg) {
     echo4(
       "Unselecting discussion " + inspect2(kind),
       "src/o11a_client.gleam",
-      503
+      506
     );
     return [
       (() => {
@@ -13978,7 +14027,7 @@ function update3(model, msg) {
         return [model, none()];
       },
       (page_path) => {
-        echo4("User clicked inside discussion", "src/o11a_client.gleam", 567);
+        echo4("User clicked inside discussion", "src/o11a_client.gleam", 570);
         let _block;
         let $ = !isEqual(
           model.selected_discussion,
@@ -14070,7 +14119,7 @@ function update3(model, msg) {
       }
     );
   } else if (msg instanceof UserClickedOutsideDiscussion) {
-    echo4("User clicked outside discussion", "src/o11a_client.gleam", 596);
+    echo4("User clicked outside discussion", "src/o11a_client.gleam", 599);
     return [
       (() => {
         let _record = model;
@@ -14147,7 +14196,7 @@ function update3(model, msg) {
           echo4(
             "Focusing discussion input, user is typing",
             "src/o11a_client.gleam",
-            634
+            637
           );
           set_is_user_typing(true);
           return [
@@ -14203,7 +14252,7 @@ function update3(model, msg) {
             none()
           ];
         } else if (discussion_effect instanceof UnfocusDiscussionInput) {
-          echo4("Unfocusing discussion input", "src/o11a_client.gleam", 665);
+          echo4("Unfocusing discussion input", "src/o11a_client.gleam", 668);
           set_is_user_typing(false);
           return [model, none()];
         } else if (discussion_effect instanceof MaximizeDiscussion) {
