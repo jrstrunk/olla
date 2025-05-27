@@ -10,23 +10,21 @@ import gleam/result
 import gleam/string
 import lib/snagx
 import o11a/config
-import o11a/declaration
 import o11a/preprocessor
 import simplifile
 import snag
 
-pub fn preprocess_source(nodes nodes: List(Node), declarations declarations) {
-  use line, index <- list.index_map(consume_source(nodes:, declarations:))
+pub fn preprocess_source(nodes nodes: List(Node)) {
+  use line, index <- list.index_map(consume_source(nodes:))
 
   let line_number = index + 1
   let line_number_text = int.to_string(line_number)
   let line_tag = "L" <> line_number_text
 
   let significance = case line {
-    preprocessor.PreProcessedDeclaration(node_declaration:, ..) ->
+    preprocessor.PreProcessedDeclaration(id:, ..) ->
       preprocessor.SingleDeclarationLine(
-        signature: node_declaration.signature,
-        topic_id: node_declaration.topic_id,
+        topic_id: preprocessor.declaration_id_to_topic_id(id, preprocessor.Text),
       )
     _ -> preprocessor.EmptyLine
   }
@@ -43,7 +41,7 @@ pub fn preprocess_source(nodes nodes: List(Node), declarations declarations) {
   )
 }
 
-fn consume_source(nodes nodes: List(Node), declarations declarations) {
+fn consume_source(nodes nodes: List(Node)) {
   list.fold(nodes, [], fn(acc, node) {
     case node {
       NewLineNode(..) -> [
@@ -53,9 +51,8 @@ fn consume_source(nodes nodes: List(Node), declarations declarations) {
       LineNode(id:, line:, ..) -> {
         [
           preprocessor.PreProcessedDeclaration(
-            node_id: acc |> list.length,
-            node_declaration: dict.get(declarations, id)
-              |> result.unwrap(declaration.unknown_declaration),
+            id:,
+            kind: preprocessor.LineDeclaration,
             tokens: line,
           ),
           ..acc
@@ -76,22 +73,27 @@ pub fn enumerate_declarations(declarations, in ast: AST) {
 
         let #(id_acc, declarations) = declarations
         #(
-          id_acc + 1,
+          int.max(id_acc, id + 1),
           dict.insert(
             declarations,
             id,
-            declaration.Declaration(
+            preprocessor.Declaration(
+              id:,
               name: "L" <> line_number_text,
-              scope: declaration.Scope(
+              scope: preprocessor.Scope(
                 file: filepath.base_name(page_path),
                 contract: option.None,
                 member: option.None,
               ),
-              signature: filepath.base_name(page_path)
-                <> "#L"
-                <> line_number_text,
-              topic_id: declaration.declaration_id_to_topic_id(id_acc),
-              kind: declaration.LineDeclaration,
+              signature: [
+                preprocessor.PreProcessedNode(
+                  element: filepath.base_name(page_path)
+                  <> "#L"
+                  <> line_number_text,
+                ),
+              ],
+              kind: preprocessor.LineDeclaration,
+              source: preprocessor.Text,
               references: [],
             ),
           ),

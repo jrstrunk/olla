@@ -17,7 +17,6 @@ import lustre/attribute
 import lustre/element
 import lustre/element/html
 import o11a/config
-import o11a/declaration
 import o11a/preprocessor
 import simplifile
 import snag
@@ -25,17 +24,18 @@ import snag
 pub fn preprocess_source(
   source source: String,
   nodes nodes: List(Node),
-  declarations declarations: dict.Dict(Int, declaration.Declaration),
+  declarations declarations: dict.Dict(Int, preprocessor.Declaration),
   max_topic_id max_topic_id,
+  page_path page_path: String,
   audit_name audit_name: String,
 ) {
   let data = {
     use acc, line <- list.fold(
       consume_source(source:, nodes:, declarations:, audit_name:),
-      #(0, max_topic_id, []),
+      #(0, max_topic_id, [], []),
     )
+    let #(index, max_topic_id, preprocessed_lines, addressable_lines) = acc
 
-    let #(index, max_topic_id, preprocessed_lines) = acc
     let new_index = index + 1
 
     let line_number = new_index
@@ -63,15 +63,14 @@ pub fn preprocess_source(
         }
       })
 
-    let #(new_max_topic_id, significance) = case
+    let #(new_max_topic_id, significance, new_addressable_lines) = case
       declaration_count,
       reference_count
     {
       1, _ -> {
-        let assert Ok(preprocessor.PreProcessedDeclaration(
-          node_declaration:,
-          ..,
-        )) =
+        let new_max_topic_id = max_topic_id + 1
+
+        let assert Ok(preprocessor.PreProcessedDeclaration(id:, ..)) =
           list.find(line, fn(decl) {
             case decl {
               preprocessor.PreProcessedDeclaration(..) -> True
@@ -82,19 +81,62 @@ pub fn preprocess_source(
         #(
           max_topic_id,
           preprocessor.SingleDeclarationLine(
-            signature: node_declaration.signature,
-            topic_id: node_declaration.topic_id,
+            topic_id: preprocessor.declaration_id_to_topic_id(
+              new_max_topic_id,
+              preprocessor.Solidity,
+            ),
           ),
+          [
+            preprocessor.Declaration(
+              id: new_max_topic_id,
+              name: "L" <> line_number_text,
+              scope: preprocessor.Scope(
+                file: filepath.base_name(page_path),
+                contract: option.None,
+                member: option.None,
+              ),
+              signature: [
+                preprocessor.PreProcessedNode(
+                  element: "line " <> line_number_text,
+                ),
+              ],
+              kind: preprocessor.LineDeclaration,
+              source: preprocessor.Solidity,
+              references: [],
+            ),
+          ],
         )
       }
-      0, 0 -> #(max_topic_id, preprocessor.EmptyLine)
+
+      0, 0 -> #(max_topic_id, preprocessor.EmptyLine, [])
+
       _, _ -> {
         let new_max_topic_id = max_topic_id + 1
         #(
           new_max_topic_id,
-          preprocessor.NonEmptyLine(declaration.declaration_id_to_topic_id(
+          preprocessor.NonEmptyLine(preprocessor.declaration_id_to_topic_id(
             new_max_topic_id,
+            preprocessor.Solidity,
           )),
+          [
+            preprocessor.Declaration(
+              id: new_max_topic_id,
+              name: "L" <> line_number_text,
+              scope: preprocessor.Scope(
+                file: filepath.base_name(page_path),
+                contract: option.None,
+                member: option.None,
+              ),
+              signature: [
+                preprocessor.PreProcessedNode(
+                  element: "line " <> line_number_text,
+                ),
+              ],
+              kind: preprocessor.LineDeclaration,
+              source: preprocessor.Solidity,
+              references: [],
+            ),
+          ],
         )
       }
     }
@@ -109,29 +151,34 @@ pub fn preprocess_source(
         }
       })
 
-    #(new_index, new_max_topic_id, [
-      preprocessor.PreProcessedLine(
-        significance:,
-        line_number:,
-        line_number_text:,
-        line_tag:,
-        leading_spaces:,
-        elements: line,
-        columns:,
-        kind: preprocessor.SoliditySourceLine,
-      ),
-      ..preprocessed_lines
-    ])
+    #(
+      new_index,
+      new_max_topic_id,
+      [
+        preprocessor.PreProcessedLine(
+          significance:,
+          line_number:,
+          line_number_text:,
+          line_tag:,
+          leading_spaces:,
+          elements: line,
+          columns:,
+          kind: preprocessor.SoliditySourceLine,
+        ),
+        ..preprocessed_lines
+      ],
+      list.append(new_addressable_lines, addressable_lines),
+    )
   }
 
-  let #(_index, max_topic_id, lines) = data
-  #(max_topic_id, lines |> list.reverse)
+  let #(_index, max_topic_id, lines, addressable_lines) = data
+  #(max_topic_id, lines |> list.reverse, addressable_lines)
 }
 
 pub fn consume_source(
   source source: String,
   nodes nodes: List(Node),
-  declarations declarations: dict.Dict(Int, declaration.Declaration),
+  declarations declarations: dict.Dict(Int, preprocessor.Declaration),
   audit_name audit_name: String,
 ) {
   let #(_, current_line, processed, rest) =
@@ -157,40 +204,57 @@ pub fn consume_source(
         | EnumDefinition(id:, ..)
         | StructDefinition(id:, ..)
         | EnumValue(id:, ..) -> {
+          let declaration =
+            dict.get(declarations, id)
+            |> result.unwrap(preprocessor.unknown_declaration)
+
           preprocessor.PreProcessedDeclaration(
-            node_id: id,
-            node_declaration: dict.get(declarations, id)
-              |> result.unwrap(declaration.unknown_declaration),
+            id:,
+            kind: declaration.kind,
             tokens: _,
           )
         }
 
-        BaseContract(reference_id:, ..) | Modifier(reference_id:, ..) -> preprocessor.PreProcessedReference(
-          referenced_node_id: reference_id,
-          referenced_node_declaration: dict.get(declarations, reference_id)
-            |> result.unwrap(declaration.unknown_declaration),
-          tokens: _,
-        )
+        BaseContract(reference_id:, ..) | Modifier(reference_id:, ..) -> {
+          let declaration =
+            dict.get(declarations, reference_id)
+            |> result.unwrap(preprocessor.unknown_declaration)
 
+          preprocessor.PreProcessedReference(
+            referenced_node_id: reference_id,
+            referenced_node_kind: declaration.kind,
+            tokens: _,
+          )
+        }
         Identifier(reference_id:, ..) | IdentifierPath(reference_id:, ..) ->
           case reference_id < 0 {
             True -> style_tokens(_, class: "global-variable")
-            False -> preprocessor.PreProcessedReference(
-              referenced_node_id: reference_id,
-              referenced_node_declaration: dict.get(declarations, reference_id)
-                |> result.unwrap(declaration.unknown_declaration),
-              tokens: _,
-            )
+            False -> {
+              let declaration =
+                dict.get(declarations, reference_id)
+                |> result.unwrap(preprocessor.unknown_declaration)
+
+              preprocessor.PreProcessedReference(
+                referenced_node_id: reference_id,
+                referenced_node_kind: declaration.kind,
+                tokens: _,
+              )
+            }
           }
 
         MemberAccess(reference_id:, is_global_access:, ..) ->
           case reference_id, is_global_access {
-            option.Some(reference_id), _ -> preprocessor.PreProcessedReference(
-              referenced_node_id: reference_id,
-              referenced_node_declaration: dict.get(declarations, reference_id)
-                |> result.unwrap(declaration.unknown_declaration),
-              tokens: _,
-            )
+            option.Some(reference_id), _ -> {
+              let declaration =
+                dict.get(declarations, reference_id)
+                |> result.unwrap(preprocessor.unknown_declaration)
+
+              preprocessor.PreProcessedReference(
+                referenced_node_id: reference_id,
+                referenced_node_kind: declaration.kind,
+                tokens: _,
+              )
+            }
             option.None, True -> style_tokens(_, class: "global-variable")
             option.None, False -> style_tokens(_, class: "text")
           }
@@ -706,7 +770,7 @@ pub fn enumerate_declarations(declarations, in ast: AST) {
     do_enumerate_node_declarations(
       declarations,
       node,
-      parent_scope: declaration.Scope(
+      parent_scope: preprocessor.Scope(
         file: ast.absolute_path,
         contract: option.None,
         member: option.None,
@@ -718,7 +782,7 @@ pub fn enumerate_declarations(declarations, in ast: AST) {
 fn do_enumerate_node_declarations(
   declarations,
   node: Node,
-  parent_scope parent_scope: declaration.Scope,
+  parent_scope parent_scope: preprocessor.Scope,
 ) {
   case node {
     Node(nodes:, ..) ->
@@ -732,21 +796,22 @@ fn do_enumerate_node_declarations(
     ImportDirectiveNode(..) | StructuredDocumentationNode(..) -> declarations
     ContractDefinitionNode(id:, name:, nodes:, contract_kind:, ..) -> {
       let children_scope =
-        declaration.Scope(..parent_scope, contract: option.Some(name))
+        preprocessor.Scope(..parent_scope, contract: option.Some(name))
 
       let #(id_acc, declarations) = declarations
       let declarations = #(
-        id_acc + 1,
+        int.max(id_acc, id + 1),
         dict.insert(
           declarations,
           id,
-          declaration.Declaration(
+          preprocessor.Declaration(
+            id:,
             name:,
             // The parent of a contract is the file it is defined in
             scope: parent_scope,
-            signature: node_to_source_string(node),
-            topic_id: declaration.declaration_id_to_topic_id(id_acc),
-            kind: declaration.ContractDeclaration(contract_kind),
+            signature: get_signature_nodes(node),
+            kind: preprocessor.ContractDeclaration(contract_kind),
+            source: preprocessor.Solidity,
             references: [],
           ),
         ),
@@ -767,26 +832,27 @@ fn do_enumerate_node_declarations(
       ..,
     ) -> {
       let name = case function_kind {
-        declaration.Function -> name
-        declaration.Constructor -> "constructor"
-        declaration.Fallback -> "fallback"
-        declaration.Receive -> "receive"
+        preprocessor.Function -> name
+        preprocessor.Constructor -> "constructor"
+        preprocessor.Fallback -> "fallback"
+        preprocessor.Receive -> "receive"
       }
       let children_scope =
-        declaration.Scope(..parent_scope, member: option.Some(name))
+        preprocessor.Scope(..parent_scope, member: option.Some(name))
 
       let #(id_acc, declarations) = declarations
       let declarations = #(
-        id_acc + 1,
+        int.max(id_acc, id + 1),
         dict.insert(
           declarations,
           id,
-          declaration.Declaration(
+          preprocessor.Declaration(
+            id:,
             name:,
             scope: parent_scope,
-            signature: node_to_source_string(node),
-            topic_id: declaration.declaration_id_to_topic_id(id_acc),
-            kind: declaration.FunctionDeclaration(function_kind),
+            signature: get_signature_nodes(node),
+            kind: preprocessor.FunctionDeclaration(function_kind),
+            source: preprocessor.Solidity,
             references: [],
           ),
         ),
@@ -807,20 +873,21 @@ fn do_enumerate_node_declarations(
     }
     ModifierDefinitionNode(id:, parameters:, nodes:, body:, name:, ..) -> {
       let children_scope =
-        declaration.Scope(..parent_scope, member: option.Some(name))
+        preprocessor.Scope(..parent_scope, member: option.Some(name))
 
       let #(id_acc, declarations) = declarations
       let declarations = #(
-        id_acc + 1,
+        int.max(id_acc, id + 1),
         dict.insert(
           declarations,
           id,
-          declaration.Declaration(
+          preprocessor.Declaration(
+            id:,
             name:,
             scope: parent_scope,
-            signature: node_to_source_string(node),
-            topic_id: declaration.declaration_id_to_topic_id(id_acc),
-            kind: declaration.ModifierDeclaration,
+            signature: get_signature_nodes(node),
+            kind: preprocessor.ModifierDeclaration,
+            source: preprocessor.Solidity,
             references: [],
           ),
         ),
@@ -845,20 +912,21 @@ fn do_enumerate_node_declarations(
     }
     ErrorDefinitionNode(id:, name:, nodes:, parameters:, ..) -> {
       let childern_scope =
-        declaration.Scope(..parent_scope, member: option.Some(name))
+        preprocessor.Scope(..parent_scope, member: option.Some(name))
 
       let #(id_acc, declarations) = declarations
       let declarations = #(
-        id_acc + 1,
+        int.max(id_acc, id + 1),
         dict.insert(
           declarations,
           id,
-          declaration.Declaration(
+          preprocessor.Declaration(
+            id:,
             name:,
             scope: parent_scope,
-            signature: node_to_source_string(node),
-            topic_id: declaration.declaration_id_to_topic_id(id_acc),
-            kind: declaration.ErrorDeclaration,
+            signature: get_signature_nodes(node),
+            kind: preprocessor.ErrorDeclaration,
+            source: preprocessor.Solidity,
             references: [],
           ),
         ),
@@ -871,20 +939,21 @@ fn do_enumerate_node_declarations(
     }
     EventDefinitionNode(id:, name:, nodes:, parameters:, ..) -> {
       let childern_scope =
-        declaration.Scope(..parent_scope, member: option.Some(name))
+        preprocessor.Scope(..parent_scope, member: option.Some(name))
 
       let #(id_acc, declarations) = declarations
       let declarations = #(
-        id_acc + 1,
+        int.max(id_acc, id + 1),
         dict.insert(
           declarations,
           id,
-          declaration.Declaration(
+          preprocessor.Declaration(
+            id:,
             name:,
             scope: parent_scope,
-            signature: node_to_source_string(node),
-            topic_id: declaration.declaration_id_to_topic_id(id_acc),
-            kind: declaration.EventDeclaration,
+            signature: get_signature_nodes(node),
+            kind: preprocessor.EventDeclaration,
+            source: preprocessor.Solidity,
             references: [],
           ),
         ),
@@ -898,19 +967,20 @@ fn do_enumerate_node_declarations(
     VariableDeclarationNode(id:, name:, constant:, ..) -> {
       let #(id_acc, declarations) = declarations
       #(
-        id_acc + 1,
+        int.max(id_acc, id + 1),
         dict.insert(
           declarations,
           id,
-          declaration.Declaration(
+          preprocessor.Declaration(
+            id:,
             name:,
             scope: parent_scope,
-            signature: node_to_source_string(node),
-            topic_id: declaration.declaration_id_to_topic_id(id_acc),
+            signature: get_signature_nodes(node),
             kind: case constant {
-              True -> declaration.ConstantDeclaration
-              False -> declaration.VariableDeclaration
+              True -> preprocessor.ConstantDeclaration
+              False -> preprocessor.VariableDeclaration
             },
+            source: preprocessor.Solidity,
             references: [],
           ),
         ),
@@ -957,20 +1027,21 @@ fn do_enumerate_node_declarations(
     }
     EnumDefinition(id:, name:, members:, nodes:, ..) -> {
       let children_scope =
-        declaration.Scope(..parent_scope, member: option.Some(name))
+        preprocessor.Scope(..parent_scope, member: option.Some(name))
 
       let #(id_acc, declarations) = declarations
       let declarations = #(
-        id_acc + 1,
+        int.max(id_acc, id + 1),
         dict.insert(
           declarations,
           id,
-          declaration.Declaration(
+          preprocessor.Declaration(
+            id:,
             name:,
             scope: parent_scope,
-            signature: node_to_source_string(node),
-            topic_id: declaration.declaration_id_to_topic_id(id_acc),
-            kind: declaration.EnumDeclaration,
+            signature: get_signature_nodes(node),
+            kind: preprocessor.EnumDeclaration,
+            source: preprocessor.Solidity,
             references: [],
           ),
         ),
@@ -986,16 +1057,17 @@ fn do_enumerate_node_declarations(
     EnumValue(id:, name:, ..) -> {
       let #(id_acc, declarations) = declarations
       #(
-        id_acc + 1,
+        int.max(id_acc, id + 1),
         dict.insert(
           declarations,
           id,
-          declaration.Declaration(
+          preprocessor.Declaration(
+            id:,
             name:,
             scope: parent_scope,
-            signature: node_to_source_string(node),
-            topic_id: declaration.declaration_id_to_topic_id(id_acc),
-            kind: declaration.EnumValueDeclaration,
+            signature: get_signature_nodes(node),
+            kind: preprocessor.EnumValueDeclaration,
+            source: preprocessor.Solidity,
             references: [],
           ),
         ),
@@ -1003,20 +1075,21 @@ fn do_enumerate_node_declarations(
     }
     StructDefinition(id:, name:, members:, nodes:, ..) -> {
       let children_scope =
-        declaration.Scope(..parent_scope, member: option.Some(name))
+        preprocessor.Scope(..parent_scope, member: option.Some(name))
 
       let #(id_acc, declarations) = declarations
       let declarations = #(
-        id_acc + 1,
+        int.max(id_acc, id + 1),
         dict.insert(
           declarations,
           id,
-          declaration.Declaration(
+          preprocessor.Declaration(
+            id:,
             name:,
             scope: parent_scope,
-            signature: node_to_source_string(node),
-            topic_id: declaration.declaration_id_to_topic_id(id_acc),
-            kind: declaration.StructDeclaration,
+            signature: get_signature_nodes(node),
+            kind: preprocessor.StructDeclaration,
+            source: preprocessor.Solidity,
             references: [],
           ),
         ),
@@ -1039,23 +1112,23 @@ pub fn count_references(declarations, in ast: AST) {
     do_count_node_references(
       declarations,
       node,
-      declaration.Scope(
+      preprocessor.Scope(
         file: ast.absolute_path,
         contract: option.None,
         member: option.None,
       ),
-      "",
-      declaration.AccessReference,
+      0,
+      preprocessor.AccessReference,
     )
   })
 }
 
 fn do_count_node_references(
-  declarations: dict.Dict(Int, declaration.Declaration),
+  declarations: dict.Dict(Int, preprocessor.Declaration),
   node: Node,
-  parent_scope: declaration.Scope,
-  parent_topic_id: String,
-  parent_reference_kind: declaration.NodeReferenceKind,
+  parent_scope: preprocessor.Scope,
+  parent_id: Int,
+  parent_reference_kind: preprocessor.NodeReferenceKind,
 ) {
   case node {
     Node(nodes:, ..)
@@ -1070,7 +1143,7 @@ fn do_count_node_references(
         declarations,
         nodes,
         parent_scope,
-        parent_topic_id,
+        parent_id,
         parent_reference_kind,
       )
 
@@ -1083,23 +1156,19 @@ fn do_count_node_references(
 
     ContractDefinitionNode(id:, nodes:, base_contracts:, name:, ..) -> {
       let children_scope =
-        declaration.Scope(..parent_scope, contract: option.Some(name))
-      let contract_topic_id =
-        dict.get(declarations, id)
-        |> result.map(fn(dec) { dec.topic_id })
-        |> result.unwrap("D0")
+        preprocessor.Scope(..parent_scope, contract: option.Some(name))
 
       do_count_node_references_multi(
         declarations,
         nodes,
         children_scope,
-        contract_topic_id,
+        id,
         parent_reference_kind,
       )
       |> do_count_node_references_multi(
         base_contracts,
         children_scope,
-        contract_topic_id,
+        id,
         parent_reference_kind,
       )
     }
@@ -1116,19 +1185,15 @@ fn do_count_node_references(
       ..,
     ) -> {
       let children_scope =
-        declaration.Scope(
+        preprocessor.Scope(
           ..parent_scope,
           member: option.Some(case function_kind {
-            declaration.Function -> name
-            declaration.Constructor -> "constructor"
-            declaration.Fallback -> "fallback"
-            declaration.Receive -> "receive"
+            preprocessor.Function -> name
+            preprocessor.Constructor -> "constructor"
+            preprocessor.Fallback -> "fallback"
+            preprocessor.Receive -> "receive"
           }),
         )
-      let function_topic_id =
-        dict.get(declarations, id)
-        |> result.map(fn(dec) { dec.topic_id })
-        |> result.unwrap("D0")
 
       let declarations =
         list.fold(nodes, declarations, fn(declarations, node) {
@@ -1136,26 +1201,26 @@ fn do_count_node_references(
             declarations,
             node,
             children_scope,
-            function_topic_id,
+            id,
             parent_reference_kind,
           )
         })
         |> do_count_node_references(
           parameters,
           children_scope,
-          function_topic_id,
+          id,
           parent_reference_kind,
         )
         |> do_count_node_references(
           return_parameters,
           children_scope,
-          function_topic_id,
+          id,
           parent_reference_kind,
         )
         |> do_count_node_references_multi(
           modifiers,
           children_scope,
-          function_topic_id,
+          id,
           parent_reference_kind,
         )
 
@@ -1165,7 +1230,7 @@ fn do_count_node_references(
             declarations,
             body,
             children_scope,
-            function_topic_id,
+            id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1173,24 +1238,20 @@ fn do_count_node_references(
     }
     ModifierDefinitionNode(id:, nodes:, parameters:, body:, name:, ..) -> {
       let children_scope =
-        declaration.Scope(..parent_scope, member: option.Some(name))
-      let modifier_id =
-        dict.get(declarations, id)
-        |> result.map(fn(dec) { dec.topic_id })
-        |> result.unwrap("D0")
+        preprocessor.Scope(..parent_scope, member: option.Some(name))
 
       let declarations =
         do_count_node_references_multi(
           declarations,
           nodes,
           children_scope,
-          modifier_id,
+          id,
           parent_reference_kind,
         )
         |> do_count_node_references(
           parameters,
           children_scope,
-          modifier_id,
+          id,
           parent_reference_kind,
         )
 
@@ -1200,7 +1261,7 @@ fn do_count_node_references(
             declarations,
             body,
             children_scope,
-            modifier_id,
+            id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1211,13 +1272,13 @@ fn do_count_node_references(
         declarations,
         nodes,
         parent_scope,
-        parent_topic_id,
+        parent_id,
         parent_reference_kind,
       )
       |> do_count_node_references_multi(
         statements,
         parent_scope,
-        parent_topic_id,
+        parent_id,
         parent_reference_kind,
       )
     }
@@ -1228,7 +1289,7 @@ fn do_count_node_references(
             declarations,
             expression,
             parent_scope,
-            parent_topic_id,
+            parent_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1238,7 +1299,7 @@ fn do_count_node_references(
         declarations,
         event_call,
         parent_scope,
-        parent_topic_id,
+        parent_id,
         parent_reference_kind,
       )
 
@@ -1249,7 +1310,7 @@ fn do_count_node_references(
             declarations,
             initial_value,
             parent_scope,
-            parent_topic_id,
+            parent_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1260,13 +1321,13 @@ fn do_count_node_references(
           declarations,
           condition,
           parent_scope,
-          parent_topic_id,
+          parent_id,
           parent_reference_kind,
         )
         |> do_count_node_references(
           true_body,
           parent_scope,
-          parent_topic_id,
+          parent_id,
           parent_reference_kind,
         )
 
@@ -1276,7 +1337,7 @@ fn do_count_node_references(
             declarations,
             false_body,
             parent_scope,
-            parent_topic_id,
+            parent_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1295,7 +1356,7 @@ fn do_count_node_references(
             declarations,
             init,
             parent_scope,
-            parent_topic_id,
+            parent_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1307,7 +1368,7 @@ fn do_count_node_references(
               declarations,
               condition,
               parent_scope,
-              parent_topic_id,
+              parent_id,
               parent_reference_kind,
             )
           option.None -> declarations
@@ -1320,7 +1381,7 @@ fn do_count_node_references(
               declarations,
               loop,
               parent_scope,
-              parent_topic_id,
+              parent_id,
               parent_reference_kind,
             )
           option.None -> declarations
@@ -1329,7 +1390,7 @@ fn do_count_node_references(
       |> do_count_node_references(
         body,
         parent_scope,
-        parent_topic_id,
+        parent_id,
         parent_reference_kind,
       )
     RevertStatementNode(expression:, ..) ->
@@ -1339,7 +1400,7 @@ fn do_count_node_references(
             declarations,
             expression,
             parent_scope,
-            parent_topic_id,
+            parent_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1352,7 +1413,7 @@ fn do_count_node_references(
             declarations,
             expression,
             parent_scope,
-            parent_topic_id,
+            parent_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1365,17 +1426,18 @@ fn do_count_node_references(
             declarations,
             expression,
             parent_scope,
-            parent_topic_id,
+            parent_id,
             parent_reference_kind,
           )
         option.None -> declarations
       }
       |> add_reference(
         reference_id,
-        declaration.Reference(
+        preprocessor.Reference(
+          parent_id:,
           scope: parent_scope,
-          topic_id: parent_topic_id,
           kind: parent_reference_kind,
+          source: preprocessor.Solidity,
         ),
       )
 
@@ -1385,10 +1447,11 @@ fn do_count_node_references(
           add_reference(
             declarations,
             reference_id,
-            declaration.Reference(
+            preprocessor.Reference(
               scope: parent_scope,
-              topic_id: parent_topic_id,
+              parent_id:,
               kind: parent_reference_kind,
+              source: preprocessor.Solidity,
             ),
           )
         option.None -> declarations
@@ -1400,7 +1463,7 @@ fn do_count_node_references(
               declarations,
               expression,
               parent_scope,
-              parent_topic_id,
+              parent_id,
               parent_reference_kind,
             )
           option.None -> declarations
@@ -1414,15 +1477,15 @@ fn do_count_node_references(
             declarations,
             expression,
             parent_scope,
-            parent_topic_id,
-            declaration.CallReference,
+            parent_id,
+            preprocessor.CallReference,
           )
         option.None -> declarations
       }
       |> do_count_node_references_multi(
         arguments,
         parent_scope,
-        parent_topic_id,
+        parent_id,
         parent_reference_kind,
       )
     Assignment(left_hand_side:, right_hand_side:, ..) ->
@@ -1430,13 +1493,13 @@ fn do_count_node_references(
         declarations,
         left_hand_side,
         parent_scope,
-        parent_topic_id,
-        declaration.MutationReference,
+        parent_id,
+        preprocessor.MutationReference,
       )
       |> do_count_node_references(
         right_hand_side,
         parent_scope,
-        parent_topic_id,
+        parent_id,
         parent_reference_kind,
       )
 
@@ -1445,13 +1508,13 @@ fn do_count_node_references(
         declarations,
         left_expression,
         parent_scope,
-        parent_topic_id,
+        parent_id,
         parent_reference_kind,
       )
       |> do_count_node_references(
         right_expression,
         parent_scope,
-        parent_topic_id,
+        parent_id,
         parent_reference_kind,
       )
 
@@ -1460,7 +1523,7 @@ fn do_count_node_references(
         declarations,
         expression,
         parent_scope,
-        parent_topic_id,
+        parent_id,
         parent_reference_kind,
       )
 
@@ -1471,7 +1534,7 @@ fn do_count_node_references(
             declarations,
             index,
             parent_scope,
-            parent_topic_id,
+            parent_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1479,7 +1542,7 @@ fn do_count_node_references(
       |> do_count_node_references(
         base,
         parent_scope,
-        parent_topic_id,
+        parent_id,
         parent_reference_kind,
       )
 
@@ -1487,10 +1550,11 @@ fn do_count_node_references(
       add_reference(
         declarations,
         reference_id,
-        declaration.Reference(
+        preprocessor.Reference(
           scope: parent_scope,
-          topic_id: parent_topic_id,
-          kind: declaration.CallReference,
+          parent_id:,
+          kind: preprocessor.CallReference,
+          source: preprocessor.Solidity,
         ),
       )
       |> fn(declarations) {
@@ -1500,7 +1564,7 @@ fn do_count_node_references(
               declarations,
               arguments,
               parent_scope,
-              parent_topic_id,
+              parent_id,
               parent_reference_kind,
             )
           option.None -> declarations
@@ -1510,20 +1574,22 @@ fn do_count_node_references(
       add_reference(
         declarations,
         reference_id,
-        declaration.Reference(
+        preprocessor.Reference(
           scope: parent_scope,
-          topic_id: parent_topic_id,
+          parent_id:,
           kind: parent_reference_kind,
+          source: preprocessor.Solidity,
         ),
       )
     BaseContract(reference_id:, ..) ->
       add_reference(
         declarations,
         reference_id,
-        declaration.Reference(
+        preprocessor.Reference(
           scope: parent_scope,
-          topic_id: parent_topic_id,
-          kind: declaration.InheritanceReference,
+          parent_id:,
+          kind: preprocessor.InheritanceReference,
+          source: preprocessor.Solidity,
         ),
       )
     Conditional(condition:, true_expression:, false_expression:, ..) ->
@@ -1531,19 +1597,19 @@ fn do_count_node_references(
         declarations,
         condition,
         parent_scope,
-        parent_topic_id,
+        parent_id,
         parent_reference_kind,
       )
       |> do_count_node_references(
         true_expression,
         parent_scope,
-        parent_topic_id,
+        parent_id,
         parent_reference_kind,
       )
       |> do_count_node_references(
         false_expression,
         parent_scope,
-        parent_topic_id,
+        parent_id,
         parent_reference_kind,
       )
     UserDefinedTypeName(path_node:, ..) ->
@@ -1551,16 +1617,16 @@ fn do_count_node_references(
         declarations,
         path_node,
         parent_scope,
-        parent_topic_id,
-        declaration.TypeReference,
+        parent_id,
+        preprocessor.TypeReference,
       )
     NewExpression(type_name:, arguments:, ..) ->
       do_count_node_references(
         declarations,
         type_name,
         parent_scope,
-        parent_topic_id,
-        declaration.TypeReference,
+        parent_id,
+        preprocessor.TypeReference,
       )
       |> fn(declarations) {
         case arguments {
@@ -1569,7 +1635,7 @@ fn do_count_node_references(
               declarations,
               arguments,
               parent_scope,
-              parent_topic_id,
+              parent_id,
               parent_reference_kind,
             )
           option.None -> declarations
@@ -1580,8 +1646,8 @@ fn do_count_node_references(
         declarations,
         base_type,
         parent_scope,
-        parent_topic_id,
-        declaration.TypeReference,
+        parent_id,
+        preprocessor.TypeReference,
       )
     FunctionCallOptions(options:, expression:, ..) ->
       case expression {
@@ -1590,15 +1656,15 @@ fn do_count_node_references(
             declarations,
             expression,
             parent_scope,
-            parent_topic_id,
-            declaration.CallReference,
+            parent_id,
+            preprocessor.CallReference,
           )
         option.None -> declarations
       }
       |> do_count_node_references_multi(
         options,
         parent_scope,
-        parent_topic_id,
+        parent_id,
         parent_reference_kind,
       )
     Mapping(key_type:, value_type:, ..) ->
@@ -1606,22 +1672,22 @@ fn do_count_node_references(
         declarations,
         key_type,
         parent_scope,
-        parent_topic_id,
-        declaration.TypeReference,
+        parent_id,
+        preprocessor.TypeReference,
       )
       |> do_count_node_references(
         value_type,
         parent_scope,
-        parent_topic_id,
-        declaration.TypeReference,
+        parent_id,
+        preprocessor.TypeReference,
       )
     UsingForDirective(library_name:, ..) ->
       do_count_node_references(
         declarations,
         library_name,
         parent_scope,
-        parent_topic_id,
-        declaration.UsingReference,
+        parent_id,
+        preprocessor.UsingReference,
       )
   }
 }
@@ -1629,12 +1695,12 @@ fn do_count_node_references(
 fn add_reference(
   declarations,
   declaration_id: Int,
-  reference: declaration.Reference,
+  reference: preprocessor.Reference,
 ) {
   dict.upsert(declarations, declaration_id, with: fn(dec) {
     case dec {
       Some(node_declaration) ->
-        declaration.Declaration(..node_declaration, references: [
+        preprocessor.Declaration(..node_declaration, references: [
           reference,
           ..node_declaration.references
         ])
@@ -1645,7 +1711,7 @@ fn add_reference(
           <> int.to_string(declaration_id)
           <> " found, there is an issue with finding all declarations",
         )
-        declaration.unknown_declaration
+        preprocessor.unknown_declaration
       }
     }
   })
@@ -1655,8 +1721,8 @@ fn do_count_node_references_multi(
   declarations,
   nodes: List(Node),
   parent_scope,
-  parent_id: String,
-  parent_reference_kind: declaration.NodeReferenceKind,
+  parent_id: Int,
+  parent_reference_kind: preprocessor.NodeReferenceKind,
 ) {
   list.fold(nodes, declarations, fn(declarations, node) {
     do_count_node_references(
@@ -1669,57 +1735,86 @@ fn do_count_node_references_multi(
   })
 }
 
-fn node_to_source_string(node) {
-  node_to_source_element(node)
-  |> element.to_string
+fn get_signature_nodes(node) {
+  do_node_to_signature_nodes(node, top_level: True)
 }
 
-fn node_to_source_element(node) {
-  do_node_to_source_element(node, True)
-}
-
-fn do_node_to_source_element(node, top_level) {
+fn do_node_to_signature_nodes(node, top_level top_level) {
   case node {
     ErrorDefinitionNode(name:, parameters:, ..) ->
-      element.fragment([
-        html.span([attribute.class("keyword")], [html.text("error ")]),
-        html.span([attribute.class("error")], [html.text(name)]),
-        html.text("("),
-        do_node_to_source_element(parameters, False),
-        html.text(")"),
-      ])
-    StructDefinition(name:, members:, ..) ->
-      element.fragment([
-        html.span([attribute.class("keyword")], [html.text("struct ")]),
-        html.span([attribute.class("struct")], [html.text(name)]),
-        html.text(" { "),
-        element.fragment(
-          list.map(members, do_node_to_source_element(_, False))
-          |> list.intersperse(html.text("; ")),
-        ),
-        html.text(" }"),
-      ])
-    EnumDefinition(name:, members:, ..) ->
-      element.fragment([
-        html.span([attribute.class("keyword")], [html.text("enum ")]),
-        html.span([attribute.class("enum")], [html.text(name)]),
-        html.text(" { "),
-        element.fragment(
-          list.map(members, do_node_to_source_element(_, False))
-          |> list.intersperse(html.text(", ")),
-        ),
-        html.text(" }"),
-      ])
-
-    EnumValue(name:, ..) ->
-      case top_level {
-        True ->
-          element.fragment([
-            html.span([attribute.class("keyword")], [html.text("enum value ")]),
-            html.span([attribute.class("enum value")], [html.text(name)]),
+      [
+        preprocessor.PreProcessedNode(
+          element: element.fragment([
+            html.span([attribute.class("keyword")], [html.text("error ")]),
+            html.span([attribute.class("error")], [html.text(name)]),
+            html.text("("),
           ])
-        False -> html.span([attribute.class("enum value")], [html.text(name)])
+          |> element.to_string,
+        ),
+      ]
+      |> list.append(do_node_to_signature_nodes(parameters, top_level: False))
+      |> list.append([preprocessor.PreProcessedNode(element: ")")])
+
+    StructDefinition(name:, members:, ..) ->
+      [
+        preprocessor.PreProcessedNode(
+          element: element.fragment([
+            html.span([attribute.class("keyword")], [html.text("struct ")]),
+            html.span([attribute.class("struct")], [html.text(name)]),
+            html.text(" { "),
+          ])
+          |> element.to_string,
+        ),
+      ]
+      |> list.append(
+        list.map(members, do_node_to_signature_nodes(_, False))
+        |> list.intersperse([preprocessor.PreProcessedNode(element: "; ")])
+        |> list.flatten,
+      )
+      |> list.append([preprocessor.PreProcessedNode(element: "}")])
+
+    EnumDefinition(name:, members:, ..) ->
+      [
+        preprocessor.PreProcessedNode(
+          element: element.fragment([
+            html.span([attribute.class("keyword")], [html.text("enum ")]),
+            html.span([attribute.class("enum")], [html.text(name)]),
+            html.text(" { "),
+          ])
+          |> element.to_string,
+        ),
+      ]
+      |> list.append(
+        list.map(members, do_node_to_signature_nodes(_, False))
+        |> list.intersperse([preprocessor.PreProcessedNode(element: ", ")])
+        |> list.flatten,
+      )
+      |> list.append([preprocessor.PreProcessedNode(element: " }")])
+
+    EnumValue(id:, name:, ..) ->
+      case top_level {
+        True -> [
+          preprocessor.PreProcessedNode(
+            element: html.span([attribute.class("keyword")], [
+              html.text("enum value "),
+            ])
+            |> element.to_string,
+          ),
+          preprocessor.PreProcessedDeclaration(
+            id:,
+            kind: preprocessor.EnumValueDeclaration,
+            tokens: name,
+          ),
+        ]
+        False -> [
+          preprocessor.PreProcessedReference(
+            referenced_node_id: id,
+            referenced_node_kind: preprocessor.EnumValueDeclaration,
+            tokens: name,
+          ),
+        ]
       }
+
     FunctionDefinitionNode(
       name:,
       function_kind:,
@@ -1730,79 +1825,122 @@ fn do_node_to_source_element(node, top_level) {
       modifiers:,
       ..,
     ) ->
-      element.fragment([
-        case function_kind {
-          declaration.Function ->
-            element.fragment([
-              html.span([attribute.class("keyword")], [html.text("function ")]),
-              html.span([attribute.class("function")], [html.text(name)]),
-            ])
-          declaration.Constructor ->
-            html.span([attribute.class("keyword")], [html.text("constructor")])
-          declaration.Fallback ->
+      [
+        preprocessor.PreProcessedNode(
+          element: element.fragment([
+            case function_kind {
+              preprocessor.Function ->
+                element.fragment([
+                  html.span([attribute.class("keyword")], [
+                    html.text("function "),
+                  ]),
+                  html.span([attribute.class("function")], [html.text(name)]),
+                ])
+              preprocessor.Constructor ->
+                html.span([attribute.class("keyword")], [
+                  html.text("constructor"),
+                ])
+              preprocessor.Fallback ->
+                html.span([attribute.class("keyword")], [
+                  html.text("fallback function"),
+                ])
+              preprocessor.Receive ->
+                html.span([attribute.class("keyword")], [
+                  html.text("receive function"),
+                ])
+            },
+            html.text("("),
+          ])
+          |> element.to_string,
+        ),
+      ]
+      |> list.append(do_node_to_signature_nodes(parameters, False))
+      |> list.append([
+        preprocessor.PreProcessedNode(
+          element: element.fragment([
+            html.text(") "),
             html.span([attribute.class("keyword")], [
-              html.text("fallback function"),
-            ])
-          declaration.Receive ->
+              html.text(visibility <> " "),
+            ]),
             html.span([attribute.class("keyword")], [
-              html.text("receive function"),
-            ])
-        },
-        html.text("("),
-        do_node_to_source_element(parameters, False),
-        html.text(") "),
-        html.span([attribute.class("keyword")], [html.text(visibility <> " ")]),
-        html.span([attribute.class("keyword")], [html.text(state_mutability)]),
-        case modifiers |> list.length > 0 {
-          True ->
-            element.fragment([
-              html.text(" "),
-              ..list.map(modifiers, do_node_to_source_element(_, False))
-              |> list.intersperse(html.text(" "))
-            ])
-          False -> element.fragment([])
-        },
-        case return_parameters {
-          ParameterListNode(parameters: [_, ..], ..) ->
-            element.fragment([
-              html.span([attribute.class("keyword")], [html.text(" returns ")]),
-              html.text("("),
-              do_node_to_source_element(return_parameters, False),
-              html.text(")"),
-            ])
-          _ -> element.fragment([])
-        },
+              html.text(state_mutability),
+            ]),
+          ])
+          |> element.to_string,
+        ),
       ])
+      |> list.append(case modifiers |> list.length > 0 {
+        True ->
+          [preprocessor.PreProcessedNode(element: " ")]
+          |> list.append(
+            list.map(modifiers, do_node_to_signature_nodes(_, False))
+            |> list.intersperse([preprocessor.PreProcessedNode(element: " ")])
+            |> list.flatten,
+          )
+        False -> []
+      })
+      |> list.append(case return_parameters {
+        ParameterListNode(parameters: [_, ..], ..) ->
+          [
+            preprocessor.PreProcessedNode(
+              element: element.fragment([
+                html.span([attribute.class("keyword")], [html.text(" returns ")]),
+                html.text("("),
+              ])
+              |> element.to_string,
+            ),
+          ]
+          |> list.append(do_node_to_signature_nodes(return_parameters, False))
+          |> list.append([preprocessor.PreProcessedNode(element: ")")])
+        _ -> []
+      })
 
     ModifierDefinitionNode(name:, parameters:, ..) ->
-      element.fragment([
-        html.span([attribute.class("keyword")], [html.text("modifier ")]),
-        html.span([attribute.class("modifier")], [html.text(name)]),
-        html.text("("),
-        do_node_to_source_element(parameters, False),
-        html.text(")"),
-      ])
-    ContractDefinitionNode(name:, contract_kind:, ..) ->
-      element.fragment([
-        html.span([attribute.class("keyword")], [
-          html.text(declaration.contract_kind_to_string(contract_kind) <> " "),
-        ]),
-        html.span([attribute.class("contract")], [html.text(name)]),
-      ])
+      [
+        preprocessor.PreProcessedNode(
+          element: element.fragment([
+            html.span([attribute.class("keyword")], [html.text("modifier ")]),
+            html.span([attribute.class("modifier")], [html.text(name)]),
+            html.text("("),
+          ])
+          |> element.to_string,
+        ),
+      ]
+      |> list.append(do_node_to_signature_nodes(parameters, False))
+      |> list.append([preprocessor.PreProcessedNode(element: ")")])
+
+    ContractDefinitionNode(name:, contract_kind:, ..) -> [
+      preprocessor.PreProcessedNode(
+        element: element.fragment([
+          html.span([attribute.class("keyword")], [
+            html.text(
+              preprocessor.contract_kind_to_string(contract_kind) <> " ",
+            ),
+          ]),
+          html.span([attribute.class("contract")], [html.text(name)]),
+        ])
+        |> element.to_string,
+      ),
+    ]
+
     EventDefinitionNode(name:, parameters:, ..) ->
-      element.fragment([
-        html.span([attribute.class("keyword")], [html.text("event ")]),
-        html.span([attribute.class("event")], [html.text(name)]),
-        html.text("("),
-        do_node_to_source_element(parameters, False),
-        html.text(")"),
-      ])
+      [
+        preprocessor.PreProcessedNode(
+          element: element.fragment([
+            html.span([attribute.class("keyword")], [html.text("event ")]),
+            html.span([attribute.class("event")], [html.text(name)]),
+            html.text("("),
+          ])
+          |> element.to_string,
+        ),
+      ]
+      |> list.append(do_node_to_signature_nodes(parameters, False))
+      |> list.append([preprocessor.PreProcessedNode(element: ")")])
 
     ParameterListNode(parameters:, ..) ->
-      element.fragment(
-        list.map(parameters, do_node_to_source_element(_, False))
-        |> list.intersperse(html.text(", ")),
-      )
+      list.map(parameters, do_node_to_signature_nodes(_, False))
+      |> list.intersperse([preprocessor.PreProcessedNode(element: ", ")])
+      |> list.flatten
 
     VariableDeclarationNode(
       type_string:,
@@ -1813,76 +1951,93 @@ fn do_node_to_source_element(node, top_level) {
       value:,
       ..,
     ) -> {
-      element.fragment([
-        element.unsafe_raw_html(
-          "type",
-          "span",
-          [],
-          style_type_string(type_string),
-        ),
-        case visibility {
-          "internal" -> element.fragment([])
-          _ ->
-            html.span([attribute.class("keyword")], [
-              html.text(" " <> visibility),
-            ])
-        },
-        case mutability {
-          "mutable" -> element.fragment([])
-          _ ->
-            html.span([attribute.class("keyword")], [
-              html.text(" " <> mutability),
-            ])
-        },
-        html.span([attribute.class("variable")], [html.text(" " <> name)]),
-        case constant, value {
-          True, option.Some(value) ->
-            element.fragment([
-              html.span([attribute.class("operator")], [html.text(" = ")]),
-              do_node_to_source_element(value, False),
-            ])
-
-          _, _ -> element.fragment([])
-        },
-      ])
-    }
-    Literal(kind:, value:, ..) ->
-      case kind {
-        StringLiteral ->
-          html.span([attribute.class("string")], [
-            html.text("\"" <> value <> "\""),
+      [
+        preprocessor.PreProcessedNode(
+          element: element.fragment([
+            element.unsafe_raw_html(
+              "type",
+              "span",
+              [],
+              style_type_string(type_string),
+            ),
+            case visibility {
+              "internal" -> element.fragment([])
+              _ ->
+                html.span([attribute.class("keyword")], [
+                  html.text(" " <> visibility),
+                ])
+            },
+            case mutability {
+              "mutable" -> element.fragment([])
+              _ ->
+                html.span([attribute.class("keyword")], [
+                  html.text(" " <> mutability),
+                ])
+            },
+            html.span([attribute.class("variable")], [html.text(" " <> name)]),
           ])
-        NumberLiteral | BoolLiteral | HexStringLiteral ->
-          html.span([attribute.class("number")], [html.text(value)])
-      }
-    FunctionCall(expression: option.Some(expr), arguments:, ..) ->
-      element.fragment([
-        do_node_to_source_element(expr, False),
-        html.text("("),
-        element.fragment(
-          list.map(arguments, node_to_source_element)
-          |> list.intersperse(html.text(", ")),
+          |> element.to_string,
         ),
-        html.text(")"),
-      ])
-    Identifier(name:, ..) -> html.text(name)
-    Modifier(name:, arguments:, ..) ->
-      element.fragment([
-        html.span([attribute.class("function")], [html.text(name)]),
-        case arguments {
-          Some(args) ->
-            element.fragment([
-              html.text("("),
-              element.fragment(
-                list.map(args, do_node_to_source_element(_, False))
-                |> list.intersperse(html.text(", ")),
-              ),
-              html.text(")"),
+      ]
+      |> list.append(case constant, value {
+        True, option.Some(value) -> [
+          preprocessor.PreProcessedNode(
+            element: html.span([attribute.class("operator")], [html.text(" = ")])
+            |> element.to_string,
+          ),
+          ..do_node_to_signature_nodes(value, False)
+        ]
+
+        _, _ -> []
+      })
+    }
+    Literal(kind:, value:, ..) -> [
+      preprocessor.PreProcessedNode(
+        element: case kind {
+          StringLiteral ->
+            html.span([attribute.class("string")], [
+              html.text("\"" <> value <> "\""),
             ])
-          option.None -> element.fragment([])
-        },
-      ])
-    _ -> html.text("...")
+          NumberLiteral | BoolLiteral | HexStringLiteral ->
+            html.span([attribute.class("number")], [html.text(value)])
+        }
+        |> element.to_string,
+      ),
+    ]
+
+    FunctionCall(expression: option.Some(expr), arguments:, ..) ->
+      do_node_to_signature_nodes(expr, False)
+      |> list.append([preprocessor.PreProcessedNode(element: "(")])
+      |> list.append(
+        list.map(arguments, do_node_to_signature_nodes(_, False))
+        |> list.intersperse([preprocessor.PreProcessedNode(element: ", ")])
+        |> list.flatten,
+      )
+      |> list.append([preprocessor.PreProcessedNode(element: ")")])
+
+    Identifier(name:, ..) -> [preprocessor.PreProcessedNode(element: name)]
+
+    Modifier(name:, arguments:, ..) ->
+      [
+        preprocessor.PreProcessedNode(
+          element: html.span([attribute.class("function")], [html.text(name)])
+          |> element.to_string,
+        ),
+      ]
+      |> list.append(case arguments {
+        Some(args) ->
+          [preprocessor.PreProcessedNode(element: "(")]
+          |> list.append(
+            list.map(args, do_node_to_signature_nodes(_, False))
+            |> list.intersperse([preprocessor.PreProcessedNode(element: ", ")])
+            |> list.flatten,
+          )
+          |> list.append([preprocessor.PreProcessedNode(element: ")")])
+
+        option.None -> []
+      })
+
+    _ -> [preprocessor.PreProcessedNode(element: "...")]
   }
 }
 
@@ -2010,7 +2165,7 @@ pub type Node {
     id: Int,
     source_map: SourceMap,
     name: String,
-    contract_kind: declaration.ContractKind,
+    contract_kind: preprocessor.ContractKind,
     base_contracts: List(Node),
     nodes: List(Node),
   )
@@ -2043,7 +2198,7 @@ pub type Node {
     id: Int,
     source_map: SourceMap,
     name: String,
-    function_kind: declaration.FunctionKind,
+    function_kind: preprocessor.FunctionKind,
     parameters: Node,
     modifiers: List(Node),
     return_parameters: Node,
@@ -2323,7 +2478,7 @@ fn node_decoder() -> decode.Decoder(Node) {
         id:,
         source_map: source_map_from_string(name_location),
         name:,
-        contract_kind: declaration.contract_kind_from_string(contract_kind),
+        contract_kind: preprocessor.contract_kind_from_string(contract_kind),
         base_contracts:,
         nodes:,
       ))
@@ -2421,19 +2576,19 @@ fn node_decoder() -> decode.Decoder(Node) {
         option.None,
         decode.optional(node_decoder()),
       )
-      let function_kind = declaration.function_kind_from_string(kind)
+      let function_kind = preprocessor.function_kind_from_string(kind)
 
       let location = source_map_from_string(src)
       let name_location = source_map_from_string(name_location)
 
       let #(name, source_map) = case function_kind {
-        declaration.Constructor -> #(
+        preprocessor.Constructor -> #(
           "constructor",
           SourceMap(location.start, 11),
         )
-        declaration.Function -> #(name, name_location)
-        declaration.Fallback -> #("fallback", SourceMap(location.start, 8))
-        declaration.Receive -> #("receive", SourceMap(location.start, 7))
+        preprocessor.Function -> #(name, name_location)
+        preprocessor.Fallback -> #("fallback", SourceMap(location.start, 8))
+        preprocessor.Receive -> #("receive", SourceMap(location.start, 7))
       }
 
       decode.success(FunctionDefinitionNode(

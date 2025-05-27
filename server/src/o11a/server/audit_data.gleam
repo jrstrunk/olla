@@ -1,7 +1,6 @@
 import filepath
 import gleam/dict
 import gleam/function
-import gleam/int
 import gleam/io
 import gleam/json
 import gleam/list
@@ -11,7 +10,6 @@ import gleam/string
 import gleam/string_tree
 import o11a/audit_metadata
 import o11a/config
-import o11a/declaration
 import o11a/preprocessor
 import o11a/server/preprocessor_sol
 import o11a/server/preprocessor_text
@@ -129,7 +127,7 @@ fn do_gather_audit_data(audit_data: AuditData, for audit_name) {
     audit_name,
     json.array(
       list.append(declarations, addressable_lines),
-      declaration.encode_declaration,
+      preprocessor.encode_declaration,
     )
       |> json.to_string_tree,
   ))
@@ -195,19 +193,19 @@ fn preprocess_audit_source(for audit_name) {
       preprocessor_sol.count_references(declarations, ast)
     })
 
-  let #(max_topic_id, text_declarations) =
+  let #(max_topic_id, _text_declarations) =
     #(max_topic_id, dict.new())
     |> list.fold(text_asts, _, fn(declarations, ast) {
       preprocessor_text.enumerate_declarations(declarations, ast)
     })
 
-  use #(_max_topic_id, source_files) <- result.map(
+  use #(_max_topic_id, source_files, addressable_lines) <- result.map(
     dict.get(page_paths, audit_name)
     |> result.unwrap([])
-    |> list.fold(Ok(#(max_topic_id, [])), fn(acc, page_path) {
-      use #(max_topic_id, source_files) <- result.try(acc)
+    |> list.fold(Ok(#(max_topic_id, [], [])), fn(acc, page_path) {
+      use #(max_topic_id, source_files, addressable_lines) <- result.try(acc)
 
-      use #(new_max_topic_id, source_file) <- result.map(
+      use #(new_max_topic_id, source_file, new_addressable_lines) <- result.map(
         case preprocessor.classify_source_kind(path: page_path) {
           // Solidity source file
           Ok(preprocessor.Solidity) ->
@@ -218,23 +216,25 @@ fn preprocess_audit_source(for audit_name) {
               Ok(source), Ok(ast) -> {
                 let nodes = preprocessor_sol.linearize_nodes(ast)
 
-                let #(max_topic_id, preprocessed_source) =
+                let #(max_topic_id, preprocessed_source, new_addressable_lines) =
                   preprocessor_sol.preprocess_source(
                     source:,
                     nodes:,
                     declarations: sol_declarations,
                     max_topic_id:,
+                    page_path:,
                     audit_name:,
                   )
 
                 Ok(#(
                   max_topic_id,
                   option.Some(#(page_path, preprocessed_source)),
+                  list.append(new_addressable_lines, addressable_lines),
                 ))
               }
               // Solidity source file without an AST (unused project dependencies)
               Ok(_source), Error(Nil) -> {
-                Ok(#(max_topic_id, option.None))
+                Ok(#(max_topic_id, option.None, addressable_lines))
               }
 
               Error(msg), _ ->
@@ -252,28 +252,30 @@ fn preprocess_audit_source(for audit_name) {
 
                 // A text file will never increase the max topic id at this stage
                 let preprocessed_source =
-                  preprocessor_text.preprocess_source(
-                    declarations: text_declarations,
-                    nodes:,
-                  )
+                  preprocessor_text.preprocess_source(nodes:)
 
                 Ok(#(
                   max_topic_id,
                   option.Some(#(page_path, preprocessed_source)),
+                  addressable_lines,
                 ))
               }
 
               // Text file without an AST (unsupported text file)
-              Error(Nil) -> Ok(#(max_topic_id, option.None))
+              Error(Nil) -> Ok(#(max_topic_id, option.None, addressable_lines))
             }
 
           // If we get a unsupported file type, just ignore it. (Eventually we could 
           // handle image files, etc.)
-          Error(Nil) -> Ok(#(max_topic_id, option.None))
+          Error(Nil) -> Ok(#(max_topic_id, option.None, addressable_lines))
         },
       )
 
-      #(new_max_topic_id, [source_file, ..source_files])
+      #(
+        new_max_topic_id,
+        [source_file, ..source_files],
+        list.append(new_addressable_lines, addressable_lines),
+      )
     }),
   )
 
@@ -286,41 +288,6 @@ fn preprocess_audit_source(for audit_name) {
     })
 
   let declarations = dict.values(sol_declarations)
-
-  let addressable_lines =
-    list.map(source_files, fn(source_file) {
-      list.index_map(source_file.1, fn(line, index) {
-        let line_number_text = int.to_string(index + 1)
-
-        case line.kind {
-          preprocessor.SoliditySourceLine ->
-            case line.significance {
-              preprocessor.SingleDeclarationLine(topic_id:, ..)
-              | preprocessor.NonEmptyLine(topic_id:) ->
-                Ok(
-                  declaration.Declaration(
-                    name: "L" <> line_number_text,
-                    scope: declaration.Scope(
-                      file: filepath.base_name(source_file.0),
-                      contract: option.None,
-                      member: option.None,
-                    ),
-                    signature: "line " <> line_number_text,
-                    topic_id:,
-                    kind: declaration.LineDeclaration,
-                    references: [],
-                  ),
-                )
-
-              preprocessor.EmptyLine -> Error(Nil)
-            }
-
-          _ -> Error(Nil)
-        }
-      })
-      |> list.filter_map(fn(result) { result })
-    })
-    |> list.flatten
 
   #(source_files, declarations, addressable_lines)
 }
