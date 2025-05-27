@@ -332,7 +332,10 @@ pub fn node_reference_kind_to_annotation(kind) {
   }
 }
 
-pub fn get_references(in message: String, with declarations: List(Declaration)) {
+pub fn get_references(
+  in message: String,
+  with declarations: dict.Dict(String, Declaration),
+) {
   string.split(message, on: " ")
   |> list.filter_map(fn(word) {
     use ref <- result.try({
@@ -341,6 +344,8 @@ pub fn get_references(in message: String, with declarations: List(Declaration)) 
         _ -> Error(Nil)
       }
     })
+
+    let declarations = dict.values(declarations)
 
     list.find(declarations, fn(dec) {
       contract_scope_to_string(dec.scope) <> "." <> dec.name == ref

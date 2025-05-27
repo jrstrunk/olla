@@ -56,7 +56,7 @@ pub type Model {
     ),
     audit_declarations: dict.Dict(
       String,
-      Result(List(declaration.Declaration), lustre_http.HttpError),
+      Result(dict.Dict(String, declaration.Declaration), lustre_http.HttpError),
     ),
     audit_references: dict.Dict(
       String,
@@ -262,7 +262,6 @@ pub type Msg {
     column_number: Int,
     node_id: option.Option(Int),
     topic_id: String,
-    topic_title: String,
     is_reference: Bool,
   )
   UserUnselectedDiscussionEntry(kind: audit_page.DiscussionSelectKind)
@@ -303,9 +302,10 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             audit_name,
             result.map(metadata, fn(metadata) {
               audit_interface.gather_interface_data(
-                dict.get(model.audit_declarations, audit_name)
-                  |> result.unwrap(Ok([]))
-                  |> result.unwrap([]),
+                case dict.get(model.audit_declarations, audit_name) {
+                  Ok(Ok(declarations)) -> declarations |> dict.values
+                  _ -> []
+                },
                 metadata.in_scope_files,
               )
             }),
@@ -357,7 +357,21 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           audit_declarations: dict.insert(
             model.audit_declarations,
             audit_name,
-            declarations,
+            case declarations {
+              Ok(declarations) -> {
+                list.group(declarations, by: fn(declaration) {
+                  declaration.topic_id
+                })
+                |> dict.map_values(fn(_k, value) {
+                  case value {
+                    [first, ..] -> first
+                    _ -> panic
+                  }
+                })
+                |> Ok
+              }
+              Error(e) -> Error(e)
+            },
           ),
           audit_references: dict.insert(
             model.audit_references,
@@ -382,14 +396,10 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             result.map(declarations, fn(declarations) {
               audit_interface.gather_interface_data(
                 declarations,
-                dict.get(model.audit_metadata, audit_name)
-                  |> result.map(fn(metadata) {
-                    case metadata {
-                      Ok(metadata) -> metadata.in_scope_files
-                      Error(..) -> []
-                    }
-                  })
-                  |> result.unwrap([]),
+                case dict.get(model.audit_metadata, audit_name) {
+                  Ok(Ok(metadata)) -> metadata.in_scope_files
+                  _ -> []
+                },
               )
             }),
           ),
@@ -435,7 +445,6 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       column_number:,
       node_id:,
       topic_id:,
-      topic_title:,
       is_reference:,
     ) -> {
       use page_path <- given.ok(
@@ -469,7 +478,6 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               line_number:,
               column_number:,
               topic_id:,
-              topic_title:,
               is_reference:,
               declarations:,
             ),
@@ -947,7 +955,6 @@ fn map_audit_page_msg(msg) {
       column_number:,
       node_id:,
       topic_id:,
-      topic_title:,
       is_reference:,
     ) ->
       UserSelectedDiscussionEntry(
@@ -956,7 +963,6 @@ fn map_audit_page_msg(msg) {
         column_number:,
         node_id:,
         topic_id:,
-        topic_title:,
         is_reference:,
       )
     audit_page.UserUnselectedDiscussionEntry(kind:) ->

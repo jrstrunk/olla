@@ -45,7 +45,6 @@ pub type Msg(msg) {
     column_number: Int,
     node_id: option.Option(Int),
     topic_id: String,
-    topic_title: String,
     is_reference: Bool,
   )
   UserUnselectedDiscussionEntry(kind: DiscussionSelectKind)
@@ -112,7 +111,6 @@ fn loc_view(
         references:,
         loc:,
         line_topic_id: topic_id,
-        line_topic_title: signature,
         selected_discussion:,
       )
 
@@ -122,7 +120,6 @@ fn loc_view(
         references:,
         loc:,
         line_topic_id: topic_id,
-        line_topic_title: loc.line_tag,
         selected_discussion:,
       )
   }
@@ -133,7 +130,6 @@ fn line_container_view(
   references references,
   loc loc: preprocessor.PreProcessedLine,
   line_topic_id line_topic_id: String,
-  line_topic_title line_topic_title: String,
   selected_discussion selected_discussion: option.Option(DiscussionReference),
 ) {
   let #(parent_notes, info_notes) =
@@ -187,7 +183,6 @@ fn line_container_view(
         inline_comment_preview_view(
           parent_notes,
           topic_id: line_topic_id,
-          topic_title: line_topic_title,
           element_line_number: loc.line_number,
           element_column_number: column_count,
           selected_discussion:,
@@ -202,7 +197,6 @@ fn line_container_view(
 fn inline_comment_preview_view(
   parent_notes: List(computed_note.ComputedNote),
   topic_id topic_id: String,
-  topic_title topic_title: String,
   element_line_number element_line_number,
   element_column_number element_column_number,
   selected_discussion selected_discussion: option.Option(DiscussionReference),
@@ -239,7 +233,6 @@ fn inline_comment_preview_view(
                 column_number: element_column_number,
                 node_id: option.None,
                 topic_id:,
-                topic_title:,
                 is_reference: False,
               )),
               event.on_blur(UserUnselectedDiscussionEntry(kind: EntryFocus)),
@@ -249,7 +242,6 @@ fn inline_comment_preview_view(
                 column_number: element_column_number,
                 node_id: option.None,
                 topic_id:,
-                topic_title:,
                 is_reference: False,
               )),
               event.on_mouse_leave(UserUnselectedDiscussionEntry(
@@ -307,7 +299,6 @@ fn inline_comment_preview_view(
                 column_number: element_column_number,
                 node_id: option.None,
                 topic_id:,
-                topic_title:,
                 is_reference: False,
               )),
               event.on_blur(UserUnselectedDiscussionEntry(kind: EntryFocus)),
@@ -317,7 +308,6 @@ fn inline_comment_preview_view(
                 column_number: element_column_number,
                 node_id: option.None,
                 topic_id:,
-                topic_title:,
                 is_reference: False,
               )),
               event.on_mouse_leave(UserUnselectedDiscussionEntry(
@@ -441,7 +431,6 @@ fn declaration_node_view(
             column_number: element_column_number,
             node_id: option.Some(node_id),
             topic_id: node_declaration.topic_id,
-            topic_title: node_declaration.signature,
             is_reference: False,
           )),
           event.on_blur(UserUnselectedDiscussionEntry(kind: EntryFocus)),
@@ -451,7 +440,6 @@ fn declaration_node_view(
             column_number: element_column_number,
             node_id: option.Some(node_id),
             topic_id: node_declaration.topic_id,
-            topic_title: node_declaration.signature,
             is_reference: False,
           )),
           event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: EntryHover)),
@@ -517,7 +505,6 @@ fn reference_node_view(
             column_number: element_column_number,
             node_id: option.Some(referenced_node_id),
             topic_id: referenced_node_declaration.topic_id,
-            topic_title: referenced_node_declaration.signature,
             is_reference: True,
           )),
           event.on_blur(UserUnselectedDiscussionEntry(kind: EntryFocus)),
@@ -527,7 +514,6 @@ fn reference_node_view(
             column_number: element_column_number,
             node_id: option.Some(referenced_node_id),
             topic_id: referenced_node_declaration.topic_id,
-            topic_title: referenced_node_declaration.signature,
             is_reference: True,
           )),
           event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: EntryHover)),

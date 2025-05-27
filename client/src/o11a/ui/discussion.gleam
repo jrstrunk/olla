@@ -25,7 +25,6 @@ pub type Model {
     line_number: Int,
     column_number: Int,
     topic_id: String,
-    topic_title: String,
     current_note_draft: String,
     current_thread_id: String,
     active_thread: option.Option(ActiveThread),
@@ -33,7 +32,7 @@ pub type Model {
     current_expanded_message_draft: option.Option(String),
     expanded_messages: set.Set(String),
     editing_note: option.Option(computed_note.ComputedNote),
-    declarations: List(declaration.Declaration),
+    declarations: dict.Dict(String, declaration.Declaration),
   )
 }
 
@@ -50,7 +49,6 @@ pub fn init(
   line_number line_number,
   column_number column_number,
   topic_id topic_id,
-  topic_title topic_title,
   is_reference is_reference,
   declarations declarations,
 ) {
@@ -61,7 +59,6 @@ pub fn init(
     line_number:,
     column_number:,
     topic_id:,
-    topic_title:,
     current_note_draft: "",
     current_thread_id: topic_id,
     active_thread: option.None,
@@ -307,7 +304,7 @@ pub fn update(model: Model, msg: Msg) {
 pub fn overlay_view(
   model: Model,
   notes: dict.Dict(String, List(computed_note.ComputedNote)),
-  references,
+  references: dict.Dict(String, List(declaration.Reference)),
 ) {
   let current_thread_notes =
     dict.get(notes, model.current_thread_id)
@@ -396,7 +393,7 @@ fn reference_header_view(model: Model, current_thread_notes) {
               "topic-title",
               "span",
               [],
-              model.topic_title,
+              get_topic_title(model),
             ),
           ]),
         ]),
@@ -478,7 +475,7 @@ fn thread_header_view(model: Model, references) {
                       "topic-title",
                       "span",
                       [],
-                      model.topic_title,
+                      get_topic_title(model),
                     ),
                   ])
                 False ->
@@ -486,7 +483,7 @@ fn thread_header_view(model: Model, references) {
                     "topic-title",
                     "span",
                     [],
-                    model.topic_title,
+                    get_topic_title(model),
                   )
               },
             ]),
@@ -745,4 +742,11 @@ fn on_input_keydown(enter_msg, up_msg) {
       _, _ -> decode.failure(enter_msg, "input_keydown")
     }
   })
+}
+
+fn get_topic_title(model: Model) {
+  case dict.get(model.declarations, model.topic_id) {
+    Ok(dec) -> dec.signature
+    Error(Nil) -> "unknown"
+  }
 }
