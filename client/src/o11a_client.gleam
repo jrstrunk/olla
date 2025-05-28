@@ -22,7 +22,6 @@ import o11a/client/page_navigation
 import o11a/client/selectors
 import o11a/client/storage
 import o11a/computed_note
-import o11a/declaration
 import o11a/events
 import o11a/note
 import o11a/preprocessor
@@ -56,12 +55,12 @@ pub type Model {
     ),
     audit_declarations: dict.Dict(
       String,
-      Result(dict.Dict(String, declaration.Declaration), lustre_http.HttpError),
+      Result(dict.Dict(String, preprocessor.Declaration), lustre_http.HttpError),
     ),
     audit_references: dict.Dict(
       String,
       Result(
-        dict.Dict(String, List(declaration.Reference)),
+        dict.Dict(String, List(preprocessor.Reference)),
         lustre_http.HttpError,
       ),
     ),
@@ -244,7 +243,7 @@ pub type Msg {
   )
   ClientFetchedDeclarations(
     audit_name: String,
-    declarations: Result(List(declaration.Declaration), lustre_http.HttpError),
+    declarations: Result(List(preprocessor.Declaration), lustre_http.HttpError),
   )
   ClientFetchedDiscussion(
     audit_name: String,
@@ -774,7 +773,7 @@ fn fetch_declarations(audit_name) {
   lustre_http.get(
     "/audit-declarations/" <> audit_name,
     lustre_http.expect_json(
-      decode.list(declaration.declaration_decoder()),
+      decode.list(preprocessor.declaration_decoder()),
       ClientFetchedDeclarations(audit_name, _),
     ),
   )

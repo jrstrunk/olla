@@ -5,19 +5,19 @@ import gleam/string
 import lustre/attribute
 import lustre/element
 import lustre/element/html
-import o11a/declaration
+import o11a/preprocessor
 
 pub type InterfaceData {
   InterfaceData(
     file_contracts: List(FileContract),
-    contract_constants: List(declaration.Declaration),
-    contract_variables: List(declaration.Declaration),
-    contract_structs: List(declaration.Declaration),
-    contract_enums: List(declaration.Declaration),
-    contract_events: List(declaration.Declaration),
-    contract_errors: List(declaration.Declaration),
-    contract_functions: List(declaration.Declaration),
-    contract_modifiers: List(declaration.Declaration),
+    contract_constants: List(preprocessor.Declaration),
+    contract_variables: List(preprocessor.Declaration),
+    contract_structs: List(preprocessor.Declaration),
+    contract_enums: List(preprocessor.Declaration),
+    contract_events: List(preprocessor.Declaration),
+    contract_errors: List(preprocessor.Declaration),
+    contract_functions: List(preprocessor.Declaration),
+    contract_modifiers: List(preprocessor.Declaration),
   )
 }
 
@@ -36,11 +36,11 @@ pub fn empty_interface_data() {
 }
 
 pub type FileContract {
-  FileContract(file_name: String, contracts: List(declaration.Declaration))
+  FileContract(file_name: String, contracts: List(preprocessor.Declaration))
 }
 
 pub type ContractDeclaration {
-  ContractDeclaration(contract: String, dec: declaration.Declaration)
+  ContractDeclaration(contract: String, dec: preprocessor.Declaration)
 }
 
 pub fn view(interface_data: InterfaceData, audit_name) {
@@ -58,7 +58,7 @@ pub fn view(interface_data: InterfaceData, audit_name) {
           html.div([attribute.class("ml-[1rem]")], [
             html.p([], [
               html.a(
-                [attribute.href(declaration.declaration_to_link(contract))],
+                [attribute.href(preprocessor.declaration_to_link(contract))],
                 [html.text(contract.name)],
               ),
             ]),
@@ -120,7 +120,7 @@ pub fn view(interface_data: InterfaceData, audit_name) {
 fn contract_members_view(
   contract: String,
   title,
-  declarations: List(declaration.Declaration),
+  declarations: List(preprocessor.Declaration),
 ) {
   let items =
     list.filter(declarations, fn(declaration) {
@@ -135,13 +135,13 @@ fn contract_members_view(
         ..list.map(items, fn(declaration) {
           html.p([attribute.class("ml-[1rem]")], [
             html.a(
-              [attribute.href(declaration.declaration_to_link(declaration))],
+              [attribute.href(preprocessor.declaration_to_link(declaration))],
               [
                 element.unsafe_raw_html(
                   "signature",
                   "span",
                   [],
-                  declaration.signature,
+                  declaration.signature |> todo,
                 ),
               ],
             ),
@@ -152,7 +152,7 @@ fn contract_members_view(
 }
 
 pub fn gather_interface_data(
-  declarations: List(declaration.Declaration),
+  declarations: List(preprocessor.Declaration),
   in_scope_files,
 ) {
   let declarations_in_scope =
@@ -181,7 +181,7 @@ pub fn gather_interface_data(
     declarations_in_scope
     |> list.filter(fn(declaration) {
       case declaration.kind {
-        declaration.ContractDeclaration(..) -> True
+        preprocessor.ContractDeclaration(..) -> True
         _ -> False
       }
     })
@@ -196,7 +196,7 @@ pub fn gather_interface_data(
   let contract_constants =
     list.filter_map(contract_member_declarations_in_scope, fn(declaration) {
       case declaration.dec.kind {
-        declaration.ConstantDeclaration -> Ok(declaration.dec)
+        preprocessor.ConstantDeclaration -> Ok(declaration.dec)
         _ -> Error(Nil)
       }
     })
@@ -204,7 +204,7 @@ pub fn gather_interface_data(
   let contract_variables =
     list.filter_map(contract_member_declarations_in_scope, fn(declaration) {
       case declaration.dec.kind {
-        declaration.VariableDeclaration -> Ok(declaration.dec)
+        preprocessor.VariableDeclaration -> Ok(declaration.dec)
         _ -> Error(Nil)
       }
     })
@@ -212,7 +212,7 @@ pub fn gather_interface_data(
   let contract_structs =
     list.filter_map(contract_member_declarations_in_scope, fn(declaration) {
       case declaration.dec.kind {
-        declaration.StructDeclaration -> Ok(declaration.dec)
+        preprocessor.StructDeclaration -> Ok(declaration.dec)
         _ -> Error(Nil)
       }
     })
@@ -220,7 +220,7 @@ pub fn gather_interface_data(
   let contract_enums =
     list.filter_map(contract_member_declarations_in_scope, fn(declaration) {
       case declaration.dec.kind {
-        declaration.EnumDeclaration -> Ok(declaration.dec)
+        preprocessor.EnumDeclaration -> Ok(declaration.dec)
         _ -> Error(Nil)
       }
     })
@@ -228,7 +228,7 @@ pub fn gather_interface_data(
   let contract_events =
     list.filter_map(contract_member_declarations_in_scope, fn(declaration) {
       case declaration.dec.kind {
-        declaration.EventDeclaration -> Ok(declaration.dec)
+        preprocessor.EventDeclaration -> Ok(declaration.dec)
         _ -> Error(Nil)
       }
     })
@@ -236,7 +236,7 @@ pub fn gather_interface_data(
   let contract_errors =
     list.filter_map(contract_member_declarations_in_scope, fn(declaration) {
       case declaration.dec.kind {
-        declaration.ErrorDeclaration -> Ok(declaration.dec)
+        preprocessor.ErrorDeclaration -> Ok(declaration.dec)
         _ -> Error(Nil)
       }
     })
@@ -244,7 +244,7 @@ pub fn gather_interface_data(
   let contract_functions =
     list.filter_map(contract_member_declarations_in_scope, fn(declaration) {
       case declaration.dec.kind {
-        declaration.FunctionDeclaration(..) -> Ok(declaration.dec)
+        preprocessor.FunctionDeclaration(..) -> Ok(declaration.dec)
         _ -> Error(Nil)
       }
     })
@@ -252,7 +252,7 @@ pub fn gather_interface_data(
   let contract_modifiers =
     list.filter_map(contract_member_declarations_in_scope, fn(declaration) {
       case declaration.dec.kind {
-        declaration.ModifierDeclaration -> Ok(declaration.dec)
+        preprocessor.ModifierDeclaration -> Ok(declaration.dec)
         _ -> Error(Nil)
       }
     })

@@ -16,7 +16,6 @@ import o11a/attributes
 import o11a/classes
 import o11a/client/attributes as client_attributes
 import o11a/computed_note
-import o11a/declaration
 import o11a/events
 import o11a/note
 import o11a/preprocessor
@@ -66,7 +65,7 @@ pub type DiscussionSelectKind {
 pub fn view(
   preprocessed_source preprocessed_source: List(preprocessor.PreProcessedLine),
   discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
-  references references: dict.Dict(String, List(declaration.Reference)),
+  references references: dict.Dict(String, List(preprocessor.Reference)),
   selected_discussion selected_discussion: option.Option(DiscussionReference),
 ) {
   html.div(
@@ -105,7 +104,7 @@ fn loc_view(
       ])
     }
 
-    preprocessor.SingleDeclarationLine(signature:, topic_id:) ->
+    preprocessor.SingleDeclarationLine(topic_id:) ->
       line_container_view(
         discussion:,
         references:,
@@ -348,13 +347,12 @@ fn preprocessed_nodes_view(
 ) {
   list.map_fold(loc.elements, 0, fn(index, element) {
     case element {
-      preprocessor.PreProcessedDeclaration(node_id:, node_declaration:, tokens:) -> {
+      preprocessor.PreProcessedDeclaration(topic_id:, tokens:) -> {
         let new_column_index = index + 1
         #(
           new_column_index,
           declaration_node_view(
-            node_id,
-            node_declaration,
+            topic_id,
             tokens,
             element_line_number: loc.line_number,
             element_column_number: new_column_index,
@@ -365,17 +363,12 @@ fn preprocessed_nodes_view(
         )
       }
 
-      preprocessor.PreProcessedReference(
-        referenced_node_id:,
-        referenced_node_declaration:,
-        tokens:,
-      ) -> {
+      preprocessor.PreProcessedReference(topic_id:, tokens:) -> {
         let new_column_index = index + 1
         #(
           new_column_index,
           reference_node_view(
-            referenced_node_id,
-            referenced_node_declaration,
+            topic_id,
             tokens,
             element_line_number: loc.line_number,
             element_column_number: new_column_index,
@@ -397,8 +390,7 @@ fn preprocessed_nodes_view(
 }
 
 fn declaration_node_view(
-  node_id,
-  node_declaration: declaration.Declaration,
+  topic_id,
   tokens tokens: String,
   discussion discussion,
   references references,
@@ -406,6 +398,8 @@ fn declaration_node_view(
   element_column_number element_column_number,
   selected_discussion selected_discussion: option.Option(DiscussionReference),
 ) {
+  let node_declaration: preprocessor.Declaration = todo
+
   html.span(
     [
       attribute.class("relative"),
@@ -417,11 +411,13 @@ fn declaration_node_view(
     [
       html.span(
         [
-          attribute.id(declaration.declaration_to_id(node_declaration)),
-          attribute.class(declaration.declaration_kind_to_string(
+          attribute.id(preprocessor.declaration_to_id(node_declaration)),
+          attribute.class(preprocessor.declaration_kind_to_string(
             node_declaration.kind,
           )),
-          attribute.class("declaration-preview N" <> int.to_string(node_id)),
+          attribute.class(
+            "declaration-preview N" <> int.to_string(node_declaration.id),
+          ),
           attribute.class(classes.discussion_entry),
           attribute.class(classes.discussion_entry_hover),
           attribute.attribute("tabindex", "0"),
@@ -429,8 +425,8 @@ fn declaration_node_view(
             kind: EntryFocus,
             line_number: element_line_number,
             column_number: element_column_number,
-            node_id: option.Some(node_id),
-            topic_id: node_declaration.topic_id,
+            node_id: option.Some(node_declaration.id),
+            topic_id: topic_id,
             is_reference: False,
           )),
           event.on_blur(UserUnselectedDiscussionEntry(kind: EntryFocus)),
@@ -438,8 +434,8 @@ fn declaration_node_view(
             kind: EntryHover,
             line_number: element_line_number,
             column_number: element_column_number,
-            node_id: option.Some(node_id),
-            topic_id: node_declaration.topic_id,
+            node_id: option.Some(node_declaration.id),
+            topic_id: topic_id,
             is_reference: False,
           )),
           event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: EntryHover)),
@@ -470,8 +466,7 @@ fn declaration_node_view(
 }
 
 fn reference_node_view(
-  referenced_node_id: Int,
-  referenced_node_declaration: declaration.Declaration,
+  topic_id: String,
   tokens: String,
   discussion discussion,
   references references,
@@ -479,6 +474,7 @@ fn reference_node_view(
   element_column_number element_column_number,
   selected_discussion selected_discussion: option.Option(DiscussionReference),
 ) {
+  let referenced_node_declaration: preprocessor.Declaration = todo
   html.span(
     [
       attribute.class("relative"),
@@ -490,11 +486,12 @@ fn reference_node_view(
     [
       html.span(
         [
-          attribute.class(declaration.declaration_kind_to_string(
+          attribute.class(preprocessor.declaration_kind_to_string(
             referenced_node_declaration.kind,
           )),
           attribute.class(
-            "reference-preview N" <> int.to_string(referenced_node_id),
+            "reference-preview N"
+            <> int.to_string(referenced_node_declaration.id),
           ),
           attribute.class(classes.discussion_entry),
           attribute.class(classes.discussion_entry_hover),
@@ -503,8 +500,8 @@ fn reference_node_view(
             kind: EntryFocus,
             line_number: element_line_number,
             column_number: element_column_number,
-            node_id: option.Some(referenced_node_id),
-            topic_id: referenced_node_declaration.topic_id,
+            node_id: option.Some(referenced_node_declaration.id),
+            topic_id:,
             is_reference: True,
           )),
           event.on_blur(UserUnselectedDiscussionEntry(kind: EntryFocus)),
@@ -512,14 +509,14 @@ fn reference_node_view(
             kind: EntryHover,
             line_number: element_line_number,
             column_number: element_column_number,
-            node_id: option.Some(referenced_node_id),
-            topic_id: referenced_node_declaration.topic_id,
+            node_id: option.Some(referenced_node_declaration.id),
+            topic_id:,
             is_reference: True,
           )),
           event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: EntryHover)),
           eventx.on_ctrl_click(
             ctrl_click: UserCtrlClickedNode(
-              uri: declaration.declaration_to_link(referenced_node_declaration),
+              uri: preprocessor.declaration_to_link(referenced_node_declaration),
             ),
             non_ctrl_click: option.Some(UserClickedDiscussionEntry(
               line_number: element_line_number,

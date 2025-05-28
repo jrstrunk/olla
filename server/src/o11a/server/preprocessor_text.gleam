@@ -22,10 +22,8 @@ pub fn preprocess_source(nodes nodes: List(Node)) {
   let line_tag = "L" <> line_number_text
 
   let significance = case line {
-    preprocessor.PreProcessedDeclaration(id:, ..) ->
-      preprocessor.SingleDeclarationLine(
-        topic_id: preprocessor.declaration_id_to_topic_id(id, preprocessor.Text),
-      )
+    preprocessor.PreProcessedDeclaration(topic_id:, ..) ->
+      preprocessor.SingleDeclarationLine(topic_id:)
     _ -> preprocessor.EmptyLine
   }
 
@@ -51,8 +49,10 @@ fn consume_source(nodes nodes: List(Node)) {
       LineNode(id:, line:, ..) -> {
         [
           preprocessor.PreProcessedDeclaration(
-            id:,
-            kind: preprocessor.LineDeclaration,
+            topic_id: preprocessor.declaration_id_to_topic_id(
+              id,
+              preprocessor.Text,
+            ),
             tokens: line,
           ),
           ..acc
@@ -79,6 +79,10 @@ pub fn enumerate_declarations(declarations, in ast: AST) {
             id,
             preprocessor.Declaration(
               id:,
+              topic_id: preprocessor.declaration_id_to_topic_id(
+                id,
+                preprocessor.Text,
+              ),
               name: "L" <> line_number_text,
               scope: preprocessor.Scope(
                 file: filepath.base_name(page_path),
@@ -93,7 +97,6 @@ pub fn enumerate_declarations(declarations, in ast: AST) {
                 ),
               ],
               kind: preprocessor.LineDeclaration,
-              source: preprocessor.Text,
               references: [],
             ),
           ),

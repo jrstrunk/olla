@@ -220,7 +220,6 @@ fn preprocess_audit_source(for audit_name) {
                   preprocessor_sol.preprocess_source(
                     source:,
                     nodes:,
-                    declarations: sol_declarations,
                     max_topic_id:,
                     page_path:,
                     audit_name:,

@@ -14,8 +14,8 @@ import lustre/element
 import lustre/element/html
 import lustre/event
 import o11a/computed_note
-import o11a/declaration
 import o11a/note
+import o11a/preprocessor
 
 pub type Model {
   Model(
@@ -32,7 +32,7 @@ pub type Model {
     current_expanded_message_draft: option.Option(String),
     expanded_messages: set.Set(String),
     editing_note: option.Option(computed_note.ComputedNote),
-    declarations: dict.Dict(String, declaration.Declaration),
+    declarations: dict.Dict(String, preprocessor.Declaration),
   )
 }
 
@@ -133,10 +133,10 @@ pub fn update(model: Model, msg: Msg) {
       }
 
       let referenced_topic_ids =
-        declaration.get_references(message, with: model.declarations)
+        preprocessor.get_references(message, with: model.declarations)
         |> list.append(case expanded_message {
           option.Some(expanded_message) ->
-            declaration.get_references(
+            preprocessor.get_references(
               expanded_message,
               with: model.declarations,
             )
@@ -304,7 +304,7 @@ pub fn update(model: Model, msg: Msg) {
 pub fn overlay_view(
   model: Model,
   notes: dict.Dict(String, List(computed_note.ComputedNote)),
-  references: dict.Dict(String, List(declaration.Reference)),
+  references: dict.Dict(String, List(preprocessor.Reference)),
 ) {
   let current_thread_notes =
     dict.get(notes, model.current_thread_id)
@@ -518,29 +518,29 @@ fn references_view(references) {
   case list.length(references) > 0 {
     True ->
       html.div([attribute.class("mb-[.75rem]")], [
-        reference_group_view(references, declaration.UsingReference),
-        reference_group_view(references, declaration.InheritanceReference),
-        reference_group_view(references, declaration.CallReference),
-        reference_group_view(references, declaration.AccessReference),
-        reference_group_view(references, declaration.MutationReference),
-        reference_group_view(references, declaration.TypeReference),
+        reference_group_view(references, preprocessor.UsingReference),
+        reference_group_view(references, preprocessor.InheritanceReference),
+        reference_group_view(references, preprocessor.CallReference),
+        reference_group_view(references, preprocessor.AccessReference),
+        reference_group_view(references, preprocessor.MutationReference),
+        reference_group_view(references, preprocessor.TypeReference),
       ])
     False -> element.fragment([])
   }
 }
 
-fn reference_group_view(references: List(declaration.Reference), group_kind) {
+fn reference_group_view(references: List(preprocessor.Reference), group_kind) {
   case list.filter(references, fn(reference) { reference.kind == group_kind }) {
     [] -> element.fragment([])
     references ->
       element.fragment([
         html.p([], [
-          html.text(declaration.node_reference_kind_to_annotation(group_kind)),
+          html.text(preprocessor.node_reference_kind_to_annotation(group_kind)),
         ]),
         ..list.map(references, fn(reference) {
           html.p([attribute.class("pl-[.25rem]")], [
-            html.a([attribute.href(declaration.reference_to_link(reference))], [
-              html.text(declaration.contract_scope_to_string(reference.scope)),
+            html.a([attribute.href(preprocessor.reference_to_link(reference))], [
+              html.text(preprocessor.contract_scope_to_string(reference.scope)),
             ]),
           ])
         })
@@ -746,7 +746,7 @@ fn on_input_keydown(enter_msg, up_msg) {
 
 fn get_topic_title(model: Model) {
   case dict.get(model.declarations, model.topic_id) {
-    Ok(dec) -> dec.signature
+    Ok(dec) -> dec.signature |> todo
     Error(Nil) -> "unknown"
   }
 }

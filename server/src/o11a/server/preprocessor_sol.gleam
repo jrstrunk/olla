@@ -24,14 +24,13 @@ import snag
 pub fn preprocess_source(
   source source: String,
   nodes nodes: List(Node),
-  declarations declarations: dict.Dict(Int, preprocessor.Declaration),
   max_topic_id max_topic_id,
   page_path page_path: String,
   audit_name audit_name: String,
 ) {
   let data = {
     use acc, line <- list.fold(
-      consume_source(source:, nodes:, declarations:, audit_name:),
+      consume_source(source:, nodes:, audit_name:),
       #(0, max_topic_id, [], []),
     )
     let #(index, max_topic_id, preprocessed_lines, addressable_lines) = acc
@@ -70,7 +69,7 @@ pub fn preprocess_source(
       1, _ -> {
         let new_max_topic_id = max_topic_id + 1
 
-        let assert Ok(preprocessor.PreProcessedDeclaration(id:, ..)) =
+        let assert Ok(preprocessor.PreProcessedDeclaration(topic_id:, ..)) =
           list.find(line, fn(decl) {
             case decl {
               preprocessor.PreProcessedDeclaration(..) -> True
@@ -89,6 +88,10 @@ pub fn preprocess_source(
           [
             preprocessor.Declaration(
               id: new_max_topic_id,
+              topic_id: preprocessor.declaration_id_to_topic_id(
+                new_max_topic_id,
+                preprocessor.Solidity,
+              ),
               name: "L" <> line_number_text,
               scope: preprocessor.Scope(
                 file: filepath.base_name(page_path),
@@ -101,7 +104,6 @@ pub fn preprocess_source(
                 ),
               ],
               kind: preprocessor.LineDeclaration,
-              source: preprocessor.Solidity,
               references: [],
             ),
           ],
@@ -121,6 +123,10 @@ pub fn preprocess_source(
           [
             preprocessor.Declaration(
               id: new_max_topic_id,
+              topic_id: preprocessor.declaration_id_to_topic_id(
+                new_max_topic_id,
+                preprocessor.Solidity,
+              ),
               name: "L" <> line_number_text,
               scope: preprocessor.Scope(
                 file: filepath.base_name(page_path),
@@ -133,7 +139,6 @@ pub fn preprocess_source(
                 ),
               ],
               kind: preprocessor.LineDeclaration,
-              source: preprocessor.Solidity,
               references: [],
             ),
           ],
@@ -178,7 +183,6 @@ pub fn preprocess_source(
 pub fn consume_source(
   source source: String,
   nodes nodes: List(Node),
-  declarations declarations: dict.Dict(Int, preprocessor.Declaration),
   audit_name audit_name: String,
 ) {
   let #(_, current_line, processed, rest) =
@@ -204,39 +208,34 @@ pub fn consume_source(
         | EnumDefinition(id:, ..)
         | StructDefinition(id:, ..)
         | EnumValue(id:, ..) -> {
-          let declaration =
-            dict.get(declarations, id)
-            |> result.unwrap(preprocessor.unknown_declaration)
-
           preprocessor.PreProcessedDeclaration(
-            id:,
-            kind: declaration.kind,
+            topic_id: preprocessor.declaration_id_to_topic_id(
+              id,
+              preprocessor.Solidity,
+            ),
             tokens: _,
           )
         }
 
         BaseContract(reference_id:, ..) | Modifier(reference_id:, ..) -> {
-          let declaration =
-            dict.get(declarations, reference_id)
-            |> result.unwrap(preprocessor.unknown_declaration)
-
           preprocessor.PreProcessedReference(
-            referenced_node_id: reference_id,
-            referenced_node_kind: declaration.kind,
+            topic_id: preprocessor.declaration_id_to_topic_id(
+              reference_id,
+              preprocessor.Solidity,
+            ),
             tokens: _,
           )
         }
+
         Identifier(reference_id:, ..) | IdentifierPath(reference_id:, ..) ->
           case reference_id < 0 {
             True -> style_tokens(_, class: "global-variable")
             False -> {
-              let declaration =
-                dict.get(declarations, reference_id)
-                |> result.unwrap(preprocessor.unknown_declaration)
-
               preprocessor.PreProcessedReference(
-                referenced_node_id: reference_id,
-                referenced_node_kind: declaration.kind,
+                topic_id: preprocessor.declaration_id_to_topic_id(
+                  reference_id,
+                  preprocessor.Solidity,
+                ),
                 tokens: _,
               )
             }
@@ -245,13 +244,11 @@ pub fn consume_source(
         MemberAccess(reference_id:, is_global_access:, ..) ->
           case reference_id, is_global_access {
             option.Some(reference_id), _ -> {
-              let declaration =
-                dict.get(declarations, reference_id)
-                |> result.unwrap(preprocessor.unknown_declaration)
-
               preprocessor.PreProcessedReference(
-                referenced_node_id: reference_id,
-                referenced_node_kind: declaration.kind,
+                topic_id: preprocessor.declaration_id_to_topic_id(
+                  reference_id,
+                  preprocessor.Solidity,
+                ),
                 tokens: _,
               )
             }
@@ -799,19 +796,21 @@ fn do_enumerate_node_declarations(
         preprocessor.Scope(..parent_scope, contract: option.Some(name))
 
       let #(id_acc, declarations) = declarations
+      let topic_id =
+        preprocessor.declaration_id_to_topic_id(id, preprocessor.Solidity)
       let declarations = #(
         int.max(id_acc, id + 1),
         dict.insert(
           declarations,
-          id,
+          topic_id,
           preprocessor.Declaration(
             id:,
+            topic_id:,
             name:,
             // The parent of a contract is the file it is defined in
             scope: parent_scope,
             signature: get_signature_nodes(node),
             kind: preprocessor.ContractDeclaration(contract_kind),
-            source: preprocessor.Solidity,
             references: [],
           ),
         ),
@@ -841,18 +840,20 @@ fn do_enumerate_node_declarations(
         preprocessor.Scope(..parent_scope, member: option.Some(name))
 
       let #(id_acc, declarations) = declarations
+      let topic_id =
+        preprocessor.declaration_id_to_topic_id(id, preprocessor.Solidity)
       let declarations = #(
         int.max(id_acc, id + 1),
         dict.insert(
           declarations,
-          id,
+          topic_id,
           preprocessor.Declaration(
             id:,
+            topic_id:,
             name:,
             scope: parent_scope,
             signature: get_signature_nodes(node),
             kind: preprocessor.FunctionDeclaration(function_kind),
-            source: preprocessor.Solidity,
             references: [],
           ),
         ),
@@ -875,19 +876,22 @@ fn do_enumerate_node_declarations(
       let children_scope =
         preprocessor.Scope(..parent_scope, member: option.Some(name))
 
+      let topic_id =
+        preprocessor.declaration_id_to_topic_id(id, preprocessor.Solidity)
+
       let #(id_acc, declarations) = declarations
       let declarations = #(
         int.max(id_acc, id + 1),
         dict.insert(
           declarations,
-          id,
+          topic_id,
           preprocessor.Declaration(
             id:,
+            topic_id:,
             name:,
             scope: parent_scope,
             signature: get_signature_nodes(node),
             kind: preprocessor.ModifierDeclaration,
-            source: preprocessor.Solidity,
             references: [],
           ),
         ),
@@ -914,19 +918,22 @@ fn do_enumerate_node_declarations(
       let childern_scope =
         preprocessor.Scope(..parent_scope, member: option.Some(name))
 
+      let topic_id =
+        preprocessor.declaration_id_to_topic_id(id, preprocessor.Solidity)
+
       let #(id_acc, declarations) = declarations
       let declarations = #(
         int.max(id_acc, id + 1),
         dict.insert(
           declarations,
-          id,
+          topic_id,
           preprocessor.Declaration(
             id:,
+            topic_id:,
             name:,
             scope: parent_scope,
             signature: get_signature_nodes(node),
             kind: preprocessor.ErrorDeclaration,
-            source: preprocessor.Solidity,
             references: [],
           ),
         ),
@@ -941,19 +948,22 @@ fn do_enumerate_node_declarations(
       let childern_scope =
         preprocessor.Scope(..parent_scope, member: option.Some(name))
 
+      let topic_id =
+        preprocessor.declaration_id_to_topic_id(id, preprocessor.Solidity)
+
       let #(id_acc, declarations) = declarations
       let declarations = #(
         int.max(id_acc, id + 1),
         dict.insert(
           declarations,
-          id,
+          topic_id,
           preprocessor.Declaration(
             id:,
+            topic_id:,
             name:,
             scope: parent_scope,
             signature: get_signature_nodes(node),
             kind: preprocessor.EventDeclaration,
-            source: preprocessor.Solidity,
             references: [],
           ),
         ),
@@ -965,14 +975,18 @@ fn do_enumerate_node_declarations(
       |> do_enumerate_node_declarations(parameters, childern_scope)
     }
     VariableDeclarationNode(id:, name:, constant:, ..) -> {
+      let topic_id =
+        preprocessor.declaration_id_to_topic_id(id, preprocessor.Solidity)
+
       let #(id_acc, declarations) = declarations
       #(
         int.max(id_acc, id + 1),
         dict.insert(
           declarations,
-          id,
+          topic_id,
           preprocessor.Declaration(
             id:,
+            topic_id:,
             name:,
             scope: parent_scope,
             signature: get_signature_nodes(node),
@@ -980,7 +994,6 @@ fn do_enumerate_node_declarations(
               True -> preprocessor.ConstantDeclaration
               False -> preprocessor.VariableDeclaration
             },
-            source: preprocessor.Solidity,
             references: [],
           ),
         ),
@@ -1029,19 +1042,22 @@ fn do_enumerate_node_declarations(
       let children_scope =
         preprocessor.Scope(..parent_scope, member: option.Some(name))
 
+      let topic_id =
+        preprocessor.declaration_id_to_topic_id(id, preprocessor.Solidity)
+
       let #(id_acc, declarations) = declarations
       let declarations = #(
         int.max(id_acc, id + 1),
         dict.insert(
           declarations,
-          id,
+          topic_id,
           preprocessor.Declaration(
             id:,
+            topic_id:,
             name:,
             scope: parent_scope,
             signature: get_signature_nodes(node),
             kind: preprocessor.EnumDeclaration,
-            source: preprocessor.Solidity,
             references: [],
           ),
         ),
@@ -1056,18 +1072,20 @@ fn do_enumerate_node_declarations(
     }
     EnumValue(id:, name:, ..) -> {
       let #(id_acc, declarations) = declarations
+      let topic_id =
+        preprocessor.declaration_id_to_topic_id(id, preprocessor.Solidity)
       #(
         int.max(id_acc, id + 1),
         dict.insert(
           declarations,
-          id,
+          topic_id,
           preprocessor.Declaration(
             id:,
+            topic_id:,
             name:,
             scope: parent_scope,
             signature: get_signature_nodes(node),
             kind: preprocessor.EnumValueDeclaration,
-            source: preprocessor.Solidity,
             references: [],
           ),
         ),
@@ -1077,19 +1095,22 @@ fn do_enumerate_node_declarations(
       let children_scope =
         preprocessor.Scope(..parent_scope, member: option.Some(name))
 
+      let topic_id =
+        preprocessor.declaration_id_to_topic_id(id, preprocessor.Solidity)
+
       let #(id_acc, declarations) = declarations
       let declarations = #(
         int.max(id_acc, id + 1),
         dict.insert(
           declarations,
-          id,
+          topic_id,
           preprocessor.Declaration(
             id:,
+            topic_id:,
             name:,
             scope: parent_scope,
             signature: get_signature_nodes(node),
             kind: preprocessor.StructDeclaration,
-            source: preprocessor.Solidity,
             references: [],
           ),
         ),
@@ -1124,7 +1145,7 @@ pub fn count_references(declarations, in ast: AST) {
 }
 
 fn do_count_node_references(
-  declarations: dict.Dict(Int, preprocessor.Declaration),
+  declarations,
   node: Node,
   parent_scope: preprocessor.Scope,
   parent_id: Int,
@@ -1697,24 +1718,31 @@ fn add_reference(
   declaration_id: Int,
   reference: preprocessor.Reference,
 ) {
-  dict.upsert(declarations, declaration_id, with: fn(dec) {
-    case dec {
-      Some(node_declaration) ->
-        preprocessor.Declaration(..node_declaration, references: [
-          reference,
-          ..node_declaration.references
-        ])
+  dict.upsert(
+    declarations,
+    preprocessor.declaration_id_to_topic_id(
+      declaration_id,
+      preprocessor.Solidity,
+    ),
+    with: fn(dec) {
+      case dec {
+        Some(node_declaration) ->
+          preprocessor.Declaration(..node_declaration, references: [
+            reference,
+            ..node_declaration.references
+          ])
 
-      option.None -> {
-        io.println(
-          "No declaration for "
-          <> int.to_string(declaration_id)
-          <> " found, there is an issue with finding all declarations",
-        )
-        preprocessor.unknown_declaration
+        option.None -> {
+          io.println(
+            "No declaration for "
+            <> int.to_string(declaration_id)
+            <> " found, there is an issue with finding all declarations",
+          )
+          preprocessor.unknown_declaration
+        }
       }
-    }
-  })
+    },
+  )
 }
 
 fn do_count_node_references_multi(
@@ -1795,21 +1823,19 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
       case top_level {
         True -> [
           preprocessor.PreProcessedNode(
-            element: html.span([attribute.class("keyword")], [
-              html.text("enum value "),
+            element: element.fragment([
+              html.span([attribute.class("keyword")], [html.text("enum value ")]),
+              html.span([attribute.class("enum")], [html.text(name)]),
             ])
             |> element.to_string,
           ),
-          preprocessor.PreProcessedDeclaration(
-            id:,
-            kind: preprocessor.EnumValueDeclaration,
-            tokens: name,
-          ),
         ]
         False -> [
-          preprocessor.PreProcessedReference(
-            referenced_node_id: id,
-            referenced_node_kind: preprocessor.EnumValueDeclaration,
+          preprocessor.PreProcessedDeclaration(
+            topic_id: preprocessor.declaration_id_to_topic_id(
+              id,
+              preprocessor.Solidity,
+            ),
             tokens: name,
           ),
         ]
@@ -1943,6 +1969,7 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
       |> list.flatten
 
     VariableDeclarationNode(
+      id:,
       type_string:,
       visibility:,
       mutability:,
@@ -1974,11 +2001,31 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
                   html.text(" " <> mutability),
                 ])
             },
-            html.span([attribute.class("variable")], [html.text(" " <> name)]),
+            html.text(" "),
           ])
           |> element.to_string,
         ),
       ]
+      |> list.append([
+        case top_level {
+          True ->
+            preprocessor.PreProcessedNode(
+              element: html.span([attribute.class("variable")], [
+                html.text(name),
+              ])
+              |> element.to_string,
+            )
+
+          False ->
+            preprocessor.PreProcessedDeclaration(
+              topic_id: preprocessor.declaration_id_to_topic_id(
+                id,
+                preprocessor.Solidity,
+              ),
+              tokens: name,
+            )
+        },
+      ])
       |> list.append(case constant, value {
         True, option.Some(value) -> [
           preprocessor.PreProcessedNode(
@@ -1991,6 +2038,7 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
         _, _ -> []
       })
     }
+
     Literal(kind:, value:, ..) -> [
       preprocessor.PreProcessedNode(
         element: case kind {
@@ -2015,7 +2063,19 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
       )
       |> list.append([preprocessor.PreProcessedNode(element: ")")])
 
-    Identifier(name:, ..) -> [preprocessor.PreProcessedNode(element: name)]
+    Identifier(id:, name:, ..) ->
+      case top_level {
+        True -> [preprocessor.PreProcessedNode(element: name)]
+        False -> [
+          preprocessor.PreProcessedDeclaration(
+            topic_id: preprocessor.declaration_id_to_topic_id(
+              id,
+              preprocessor.Solidity,
+            ),
+            tokens: name,
+          ),
+        ]
+      }
 
     Modifier(name:, arguments:, ..) ->
       [

@@ -11,25 +11,25 @@ import gleam/string
 pub type Declaration {
   Declaration(
     id: Int,
+    topic_id: String,
     name: String,
     signature: List(PreProcessedNode),
     scope: Scope,
     kind: DeclarationKind,
-    source: SourceKind,
     references: List(Reference),
   )
 }
 
 pub fn encode_declaration(declaration: Declaration) -> json.Json {
   case declaration {
-    Declaration(id:, name:, scope:, signature:, kind:, source:, references:) ->
+    Declaration(id:, topic_id:, name:, scope:, signature:, kind:, references:) ->
       json.object([
         #("i", json.int(id)),
+        #("t", json.string(topic_id)),
         #("n", json.string(name)),
         #("s", encode_scope(scope)),
-        #("g", todo),
+        #("g", json.array(signature, encode_pre_processed_node)),
         #("k", encode_declaration_kind(kind)),
-        #("c", encode_source_kind(source)),
         #("r", json.array(references, encode_reference)),
       ])
   }
@@ -37,19 +37,19 @@ pub fn encode_declaration(declaration: Declaration) -> json.Json {
 
 pub fn declaration_decoder() -> decode.Decoder(Declaration) {
   use id <- decode.field("i", decode.int)
+  use topic_id <- decode.field("t", decode.string)
   use name <- decode.field("n", decode.string)
   use scope <- decode.field("s", scope_decoder())
-  use signature <- decode.field("g", todo)
+  use signature <- decode.field("g", decode.list(pre_processed_node_decoder()))
   use kind <- decode.field("k", decode_declaration_kind())
-  use source <- decode.field("c", source_kind_decoder())
   use references <- decode.field("r", decode.list(reference_decoder()))
   decode.success(Declaration(
     id:,
+    topic_id:,
     name:,
     scope:,
     signature:,
     kind:,
-    source:,
     references:,
   ))
 }
@@ -57,10 +57,10 @@ pub fn declaration_decoder() -> decode.Decoder(Declaration) {
 pub const unknown_declaration = Declaration(
   0,
   "",
+  "",
   [],
   Scope("", option.None, option.None),
   UnknownDeclaration,
-  Solidity,
   [],
 )
 
@@ -367,7 +367,7 @@ pub fn get_references(
     |> result.try_recover(fn(_) {
       list.find(declarations, fn(dec) { dec.name == ref })
     })
-    |> result.map(fn(dec) { dec.id })
+    |> result.map(fn(dec) { dec.topic_id })
   })
 }
 
@@ -535,12 +535,8 @@ fn pre_processed_line_kind_decoder() -> decode.Decoder(PreProcessedLineKind) {
 }
 
 pub type PreProcessedNode {
-  PreProcessedDeclaration(id: Int, kind: DeclarationKind, tokens: String)
-  PreProcessedReference(
-    referenced_node_id: Int,
-    referenced_node_kind: DeclarationKind,
-    tokens: String,
-  )
+  PreProcessedDeclaration(topic_id: String, tokens: String)
+  PreProcessedReference(topic_id: String, tokens: String)
   PreProcessedNode(element: String)
   PreProcessedGapNode(element: String, leading_spaces: Int)
 }
@@ -550,16 +546,14 @@ fn encode_pre_processed_node(pre_processed_node: PreProcessedNode) -> json.Json 
     PreProcessedDeclaration(..) ->
       json.object([
         #("v", json.string("ppd")),
-        #("i", json.int(pre_processed_node.id)),
-        #("k", encode_declaration_kind(pre_processed_node.kind)),
-        #("t", json.string(pre_processed_node.tokens)),
+        #("t", json.string(pre_processed_node.topic_id)),
+        #("n", json.string(pre_processed_node.tokens)),
       ])
     PreProcessedReference(..) ->
       json.object([
         #("v", json.string("ppr")),
-        #("i", json.int(pre_processed_node.referenced_node_id)),
-        #("k", encode_declaration_kind(pre_processed_node.referenced_node_kind)),
-        #("t", json.string(pre_processed_node.tokens)),
+        #("t", json.string(pre_processed_node.topic_id)),
+        #("n", json.string(pre_processed_node.tokens)),
       ])
     PreProcessedNode(..) ->
       json.object([
@@ -579,20 +573,14 @@ fn pre_processed_node_decoder() -> decode.Decoder(PreProcessedNode) {
   use variant <- decode.field("v", decode.string)
   case variant {
     "ppd" -> {
-      use id <- decode.field("i", decode.int)
-      use kind <- decode.field("k", decode_declaration_kind())
-      use tokens <- decode.field("t", decode.string)
-      decode.success(PreProcessedDeclaration(id:, kind:, tokens:))
+      use topic_id <- decode.field("t", decode.string)
+      use tokens <- decode.field("n", decode.string)
+      decode.success(PreProcessedDeclaration(topic_id:, tokens:))
     }
     "ppr" -> {
-      use referenced_node_id <- decode.field("i", decode.int)
-      use referenced_node_kind <- decode.field("k", decode_declaration_kind())
-      use tokens <- decode.field("t", decode.string)
-      decode.success(PreProcessedReference(
-        referenced_node_id:,
-        referenced_node_kind:,
-        tokens:,
-      ))
+      use topic_id <- decode.field("t", decode.string)
+      use tokens <- decode.field("n", decode.string)
+      decode.success(PreProcessedReference(topic_id:, tokens:))
     }
     "ppn" -> {
       use element <- decode.field("e", decode.string)
