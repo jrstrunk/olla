@@ -10,4 +10,6 @@ pub const user_maximized_thread = "user-maximized-thread"
 
 pub const server_updated_discussion = "sud"
 
+pub const server_updated_topics = "sut"
+
 pub const client_mounted_discussion = "lustre-server-component-init"

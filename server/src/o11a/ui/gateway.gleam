@@ -48,10 +48,10 @@ pub fn start_gateway() -> Result(Gateway, snag.Snag) {
       concurrent_dict.insert(discussion_gateway, audit_name, discussion)
 
       use discussion_component_actor <- result.map(
-        lustre.start_server_component(
-          discussion_component.app(),
-          discussion_component.Model(discussion:),
-        )
+        lustre.start_server_component(discussion_component.app(), #(
+          discussion,
+          audit_data,
+        ))
         |> snag.map_error(string.inspect),
       )
 

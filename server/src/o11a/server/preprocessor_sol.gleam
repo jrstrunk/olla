@@ -25,15 +25,25 @@ pub fn preprocess_source(
   source source: String,
   nodes nodes: List(Node),
   max_topic_id max_topic_id,
+  topic_merges topic_merges: dict.Dict(String, String),
   page_path page_path: String,
   audit_name audit_name: String,
 ) {
   let data = {
-    use acc, line <- list.fold(
-      consume_source(source:, nodes:, audit_name:),
-      #(0, max_topic_id, [], []),
-    )
-    let #(index, max_topic_id, preprocessed_lines, addressable_lines) = acc
+    use acc, line <- list.fold(consume_source(source:, nodes:, audit_name:), #(
+      0,
+      max_topic_id,
+      [],
+      [],
+      topic_merges,
+    ))
+    let #(
+      index,
+      max_topic_id,
+      preprocessed_lines,
+      addressable_lines,
+      topic_merges,
+    ) = acc
 
     let new_index = index + 1
 
@@ -62,7 +72,7 @@ pub fn preprocess_source(
         }
       })
 
-    let #(new_max_topic_id, significance, new_addressable_lines) = case
+    let #(new_max_topic_id, significance, new_addressable_lines, topic_merges) = case
       declaration_count,
       reference_count
     {
@@ -77,21 +87,23 @@ pub fn preprocess_source(
             }
           })
 
+        let line_topic_id =
+          preprocessor.node_id_to_topic_id(
+            new_max_topic_id,
+            preprocessor.Solidity,
+          )
+
+        // Merge this line with the declaration's topic so that we see the
+        // declaration's topic when interacting with the line
+        dict.insert(topic_merges, line_topic_id, topic_id)
+
         #(
           max_topic_id,
-          preprocessor.SingleDeclarationLine(
-            topic_id: preprocessor.declaration_id_to_topic_id(
-              new_max_topic_id,
-              preprocessor.Solidity,
-            ),
-          ),
+          preprocessor.SingleDeclarationLine(topic_id: line_topic_id),
           [
             preprocessor.Declaration(
               id: new_max_topic_id,
-              topic_id: preprocessor.declaration_id_to_topic_id(
-                new_max_topic_id,
-                preprocessor.Solidity,
-              ),
+              topic_id: line_topic_id,
               name: "L" <> line_number_text,
               scope: preprocessor.Scope(
                 file: filepath.base_name(page_path),
@@ -107,23 +119,24 @@ pub fn preprocess_source(
               references: [],
             ),
           ],
+          topic_merges,
         )
       }
 
-      0, 0 -> #(max_topic_id, preprocessor.EmptyLine, [])
+      0, 0 -> #(max_topic_id, preprocessor.EmptyLine, [], topic_merges)
 
       _, _ -> {
         let new_max_topic_id = max_topic_id + 1
         #(
           new_max_topic_id,
-          preprocessor.NonEmptyLine(preprocessor.declaration_id_to_topic_id(
+          preprocessor.NonEmptyLine(preprocessor.node_id_to_topic_id(
             new_max_topic_id,
             preprocessor.Solidity,
           )),
           [
             preprocessor.Declaration(
               id: new_max_topic_id,
-              topic_id: preprocessor.declaration_id_to_topic_id(
+              topic_id: preprocessor.node_id_to_topic_id(
                 new_max_topic_id,
                 preprocessor.Solidity,
               ),
@@ -142,6 +155,7 @@ pub fn preprocess_source(
               references: [],
             ),
           ],
+          topic_merges,
         )
       }
     }
@@ -173,11 +187,12 @@ pub fn preprocess_source(
         ..preprocessed_lines
       ],
       list.append(new_addressable_lines, addressable_lines),
+      topic_merges,
     )
   }
 
-  let #(_index, max_topic_id, lines, addressable_lines) = data
-  #(max_topic_id, lines |> list.reverse, addressable_lines)
+  let #(_index, max_topic_id, lines, addressable_lines, topic_merges) = data
+  #(max_topic_id, lines |> list.reverse, addressable_lines, topic_merges)
 }
 
 pub fn consume_source(
@@ -209,7 +224,7 @@ pub fn consume_source(
         | StructDefinition(id:, ..)
         | EnumValue(id:, ..) -> {
           preprocessor.PreProcessedDeclaration(
-            topic_id: preprocessor.declaration_id_to_topic_id(
+            topic_id: preprocessor.node_id_to_topic_id(
               id,
               preprocessor.Solidity,
             ),
@@ -219,7 +234,7 @@ pub fn consume_source(
 
         BaseContract(reference_id:, ..) | Modifier(reference_id:, ..) -> {
           preprocessor.PreProcessedReference(
-            topic_id: preprocessor.declaration_id_to_topic_id(
+            topic_id: preprocessor.node_id_to_topic_id(
               reference_id,
               preprocessor.Solidity,
             ),
@@ -232,7 +247,7 @@ pub fn consume_source(
             True -> style_tokens(_, class: "global-variable")
             False -> {
               preprocessor.PreProcessedReference(
-                topic_id: preprocessor.declaration_id_to_topic_id(
+                topic_id: preprocessor.node_id_to_topic_id(
                   reference_id,
                   preprocessor.Solidity,
                 ),
@@ -245,7 +260,7 @@ pub fn consume_source(
           case reference_id, is_global_access {
             option.Some(reference_id), _ -> {
               preprocessor.PreProcessedReference(
-                topic_id: preprocessor.declaration_id_to_topic_id(
+                topic_id: preprocessor.node_id_to_topic_id(
                   reference_id,
                   preprocessor.Solidity,
                 ),
@@ -796,8 +811,7 @@ fn do_enumerate_node_declarations(
         preprocessor.Scope(..parent_scope, contract: option.Some(name))
 
       let #(id_acc, declarations) = declarations
-      let topic_id =
-        preprocessor.declaration_id_to_topic_id(id, preprocessor.Solidity)
+      let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
       let declarations = #(
         int.max(id_acc, id + 1),
         dict.insert(
@@ -840,8 +854,7 @@ fn do_enumerate_node_declarations(
         preprocessor.Scope(..parent_scope, member: option.Some(name))
 
       let #(id_acc, declarations) = declarations
-      let topic_id =
-        preprocessor.declaration_id_to_topic_id(id, preprocessor.Solidity)
+      let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
       let declarations = #(
         int.max(id_acc, id + 1),
         dict.insert(
@@ -876,8 +889,7 @@ fn do_enumerate_node_declarations(
       let children_scope =
         preprocessor.Scope(..parent_scope, member: option.Some(name))
 
-      let topic_id =
-        preprocessor.declaration_id_to_topic_id(id, preprocessor.Solidity)
+      let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
       let #(id_acc, declarations) = declarations
       let declarations = #(
@@ -918,8 +930,7 @@ fn do_enumerate_node_declarations(
       let childern_scope =
         preprocessor.Scope(..parent_scope, member: option.Some(name))
 
-      let topic_id =
-        preprocessor.declaration_id_to_topic_id(id, preprocessor.Solidity)
+      let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
       let #(id_acc, declarations) = declarations
       let declarations = #(
@@ -948,8 +959,7 @@ fn do_enumerate_node_declarations(
       let childern_scope =
         preprocessor.Scope(..parent_scope, member: option.Some(name))
 
-      let topic_id =
-        preprocessor.declaration_id_to_topic_id(id, preprocessor.Solidity)
+      let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
       let #(id_acc, declarations) = declarations
       let declarations = #(
@@ -975,8 +985,7 @@ fn do_enumerate_node_declarations(
       |> do_enumerate_node_declarations(parameters, childern_scope)
     }
     VariableDeclarationNode(id:, name:, constant:, ..) -> {
-      let topic_id =
-        preprocessor.declaration_id_to_topic_id(id, preprocessor.Solidity)
+      let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
       let #(id_acc, declarations) = declarations
       #(
@@ -1042,8 +1051,7 @@ fn do_enumerate_node_declarations(
       let children_scope =
         preprocessor.Scope(..parent_scope, member: option.Some(name))
 
-      let topic_id =
-        preprocessor.declaration_id_to_topic_id(id, preprocessor.Solidity)
+      let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
       let #(id_acc, declarations) = declarations
       let declarations = #(
@@ -1072,8 +1080,7 @@ fn do_enumerate_node_declarations(
     }
     EnumValue(id:, name:, ..) -> {
       let #(id_acc, declarations) = declarations
-      let topic_id =
-        preprocessor.declaration_id_to_topic_id(id, preprocessor.Solidity)
+      let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
       #(
         int.max(id_acc, id + 1),
         dict.insert(
@@ -1095,8 +1102,7 @@ fn do_enumerate_node_declarations(
       let children_scope =
         preprocessor.Scope(..parent_scope, member: option.Some(name))
 
-      let topic_id =
-        preprocessor.declaration_id_to_topic_id(id, preprocessor.Solidity)
+      let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
       let #(id_acc, declarations) = declarations
       let declarations = #(
@@ -1720,10 +1726,7 @@ fn add_reference(
 ) {
   dict.upsert(
     declarations,
-    preprocessor.declaration_id_to_topic_id(
-      declaration_id,
-      preprocessor.Solidity,
-    ),
+    preprocessor.node_id_to_topic_id(declaration_id, preprocessor.Solidity),
     with: fn(dec) {
       case dec {
         Some(node_declaration) ->
@@ -1769,51 +1772,56 @@ fn get_signature_nodes(node) {
 
 fn do_node_to_signature_nodes(node, top_level top_level) {
   case node {
-    ErrorDefinitionNode(name:, parameters:, ..) ->
+    ErrorDefinitionNode(id:, name:, parameters:, ..) ->
       [
         preprocessor.PreProcessedNode(
-          element: element.fragment([
-            html.span([attribute.class("keyword")], [html.text("error ")]),
-            html.span([attribute.class("error")], [html.text(name)]),
-            html.text("("),
-          ])
+          element: html.span([attribute.class("keyword")], [html.text("error ")])
           |> element.to_string,
         ),
+        preprocessor.PreProcessedDeclaration(
+          topic_id: preprocessor.node_id_to_topic_id(id, preprocessor.Solidity),
+          tokens: name,
+        ),
+        preprocessor.PreProcessedNode(element: "("),
       ]
       |> list.append(do_node_to_signature_nodes(parameters, top_level: False))
       |> list.append([preprocessor.PreProcessedNode(element: ")")])
 
-    StructDefinition(name:, members:, ..) ->
+    StructDefinition(id:, name:, members:, ..) ->
       [
         preprocessor.PreProcessedNode(
-          element: element.fragment([
-            html.span([attribute.class("keyword")], [html.text("struct ")]),
-            html.span([attribute.class("struct")], [html.text(name)]),
-            html.text(" { "),
+          element: html.span([attribute.class("keyword")], [
+            html.text("struct "),
           ])
           |> element.to_string,
         ),
+        preprocessor.PreProcessedDeclaration(
+          topic_id: preprocessor.node_id_to_topic_id(id, preprocessor.Solidity),
+          tokens: name,
+        ),
+        preprocessor.PreProcessedNode(element: " { "),
       ]
       |> list.append(
-        list.map(members, do_node_to_signature_nodes(_, False))
+        list.map(members, do_node_to_signature_nodes(_, top_level: False))
         |> list.intersperse([preprocessor.PreProcessedNode(element: "; ")])
         |> list.flatten,
       )
-      |> list.append([preprocessor.PreProcessedNode(element: "}")])
+      |> list.append([preprocessor.PreProcessedNode(element: " }")])
 
-    EnumDefinition(name:, members:, ..) ->
+    EnumDefinition(id:, name:, members:, ..) ->
       [
         preprocessor.PreProcessedNode(
-          element: element.fragment([
-            html.span([attribute.class("keyword")], [html.text("enum ")]),
-            html.span([attribute.class("enum")], [html.text(name)]),
-            html.text(" { "),
-          ])
+          element: html.span([attribute.class("keyword")], [html.text("enum ")])
           |> element.to_string,
         ),
+        preprocessor.PreProcessedDeclaration(
+          topic_id: preprocessor.node_id_to_topic_id(id, preprocessor.Solidity),
+          tokens: name,
+        ),
+        preprocessor.PreProcessedNode(element: " { "),
       ]
       |> list.append(
-        list.map(members, do_node_to_signature_nodes(_, False))
+        list.map(members, do_node_to_signature_nodes(_, top_level: False))
         |> list.intersperse([preprocessor.PreProcessedNode(element: ", ")])
         |> list.flatten,
       )
@@ -1823,16 +1831,22 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
       case top_level {
         True -> [
           preprocessor.PreProcessedNode(
-            element: element.fragment([
-              html.span([attribute.class("keyword")], [html.text("enum value ")]),
-              html.span([attribute.class("enum")], [html.text(name)]),
+            element: html.span([attribute.class("keyword")], [
+              html.text("enum value "),
             ])
             |> element.to_string,
           ),
+          preprocessor.PreProcessedDeclaration(
+            topic_id: preprocessor.node_id_to_topic_id(
+              id,
+              preprocessor.Solidity,
+            ),
+            tokens: name,
+          ),
         ]
         False -> [
-          preprocessor.PreProcessedDeclaration(
-            topic_id: preprocessor.declaration_id_to_topic_id(
+          preprocessor.PreProcessedReference(
+            topic_id: preprocessor.node_id_to_topic_id(
               id,
               preprocessor.Solidity,
             ),
@@ -1842,6 +1856,7 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
       }
 
     FunctionDefinitionNode(
+      id:,
       name:,
       function_kind:,
       parameters:,
@@ -1851,36 +1866,34 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
       modifiers:,
       ..,
     ) ->
-      [
-        preprocessor.PreProcessedNode(
-          element: element.fragment([
-            case function_kind {
-              preprocessor.Function ->
-                element.fragment([
-                  html.span([attribute.class("keyword")], [
-                    html.text("function "),
-                  ]),
-                  html.span([attribute.class("function")], [html.text(name)]),
-                ])
-              preprocessor.Constructor ->
-                html.span([attribute.class("keyword")], [
-                  html.text("constructor"),
-                ])
-              preprocessor.Fallback ->
-                html.span([attribute.class("keyword")], [
-                  html.text("fallback function"),
-                ])
-              preprocessor.Receive ->
-                html.span([attribute.class("keyword")], [
-                  html.text("receive function"),
-                ])
-            },
-            html.text("("),
-          ])
-          |> element.to_string,
-        ),
-      ]
-      |> list.append(do_node_to_signature_nodes(parameters, False))
+      case function_kind {
+        preprocessor.Function -> [
+          preprocessor.PreProcessedNode(
+            element: html.span([attribute.class("keyword")], [
+              html.text("function "),
+            ])
+            |> element.to_string,
+          ),
+          preprocessor.PreProcessedDeclaration(
+            topic_id: preprocessor.node_id_to_topic_id(
+              id,
+              preprocessor.Solidity,
+            ),
+            tokens: name,
+          ),
+        ]
+        preprocessor.Constructor | preprocessor.Fallback | preprocessor.Receive -> [
+          preprocessor.PreProcessedDeclaration(
+            topic_id: preprocessor.node_id_to_topic_id(
+              id,
+              preprocessor.Solidity,
+            ),
+            tokens: name,
+          ),
+        ]
+      }
+      |> list.append([preprocessor.PreProcessedNode(element: "(")])
+      |> list.append(do_node_to_signature_nodes(parameters, top_level: False))
       |> list.append([
         preprocessor.PreProcessedNode(
           element: element.fragment([
@@ -1899,7 +1912,7 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
         True ->
           [preprocessor.PreProcessedNode(element: " ")]
           |> list.append(
-            list.map(modifiers, do_node_to_signature_nodes(_, False))
+            list.map(modifiers, do_node_to_signature_nodes(_, top_level: False))
             |> list.intersperse([preprocessor.PreProcessedNode(element: " ")])
             |> list.flatten,
           )
@@ -1921,50 +1934,53 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
         _ -> []
       })
 
-    ModifierDefinitionNode(name:, parameters:, ..) ->
+    ModifierDefinitionNode(id:, name:, parameters:, ..) ->
       [
         preprocessor.PreProcessedNode(
-          element: element.fragment([
-            html.span([attribute.class("keyword")], [html.text("modifier ")]),
-            html.span([attribute.class("modifier")], [html.text(name)]),
-            html.text("("),
+          element: html.span([attribute.class("keyword")], [
+            html.text("modifier "),
           ])
           |> element.to_string,
         ),
+        preprocessor.PreProcessedDeclaration(
+          topic_id: preprocessor.node_id_to_topic_id(id, preprocessor.Solidity),
+          tokens: name,
+        ),
+        preprocessor.PreProcessedNode(element: "("),
       ]
-      |> list.append(do_node_to_signature_nodes(parameters, False))
+      |> list.append(do_node_to_signature_nodes(parameters, top_level: False))
       |> list.append([preprocessor.PreProcessedNode(element: ")")])
 
-    ContractDefinitionNode(name:, contract_kind:, ..) -> [
+    ContractDefinitionNode(id:, name:, contract_kind:, ..) -> [
       preprocessor.PreProcessedNode(
-        element: element.fragment([
-          html.span([attribute.class("keyword")], [
-            html.text(
-              preprocessor.contract_kind_to_string(contract_kind) <> " ",
-            ),
-          ]),
-          html.span([attribute.class("contract")], [html.text(name)]),
+        element: html.span([attribute.class("keyword")], [
+          html.text(preprocessor.contract_kind_to_string(contract_kind) <> " "),
         ])
         |> element.to_string,
       ),
+      preprocessor.PreProcessedDeclaration(
+        topic_id: preprocessor.node_id_to_topic_id(id, preprocessor.Solidity),
+        tokens: name,
+      ),
     ]
 
-    EventDefinitionNode(name:, parameters:, ..) ->
+    EventDefinitionNode(id:, name:, parameters:, ..) ->
       [
         preprocessor.PreProcessedNode(
-          element: element.fragment([
-            html.span([attribute.class("keyword")], [html.text("event ")]),
-            html.span([attribute.class("event")], [html.text(name)]),
-            html.text("("),
-          ])
+          element: html.span([attribute.class("keyword")], [html.text("event ")])
           |> element.to_string,
         ),
+        preprocessor.PreProcessedDeclaration(
+          topic_id: preprocessor.node_id_to_topic_id(id, preprocessor.Solidity),
+          tokens: name,
+        ),
+        preprocessor.PreProcessedNode(element: "("),
       ]
-      |> list.append(do_node_to_signature_nodes(parameters, False))
+      |> list.append(do_node_to_signature_nodes(parameters, top_level: False))
       |> list.append([preprocessor.PreProcessedNode(element: ")")])
 
     ParameterListNode(parameters:, ..) ->
-      list.map(parameters, do_node_to_signature_nodes(_, False))
+      list.map(parameters, do_node_to_signature_nodes(_, top_level: False))
       |> list.intersperse([preprocessor.PreProcessedNode(element: ", ")])
       |> list.flatten
 
@@ -2007,23 +2023,16 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
         ),
       ]
       |> list.append([
-        case top_level {
-          True ->
-            preprocessor.PreProcessedNode(
-              element: html.span([attribute.class("variable")], [
-                html.text(name),
-              ])
-              |> element.to_string,
-            )
+        {
+          let topic_id =
+            preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
-          False ->
-            preprocessor.PreProcessedDeclaration(
-              topic_id: preprocessor.declaration_id_to_topic_id(
-                id,
-                preprocessor.Solidity,
-              ),
-              tokens: name,
-            )
+          case top_level {
+            True ->
+              preprocessor.PreProcessedDeclaration(topic_id:, tokens: name)
+
+            False -> preprocessor.PreProcessedReference(topic_id:, tokens: name)
+          }
         },
       ])
       |> list.append(case constant, value {
@@ -2057,38 +2066,32 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
       do_node_to_signature_nodes(expr, False)
       |> list.append([preprocessor.PreProcessedNode(element: "(")])
       |> list.append(
-        list.map(arguments, do_node_to_signature_nodes(_, False))
+        list.map(arguments, do_node_to_signature_nodes(_, top_level: False))
         |> list.intersperse([preprocessor.PreProcessedNode(element: ", ")])
         |> list.flatten,
       )
       |> list.append([preprocessor.PreProcessedNode(element: ")")])
 
-    Identifier(id:, name:, ..) ->
+    Identifier(id:, name:, ..) -> {
+      let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
       case top_level {
-        True -> [preprocessor.PreProcessedNode(element: name)]
-        False -> [
-          preprocessor.PreProcessedDeclaration(
-            topic_id: preprocessor.declaration_id_to_topic_id(
-              id,
-              preprocessor.Solidity,
-            ),
-            tokens: name,
-          ),
-        ]
+        True -> [preprocessor.PreProcessedDeclaration(topic_id:, tokens: name)]
+        False -> [preprocessor.PreProcessedReference(topic_id:, tokens: name)]
       }
+    }
 
-    Modifier(name:, arguments:, ..) ->
+    Modifier(id:, name:, arguments:, ..) ->
       [
-        preprocessor.PreProcessedNode(
-          element: html.span([attribute.class("function")], [html.text(name)])
-          |> element.to_string,
+        preprocessor.PreProcessedDeclaration(
+          topic_id: preprocessor.node_id_to_topic_id(id, preprocessor.Solidity),
+          tokens: name,
         ),
       ]
       |> list.append(case arguments {
         Some(args) ->
           [preprocessor.PreProcessedNode(element: "(")]
           |> list.append(
-            list.map(args, do_node_to_signature_nodes(_, False))
+            list.map(args, do_node_to_signature_nodes(_, top_level: False))
             |> list.intersperse([preprocessor.PreProcessedNode(element: ", ")])
             |> list.flatten,
           )

@@ -1,5 +1,6 @@
 import filepath
 import gleam/dict
+import gleam/dynamic/decode
 import gleam/function
 import gleam/io
 import gleam/json
@@ -24,6 +25,7 @@ pub opaque type AuditData {
     source_file_provider: AuditSourceFileProvider,
     metadata_provider: AuditMetadataProvider,
     declarations_provider: AuditDeclarationsProvider,
+    topic_merges_provider: AuditTopicMergesProvider,
   )
 }
 
@@ -31,11 +33,13 @@ pub fn build() {
   use source_file_provider <- result.try(build_source_file_provider())
   use metadata_provider <- result.try(build_audit_metadata_provider())
   use declarations_provider <- result.try(build_declarations_provider())
+  use topic_merges_provider <- result.try(build_topic_merges_provider())
 
   Ok(AuditData(
     source_file_provider:,
     metadata_provider:,
     declarations_provider:,
+    topic_merges_provider:,
   ))
 }
 
@@ -86,6 +90,18 @@ pub fn get_declarations(audit_data: AuditData, for audit_name) {
   }
 }
 
+pub fn get_topic_merges(audit_data: AuditData, for audit_name) {
+  case pcd.get(audit_data.topic_merges_provider.pcd, audit_name) {
+    Ok(topic_merges) -> Ok(topic_merges)
+
+    Error(Nil) -> {
+      gather_audit_data(audit_data, for: audit_name)
+
+      pcd.get(audit_data.topic_merges_provider.pcd, audit_name)
+    }
+  }
+}
+
 fn gather_audit_data(audit_data: AuditData, for audit_name) {
   case
     do_gather_audit_data(audit_data, for: audit_name)
@@ -97,7 +113,7 @@ fn gather_audit_data(audit_data: AuditData, for audit_name) {
 }
 
 fn do_gather_audit_data(audit_data: AuditData, for audit_name) {
-  use #(source_files, declarations, addressable_lines) <- result.try(
+  use #(source_files, declarations, addressable_lines, topic_merges) <- result.try(
     preprocess_audit_source(for: audit_name),
   )
 
@@ -130,6 +146,12 @@ fn do_gather_audit_data(audit_data: AuditData, for audit_name) {
       preprocessor.encode_declaration,
     )
       |> json.to_string_tree,
+  ))
+
+  use Nil <- result.try(pcd.insert(
+    audit_data.topic_merges_provider.pcd,
+    audit_name,
+    topic_merges,
   ))
 
   Ok(Nil)
@@ -199,13 +221,15 @@ fn preprocess_audit_source(for audit_name) {
       preprocessor_text.enumerate_declarations(declarations, ast)
     })
 
-  use #(_max_topic_id, source_files, addressable_lines) <- result.map(
+  use #(_max_topic_id, source_files, addressable_lines, topic_merges) <- result.map(
     dict.get(page_paths, audit_name)
     |> result.unwrap([])
-    |> list.fold(Ok(#(max_topic_id, [], [])), fn(acc, page_path) {
-      use #(max_topic_id, source_files, addressable_lines) <- result.try(acc)
+    |> list.fold(Ok(#(max_topic_id, [], [], dict.new())), fn(acc, page_path) {
+      use #(max_topic_id, source_files, addressable_lines, topic_merges) <- result.try(
+        acc,
+      )
 
-      use #(new_max_topic_id, source_file, new_addressable_lines) <- result.map(
+      use #(new_max_topic_id, source_file, new_addressable_lines, topic_merges) <- result.map(
         case preprocessor.classify_source_kind(path: page_path) {
           // Solidity source file
           Ok(preprocessor.Solidity) ->
@@ -216,11 +240,17 @@ fn preprocess_audit_source(for audit_name) {
               Ok(source), Ok(ast) -> {
                 let nodes = preprocessor_sol.linearize_nodes(ast)
 
-                let #(max_topic_id, preprocessed_source, new_addressable_lines) =
+                let #(
+                  max_topic_id,
+                  preprocessed_source,
+                  new_addressable_lines,
+                  topic_merges,
+                ) =
                   preprocessor_sol.preprocess_source(
                     source:,
                     nodes:,
                     max_topic_id:,
+                    topic_merges:,
                     page_path:,
                     audit_name:,
                   )
@@ -229,11 +259,12 @@ fn preprocess_audit_source(for audit_name) {
                   max_topic_id,
                   option.Some(#(page_path, preprocessed_source)),
                   list.append(new_addressable_lines, addressable_lines),
+                  topic_merges,
                 ))
               }
               // Solidity source file without an AST (unused project dependencies)
               Ok(_source), Error(Nil) -> {
-                Ok(#(max_topic_id, option.None, addressable_lines))
+                Ok(#(max_topic_id, option.None, addressable_lines, topic_merges))
               }
 
               Error(msg), _ ->
@@ -257,16 +288,19 @@ fn preprocess_audit_source(for audit_name) {
                   max_topic_id,
                   option.Some(#(page_path, preprocessed_source)),
                   addressable_lines,
+                  topic_merges,
                 ))
               }
 
               // Text file without an AST (unsupported text file)
-              Error(Nil) -> Ok(#(max_topic_id, option.None, addressable_lines))
+              Error(Nil) ->
+                Ok(#(max_topic_id, option.None, addressable_lines, topic_merges))
             }
 
           // If we get a unsupported file type, just ignore it. (Eventually we could 
           // handle image files, etc.)
-          Error(Nil) -> Ok(#(max_topic_id, option.None, addressable_lines))
+          Error(Nil) ->
+            Ok(#(max_topic_id, option.None, addressable_lines, topic_merges))
         },
       )
 
@@ -274,6 +308,7 @@ fn preprocess_audit_source(for audit_name) {
         new_max_topic_id,
         [source_file, ..source_files],
         list.append(new_addressable_lines, addressable_lines),
+        topic_merges,
       )
     }),
   )
@@ -288,7 +323,7 @@ fn preprocess_audit_source(for audit_name) {
 
   let declarations = dict.values(sol_declarations)
 
-  #(source_files, declarations, addressable_lines)
+  #(source_files, declarations, addressable_lines, topic_merges)
 }
 
 // AuditMetadataProvider -------------------------------------------------------
@@ -378,4 +413,67 @@ fn build_declarations_provider() {
   )
 
   AuditDeclarationsProvider(pcd:)
+}
+
+// AuditTopicMergesProvider ----------------------------------------------------
+
+type AuditTopicMergesProvider {
+  AuditTopicMergesProvider(
+    pcd: pcd.PersistentConcurrentDict(String, dict.Dict(String, String)),
+  )
+}
+
+fn build_topic_merges_provider() {
+  use pcd <- result.map(
+    pcd.build(
+      config.get_persist_path(for: "audit_topic_merges"),
+      key_encoder: function.identity,
+      key_decoder: function.identity,
+      val_encoder: fn(val) {
+        val
+        |> encode_topic_merges
+        |> json.to_string
+      },
+      val_decoder: fn(val) {
+        let assert Ok(topic_merges) =
+          json.parse(val, decode.list(topic_merge_decoder()))
+        dict.from_list(topic_merges)
+      },
+    ),
+  )
+
+  AuditTopicMergesProvider(pcd:)
+}
+
+pub fn add_topic_merge(
+  audit_data: AuditData,
+  audit_name audit_name,
+  current_topic_id current_topic_id,
+  new_topic_id new_topic_id,
+) {
+  pcd.get(audit_data.topic_merges_provider.pcd, audit_name)
+  |> result.unwrap(dict.new())
+  |> dict.insert(current_topic_id, new_topic_id)
+  |> pcd.insert(audit_data.topic_merges_provider.pcd, audit_name, _)
+}
+
+pub fn encode_topic_merges(topic_merges: dict.Dict(String, String)) {
+  dict.to_list(topic_merges)
+  |> json.array(fn(topic_merge) {
+    json.array([topic_merge.0, topic_merge.1], json.string)
+  })
+}
+
+pub fn topic_merge_decoder() {
+  use old_topic <- decode.field(0, decode.string)
+  use new_topic <- decode.field(1, decode.string)
+  decode.success(#(old_topic, new_topic))
+}
+
+pub fn subscribe_to_topic_merge_updates(
+  audit_data: AuditData,
+  audit_name audit_name,
+  effect effect,
+) {
+  pcd.subscribe_to_key(audit_data.topic_merges_provider.pcd, audit_name, effect)
 }

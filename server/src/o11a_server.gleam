@@ -133,6 +133,35 @@ fn handle_wisp_request(req, context: Context) {
       ))
       |> wisp.json_response(200)
 
+    ["discussion-topic-merges", audit_name] -> {
+      use <- wisp.require_method(req, http.Get)
+      audit_data.get_topic_merges(context.audit_data, for: audit_name)
+      |> result.map(audit_data.encode_topic_merges)
+      |> result.map(json.to_string_tree)
+      |> result.unwrap(string_tree.from_string(
+        "{\"error\": \"Topic merges not found\"}",
+      ))
+      |> wisp.json_response(200)
+    }
+
+    ["add-topic-merge", audit_name, current_topic_id, new_topic_id] -> {
+      use <- wisp.require_method(req, http.Post)
+      case audit_data.add_topic_merge(
+        context.audit_data,
+        audit_name:,
+        current_topic_id:,
+        new_topic_id:,
+      ) {
+        Ok(Nil) -> wisp.response(201)
+        Error(e) ->
+          wisp.json_response(
+            json.object([#("error", json.string(snag.line_print(e)))])
+              |> json.to_string_tree,
+            500,
+          )
+      }
+    }
+
     ["audit-discussion", audit_name] -> {
       use <- wisp.require_method(req, http.Get)
 

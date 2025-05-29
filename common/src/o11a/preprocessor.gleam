@@ -401,7 +401,7 @@ fn source_kind_decoder() -> decode.Decoder(SourceKind) {
   }
 }
 
-pub fn declaration_id_to_topic_id(declaration_id, source_kind source_kind) {
+pub fn node_id_to_topic_id(declaration_id, source_kind source_kind) {
   case source_kind {
     Solidity -> "S" <> int.to_string(declaration_id)
     Text -> "T" <> int.to_string(declaration_id)

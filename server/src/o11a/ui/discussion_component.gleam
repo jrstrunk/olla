@@ -12,29 +12,57 @@ import lustre/element
 import lustre/element/html
 import lustre/server_component
 import o11a/events
+import o11a/server/audit_data
 import o11a/server/discussion
 
-pub fn app() -> lustre.App(Model, Model, Msg) {
+pub fn app() -> lustre.App(
+  #(discussion.Discussion, audit_data.AuditData),
+  Model,
+  Msg,
+) {
   lustre.component(init, update, view, [])
 }
 
 pub type Msg {
   ServerUpdatedDiscussion
+  ServerUpdatedTopics
 }
 
 pub type Model {
   Model(discussion: discussion.Discussion)
 }
 
-pub fn init(init_model: Model) -> #(Model, effect.Effect(Msg)) {
+pub fn init(
+  init_flags: #(discussion.Discussion, audit_data.AuditData),
+) -> #(Model, effect.Effect(Msg)) {
+  let #(discussion, audit_data) = init_flags
+
   let subscribe_to_note_updates_effect =
     effect.from(fn(dispatch) {
-      discussion.subscribe_to_note_updates(init_model.discussion, fn() {
+      discussion.subscribe_to_note_updates(discussion, fn() {
         dispatch(ServerUpdatedDiscussion)
       })
     })
 
-  #(init_model, subscribe_to_note_updates_effect)
+  let subscribe_to_topic_updates_effect =
+    effect.from(fn(dispatch) {
+      let assert Ok(Nil) =
+        audit_data.subscribe_to_topic_merge_updates(
+          audit_data,
+          discussion.audit_name,
+          fn() { dispatch(ServerUpdatedDiscussion) },
+        )
+
+      Nil
+    })
+
+  #(
+    Model(discussion:),
+    effect.batch([
+      subscribe_to_note_updates_effect,
+      subscribe_to_topic_updates_effect,
+    ]),
+  )
 }
 
 pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
@@ -45,6 +73,18 @@ pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         model,
         server_component.emit(
           events.server_updated_discussion,
+          json.object([
+            #("audit_name", json.string(model.discussion.audit_name)),
+          ]),
+        ),
+      )
+    }
+    ServerUpdatedTopics -> {
+      echo "Emitting server updated topics"
+      #(
+        model,
+        server_component.emit(
+          events.server_updated_topics,
           json.object([
             #("audit_name", json.string(model.discussion.audit_name)),
           ]),

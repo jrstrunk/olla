@@ -938,9 +938,17 @@ fn get_selected_discussion(model: Model) {
   }
 }
 
-pub fn on_server_updated_discussion(msg) {
+fn on_server_updated_discussion(msg) {
   event.on(events.server_updated_discussion, {
     // echo "Server updated discussion"
+    use audit_name <- decode.subfield(["detail", "audit_name"], decode.string)
+    decode.success(msg(audit_name))
+  })
+}
+
+fn on_server_updated_topics(msg) {
+  event.on(events.server_updated_topics, {
+    // echo "Server updated topics"
     use audit_name <- decode.subfield(["detail", "audit_name"], decode.string)
     decode.success(msg(audit_name))
   })

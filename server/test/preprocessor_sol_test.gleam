@@ -1,3 +1,4 @@
+import gleam/dict
 import gleam/dynamic/decode
 import gleam/json
 import gleeunit/should
@@ -56,7 +57,7 @@ pub fn preprocess_source_test() {
 
   let nodes = preprocessor_sol.linearize_nodes(ast)
 
-  preprocessor_sol.preprocess_source(src, nodes, 0, "Titn.json", "thorwallet")
+  preprocessor_sol.preprocess_source(src, nodes, 0, dict.new(), "Titn.json", "thorwallet")
 }
 
 const src = "// SPDX-License-Identifier: MIT
