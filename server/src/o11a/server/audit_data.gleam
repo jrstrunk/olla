@@ -11,6 +11,7 @@ import gleam/string
 import gleam/string_tree
 import o11a/audit_metadata
 import o11a/config
+import o11a/discussion_topic
 import o11a/preprocessor
 import o11a/server/preprocessor_sol
 import o11a/server/preprocessor_text
@@ -431,12 +432,12 @@ fn build_topic_merges_provider() {
       key_decoder: function.identity,
       val_encoder: fn(val) {
         val
-        |> encode_topic_merges
+        |> discussion_topic.encode_topic_merges
         |> json.to_string
       },
       val_decoder: fn(val) {
         let assert Ok(topic_merges) =
-          json.parse(val, decode.list(topic_merge_decoder()))
+          json.parse(val, decode.list(discussion_topic.topic_merge_decoder()))
         dict.from_list(topic_merges)
       },
     ),
@@ -455,19 +456,6 @@ pub fn add_topic_merge(
   |> result.unwrap(dict.new())
   |> dict.insert(current_topic_id, new_topic_id)
   |> pcd.insert(audit_data.topic_merges_provider.pcd, audit_name, _)
-}
-
-pub fn encode_topic_merges(topic_merges: dict.Dict(String, String)) {
-  dict.to_list(topic_merges)
-  |> json.array(fn(topic_merge) {
-    json.array([topic_merge.0, topic_merge.1], json.string)
-  })
-}
-
-pub fn topic_merge_decoder() {
-  use old_topic <- decode.field(0, decode.string)
-  use new_topic <- decode.field(1, decode.string)
-  decode.success(#(old_topic, new_topic))
 }
 
 pub fn subscribe_to_topic_merge_updates(

@@ -22,6 +22,7 @@ import o11a/client/page_navigation
 import o11a/client/selectors
 import o11a/client/storage
 import o11a/computed_note
+import o11a/discussion_topic
 import o11a/events
 import o11a/note
 import o11a/preprocessor
@@ -68,6 +69,10 @@ pub type Model {
       String,
       Result(audit_interface.InterfaceData, lustre_http.HttpError),
     ),
+    merged_topics: dict.Dict(
+      String,
+      Result(dict.Dict(String, String), lustre_http.HttpError),
+    ),
     discussions: dict.Dict(
       String,
       dict.Dict(String, List(computed_note.ComputedNote)),
@@ -105,6 +110,7 @@ fn init(_) -> #(Model, Effect(Msg)) {
       audit_metadata: dict.new(),
       source_files: dict.new(),
       audit_declarations: dict.new(),
+      merged_topics: dict.new(),
       discussions: dict.new(),
       audit_references: dict.new(),
       discussion_models: dict.new(),
@@ -245,10 +251,15 @@ pub type Msg {
     audit_name: String,
     declarations: Result(List(preprocessor.Declaration), lustre_http.HttpError),
   )
+  ClientFetchedMergedTopics(
+    audit_name: String,
+    merged_topics: Result(List(#(String, String)), lustre_http.HttpError),
+  )
   ClientFetchedDiscussion(
     audit_name: String,
     discussion: Result(List(computed_note.ComputedNote), lustre_http.HttpError),
   )
+  ServerUpdatedMergedTopics(audit_name: String)
   ServerUpdatedDiscussion(audit_name: String)
   UserEnteredKey(
     browser_event: browser_event.Event(
@@ -406,6 +417,34 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         effect.none(),
       )
     }
+
+    ClientFetchedMergedTopics(audit_name:, merged_topics:) -> {
+      case merged_topics {
+        Ok(..) -> io.println("Successfully fetched merged topics")
+        Error(e) -> {
+          io.println_error(
+            "Failed to fetch merged topics: " <> string.inspect(e),
+          )
+        }
+      }
+
+      #(
+        Model(
+          ..model,
+          merged_topics: dict.insert(
+            model.merged_topics,
+            audit_name,
+            merged_topics |> result.map(dict.from_list),
+          ),
+        ),
+        effect.none(),
+      )
+    }
+
+    ServerUpdatedMergedTopics(audit_name) -> #(
+      model,
+      fetch_merged_topics(audit_name),
+    )
 
     ClientFetchedDiscussion(audit_name:, discussion:) ->
       case discussion {
@@ -729,6 +768,7 @@ fn route_change_effect(model, new_route route: Route) {
         fetch_metadata(model, audit_name),
         fetch_declarations(audit_name),
         fetch_discussion(audit_name),
+        fetch_merged_topics(audit_name),
       ])
     AuditPageRoute(audit_name:, page_path:) ->
       effect.batch([
@@ -736,6 +776,7 @@ fn route_change_effect(model, new_route route: Route) {
         fetch_source_file(model, page_path),
         fetch_declarations(audit_name),
         fetch_discussion(audit_name),
+        fetch_merged_topics(audit_name),
       ])
     O11aHomeRoute -> effect.none()
   }
@@ -775,6 +816,16 @@ fn fetch_declarations(audit_name) {
     lustre_http.expect_json(
       decode.list(preprocessor.declaration_decoder()),
       ClientFetchedDeclarations(audit_name, _),
+    ),
+  )
+}
+
+fn fetch_merged_topics(audit_name) {
+  lustre_http.get(
+    "/audit-merged-topics/" <> audit_name,
+    lustre_http.expect_json(
+      decode.list(discussion_topic.topic_merge_decoder()),
+      ClientFetchedMergedTopics(audit_name, _),
     ),
   )
 }
@@ -879,6 +930,7 @@ fn view(model: Model) {
           [
             server_component.route("/component-discussion/" <> audit_name),
             on_server_updated_discussion(ServerUpdatedDiscussion),
+            on_server_updated_topics(ServerUpdatedMergedTopics),
           ],
           [],
         ),

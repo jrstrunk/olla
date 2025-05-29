@@ -19,6 +19,7 @@ import lustre/element
 import lustre/element/html
 import mist
 import o11a/config
+import o11a/discussion_topic
 import o11a/note
 import o11a/server/audit_data
 import o11a/server/discussion
@@ -133,10 +134,10 @@ fn handle_wisp_request(req, context: Context) {
       ))
       |> wisp.json_response(200)
 
-    ["discussion-topic-merges", audit_name] -> {
+    ["audit-merged-topics", audit_name] -> {
       use <- wisp.require_method(req, http.Get)
       audit_data.get_topic_merges(context.audit_data, for: audit_name)
-      |> result.map(audit_data.encode_topic_merges)
+      |> result.map(discussion_topic.encode_topic_merges)
       |> result.map(json.to_string_tree)
       |> result.unwrap(string_tree.from_string(
         "{\"error\": \"Topic merges not found\"}",
@@ -144,14 +145,16 @@ fn handle_wisp_request(req, context: Context) {
       |> wisp.json_response(200)
     }
 
-    ["add-topic-merge", audit_name, current_topic_id, new_topic_id] -> {
+    ["merge-topics", audit_name, current_topic_id, new_topic_id] -> {
       use <- wisp.require_method(req, http.Post)
-      case audit_data.add_topic_merge(
-        context.audit_data,
-        audit_name:,
-        current_topic_id:,
-        new_topic_id:,
-      ) {
+      case
+        audit_data.add_topic_merge(
+          context.audit_data,
+          audit_name:,
+          current_topic_id:,
+          new_topic_id:,
+        )
+      {
         Ok(Nil) -> wisp.response(201)
         Error(e) ->
           wisp.json_response(
