@@ -65,7 +65,7 @@ pub type DiscussionSelectKind {
 pub fn view(
   preprocessed_source preprocessed_source: List(preprocessor.PreProcessedLine),
   discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
-  references references: dict.Dict(String, List(preprocessor.Reference)),
+  declarations declarations: dict.Dict(String, preprocessor.Declaration),
   selected_discussion selected_discussion: option.Option(DiscussionReference),
 ) {
   html.div(
@@ -75,18 +75,18 @@ pub fn view(
       attribute.data("lc", preprocessed_source |> list.length |> int.to_string),
     ],
     list.map(preprocessed_source, loc_view(
-      discussion,
-      references,
       _,
+      discussion:,
+      declarations:,
       selected_discussion:,
     )),
   )
 }
 
 fn loc_view(
-  discussion: dict.Dict(String, List(computed_note.ComputedNote)),
-  references,
   loc: preprocessor.PreProcessedLine,
+  discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
+  declarations declarations,
   selected_discussion selected_discussion: option.Option(DiscussionReference),
 ) {
   case loc.significance {
@@ -99,7 +99,7 @@ fn loc_view(
           loc,
           selected_discussion:,
           discussion:,
-          references:,
+          declarations:,
         )
       ])
     }
@@ -107,7 +107,7 @@ fn loc_view(
     preprocessor.SingleDeclarationLine(topic_id:) ->
       line_container_view(
         discussion:,
-        references:,
+        declarations:,
         loc:,
         line_topic_id: topic_id,
         selected_discussion:,
@@ -116,7 +116,7 @@ fn loc_view(
     preprocessor.NonEmptyLine(topic_id:) ->
       line_container_view(
         discussion:,
-        references:,
+        declarations:,
         loc:,
         line_topic_id: topic_id,
         selected_discussion:,
@@ -126,7 +126,7 @@ fn loc_view(
 
 fn line_container_view(
   discussion discussion,
-  references references,
+  declarations declarations,
   loc loc: preprocessor.PreProcessedLine,
   line_topic_id line_topic_id: String,
   selected_discussion selected_discussion: option.Option(DiscussionReference),
@@ -177,7 +177,7 @@ fn line_container_view(
           loc,
           selected_discussion:,
           discussion:,
-          references:,
+          declarations:,
         )),
         inline_comment_preview_view(
           parent_notes,
@@ -186,7 +186,7 @@ fn line_container_view(
           element_column_number: column_count,
           selected_discussion:,
           discussion:,
-          references:,
+          declarations:,
         ),
       ]),
     ],
@@ -200,7 +200,7 @@ fn inline_comment_preview_view(
   element_column_number element_column_number,
   selected_discussion selected_discussion: option.Option(DiscussionReference),
   discussion discussion,
-  references references,
+  declarations declarations,
 ) {
   let note_result =
     list.find(parent_notes, fn(note) {
@@ -271,7 +271,7 @@ fn inline_comment_preview_view(
             element_column_number:,
             selected_discussion:,
             discussion:,
-            references:,
+            declarations:,
           ),
         ],
       )
@@ -332,7 +332,7 @@ fn inline_comment_preview_view(
             element_column_number:,
             selected_discussion:,
             discussion:,
-            references:,
+            declarations:,
           ),
         ],
       )
@@ -342,7 +342,7 @@ fn inline_comment_preview_view(
 fn preprocessed_nodes_view(
   loc: preprocessor.PreProcessedLine,
   discussion discussion,
-  references references,
+  declarations declarations,
   selected_discussion selected_discussion: option.Option(DiscussionReference),
 ) {
   list.map_fold(loc.elements, 0, fn(index, element) {
@@ -358,7 +358,7 @@ fn preprocessed_nodes_view(
             element_column_number: new_column_index,
             selected_discussion:,
             discussion:,
-            references:,
+            declarations:,
           ),
         )
       }
@@ -374,7 +374,7 @@ fn preprocessed_nodes_view(
             element_column_number: new_column_index,
             selected_discussion:,
             discussion:,
-            references:,
+            declarations:,
           ),
         )
       }
@@ -393,12 +393,14 @@ fn declaration_node_view(
   topic_id,
   tokens tokens: String,
   discussion discussion,
-  references references,
+  declarations declarations,
   element_line_number element_line_number,
   element_column_number element_column_number,
   selected_discussion selected_discussion: option.Option(DiscussionReference),
 ) {
-  let node_declaration: preprocessor.Declaration = todo
+  let node_declaration =
+    dict.get(declarations, topic_id)
+    |> result.unwrap(preprocessor.unknown_declaration)
 
   html.span(
     [
@@ -459,7 +461,7 @@ fn declaration_node_view(
         element_column_number:,
         selected_discussion:,
         discussion:,
-        references:,
+        declarations:,
       ),
     ],
   )
@@ -469,12 +471,15 @@ fn reference_node_view(
   topic_id: String,
   tokens: String,
   discussion discussion,
-  references references,
+  declarations declarations,
   element_line_number element_line_number,
   element_column_number element_column_number,
   selected_discussion selected_discussion: option.Option(DiscussionReference),
 ) {
-  let referenced_node_declaration: preprocessor.Declaration = todo
+  let referenced_node_declaration =
+    dict.get(declarations, topic_id)
+    |> result.unwrap(preprocessor.unknown_declaration)
+
   html.span(
     [
       attribute.class("relative"),
@@ -536,7 +541,7 @@ fn reference_node_view(
           |> event.stop_propagation,
         ],
         discussion:,
-        references:,
+        declarations:,
         element_line_number:,
         element_column_number:,
         selected_discussion:,
@@ -548,7 +553,7 @@ fn reference_node_view(
 fn discussion_view(
   attrs,
   discussion discussion,
-  references references,
+  declarations declarations,
   element_line_number element_line_number,
   element_column_number element_column_number,
   selected_discussion selected_discussion: option.Option(DiscussionReference),
@@ -564,7 +569,7 @@ fn discussion_view(
             discussion.overlay_view(
               selected_discussion.model,
               discussion,
-              references,
+              declarations,
             )
             |> element.map(map_discussion_msg(_, selected_discussion)),
           ])

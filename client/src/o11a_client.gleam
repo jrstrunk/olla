@@ -58,13 +58,6 @@ pub type Model {
       String,
       Result(dict.Dict(String, preprocessor.Declaration), lustre_http.HttpError),
     ),
-    audit_references: dict.Dict(
-      String,
-      Result(
-        dict.Dict(String, List(preprocessor.Reference)),
-        lustre_http.HttpError,
-      ),
-    ),
     audit_interface: dict.Dict(
       String,
       Result(audit_interface.InterfaceData, lustre_http.HttpError),
@@ -112,7 +105,6 @@ fn init(_) -> #(Model, Effect(Msg)) {
       audit_declarations: dict.new(),
       merged_topics: dict.new(),
       discussions: dict.new(),
-      audit_references: dict.new(),
       discussion_models: dict.new(),
       audit_interface: dict.new(),
       keyboard_model: page_navigation.init(),
@@ -313,8 +305,8 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             result.map(metadata, fn(metadata) {
               audit_interface.gather_interface_data(
                 case dict.get(model.audit_declarations, audit_name) {
-                  Ok(Ok(declarations)) -> declarations |> dict.values
-                  _ -> []
+                  Ok(Ok(declarations)) -> declarations
+                  _ -> dict.new()
                 },
                 metadata.in_scope_files,
               )
@@ -361,49 +353,40 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             "Failed to fetch declarations: " <> string.inspect(e),
           )
       }
+
+      let merged_declarations = case declarations {
+        Ok(declarations) -> {
+          list.group(declarations, by: fn(declaration) { declaration.topic_id })
+          |> dict.map_values(fn(_k, value) {
+            case value {
+              [first, ..] -> first
+              _ -> panic
+            }
+          })
+          |> discussion_topic.build_topics(
+            case dict.get(model.merged_topics, audit_name) {
+              Ok(Ok(merged_topics)) -> merged_topics
+              _ -> dict.new()
+            },
+            get_combined_topics: discussion_topic.get_combined_declaration,
+          )
+          |> Ok
+        }
+        Error(e) -> Error(e)
+      }
+
       #(
         Model(
           ..model,
           audit_declarations: dict.insert(
             model.audit_declarations,
             audit_name,
-            case declarations {
-              Ok(declarations) -> {
-                list.group(declarations, by: fn(declaration) {
-                  declaration.topic_id
-                })
-                |> dict.map_values(fn(_k, value) {
-                  case value {
-                    [first, ..] -> first
-                    _ -> panic
-                  }
-                })
-                |> Ok
-              }
-              Error(e) -> Error(e)
-            },
-          ),
-          audit_references: dict.insert(
-            model.audit_references,
-            audit_name,
-            declarations
-              |> result.map(fn(declarations) {
-                // Multiple declarations can have the same topic_id, so we need
-                // to group them by topic_id first, then flatten the result
-                // This the above still true?
-                list.group(declarations, by: fn(declaration) {
-                  declaration.topic_id
-                })
-                |> dict.map_values(fn(_k, value) {
-                  list.map(value, fn(declaration) { declaration.references })
-                  |> list.flatten
-                })
-              }),
+            merged_declarations,
           ),
           audit_interface: dict.insert(
             model.audit_interface,
             audit_name,
-            result.map(declarations, fn(declarations) {
+            result.map(merged_declarations, fn(declarations) {
               audit_interface.gather_interface_data(
                 declarations,
                 case dict.get(model.audit_metadata, audit_name) {
@@ -428,13 +411,50 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         }
       }
 
+      let merged_topics = merged_topics |> result.map(dict.from_list)
+
       #(
         Model(
           ..model,
           merged_topics: dict.insert(
             model.merged_topics,
             audit_name,
-            merged_topics |> result.map(dict.from_list),
+            merged_topics,
+          ),
+          discussions: dict.upsert(
+            model.discussions,
+            audit_name,
+            fn(discussions) {
+              let discussions = option.unwrap(discussions, dict.new())
+              case merged_topics {
+                Ok(merged_topics) ->
+                  discussion_topic.build_topics(
+                    discussions,
+                    merged_topics,
+                    get_combined_topics: discussion_topic.get_combined_discussion,
+                  )
+                Error(..) -> discussions
+              }
+            },
+          ),
+          audit_declarations: dict.upsert(
+            model.audit_declarations,
+            audit_name,
+            fn(audit_declarations) {
+              audit_declarations
+              |> option.unwrap(Ok(dict.new()))
+              |> result.map(fn(audit_declarations) {
+                case merged_topics {
+                  Ok(merged_topics) ->
+                    discussion_topic.build_topics(
+                      audit_declarations,
+                      merged_topics,
+                      get_combined_topics: discussion_topic.get_combined_declaration,
+                    )
+                  Error(..) -> audit_declarations
+                }
+              })
+            },
           ),
         ),
         effect.none(),
@@ -455,7 +475,14 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               model.discussions,
               audit_name,
               discussion
-                |> list.group(by: fn(note) { note.parent_id }),
+                |> list.group(by: fn(note) { note.parent_id })
+                |> discussion_topic.build_topics(
+                  case dict.get(model.merged_topics, audit_name) {
+                    Ok(Ok(merged_topics)) -> merged_topics
+                    _ -> dict.new()
+                  },
+                  get_combined_topics: discussion_topic.get_combined_discussion,
+                ),
             ),
           ),
           effect.none(),
@@ -919,10 +946,10 @@ fn view(model: Model) {
         |> result.unwrap(Ok([]))
         |> result.unwrap([])
 
-      let references =
-        dict.get(model.audit_references, audit_name)
-        |> result.unwrap(Ok(dict.new()))
-        |> result.unwrap(dict.new())
+      let declarations = case dict.get(model.audit_declarations, audit_name) {
+        Ok(Ok(declarations)) -> declarations
+        _ -> dict.new()
+      }
 
       html.div([event.on_click(UserClickedOutsideDiscussion)], [
         selected_node_highlighter(model),
@@ -938,7 +965,7 @@ fn view(model: Model) {
           audit_page.view(
             preprocessed_source:,
             discussion:,
-            references:,
+            declarations:,
             selected_discussion:,
           )
             |> element.map(map_audit_page_msg),

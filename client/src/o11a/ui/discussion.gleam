@@ -304,14 +304,15 @@ pub fn update(model: Model, msg: Msg) {
 pub fn overlay_view(
   model: Model,
   notes: dict.Dict(String, List(computed_note.ComputedNote)),
-  references: dict.Dict(String, List(preprocessor.Reference)),
+  declarations: dict.Dict(String, preprocessor.Declaration),
 ) {
   let current_thread_notes =
     dict.get(notes, model.current_thread_id)
     |> result.unwrap([])
 
   let references =
-    dict.get(references, model.topic_id)
+    dict.get(declarations, model.topic_id)
+    |> result.map(fn(declaration) { declaration.references })
     |> result.unwrap([])
 
   html.div(
