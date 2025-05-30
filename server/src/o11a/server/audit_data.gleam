@@ -230,7 +230,7 @@ fn preprocess_audit_source(for audit_name) {
         acc,
       )
 
-      use #(new_max_topic_id, source_file, new_addressable_lines, topic_merges) <- result.map(
+      use #(new_max_topic_id, source_file, addressable_lines, topic_merges) <- result.map(
         case preprocessor.classify_source_kind(path: page_path) {
           // Solidity source file
           Ok(preprocessor.Solidity) ->
@@ -288,7 +288,7 @@ fn preprocess_audit_source(for audit_name) {
                 Ok(#(
                   max_topic_id,
                   option.Some(#(page_path, preprocessed_source)),
-                  addressable_lines,
+                  [],
                   topic_merges,
                 ))
               }
@@ -308,7 +308,7 @@ fn preprocess_audit_source(for audit_name) {
       #(
         new_max_topic_id,
         [source_file, ..source_files],
-        list.append(new_addressable_lines, addressable_lines),
+        addressable_lines,
         topic_merges,
       )
     }),

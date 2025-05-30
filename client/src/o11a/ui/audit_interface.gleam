@@ -6,6 +6,7 @@ import lustre/attribute
 import lustre/element
 import lustre/element/html
 import o11a/preprocessor
+import o11a/ui/node_renderer
 
 pub type InterfaceData {
   InterfaceData(
@@ -43,7 +44,7 @@ pub type ContractDeclaration {
   ContractDeclaration(contract: String, dec: preprocessor.Declaration)
 }
 
-pub fn view(interface_data: InterfaceData, audit_name) {
+pub fn view(interface_data: InterfaceData, audit_name, declarations) {
   html.div([attribute.class("p-[1rem]")], [
     // Page header
     html.h1([], [
@@ -67,48 +68,56 @@ pub fn view(interface_data: InterfaceData, audit_name) {
               contract.name,
               "Constants",
               interface_data.contract_constants,
+              declarations,
             ),
             // List of variables in contract
             contract_members_view(
               contract.name,
               "State Variables",
               interface_data.contract_variables,
+              declarations,
             ),
             // List of structs in contract
             contract_members_view(
               contract.name,
               "Structs",
               interface_data.contract_structs,
+              declarations,
             ),
             // List of enums in contract
             contract_members_view(
               contract.name,
               "Enums",
               interface_data.contract_enums,
+              declarations,
             ),
             // List of events in contract
             contract_members_view(
               contract.name,
               "Events",
               interface_data.contract_events,
+              declarations,
             ),
             // List of errors in contract
             contract_members_view(
               contract.name,
               "Errors",
               interface_data.contract_errors,
+              declarations,
             ),
             // List of functions in contract
             contract_members_view(
               contract.name,
               "Functions",
               interface_data.contract_functions,
+              declarations,
             ),
             // List of modifiers in contract
             contract_members_view(
               contract.name,
               "Modifiers",
               interface_data.contract_modifiers,
+              declarations,
             ),
           ])
         })
@@ -120,10 +129,11 @@ pub fn view(interface_data: InterfaceData, audit_name) {
 fn contract_members_view(
   contract: String,
   title,
-  declarations: List(preprocessor.Declaration),
+  declarations_of_type: List(preprocessor.Declaration),
+  declarations: dict.Dict(String, preprocessor.Declaration),
 ) {
   let items =
-    list.filter(declarations, fn(declaration) {
+    list.filter(declarations_of_type, fn(declaration) {
       option.unwrap(declaration.scope.contract, "") == contract
     })
 
@@ -136,14 +146,10 @@ fn contract_members_view(
           html.p([attribute.class("ml-[1rem]")], [
             html.a(
               [attribute.href(preprocessor.declaration_to_link(declaration))],
-              [
-                element.unsafe_raw_html(
-                  "signature",
-                  "span",
-                  [],
-                  declaration.signature |> todo,
-                ),
-              ],
+              node_renderer.render_topic_signature(
+                declaration.signature,
+                declarations,
+              ),
             ),
           ])
         })

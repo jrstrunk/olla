@@ -16,6 +16,7 @@ import lustre/event
 import o11a/computed_note
 import o11a/note
 import o11a/preprocessor
+import o11a/ui/node_renderer
 
 pub type Model {
   Model(
@@ -388,16 +389,7 @@ fn reference_header_view(model: Model, current_thread_notes) {
         ),
       ],
       [
-        html.span([attribute.class("pt-[.1rem]")], [
-          html.a([attribute.href("/" <> model.topic_id)], [
-            element.unsafe_raw_html(
-              "topic-title",
-              "span",
-              [],
-              get_topic_title(model),
-            ),
-          ]),
-        ]),
+        html.span([attribute.class("pt-[.1rem]")], get_topic_title(model)),
         html.button(
           [
             event.on_click(UserToggledReferenceDiscussion),
@@ -468,26 +460,7 @@ fn thread_header_view(model: Model, references) {
             ),
           ],
           [
-            html.span([attribute.class("pt-[.1rem]")], [
-              case model.is_reference {
-                True ->
-                  html.a([attribute.href("/" <> model.topic_id)], [
-                    element.unsafe_raw_html(
-                      "topic-title",
-                      "span",
-                      [],
-                      get_topic_title(model),
-                    ),
-                  ])
-                False ->
-                  element.unsafe_raw_html(
-                    "topic-title",
-                    "span",
-                    [],
-                    get_topic_title(model),
-                  )
-              },
-            ]),
+            html.span([attribute.class("pt-[.1rem]")], get_topic_title(model)),
             html.div([], [
               case model.is_reference {
                 True ->
@@ -747,7 +720,8 @@ fn on_input_keydown(enter_msg, up_msg) {
 
 fn get_topic_title(model: Model) {
   case dict.get(model.declarations, model.topic_id) {
-    Ok(dec) -> dec.signature |> todo
-    Error(Nil) -> "unknown"
+    Ok(dec) ->
+      dec.signature |> node_renderer.render_topic_signature(model.declarations)
+    Error(Nil) -> [html.span([], [html.text("unknown")])]
   }
 }

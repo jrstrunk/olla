@@ -2088,6 +2088,15 @@ function values(dict2) {
 function delete$(dict2, key2) {
   return map_remove(key2, dict2);
 }
+function upsert(dict2, key2, fun) {
+  let $ = map_get(dict2, key2);
+  if ($.isOk()) {
+    let value3 = $[0];
+    return insert(dict2, key2, fun(new Some(value3)));
+  } else {
+    return insert(dict2, key2, fun(new None()));
+  }
+}
 function fold_loop(loop$list, loop$initial, loop$fun) {
   while (true) {
     let list4 = loop$list;
@@ -8178,10 +8187,102 @@ function is_significance_threadable(note_significance) {
   }
 }
 
-// build/dev/javascript/o11a_common/o11a/declaration.mjs
+// build/dev/javascript/filepath/filepath_ffi.mjs
+function is_windows() {
+  return globalThis?.process?.platform === "win32" || globalThis?.Deno?.build?.os === "windows";
+}
+
+// build/dev/javascript/filepath/filepath.mjs
+function split_unix(path2) {
+  let _block;
+  let $ = split2(path2, "/");
+  if ($.hasLength(1) && $.head === "") {
+    _block = toList([]);
+  } else if ($.atLeastLength(1) && $.head === "") {
+    let rest = $.tail;
+    _block = prepend("/", rest);
+  } else {
+    let rest = $;
+    _block = rest;
+  }
+  let _pipe = _block;
+  return filter(_pipe, (x2) => {
+    return x2 !== "";
+  });
+}
+function pop_windows_drive_specifier(path2) {
+  let start4 = slice(path2, 0, 3);
+  let codepoints = to_utf_codepoints(start4);
+  let $ = map2(codepoints, utf_codepoint_to_int);
+  if ($.hasLength(3) && (($.tail.tail.head === 47 || $.tail.tail.head === 92) && $.tail.head === 58 && ($.head >= 65 && $.head <= 90 || $.head >= 97 && $.head <= 122))) {
+    let drive = $.head;
+    let colon = $.tail.head;
+    let slash = $.tail.tail.head;
+    let drive_letter = slice(path2, 0, 1);
+    let drive$1 = lowercase(drive_letter) + ":/";
+    let path$1 = drop_start(path2, 3);
+    return [new Some(drive$1), path$1];
+  } else {
+    return [new None(), path2];
+  }
+}
+function split_windows(path2) {
+  let $ = pop_windows_drive_specifier(path2);
+  let drive = $[0];
+  let path$1 = $[1];
+  let _block;
+  let _pipe = split2(path$1, "/");
+  _block = flat_map(
+    _pipe,
+    (_capture) => {
+      return split2(_capture, "\\");
+    }
+  );
+  let segments = _block;
+  let _block$1;
+  if (drive instanceof Some) {
+    let drive$1 = drive[0];
+    _block$1 = prepend(drive$1, segments);
+  } else {
+    _block$1 = segments;
+  }
+  let segments$1 = _block$1;
+  if (segments$1.hasLength(1) && segments$1.head === "") {
+    return toList([]);
+  } else if (segments$1.atLeastLength(1) && segments$1.head === "") {
+    let rest = segments$1.tail;
+    return prepend("/", rest);
+  } else {
+    let rest = segments$1;
+    return rest;
+  }
+}
+function split4(path2) {
+  let $ = is_windows();
+  if ($) {
+    return split_windows(path2);
+  } else {
+    return split_unix(path2);
+  }
+}
+function base_name(path2) {
+  return guard(
+    path2 === "/",
+    "",
+    () => {
+      let _pipe = path2;
+      let _pipe$1 = split4(_pipe);
+      let _pipe$2 = last(_pipe$1);
+      return unwrap2(_pipe$2, "");
+    }
+  );
+}
+
+// build/dev/javascript/o11a_common/o11a/preprocessor.mjs
 var Declaration = class extends CustomType {
-  constructor(topic_id, name2, signature, scope, kind, references) {
+  constructor(id2, topic_id, name2, signature, scope, kind, references) {
     super();
+    this.id = id2;
     this.topic_id = topic_id;
     this.name = name2;
     this.signature = signature;
@@ -8247,11 +8348,12 @@ var Fallback = class extends CustomType {
 var Receive = class extends CustomType {
 };
 var Reference2 = class extends CustomType {
-  constructor(scope, topic_id, kind) {
+  constructor(parent_id, scope, kind, source) {
     super();
+    this.parent_id = parent_id;
     this.scope = scope;
-    this.topic_id = topic_id;
     this.kind = kind;
+    this.source = source;
   }
 };
 var CallReference = class extends CustomType {
@@ -8265,6 +8367,68 @@ var AccessReference = class extends CustomType {
 var UsingReference = class extends CustomType {
 };
 var TypeReference = class extends CustomType {
+};
+var Solidity = class extends CustomType {
+};
+var Text2 = class extends CustomType {
+};
+var PreProcessedLine = class extends CustomType {
+  constructor(significance, line_number, line_number_text, line_tag, leading_spaces, elements, columns, kind) {
+    super();
+    this.significance = significance;
+    this.line_number = line_number;
+    this.line_number_text = line_number_text;
+    this.line_tag = line_tag;
+    this.leading_spaces = leading_spaces;
+    this.elements = elements;
+    this.columns = columns;
+    this.kind = kind;
+  }
+};
+var SingleDeclarationLine = class extends CustomType {
+  constructor(topic_id) {
+    super();
+    this.topic_id = topic_id;
+  }
+};
+var NonEmptyLine = class extends CustomType {
+  constructor(topic_id) {
+    super();
+    this.topic_id = topic_id;
+  }
+};
+var EmptyLine = class extends CustomType {
+};
+var SoliditySourceLine = class extends CustomType {
+};
+var TextLine = class extends CustomType {
+};
+var PreProcessedDeclaration = class extends CustomType {
+  constructor(topic_id, tokens) {
+    super();
+    this.topic_id = topic_id;
+    this.tokens = tokens;
+  }
+};
+var PreProcessedReference = class extends CustomType {
+  constructor(topic_id, tokens) {
+    super();
+    this.topic_id = topic_id;
+    this.tokens = tokens;
+  }
+};
+var PreProcessedNode = class extends CustomType {
+  constructor(element4) {
+    super();
+    this.element = element4;
+  }
+};
+var PreProcessedGapNode = class extends CustomType {
+  constructor(element4, leading_spaces) {
+    super();
+    this.element = element4;
+    this.leading_spaces = leading_spaces;
+  }
 };
 function scope_decoder() {
   return field(
@@ -8446,75 +8610,6 @@ function node_reference_kind_decoder() {
     }
   );
 }
-function reference_decoder() {
-  return field(
-    "s",
-    scope_decoder(),
-    (scope) => {
-      return field(
-        "t",
-        string3,
-        (topic_id) => {
-          return field(
-            "k",
-            node_reference_kind_decoder(),
-            (kind) => {
-              return success(new Reference2(scope, topic_id, kind));
-            }
-          );
-        }
-      );
-    }
-  );
-}
-function declaration_decoder() {
-  return field(
-    "t",
-    string3,
-    (topic_id) => {
-      return field(
-        "n",
-        string3,
-        (name2) => {
-          return field(
-            "s",
-            scope_decoder(),
-            (scope) => {
-              return field(
-                "g",
-                string3,
-                (signature) => {
-                  return field(
-                    "k",
-                    decode_declaration_kind(),
-                    (kind) => {
-                      return field(
-                        "r",
-                        list2(reference_decoder()),
-                        (references) => {
-                          return success(
-                            new Declaration(
-                              topic_id,
-                              name2,
-                              signature,
-                              scope,
-                              kind,
-                              references
-                            )
-                          );
-                        }
-                      );
-                    }
-                  );
-                }
-              );
-            }
-          );
-        }
-      );
-    }
-  );
-}
 function node_reference_kind_to_annotation(kind) {
   if (kind instanceof CallReference) {
     return "Called in:";
@@ -8571,163 +8666,49 @@ function get_references(message, declarations) {
     }
   );
 }
-
-// build/dev/javascript/o11a_common/o11a/events.mjs
-var server_updated_discussion = "sud";
-
-// build/dev/javascript/filepath/filepath_ffi.mjs
-function is_windows() {
-  return globalThis?.process?.platform === "win32" || globalThis?.Deno?.build?.os === "windows";
-}
-
-// build/dev/javascript/filepath/filepath.mjs
-function split_unix(path2) {
-  let _block;
-  let $ = split2(path2, "/");
-  if ($.hasLength(1) && $.head === "") {
-    _block = toList([]);
-  } else if ($.atLeastLength(1) && $.head === "") {
-    let rest = $.tail;
-    _block = prepend("/", rest);
-  } else {
-    let rest = $;
-    _block = rest;
-  }
-  let _pipe = _block;
-  return filter(_pipe, (x2) => {
-    return x2 !== "";
-  });
-}
-function pop_windows_drive_specifier(path2) {
-  let start4 = slice(path2, 0, 3);
-  let codepoints = to_utf_codepoints(start4);
-  let $ = map2(codepoints, utf_codepoint_to_int);
-  if ($.hasLength(3) && (($.tail.tail.head === 47 || $.tail.tail.head === 92) && $.tail.head === 58 && ($.head >= 65 && $.head <= 90 || $.head >= 97 && $.head <= 122))) {
-    let drive = $.head;
-    let colon = $.tail.head;
-    let slash = $.tail.tail.head;
-    let drive_letter = slice(path2, 0, 1);
-    let drive$1 = lowercase(drive_letter) + ":/";
-    let path$1 = drop_start(path2, 3);
-    return [new Some(drive$1), path$1];
-  } else {
-    return [new None(), path2];
-  }
-}
-function split_windows(path2) {
-  let $ = pop_windows_drive_specifier(path2);
-  let drive = $[0];
-  let path$1 = $[1];
-  let _block;
-  let _pipe = split2(path$1, "/");
-  _block = flat_map(
-    _pipe,
-    (_capture) => {
-      return split2(_capture, "\\");
-    }
-  );
-  let segments = _block;
-  let _block$1;
-  if (drive instanceof Some) {
-    let drive$1 = drive[0];
-    _block$1 = prepend(drive$1, segments);
-  } else {
-    _block$1 = segments;
-  }
-  let segments$1 = _block$1;
-  if (segments$1.hasLength(1) && segments$1.head === "") {
-    return toList([]);
-  } else if (segments$1.atLeastLength(1) && segments$1.head === "") {
-    let rest = segments$1.tail;
-    return prepend("/", rest);
-  } else {
-    let rest = segments$1;
-    return rest;
-  }
-}
-function split4(path2) {
-  let $ = is_windows();
-  if ($) {
-    return split_windows(path2);
-  } else {
-    return split_unix(path2);
-  }
-}
-function base_name(path2) {
-  return guard(
-    path2 === "/",
-    "",
-    () => {
-      let _pipe = path2;
-      let _pipe$1 = split4(_pipe);
-      let _pipe$2 = last(_pipe$1);
-      return unwrap2(_pipe$2, "");
+function source_kind_decoder() {
+  return then$2(
+    string3,
+    (variant) => {
+      if (variant === "s") {
+        return success(new Solidity());
+      } else if (variant === "t") {
+        return success(new Text2());
+      } else {
+        return failure(new Text2(), "SourceKind");
+      }
     }
   );
 }
-
-// build/dev/javascript/o11a_common/o11a/preprocessor.mjs
-var PreProcessedLine = class extends CustomType {
-  constructor(significance, line_number, line_number_text, line_tag, leading_spaces, elements, columns, kind) {
-    super();
-    this.significance = significance;
-    this.line_number = line_number;
-    this.line_number_text = line_number_text;
-    this.line_tag = line_tag;
-    this.leading_spaces = leading_spaces;
-    this.elements = elements;
-    this.columns = columns;
-    this.kind = kind;
-  }
-};
-var SingleDeclarationLine = class extends CustomType {
-  constructor(signature, topic_id) {
-    super();
-    this.signature = signature;
-    this.topic_id = topic_id;
-  }
-};
-var NonEmptyLine = class extends CustomType {
-  constructor(topic_id) {
-    super();
-    this.topic_id = topic_id;
-  }
-};
-var EmptyLine = class extends CustomType {
-};
-var SoliditySourceLine = class extends CustomType {
-};
-var TextLine = class extends CustomType {
-};
-var PreProcessedDeclaration = class extends CustomType {
-  constructor(node_id, node_declaration, tokens) {
-    super();
-    this.node_id = node_id;
-    this.node_declaration = node_declaration;
-    this.tokens = tokens;
-  }
-};
-var PreProcessedReference = class extends CustomType {
-  constructor(referenced_node_id, referenced_node_declaration, tokens) {
-    super();
-    this.referenced_node_id = referenced_node_id;
-    this.referenced_node_declaration = referenced_node_declaration;
-    this.tokens = tokens;
-  }
-};
-var PreProcessedNode = class extends CustomType {
-  constructor(element4) {
-    super();
-    this.element = element4;
-  }
-};
-var PreProcessedGapNode = class extends CustomType {
-  constructor(element4, leading_spaces) {
-    super();
-    this.element = element4;
-    this.leading_spaces = leading_spaces;
-  }
-};
+function reference_decoder() {
+  return field(
+    "i",
+    int2,
+    (parent_id) => {
+      return field(
+        "s",
+        scope_decoder(),
+        (scope) => {
+          return field(
+            "k",
+            node_reference_kind_decoder(),
+            (kind) => {
+              return field(
+                "c",
+                source_kind_decoder(),
+                (source) => {
+                  return success(
+                    new Reference2(parent_id, scope, kind, source)
+                  );
+                }
+              );
+            }
+          );
+        }
+      );
+    }
+  );
+}
 function pre_processed_line_significance_decoder() {
   return field(
     "v",
@@ -8735,18 +8716,10 @@ function pre_processed_line_significance_decoder() {
     (variant) => {
       if (variant === "sdl") {
         return field(
-          "g",
+          "t",
           string3,
-          (signature) => {
-            return field(
-              "t",
-              string3,
-              (topic_id) => {
-                return success(
-                  new SingleDeclarationLine(signature, topic_id)
-                );
-              }
-            );
+          (topic_id) => {
+            return success(new SingleDeclarationLine(topic_id));
           }
         );
       } else if (variant === "nel") {
@@ -8786,25 +8759,15 @@ function pre_processed_node_decoder() {
     (variant) => {
       if (variant === "ppd") {
         return field(
-          "i",
-          int2,
-          (node_id) => {
+          "t",
+          string3,
+          (topic_id) => {
             return field(
-              "d",
-              declaration_decoder(),
-              (node_declaration) => {
-                return field(
-                  "t",
-                  string3,
-                  (tokens) => {
-                    return success(
-                      new PreProcessedDeclaration(
-                        node_id,
-                        node_declaration,
-                        tokens
-                      )
-                    );
-                  }
+              "n",
+              string3,
+              (tokens) => {
+                return success(
+                  new PreProcessedDeclaration(topic_id, tokens)
                 );
               }
             );
@@ -8812,25 +8775,15 @@ function pre_processed_node_decoder() {
         );
       } else if (variant === "ppr") {
         return field(
-          "i",
-          int2,
-          (referenced_node_id) => {
+          "t",
+          string3,
+          (topic_id) => {
             return field(
-              "d",
-              declaration_decoder(),
-              (referenced_node_declaration) => {
-                return field(
-                  "t",
-                  string3,
-                  (tokens) => {
-                    return success(
-                      new PreProcessedReference(
-                        referenced_node_id,
-                        referenced_node_declaration,
-                        tokens
-                      )
-                    );
-                  }
+              "n",
+              string3,
+              (tokens) => {
+                return success(
+                  new PreProcessedReference(topic_id, tokens)
                 );
               }
             );
@@ -8863,6 +8816,61 @@ function pre_processed_node_decoder() {
       } else {
         return failure(new PreProcessedNode(""), "PreProcessedNode");
       }
+    }
+  );
+}
+function declaration_decoder() {
+  return field(
+    "i",
+    int2,
+    (id2) => {
+      return field(
+        "t",
+        string3,
+        (topic_id) => {
+          return field(
+            "n",
+            string3,
+            (name2) => {
+              return field(
+                "s",
+                scope_decoder(),
+                (scope) => {
+                  return field(
+                    "g",
+                    list2(pre_processed_node_decoder()),
+                    (signature) => {
+                      return field(
+                        "k",
+                        decode_declaration_kind(),
+                        (kind) => {
+                          return field(
+                            "r",
+                            list2(reference_decoder()),
+                            (references) => {
+                              return success(
+                                new Declaration(
+                                  id2,
+                                  topic_id,
+                                  name2,
+                                  signature,
+                                  scope,
+                                  kind,
+                                  references
+                                )
+                              );
+                            }
+                          );
+                        }
+                      );
+                    }
+                  );
+                }
+              );
+            }
+          );
+        }
+      );
     }
   );
 }
@@ -8920,6 +8928,210 @@ function pre_processed_line_decoder() {
     }
   );
 }
+var unknown_declaration = /* @__PURE__ */ new Declaration(
+  0,
+  "",
+  "",
+  /* @__PURE__ */ toList([]),
+  /* @__PURE__ */ new Scope(
+    "",
+    /* @__PURE__ */ new None(),
+    /* @__PURE__ */ new None()
+  ),
+  /* @__PURE__ */ new UnknownDeclaration(),
+  /* @__PURE__ */ toList([])
+);
+
+// build/dev/javascript/o11a_common/o11a/discussion_topic.mjs
+var TopicMerge = class extends CustomType {
+  constructor(old_topic_id, new_topic_id) {
+    super();
+    this.old_topic_id = old_topic_id;
+    this.new_topic_id = new_topic_id;
+  }
+};
+function topic_merge_decoder() {
+  return field(
+    0,
+    string3,
+    (old_topic) => {
+      return field(
+        1,
+        string3,
+        (new_topic) => {
+          return success([old_topic, new_topic]);
+        }
+      );
+    }
+  );
+}
+function do_find_topic_merge_chain_parents(loop$old_topic_id, loop$topic_merges) {
+  while (true) {
+    let old_topic_id = loop$old_topic_id;
+    let topic_merges = loop$topic_merges;
+    let $ = find2(
+      topic_merges,
+      (topic_merge) => {
+        return topic_merge.new_topic_id === old_topic_id;
+      }
+    );
+    if ($.isOk()) {
+      let topic_merge = $[0];
+      loop$old_topic_id = topic_merge.old_topic_id;
+      loop$topic_merges = topic_merges;
+    } else {
+      return old_topic_id;
+    }
+  }
+}
+function find_topic_merge_chain_parents(topic_merges) {
+  let _pipe = map2(
+    topic_merges,
+    (topic_merge) => {
+      return do_find_topic_merge_chain_parents(
+        topic_merge.old_topic_id,
+        topic_merges
+      );
+    }
+  );
+  return unique(_pipe);
+}
+function build_topics(data2, topic_merges, get_combined_topics) {
+  let _block;
+  let _pipe = map_to_list(topic_merges);
+  _block = map2(
+    _pipe,
+    (topic_merge) => {
+      return new TopicMerge(topic_merge[0], topic_merge[1]);
+    }
+  );
+  let topic_merge_list = _block;
+  let _pipe$1 = find_topic_merge_chain_parents(topic_merge_list);
+  return fold2(
+    _pipe$1,
+    data2,
+    (declarations, parent_topic_id) => {
+      let $ = get_combined_topics(parent_topic_id, data2, topic_merges);
+      if ($.isOk()) {
+        let combined_decl = $[0][0];
+        let updated_topic_ids = $[0][1];
+        return fold2(
+          updated_topic_ids,
+          declarations,
+          (declarations2, topic_id) => {
+            return insert(declarations2, topic_id, combined_decl);
+          }
+        );
+      } else {
+        return declarations;
+      }
+    }
+  );
+}
+function get_topic_chain(loop$parent_topic_id, loop$data, loop$topic_merges, loop$combined_declarations) {
+  while (true) {
+    let parent_topic_id = loop$parent_topic_id;
+    let data2 = loop$data;
+    let topic_merges = loop$topic_merges;
+    let combined_declarations = loop$combined_declarations;
+    let $ = map_get(topic_merges, parent_topic_id);
+    if ($.isOk()) {
+      let new_topic_id = $[0];
+      let $1 = map_get(data2, new_topic_id);
+      if ($1.isOk()) {
+        let new_declaration = $1[0];
+        loop$parent_topic_id = new_topic_id;
+        loop$data = data2;
+        loop$topic_merges = topic_merges;
+        loop$combined_declarations = prepend(
+          [new_topic_id, new_declaration],
+          combined_declarations
+        );
+      } else {
+        return combined_declarations;
+      }
+    } else {
+      return combined_declarations;
+    }
+  }
+}
+function get_combined_declaration(parent_topic_id, declarations, topic_merges) {
+  let $ = map_get(declarations, parent_topic_id);
+  if ($.isOk()) {
+    let declaration = $[0];
+    let _pipe = get_topic_chain(
+      parent_topic_id,
+      declarations,
+      topic_merges,
+      toList([])
+    );
+    let _pipe$1 = reverse(_pipe);
+    let _pipe$2 = fold2(
+      _pipe$1,
+      [declaration, toList([parent_topic_id])],
+      (decl_acc, next_decl) => {
+        let existing_decl = decl_acc[0];
+        let updated_topic_ids = decl_acc[1];
+        let next_topic_id = next_decl[0];
+        let next_declaration = next_decl[1];
+        return [
+          (() => {
+            let _record = next_declaration;
+            return new Declaration(
+              _record.id,
+              _record.topic_id,
+              _record.name,
+              _record.signature,
+              _record.scope,
+              _record.kind,
+              append2(
+                next_declaration.references,
+                existing_decl.references
+              )
+            );
+          })(),
+          prepend(next_topic_id, updated_topic_ids)
+        ];
+      }
+    );
+    return new Ok(_pipe$2);
+  } else {
+    return new Error(void 0);
+  }
+}
+function get_combined_discussion(parent_topic_id, discussion, topic_merges) {
+  let $ = map_get(discussion, parent_topic_id);
+  if ($.isOk()) {
+    let notes = $[0];
+    let _pipe = get_topic_chain(
+      parent_topic_id,
+      discussion,
+      topic_merges,
+      toList([])
+    );
+    let _pipe$1 = fold2(
+      _pipe,
+      [notes, toList([parent_topic_id])],
+      (notes_acc, next_notes) => {
+        let existing_notes = notes_acc[0];
+        let updated_topic_ids = notes_acc[1];
+        let next_topic_id = next_notes[0];
+        let next_notes$1 = next_notes[1];
+        return [
+          append2(next_notes$1, existing_notes),
+          prepend(next_topic_id, updated_topic_ids)
+        ];
+      }
+    );
+    return new Ok(_pipe$1);
+  } else {
+    return new Error(void 0);
+  }
+}
+
+// build/dev/javascript/o11a_common/o11a/events.mjs
+var server_updated_discussion = "sud";
+var server_updated_topics = "sut";
 
 // build/dev/javascript/plinth/element_ffi.mjs
 function focus(element4) {
@@ -9943,6 +10155,88 @@ function view(notes, audit_name) {
   );
 }
 
+// build/dev/javascript/o11a_client/o11a/ui/node_renderer.mjs
+function render_topic_signature(signatures, declarations) {
+  let _pipe = map_fold(
+    signatures,
+    0,
+    (index5, node) => {
+      if (node instanceof PreProcessedDeclaration) {
+        let topic_id = node.topic_id;
+        let tokens = node.tokens;
+        let _block;
+        let _pipe2 = map_get(declarations, topic_id);
+        _block = unwrap2(_pipe2, unknown_declaration);
+        let declaration = _block;
+        let rendered_node = span(
+          toList([class$("relative")]),
+          toList([
+            span(
+              toList([
+                class$(
+                  declaration_kind_to_string(declaration.kind)
+                )
+              ]),
+              toList([text3(tokens)])
+            )
+          ])
+        );
+        return [index5, rendered_node];
+      } else if (node instanceof PreProcessedReference) {
+        let topic_id = node.topic_id;
+        let tokens = node.tokens;
+        let new_index = index5 + 1;
+        let _block;
+        let _pipe2 = map_get(declarations, topic_id);
+        _block = unwrap2(_pipe2, unknown_declaration);
+        let referenced_declaraion = _block;
+        let rendered_node = span(
+          toList([class$("relative")]),
+          toList([
+            span(
+              toList([
+                class$(
+                  declaration_kind_to_string(
+                    referenced_declaraion.kind
+                  )
+                ),
+                class$(
+                  "N" + to_string(referenced_declaraion.id)
+                )
+              ]),
+              toList([text3(tokens)])
+            )
+          ])
+        );
+        return [new_index, rendered_node];
+      } else if (node instanceof PreProcessedNode) {
+        let element4 = node.element;
+        return [
+          index5,
+          unsafe_raw_html(
+            "preprocessed-node",
+            "span",
+            toList([]),
+            element4
+          )
+        ];
+      } else {
+        let element4 = node.element;
+        return [
+          index5,
+          unsafe_raw_html(
+            "preprocessed-node",
+            "span",
+            toList([]),
+            element4
+          )
+        ];
+      }
+    }
+  );
+  return second(_pipe);
+}
+
 // build/dev/javascript/o11a_client/o11a/ui/audit_interface.mjs
 var InterfaceData = class extends CustomType {
   constructor(file_contracts, contract_constants, contract_variables, contract_structs, contract_enums, contract_events, contract_errors, contract_functions, contract_modifiers) {
@@ -9985,9 +10279,9 @@ function empty_interface_data() {
     toList([])
   );
 }
-function contract_members_view(contract, title2, declarations) {
+function contract_members_view(contract, title2, declarations_of_type, declarations) {
   let items = filter(
-    declarations,
+    declarations_of_type,
     (declaration) => {
       return unwrap(declaration.scope.contract, "") === contract;
     }
@@ -10012,14 +10306,10 @@ function contract_members_view(contract, title2, declarations) {
                       declaration_to_link(declaration)
                     )
                   ]),
-                  toList([
-                    unsafe_raw_html(
-                      "signature",
-                      "span",
-                      toList([]),
-                      declaration.signature
-                    )
-                  ])
+                  render_topic_signature(
+                    declaration.signature,
+                    declarations
+                  )
                 )
               ])
             );
@@ -10029,7 +10319,7 @@ function contract_members_view(contract, title2, declarations) {
     );
   }
 }
-function view2(interface_data, audit_name) {
+function view2(interface_data, audit_name, declarations) {
   return div(
     toList([class$("p-[1rem]")]),
     prepend(
@@ -10073,42 +10363,50 @@ function view2(interface_data, audit_name) {
                       contract_members_view(
                         contract.name,
                         "Constants",
-                        interface_data.contract_constants
+                        interface_data.contract_constants,
+                        declarations
                       ),
                       contract_members_view(
                         contract.name,
                         "State Variables",
-                        interface_data.contract_variables
+                        interface_data.contract_variables,
+                        declarations
                       ),
                       contract_members_view(
                         contract.name,
                         "Structs",
-                        interface_data.contract_structs
+                        interface_data.contract_structs,
+                        declarations
                       ),
                       contract_members_view(
                         contract.name,
                         "Enums",
-                        interface_data.contract_enums
+                        interface_data.contract_enums,
+                        declarations
                       ),
                       contract_members_view(
                         contract.name,
                         "Events",
-                        interface_data.contract_events
+                        interface_data.contract_events,
+                        declarations
                       ),
                       contract_members_view(
                         contract.name,
                         "Errors",
-                        interface_data.contract_errors
+                        interface_data.contract_errors,
+                        declarations
                       ),
                       contract_members_view(
                         contract.name,
                         "Functions",
-                        interface_data.contract_functions
+                        interface_data.contract_functions,
+                        declarations
                       ),
                       contract_members_view(
                         contract.name,
                         "Modifiers",
-                        interface_data.contract_modifiers
+                        interface_data.contract_modifiers,
+                        declarations
                       )
                     ])
                   );
@@ -10124,17 +10422,18 @@ function view2(interface_data, audit_name) {
 function gather_interface_data(declarations, in_scope_files) {
   let _block;
   let _pipe = declarations;
+  let _pipe$1 = values(_pipe);
   _block = filter(
-    _pipe,
+    _pipe$1,
     (declaration) => {
       return contains(in_scope_files, declaration.scope.file);
     }
   );
   let declarations_in_scope = _block;
   let _block$1;
-  let _pipe$1 = declarations_in_scope;
+  let _pipe$2 = declarations_in_scope;
   _block$1 = filter_map(
-    _pipe$1,
+    _pipe$2,
     (declaration) => {
       let $ = declaration.scope.contract;
       let $1 = declaration.scope.member;
@@ -10148,9 +10447,9 @@ function gather_interface_data(declarations, in_scope_files) {
   );
   let contract_member_declarations_in_scope = _block$1;
   let _block$2;
-  let _pipe$2 = declarations_in_scope;
-  let _pipe$3 = filter(
-    _pipe$2,
+  let _pipe$3 = declarations_in_scope;
+  let _pipe$4 = filter(
+    _pipe$3,
     (declaration) => {
       let $ = declaration.kind;
       if ($ instanceof ContractDeclaration) {
@@ -10160,24 +10459,24 @@ function gather_interface_data(declarations, in_scope_files) {
       }
     }
   );
-  let _pipe$4 = group(
-    _pipe$3,
+  let _pipe$5 = group(
+    _pipe$4,
     (declaration) => {
       return declaration.scope.file;
     }
   );
-  let _pipe$5 = map_values(
-    _pipe$4,
+  let _pipe$6 = map_values(
+    _pipe$5,
     (_, value3) => {
-      let _pipe$52 = map2(value3, (declaration) => {
+      let _pipe$62 = map2(value3, (declaration) => {
         return declaration;
       });
-      return unique(_pipe$52);
+      return unique(_pipe$62);
     }
   );
-  let _pipe$6 = map_to_list(_pipe$5);
+  let _pipe$7 = map_to_list(_pipe$6);
   _block$2 = map2(
-    _pipe$6,
+    _pipe$7,
     (contracts) => {
       return new FileContract(contracts[0], contracts[1]);
     }
@@ -11114,7 +11413,7 @@ function update2(model, msg) {
     echo3(
       "Submitting note! " + model.current_note_draft + " " + model.topic_id,
       "src/o11a/ui/discussion.gleam",
-      108
+      109
     );
     let _block;
     let _pipe = model.current_note_draft;
@@ -11589,9 +11888,10 @@ function get_topic_title(model) {
   let $ = map_get(model.declarations, model.topic_id);
   if ($.isOk()) {
     let dec = $[0];
-    return dec.signature;
+    let _pipe = dec.signature;
+    return render_topic_signature(_pipe, model.declarations);
   } else {
-    return "unknown";
+    return toList([span(toList([]), toList([text3("unknown")]))]);
   }
 }
 function reference_header_view(model, current_thread_notes) {
@@ -11606,19 +11906,7 @@ function reference_header_view(model, current_thread_notes) {
         toList([
           span(
             toList([class$("pt-[.1rem]")]),
-            toList([
-              a(
-                toList([href("/" + model.topic_id)]),
-                toList([
-                  unsafe_raw_html(
-                    "topic-title",
-                    "span",
-                    toList([]),
-                    get_topic_title(model)
-                  )
-                ])
-              )
-            ])
+            get_topic_title(model)
           ),
           button(
             toList([
@@ -11722,31 +12010,7 @@ function thread_header_view(model, references) {
           toList([
             span(
               toList([class$("pt-[.1rem]")]),
-              toList([
-                (() => {
-                  let $1 = model.is_reference;
-                  if ($1) {
-                    return a(
-                      toList([href("/" + model.topic_id)]),
-                      toList([
-                        unsafe_raw_html(
-                          "topic-title",
-                          "span",
-                          toList([]),
-                          get_topic_title(model)
-                        )
-                      ])
-                    );
-                  } else {
-                    return unsafe_raw_html(
-                      "topic-title",
-                      "span",
-                      toList([]),
-                      get_topic_title(model)
-                    );
-                  }
-                })()
-              ])
+              get_topic_title(model)
             ),
             div(
               toList([]),
@@ -11781,15 +12045,21 @@ function thread_header_view(model, references) {
     );
   }
 }
-function overlay_view(model, notes, references) {
+function overlay_view(model, notes, declarations) {
   let _block;
   let _pipe = map_get(notes, model.current_thread_id);
   _block = unwrap2(_pipe, toList([]));
   let current_thread_notes = _block;
   let _block$1;
-  let _pipe$1 = map_get(references, model.topic_id);
-  _block$1 = unwrap2(_pipe$1, toList([]));
-  let references$1 = _block$1;
+  let _pipe$1 = map_get(declarations, model.topic_id);
+  let _pipe$2 = map3(
+    _pipe$1,
+    (declaration) => {
+      return declaration.references;
+    }
+  );
+  _block$1 = unwrap2(_pipe$2, toList([]));
+  let references = _block$1;
   return div(
     toList([
       class$(
@@ -11818,7 +12088,7 @@ function overlay_view(model, notes, references) {
               div(
                 toList([class$("overlay p-[.5rem]")]),
                 toList([
-                  thread_header_view(model, references$1),
+                  thread_header_view(model, references),
                   (() => {
                     let $1 = is_some(model.active_thread) || length2(
                       current_thread_notes
@@ -12042,7 +12312,7 @@ function map_discussion_msg(msg, selected_discussion) {
     update2(selected_discussion.model, msg)
   );
 }
-function discussion_view(attrs, discussion, references, element_line_number, element_column_number, selected_discussion) {
+function discussion_view(attrs, discussion, declarations, element_line_number, element_column_number, selected_discussion) {
   if (selected_discussion instanceof Some) {
     let selected_discussion$1 = selected_discussion[0];
     let $ = element_line_number === selected_discussion$1.line_number && element_column_number === selected_discussion$1.column_number;
@@ -12054,7 +12324,7 @@ function discussion_view(attrs, discussion, references, element_line_number, ele
             let _pipe = overlay_view(
               selected_discussion$1.model,
               discussion,
-              references
+              declarations
             );
             return map5(
               _pipe,
@@ -12072,7 +12342,7 @@ function discussion_view(attrs, discussion, references, element_line_number, ele
     return fragment2(toList([]));
   }
 }
-function inline_comment_preview_view(parent_notes, topic_id, element_line_number, element_column_number, selected_discussion, discussion, references) {
+function inline_comment_preview_view(parent_notes, topic_id, element_line_number, element_column_number, selected_discussion, discussion, declarations) {
   let note_result = find2(
     parent_notes,
     (note) => {
@@ -12168,7 +12438,7 @@ function inline_comment_preview_view(parent_notes, topic_id, element_line_number
             })()
           ]),
           discussion,
-          references,
+          declarations,
           element_line_number,
           element_column_number,
           selected_discussion
@@ -12246,7 +12516,7 @@ function inline_comment_preview_view(parent_notes, topic_id, element_line_number
             })()
           ]),
           discussion,
-          references,
+          declarations,
           element_line_number,
           element_column_number,
           selected_discussion
@@ -12255,18 +12525,22 @@ function inline_comment_preview_view(parent_notes, topic_id, element_line_number
     );
   }
 }
-function declaration_node_view(node_id, node_declaration, tokens, discussion, references, element_line_number, element_column_number, selected_discussion) {
+function declaration_node_view(topic_id, tokens, discussion, declarations, element_line_number, element_column_number, selected_discussion) {
+  let _block;
+  let _pipe = map_get(declarations, topic_id);
+  _block = unwrap2(_pipe, unknown_declaration);
+  let node_declaration = _block;
   return span(
     toList([
       class$("relative"),
       encode_grid_location_data(
         (() => {
-          let _pipe = element_line_number;
-          return to_string(_pipe);
+          let _pipe$1 = element_line_number;
+          return to_string(_pipe$1);
         })(),
         (() => {
-          let _pipe = element_column_number;
-          return to_string(_pipe);
+          let _pipe$1 = element_column_number;
+          return to_string(_pipe$1);
         })()
       )
     ]),
@@ -12277,7 +12551,9 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, re
           class$(
             declaration_kind_to_string(node_declaration.kind)
           ),
-          class$("declaration-preview N" + to_string(node_id)),
+          class$(
+            "declaration-preview N" + to_string(node_declaration.id)
+          ),
           class$(discussion_entry),
           class$(discussion_entry_hover),
           attribute2("tabindex", "0"),
@@ -12286,8 +12562,8 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, re
               new EntryFocus(),
               element_line_number,
               element_column_number,
-              new Some(node_id),
-              node_declaration.topic_id,
+              new Some(node_declaration.id),
+              topic_id,
               false
             )
           ),
@@ -12297,8 +12573,8 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, re
               new EntryHover(),
               element_line_number,
               element_column_number,
-              new Some(node_id),
-              node_declaration.topic_id,
+              new Some(node_declaration.id),
+              topic_id,
               false
             )
           ),
@@ -12306,13 +12582,13 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, re
             new UserUnselectedDiscussionEntry(new EntryHover())
           ),
           (() => {
-            let _pipe = on_click(
+            let _pipe$1 = on_click(
               new UserClickedDiscussionEntry(
                 element_line_number,
                 element_column_number
               )
             );
-            return stop_propagation(_pipe);
+            return stop_propagation(_pipe$1);
           })()
         ]),
         toList([text3(tokens)])
@@ -12320,17 +12596,17 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, re
       discussion_view(
         toList([
           (() => {
-            let _pipe = on_click(
+            let _pipe$1 = on_click(
               new UserClickedInsideDiscussion(
                 element_line_number,
                 element_column_number
               )
             );
-            return stop_propagation(_pipe);
+            return stop_propagation(_pipe$1);
           })()
         ]),
         discussion,
-        references,
+        declarations,
         element_line_number,
         element_column_number,
         selected_discussion
@@ -12338,18 +12614,22 @@ function declaration_node_view(node_id, node_declaration, tokens, discussion, re
     ])
   );
 }
-function reference_node_view(referenced_node_id, referenced_node_declaration, tokens, discussion, references, element_line_number, element_column_number, selected_discussion) {
+function reference_node_view(topic_id, tokens, discussion, declarations, element_line_number, element_column_number, selected_discussion) {
+  let _block;
+  let _pipe = map_get(declarations, topic_id);
+  _block = unwrap2(_pipe, unknown_declaration);
+  let referenced_node_declaration = _block;
   return span(
     toList([
       class$("relative"),
       encode_grid_location_data(
         (() => {
-          let _pipe = element_line_number;
-          return to_string(_pipe);
+          let _pipe$1 = element_line_number;
+          return to_string(_pipe$1);
         })(),
         (() => {
-          let _pipe = element_column_number;
-          return to_string(_pipe);
+          let _pipe$1 = element_column_number;
+          return to_string(_pipe$1);
         })()
       )
     ]),
@@ -12362,7 +12642,9 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
             )
           ),
           class$(
-            "reference-preview N" + to_string(referenced_node_id)
+            "reference-preview N" + to_string(
+              referenced_node_declaration.id
+            )
           ),
           class$(discussion_entry),
           class$(discussion_entry_hover),
@@ -12372,8 +12654,8 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
               new EntryFocus(),
               element_line_number,
               element_column_number,
-              new Some(referenced_node_id),
-              referenced_node_declaration.topic_id,
+              new Some(referenced_node_declaration.id),
+              topic_id,
               true
             )
           ),
@@ -12383,8 +12665,8 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
               new EntryHover(),
               element_line_number,
               element_column_number,
-              new Some(referenced_node_id),
-              referenced_node_declaration.topic_id,
+              new Some(referenced_node_declaration.id),
+              topic_id,
               true
             )
           ),
@@ -12392,7 +12674,7 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
             new UserUnselectedDiscussionEntry(new EntryHover())
           ),
           (() => {
-            let _pipe = on_ctrl_click(
+            let _pipe$1 = on_ctrl_click(
               new UserCtrlClickedNode(
                 declaration_to_link(referenced_node_declaration)
               ),
@@ -12403,7 +12685,7 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
                 )
               )
             );
-            return stop_propagation(_pipe);
+            return stop_propagation(_pipe$1);
           })()
         ]),
         toList([text3(tokens)])
@@ -12411,17 +12693,17 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
       discussion_view(
         toList([
           (() => {
-            let _pipe = on_click(
+            let _pipe$1 = on_click(
               new UserClickedInsideDiscussion(
                 element_line_number,
                 element_column_number
               )
             );
-            return stop_propagation(_pipe);
+            return stop_propagation(_pipe$1);
           })()
         ]),
         discussion,
-        references,
+        declarations,
         element_line_number,
         element_column_number,
         selected_discussion
@@ -12429,42 +12711,38 @@ function reference_node_view(referenced_node_id, referenced_node_declaration, to
     ])
   );
 }
-function preprocessed_nodes_view(loc, discussion, references, selected_discussion) {
+function preprocessed_nodes_view(loc, discussion, declarations, selected_discussion) {
   let _pipe = map_fold(
     loc.elements,
     0,
     (index5, element4) => {
       if (element4 instanceof PreProcessedDeclaration) {
-        let node_id = element4.node_id;
-        let node_declaration = element4.node_declaration;
+        let topic_id = element4.topic_id;
         let tokens = element4.tokens;
         let new_column_index = index5 + 1;
         return [
           new_column_index,
           declaration_node_view(
-            node_id,
-            node_declaration,
+            topic_id,
             tokens,
             discussion,
-            references,
+            declarations,
             loc.line_number,
             new_column_index,
             selected_discussion
           )
         ];
       } else if (element4 instanceof PreProcessedReference) {
-        let referenced_node_id = element4.referenced_node_id;
-        let referenced_node_declaration = element4.referenced_node_declaration;
+        let topic_id = element4.topic_id;
         let tokens = element4.tokens;
         let new_column_index = index5 + 1;
         return [
           new_column_index,
           reference_node_view(
-            referenced_node_id,
-            referenced_node_declaration,
+            topic_id,
             tokens,
             discussion,
-            references,
+            declarations,
             loc.line_number,
             new_column_index,
             selected_discussion
@@ -12585,7 +12863,7 @@ function get_notes(discussion, leading_spaces, topic_id) {
   let info_notes = _block$1;
   return [parent_notes, info_notes];
 }
-function line_container_view(discussion, references, loc, line_topic_id, selected_discussion) {
+function line_container_view(discussion, declarations, loc, line_topic_id, selected_discussion) {
   let $ = get_notes(discussion, loc.leading_spaces, line_topic_id);
   let parent_notes = $[0];
   let info_notes = $[1];
@@ -12651,7 +12929,7 @@ function line_container_view(discussion, references, loc, line_topic_id, selecte
             preprocessed_nodes_view(
               loc,
               discussion,
-              references,
+              declarations,
               selected_discussion
             )
           ),
@@ -12662,14 +12940,14 @@ function line_container_view(discussion, references, loc, line_topic_id, selecte
             column_count,
             selected_discussion,
             discussion,
-            references
+            declarations
           )
         ])
       )
     ])
   );
 }
-function loc_view(discussion, references, loc, selected_discussion) {
+function loc_view(loc, discussion, declarations, selected_discussion) {
   let $ = loc.significance;
   if ($ instanceof EmptyLine) {
     return p(
@@ -12682,17 +12960,16 @@ function loc_view(discussion, references, loc, selected_discussion) {
         preprocessed_nodes_view(
           loc,
           discussion,
-          references,
+          declarations,
           selected_discussion
         )
       )
     );
   } else if ($ instanceof SingleDeclarationLine) {
-    let signature = $.signature;
     let topic_id = $.topic_id;
     return line_container_view(
       discussion,
-      references,
+      declarations,
       loc,
       topic_id,
       selected_discussion
@@ -12701,14 +12978,14 @@ function loc_view(discussion, references, loc, selected_discussion) {
     let topic_id = $.topic_id;
     return line_container_view(
       discussion,
-      references,
+      declarations,
       loc,
       topic_id,
       selected_discussion
     );
   }
 }
-function view3(preprocessed_source, discussion, references, selected_discussion) {
+function view3(preprocessed_source, discussion, declarations, selected_discussion) {
   return div(
     toList([
       id("audit-page"),
@@ -12725,7 +13002,7 @@ function view3(preprocessed_source, discussion, references, selected_discussion)
     map2(
       preprocessed_source,
       (_capture) => {
-        return loc_view(discussion, references, _capture, selected_discussion);
+        return loc_view(_capture, discussion, declarations, selected_discussion);
       }
     )
   );
@@ -13077,15 +13354,15 @@ function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
 
 // build/dev/javascript/o11a_client/o11a_client.mjs
 var Model3 = class extends CustomType {
-  constructor(route2, file_tree, audit_metadata, source_files, audit_declarations, audit_references, audit_interface, discussions, discussion_models, keyboard_model, selected_discussion, selected_node_id, focused_discussion, clicked_discussion) {
+  constructor(route2, file_tree, audit_metadata, source_files, audit_declarations, audit_interface, merged_topics, discussions, discussion_models, keyboard_model, selected_discussion, selected_node_id, focused_discussion, clicked_discussion) {
     super();
     this.route = route2;
     this.file_tree = file_tree;
     this.audit_metadata = audit_metadata;
     this.source_files = source_files;
     this.audit_declarations = audit_declarations;
-    this.audit_references = audit_references;
     this.audit_interface = audit_interface;
+    this.merged_topics = merged_topics;
     this.discussions = discussions;
     this.discussion_models = discussion_models;
     this.keyboard_model = keyboard_model;
@@ -13151,11 +13428,24 @@ var ClientFetchedDeclarations = class extends CustomType {
     this.declarations = declarations;
   }
 };
+var ClientFetchedMergedTopics = class extends CustomType {
+  constructor(audit_name, merged_topics) {
+    super();
+    this.audit_name = audit_name;
+    this.merged_topics = merged_topics;
+  }
+};
 var ClientFetchedDiscussion = class extends CustomType {
   constructor(audit_name, discussion) {
     super();
     this.audit_name = audit_name;
     this.discussion = discussion;
+  }
+};
+var ServerUpdatedMergedTopics = class extends CustomType {
+  constructor(audit_name) {
+    super();
+    this.audit_name = audit_name;
   }
 };
 var ServerUpdatedDiscussion = class extends CustomType {
@@ -13256,8 +13546,8 @@ function parse_route(uri) {
   }
 }
 function on_url_change(uri) {
-  echo4("on_url_change", "src/o11a_client.gleam", 136);
-  echo4(uri, "src/o11a_client.gleam", 137);
+  echo4("on_url_change", "src/o11a_client.gleam", 133);
+  echo4(uri, "src/o11a_client.gleam", 134);
   let _pipe = parse_route(uri);
   return new OnRouteChange(_pipe);
 }
@@ -13392,6 +13682,17 @@ function fetch_declarations(audit_name) {
     )
   );
 }
+function fetch_merged_topics(audit_name) {
+  return get2(
+    "/audit-merged-topics/" + audit_name,
+    expect_json(
+      list2(topic_merge_decoder()),
+      (_capture) => {
+        return new ClientFetchedMergedTopics(audit_name, _capture);
+      }
+    )
+  );
+}
 function fetch_discussion(audit_name) {
   return get2(
     "/audit-discussion/" + audit_name,
@@ -13410,7 +13711,8 @@ function route_change_effect(model, route2) {
       toList([
         fetch_metadata(model, audit_name),
         fetch_declarations(audit_name),
-        fetch_discussion(audit_name)
+        fetch_discussion(audit_name),
+        fetch_merged_topics(audit_name)
       ])
     );
   } else if (route2 instanceof AuditInterfaceRoute) {
@@ -13419,7 +13721,8 @@ function route_change_effect(model, route2) {
       toList([
         fetch_metadata(model, audit_name),
         fetch_declarations(audit_name),
-        fetch_discussion(audit_name)
+        fetch_discussion(audit_name),
+        fetch_merged_topics(audit_name)
       ])
     );
   } else if (route2 instanceof AuditPageRoute) {
@@ -13430,7 +13733,8 @@ function route_change_effect(model, route2) {
         fetch_metadata(model, audit_name),
         fetch_source_file(model, page_path),
         fetch_declarations(audit_name),
-        fetch_discussion(audit_name)
+        fetch_discussion(audit_name),
+        fetch_merged_topics(audit_name)
       ])
     );
   } else {
@@ -13528,8 +13832,8 @@ function update3(model, msg) {
           _record.audit_metadata,
           _record.source_files,
           _record.audit_declarations,
-          _record.audit_references,
           _record.audit_interface,
+          _record.merged_topics,
           _record.discussions,
           _record.discussion_models,
           _record.keyboard_model,
@@ -13558,7 +13862,6 @@ function update3(model, msg) {
           updated_audit_metadata,
           _record.source_files,
           _record.audit_declarations,
-          _record.audit_references,
           insert(
             model.audit_interface,
             audit_name,
@@ -13570,10 +13873,9 @@ function update3(model, msg) {
                     let $ = map_get(model.audit_declarations, audit_name);
                     if ($.isOk() && $[0].isOk()) {
                       let declarations = $[0][0];
-                      let _pipe = declarations;
-                      return values(_pipe);
+                      return declarations;
                     } else {
-                      return toList([]);
+                      return new_map();
                     }
                   })(),
                   metadata2.in_scope_files
@@ -13581,6 +13883,7 @@ function update3(model, msg) {
               }
             )
           ),
+          _record.merged_topics,
           _record.discussions,
           _record.discussion_models,
           _record.keyboard_model,
@@ -13614,8 +13917,8 @@ function update3(model, msg) {
           _record.audit_metadata,
           insert(model.source_files, page_path, source_files),
           _record.audit_declarations,
-          _record.audit_references,
           _record.audit_interface,
+          _record.merged_topics,
           _record.discussions,
           _record.discussion_models,
           (() => {
@@ -13651,6 +13954,52 @@ function update3(model, msg) {
       let e = declarations[0];
       console_error("Failed to fetch declarations: " + inspect2(e));
     }
+    let _block;
+    if (declarations.isOk()) {
+      let declarations$1 = declarations[0];
+      let _pipe = group(
+        declarations$1,
+        (declaration) => {
+          return declaration.topic_id;
+        }
+      );
+      let _pipe$1 = map_values(
+        _pipe,
+        (_, value3) => {
+          if (value3.atLeastLength(1)) {
+            let first2 = value3.head;
+            return first2;
+          } else {
+            throw makeError(
+              "panic",
+              "o11a_client",
+              363,
+              "",
+              "`panic` expression evaluated.",
+              {}
+            );
+          }
+        }
+      );
+      let _pipe$2 = build_topics(
+        _pipe$1,
+        (() => {
+          let $ = map_get(model.merged_topics, audit_name);
+          if ($.isOk() && $[0].isOk()) {
+            let merged_topics = $[0][0];
+            return merged_topics;
+          } else {
+            return new_map();
+          }
+        })(),
+        get_combined_declaration
+      );
+      _block = new Ok(_pipe$2);
+    } else {
+      let e = declarations[0];
+      _block = new Error(e);
+    }
+    let merged_declarations = _block;
     return [
       (() => {
         let _record = model;
@@ -13662,75 +14011,13 @@ function update3(model, msg) {
           insert(
             model.audit_declarations,
             audit_name,
-            (() => {
-              if (declarations.isOk()) {
-                let declarations$1 = declarations[0];
-                let _pipe = group(
-                  declarations$1,
-                  (declaration) => {
-                    return declaration.topic_id;
-                  }
-                );
-                let _pipe$1 = map_values(
-                  _pipe,
-                  (_, value3) => {
-                    if (value3.atLeastLength(1)) {
-                      let first2 = value3.head;
-                      return first2;
-                    } else {
-                      throw makeError(
-                        "panic",
-                        "o11a_client",
-                        368,
-                        "",
-                        "`panic` expression evaluated.",
-                        {}
-                      );
-                    }
-                  }
-                );
-                return new Ok(_pipe$1);
-              } else {
-                let e = declarations[0];
-                return new Error(e);
-              }
-            })()
-          ),
-          insert(
-            model.audit_references,
-            audit_name,
-            (() => {
-              let _pipe = declarations;
-              return map3(
-                _pipe,
-                (declarations2) => {
-                  let _pipe$1 = group(
-                    declarations2,
-                    (declaration) => {
-                      return declaration.topic_id;
-                    }
-                  );
-                  return map_values(
-                    _pipe$1,
-                    (_, value3) => {
-                      let _pipe$2 = map2(
-                        value3,
-                        (declaration) => {
-                          return declaration.references;
-                        }
-                      );
-                      return flatten2(_pipe$2);
-                    }
-                  );
-                }
-              );
-            })()
+            merged_declarations
           ),
           insert(
             model.audit_interface,
             audit_name,
             map3(
-              declarations,
+              merged_declarations,
               (declarations2) => {
                 return gather_interface_data(
                   declarations2,
@@ -13747,6 +14034,7 @@ function update3(model, msg) {
               }
             )
           ),
+          _record.merged_topics,
           _record.discussions,
           _record.discussion_models,
           _record.keyboard_model,
@@ -13758,6 +14046,82 @@ function update3(model, msg) {
       })(),
       none()
     ];
+  } else if (msg instanceof ClientFetchedMergedTopics) {
+    let audit_name = msg.audit_name;
+    let merged_topics = msg.merged_topics;
+    if (merged_topics.isOk()) {
+      console_log("Successfully fetched merged topics");
+    } else {
+      let e = merged_topics[0];
+      console_error("Failed to fetch merged topics: " + inspect2(e));
+    }
+    let _block;
+    let _pipe = merged_topics;
+    _block = map3(_pipe, from_list);
+    let merged_topics$1 = _block;
+    return [
+      (() => {
+        let _record = model;
+        return new Model3(
+          _record.route,
+          _record.file_tree,
+          _record.audit_metadata,
+          _record.source_files,
+          upsert(
+            model.audit_declarations,
+            audit_name,
+            (audit_declarations) => {
+              let _pipe$1 = audit_declarations;
+              let _pipe$2 = unwrap(_pipe$1, new Ok(new_map()));
+              return map3(
+                _pipe$2,
+                (audit_declarations2) => {
+                  if (merged_topics$1.isOk()) {
+                    let merged_topics$2 = merged_topics$1[0];
+                    return build_topics(
+                      audit_declarations2,
+                      merged_topics$2,
+                      get_combined_declaration
+                    );
+                  } else {
+                    return audit_declarations2;
+                  }
+                }
+              );
+            }
+          ),
+          _record.audit_interface,
+          insert(model.merged_topics, audit_name, merged_topics$1),
+          upsert(
+            model.discussions,
+            audit_name,
+            (discussions) => {
+              let discussions$1 = unwrap(discussions, new_map());
+              if (merged_topics$1.isOk()) {
+                let merged_topics$2 = merged_topics$1[0];
+                return build_topics(
+                  discussions$1,
+                  merged_topics$2,
+                  get_combined_discussion
+                );
+              } else {
+                return discussions$1;
+              }
+            }
+          ),
+          _record.discussion_models,
+          _record.keyboard_model,
+          _record.selected_discussion,
+          _record.selected_node_id,
+          _record.focused_discussion,
+          _record.clicked_discussion
+        );
+      })(),
+      none()
+    ];
+  } else if (msg instanceof ServerUpdatedMergedTopics) {
+    let audit_name = msg.audit_name;
+    return [model, fetch_merged_topics(audit_name)];
   } else if (msg instanceof ClientFetchedDiscussion) {
     let audit_name = msg.audit_name;
     let discussion = msg.discussion;
@@ -13772,16 +14136,32 @@ function update3(model, msg) {
             _record.audit_metadata,
             _record.source_files,
             _record.audit_declarations,
-            _record.audit_references,
             _record.audit_interface,
+            _record.merged_topics,
             insert(
               model.discussions,
               audit_name,
               (() => {
                 let _pipe = discussion$1;
-                return group(_pipe, (note) => {
-                  return note.parent_id;
-                });
+                let _pipe$1 = group(
+                  _pipe,
+                  (note) => {
+                    return note.parent_id;
+                  }
+                );
+                return build_topics(
+                  _pipe$1,
+                  (() => {
+                    let $ = map_get(model.merged_topics, audit_name);
+                    if ($.isOk() && $[0].isOk()) {
+                      let merged_topics = $[0][0];
+                      return merged_topics;
+                    } else {
+                      return new_map();
+                    }
+                  })(),
+                  get_combined_discussion
+                );
               })()
             ),
             _record.discussion_models,
@@ -13819,8 +14199,8 @@ function update3(model, msg) {
           _record.audit_metadata,
           _record.source_files,
           _record.audit_declarations,
-          _record.audit_references,
           _record.audit_interface,
+          _record.merged_topics,
           _record.discussions,
           _record.discussion_models,
           keyboard_model,
@@ -13898,8 +14278,8 @@ function update3(model, msg) {
                         _record.audit_metadata,
                         _record.source_files,
                         _record.audit_declarations,
-                        _record.audit_references,
                         _record.audit_interface,
+                        _record.merged_topics,
                         _record.discussions,
                         discussion_models,
                         _record.keyboard_model,
@@ -13916,8 +14296,8 @@ function update3(model, msg) {
                         _record.audit_metadata,
                         _record.source_files,
                         _record.audit_declarations,
-                        _record.audit_references,
                         _record.audit_interface,
+                        _record.merged_topics,
                         _record.discussions,
                         discussion_models,
                         (() => {
@@ -13949,7 +14329,7 @@ function update3(model, msg) {
     echo4(
       "Unselecting discussion " + inspect2(kind),
       "src/o11a_client.gleam",
-      514
+      579
     );
     return [
       (() => {
@@ -13961,8 +14341,8 @@ function update3(model, msg) {
             _record.audit_metadata,
             _record.source_files,
             _record.audit_declarations,
-            _record.audit_references,
             _record.audit_interface,
+            _record.merged_topics,
             _record.discussions,
             _record.discussion_models,
             _record.keyboard_model,
@@ -13979,8 +14359,8 @@ function update3(model, msg) {
             _record.audit_metadata,
             _record.source_files,
             _record.audit_declarations,
-            _record.audit_references,
             _record.audit_interface,
+            _record.merged_topics,
             _record.discussions,
             _record.discussion_models,
             _record.keyboard_model,
@@ -14011,8 +14391,8 @@ function update3(model, msg) {
               _record.audit_metadata,
               _record.source_files,
               _record.audit_declarations,
-              _record.audit_references,
               _record.audit_interface,
+              _record.merged_topics,
               _record.discussions,
               _record.discussion_models,
               _record.keyboard_model,
@@ -14068,7 +14448,7 @@ function update3(model, msg) {
         return [model, none()];
       },
       (page_path) => {
-        echo4("User clicked inside discussion", "src/o11a_client.gleam", 578);
+        echo4("User clicked inside discussion", "src/o11a_client.gleam", 643);
         let _block;
         let $ = !isEqual(
           model.selected_discussion,
@@ -14084,8 +14464,8 @@ function update3(model, msg) {
             _record.audit_metadata,
             _record.source_files,
             _record.audit_declarations,
-            _record.audit_references,
             _record.audit_interface,
+            _record.merged_topics,
             _record.discussions,
             _record.discussion_models,
             _record.keyboard_model,
@@ -14113,8 +14493,8 @@ function update3(model, msg) {
             _record.audit_metadata,
             _record.source_files,
             _record.audit_declarations,
-            _record.audit_references,
             _record.audit_interface,
+            _record.merged_topics,
             _record.discussions,
             _record.discussion_models,
             _record.keyboard_model,
@@ -14142,8 +14522,8 @@ function update3(model, msg) {
             _record.audit_metadata,
             _record.source_files,
             _record.audit_declarations,
-            _record.audit_references,
             _record.audit_interface,
+            _record.merged_topics,
             _record.discussions,
             _record.discussion_models,
             _record.keyboard_model,
@@ -14160,7 +14540,7 @@ function update3(model, msg) {
       }
     );
   } else if (msg instanceof UserClickedOutsideDiscussion) {
-    echo4("User clicked outside discussion", "src/o11a_client.gleam", 607);
+    echo4("User clicked outside discussion", "src/o11a_client.gleam", 672);
     return [
       (() => {
         let _record = model;
@@ -14170,8 +14550,8 @@ function update3(model, msg) {
           _record.audit_metadata,
           _record.source_files,
           _record.audit_declarations,
-          _record.audit_references,
           _record.audit_interface,
+          _record.merged_topics,
           _record.discussions,
           _record.discussion_models,
           _record.keyboard_model,
@@ -14237,7 +14617,7 @@ function update3(model, msg) {
           echo4(
             "Focusing discussion input, user is typing",
             "src/o11a_client.gleam",
-            645
+            710
           );
           set_is_user_typing(true);
           return [
@@ -14249,8 +14629,8 @@ function update3(model, msg) {
                 _record.audit_metadata,
                 _record.source_files,
                 _record.audit_declarations,
-                _record.audit_references,
                 _record.audit_interface,
+                _record.merged_topics,
                 _record.discussions,
                 _record.discussion_models,
                 _record.keyboard_model,
@@ -14277,8 +14657,8 @@ function update3(model, msg) {
                 _record.audit_metadata,
                 _record.source_files,
                 _record.audit_declarations,
-                _record.audit_references,
                 _record.audit_interface,
+                _record.merged_topics,
                 _record.discussions,
                 _record.discussion_models,
                 _record.keyboard_model,
@@ -14293,7 +14673,7 @@ function update3(model, msg) {
             none()
           ];
         } else if (discussion_effect instanceof UnfocusDiscussionInput) {
-          echo4("Unfocusing discussion input", "src/o11a_client.gleam", 676);
+          echo4("Unfocusing discussion input", "src/o11a_client.gleam", 741);
           set_is_user_typing(false);
           return [model, none()];
         } else if (discussion_effect instanceof MaximizeDiscussion) {
@@ -14306,8 +14686,8 @@ function update3(model, msg) {
                 _record.audit_metadata,
                 _record.source_files,
                 _record.audit_declarations,
-                _record.audit_references,
                 _record.audit_interface,
+                _record.merged_topics,
                 _record.discussions,
                 insert(
                   model.discussion_models,
@@ -14333,8 +14713,8 @@ function update3(model, msg) {
                 _record.audit_metadata,
                 _record.source_files,
                 _record.audit_declarations,
-                _record.audit_references,
                 _record.audit_interface,
+                _record.merged_topics,
                 _record.discussions,
                 insert(
                   model.discussion_models,
@@ -14370,8 +14750,8 @@ function update3(model, msg) {
               _record.audit_metadata,
               _record.source_files,
               _record.audit_declarations,
-              _record.audit_references,
               _record.audit_interface,
+              _record.merged_topics,
               _record.discussions,
               insert(
                 model.discussion_models,
@@ -14479,6 +14859,18 @@ function on_server_updated_discussion(msg) {
     )
   );
 }
+function on_server_updated_topics(msg) {
+  return on(
+    server_updated_topics,
+    subfield(
+      toList(["detail", "audit_name"]),
+      string3,
+      (audit_name) => {
+        return success(msg(audit_name));
+      }
+    )
+  );
+}
 function map_audit_page_msg(msg) {
   if (msg instanceof UserSelectedDiscussionEntry) {
     let kind = msg.kind;
@@ -14553,6 +14945,15 @@ function view6(model) {
       _block = empty_interface_data();
     }
     let interface_data = _block;
+    let _block$1;
+    let $2 = map_get(model.audit_declarations, audit_name);
+    if ($2.isOk() && $2[0].isOk()) {
+      let declarations2 = $2[0][0];
+      _block$1 = declarations2;
+    } else {
+      _block$1 = new_map();
+    }
+    let declarations = _block$1;
     return div(
       toList([]),
       toList([
@@ -14563,7 +14964,7 @@ function view6(model) {
           toList([])
         ),
         view5(
-          view2(interface_data, audit_name),
+          view2(interface_data, audit_name, declarations),
           new None(),
           model.file_tree,
           audit_name,
@@ -14585,10 +14986,14 @@ function view6(model) {
     _block$1 = unwrap2(_pipe$2, toList([]));
     let preprocessed_source = _block$1;
     let _block$2;
-    let _pipe$3 = map_get(model.audit_references, audit_name);
-    let _pipe$4 = unwrap2(_pipe$3, new Ok(new_map()));
-    _block$2 = unwrap2(_pipe$4, new_map());
-    let references = _block$2;
+    let $1 = map_get(model.audit_declarations, audit_name);
+    if ($1.isOk() && $1[0].isOk()) {
+      let declarations2 = $1[0][0];
+      _block$2 = declarations2;
+    } else {
+      _block$2 = new_map();
+    }
+    let declarations = _block$2;
     return div(
       toList([on_click(new UserClickedOutsideDiscussion())]),
       toList([
@@ -14600,23 +15005,28 @@ function view6(model) {
               (var0) => {
                 return new ServerUpdatedDiscussion(var0);
               }
+            ),
+            on_server_updated_topics(
+              (var0) => {
+                return new ServerUpdatedMergedTopics(var0);
+              }
             )
           ]),
           toList([])
         ),
         view5(
           (() => {
-            let _pipe$5 = view3(
+            let _pipe$3 = view3(
               preprocessed_source,
               discussion,
-              references,
+              declarations,
               selected_discussion
             );
-            return map5(_pipe$5, map_audit_page_msg);
+            return map5(_pipe$3, map_audit_page_msg);
           })(),
           (() => {
-            let _pipe$5 = view4(discussion, page_path);
-            return new Some(_pipe$5);
+            let _pipe$3 = view4(discussion, page_path);
+            return new Some(_pipe$3);
           })(),
           model.file_tree,
           audit_name,

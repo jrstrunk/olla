@@ -919,13 +919,18 @@ fn view(model: Model) {
         _ -> audit_interface.empty_interface_data()
       }
 
+      let declarations = case dict.get(model.audit_declarations, audit_name) {
+        Ok(Ok(declarations)) -> declarations
+        _ -> dict.new()
+      }
+
       html.div([], [
         server_component.element(
           [server_component.route("/component-discussion/" <> audit_name)],
           [],
         ),
         audit_tree.view(
-          audit_interface.view(interface_data, audit_name),
+          audit_interface.view(interface_data, audit_name, declarations),
           option.None,
           model.file_tree,
           audit_name,
@@ -1019,7 +1024,6 @@ fn get_selected_discussion(model: Model) {
 
 fn on_server_updated_discussion(msg) {
   event.on(events.server_updated_discussion, {
-    // echo "Server updated discussion"
     use audit_name <- decode.subfield(["detail", "audit_name"], decode.string)
     decode.success(msg(audit_name))
   })
@@ -1027,7 +1031,6 @@ fn on_server_updated_discussion(msg) {
 
 fn on_server_updated_topics(msg) {
   event.on(events.server_updated_topics, {
-    // echo "Server updated topics"
     use audit_name <- decode.subfield(["detail", "audit_name"], decode.string)
     decode.success(msg(audit_name))
   })

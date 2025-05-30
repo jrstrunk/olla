@@ -95,7 +95,7 @@ pub fn preprocess_source(
 
         // Merge this line with the declaration's topic so that we see the
         // declaration's topic when interacting with the line
-        dict.insert(topic_merges, line_topic_id, topic_id)
+        let topic_merges = dict.insert(topic_merges, line_topic_id, topic_id)
 
         #(
           max_topic_id,
