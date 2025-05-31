@@ -288,7 +288,7 @@ fn preprocess_audit_source(for audit_name) {
                 Ok(#(
                   max_topic_id,
                   option.Some(#(page_path, preprocessed_source)),
-                  [],
+                  addressable_lines,
                   topic_merges,
                 ))
               }
