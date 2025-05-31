@@ -58,6 +58,10 @@ pub type Model {
       String,
       Result(dict.Dict(String, preprocessor.Declaration), lustre_http.HttpError),
     ),
+    audit_declaration_lists: dict.Dict(
+      String,
+      Result(List(preprocessor.Declaration), lustre_http.HttpError),
+    ),
     audit_interface: dict.Dict(
       String,
       Result(audit_interface.InterfaceData, lustre_http.HttpError),
@@ -103,6 +107,7 @@ fn init(_) -> #(Model, Effect(Msg)) {
       audit_metadata: dict.new(),
       source_files: dict.new(),
       audit_declarations: dict.new(),
+      audit_declaration_lists: dict.new(),
       merged_topics: dict.new(),
       discussions: dict.new(),
       discussion_models: dict.new(),
@@ -304,9 +309,9 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             audit_name,
             result.map(metadata, fn(metadata) {
               audit_interface.gather_interface_data(
-                case dict.get(model.audit_declarations, audit_name) {
+                case dict.get(model.audit_declaration_lists, audit_name) {
                   Ok(Ok(declarations)) -> declarations
-                  _ -> dict.new()
+                  _ -> []
                 },
                 metadata.in_scope_files,
               )
@@ -354,7 +359,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
       }
 
-      let merged_declarations = case declarations {
+      let merged_declaration_dict = case declarations {
         Ok(declarations) -> {
           list.group(declarations, by: fn(declaration) { declaration.topic_id })
           |> dict.map_values(fn(_k, value) {
@@ -363,7 +368,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               _ -> panic
             }
           })
-          |> discussion_topic.build_topics(
+          |> discussion_topic.build_merged_topics(
             case dict.get(model.merged_topics, audit_name) {
               Ok(Ok(merged_topics)) -> merged_topics
               _ -> dict.new()
@@ -381,12 +386,17 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           audit_declarations: dict.insert(
             model.audit_declarations,
             audit_name,
-            merged_declarations,
+            merged_declaration_dict,
+          ),
+          audit_declaration_lists: dict.insert(
+            model.audit_declaration_lists,
+            audit_name,
+            declarations,
           ),
           audit_interface: dict.insert(
             model.audit_interface,
             audit_name,
-            result.map(merged_declarations, fn(declarations) {
+            result.map(declarations, fn(declarations) {
               audit_interface.gather_interface_data(
                 declarations,
                 case dict.get(model.audit_metadata, audit_name) {
@@ -428,7 +438,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               let discussions = option.unwrap(discussions, dict.new())
               case merged_topics {
                 Ok(merged_topics) ->
-                  discussion_topic.build_topics(
+                  discussion_topic.build_merged_topics(
                     discussions,
                     merged_topics,
                     get_combined_topics: discussion_topic.get_combined_discussion,
@@ -446,7 +456,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               |> result.map(fn(audit_declarations) {
                 case merged_topics {
                   Ok(merged_topics) ->
-                    discussion_topic.build_topics(
+                    discussion_topic.build_merged_topics(
                       audit_declarations,
                       merged_topics,
                       get_combined_topics: discussion_topic.get_combined_declaration,
@@ -476,7 +486,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               audit_name,
               discussion
                 |> list.group(by: fn(note) { note.parent_id })
-                |> discussion_topic.build_topics(
+                |> discussion_topic.build_merged_topics(
                   case dict.get(model.merged_topics, audit_name) {
                     Ok(Ok(merged_topics)) -> merged_topics
                     _ -> dict.new()

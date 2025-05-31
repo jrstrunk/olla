@@ -159,12 +159,11 @@ fn contract_members_view(
 }
 
 pub fn gather_interface_data(
-  declarations: dict.Dict(String, preprocessor.Declaration),
+  declaration_list: List(preprocessor.Declaration),
   in_scope_files,
 ) {
   let declarations_in_scope =
-    declarations
-    |> dict.values
+    declaration_list
     |> list.filter(fn(declaration) {
       list.contains(in_scope_files, declaration.scope.file)
     })

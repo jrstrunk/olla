@@ -18,7 +18,7 @@ pub fn topic_merge_decoder() {
   decode.success(#(old_topic, new_topic))
 }
 
-pub fn build_topics(
+pub fn build_merged_topics(
   data data: dict.Dict(String, a),
   topic_merges topic_merges: dict.Dict(String, String),
   get_combined_topics get_combined_topics,

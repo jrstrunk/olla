@@ -9040,7 +9040,7 @@ function find_topic_merge_chain_parents(topic_merges) {
   );
   return unique(_pipe);
 }
-function build_topics(data2, topic_merges, get_combined_topics) {
+function build_merged_topics(data2, topic_merges, get_combined_topics) {
   let _block;
   let _pipe = map_to_list(topic_merges);
   _block = map2(
@@ -10464,21 +10464,20 @@ function view2(interface_data, audit_name, declarations) {
     )
   );
 }
-function gather_interface_data(declarations, in_scope_files) {
+function gather_interface_data(declaration_list, in_scope_files) {
   let _block;
-  let _pipe = declarations;
-  let _pipe$1 = values(_pipe);
+  let _pipe = declaration_list;
   _block = filter(
-    _pipe$1,
+    _pipe,
     (declaration) => {
       return contains(in_scope_files, declaration.scope.file);
     }
   );
   let declarations_in_scope = _block;
   let _block$1;
-  let _pipe$2 = declarations_in_scope;
-  let _pipe$3 = filter_map(
-    _pipe$2,
+  let _pipe$1 = declarations_in_scope;
+  let _pipe$2 = filter_map(
+    _pipe$1,
     (declaration) => {
       let $ = declaration.scope.contract;
       let $1 = declaration.scope.member;
@@ -10491,16 +10490,16 @@ function gather_interface_data(declarations, in_scope_files) {
     }
   );
   _block$1 = sort(
-    _pipe$3,
+    _pipe$2,
     (a2, b) => {
       return compare(a2.dec.source_map.start, b.dec.source_map.start);
     }
   );
   let contract_member_declarations_in_scope = _block$1;
   let _block$2;
-  let _pipe$4 = declarations_in_scope;
-  let _pipe$5 = filter(
-    _pipe$4,
+  let _pipe$3 = declarations_in_scope;
+  let _pipe$4 = filter(
+    _pipe$3,
     (declaration) => {
       let $ = declaration.kind;
       if ($ instanceof ContractDeclaration) {
@@ -10510,24 +10509,24 @@ function gather_interface_data(declarations, in_scope_files) {
       }
     }
   );
-  let _pipe$6 = group(
-    _pipe$5,
+  let _pipe$5 = group(
+    _pipe$4,
     (declaration) => {
       return declaration.scope.file;
     }
   );
-  let _pipe$7 = map_values(
-    _pipe$6,
+  let _pipe$6 = map_values(
+    _pipe$5,
     (_, value3) => {
-      let _pipe$72 = map2(value3, (declaration) => {
+      let _pipe$62 = map2(value3, (declaration) => {
         return declaration;
       });
-      return unique(_pipe$72);
+      return unique(_pipe$62);
     }
   );
-  let _pipe$8 = map_to_list(_pipe$7);
+  let _pipe$7 = map_to_list(_pipe$6);
   _block$2 = map2(
-    _pipe$8,
+    _pipe$7,
     (contracts) => {
       return new FileContract(contracts[0], contracts[1]);
     }
@@ -13407,13 +13406,14 @@ function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
 
 // build/dev/javascript/o11a_client/o11a_client.mjs
 var Model3 = class extends CustomType {
-  constructor(route2, file_tree, audit_metadata, source_files, audit_declarations, audit_interface, merged_topics, discussions, discussion_models, keyboard_model, selected_discussion, selected_node_id, focused_discussion, clicked_discussion) {
+  constructor(route2, file_tree, audit_metadata, source_files, audit_declarations, audit_declaration_lists, audit_interface, merged_topics, discussions, discussion_models, keyboard_model, selected_discussion, selected_node_id, focused_discussion, clicked_discussion) {
     super();
     this.route = route2;
     this.file_tree = file_tree;
     this.audit_metadata = audit_metadata;
     this.source_files = source_files;
     this.audit_declarations = audit_declarations;
+    this.audit_declaration_lists = audit_declaration_lists;
     this.audit_interface = audit_interface;
     this.merged_topics = merged_topics;
     this.discussions = discussions;
@@ -13599,8 +13599,8 @@ function parse_route(uri) {
   }
 }
 function on_url_change(uri) {
-  echo4("on_url_change", "src/o11a_client.gleam", 133);
-  echo4(uri, "src/o11a_client.gleam", 134);
+  echo4("on_url_change", "src/o11a_client.gleam", 138);
+  echo4(uri, "src/o11a_client.gleam", 139);
   let _pipe = parse_route(uri);
   return new OnRouteChange(_pipe);
 }
@@ -13814,6 +13814,7 @@ function init4(_) {
     new_map(),
     new_map(),
     new_map(),
+    new_map(),
     init2(),
     new None(),
     new None(),
@@ -13885,6 +13886,7 @@ function update3(model, msg) {
           _record.audit_metadata,
           _record.source_files,
           _record.audit_declarations,
+          _record.audit_declaration_lists,
           _record.audit_interface,
           _record.merged_topics,
           _record.discussions,
@@ -13915,6 +13917,7 @@ function update3(model, msg) {
           updated_audit_metadata,
           _record.source_files,
           _record.audit_declarations,
+          _record.audit_declaration_lists,
           insert(
             model.audit_interface,
             audit_name,
@@ -13923,12 +13926,12 @@ function update3(model, msg) {
               (metadata2) => {
                 return gather_interface_data(
                   (() => {
-                    let $ = map_get(model.audit_declarations, audit_name);
+                    let $ = map_get(model.audit_declaration_lists, audit_name);
                     if ($.isOk() && $[0].isOk()) {
                       let declarations = $[0][0];
                       return declarations;
                     } else {
-                      return new_map();
+                      return toList([]);
                     }
                   })(),
                   metadata2.in_scope_files
@@ -13970,6 +13973,7 @@ function update3(model, msg) {
           _record.audit_metadata,
           insert(model.source_files, page_path, source_files),
           _record.audit_declarations,
+          _record.audit_declaration_lists,
           _record.audit_interface,
           _record.merged_topics,
           _record.discussions,
@@ -14026,7 +14030,7 @@ function update3(model, msg) {
             throw makeError(
               "panic",
               "o11a_client",
-              363,
+              368,
               "",
               "`panic` expression evaluated.",
               {}
@@ -14034,7 +14038,7 @@ function update3(model, msg) {
           }
         }
       );
-      let _pipe$2 = build_topics(
+      let _pipe$2 = build_merged_topics(
         _pipe$1,
         (() => {
           let $ = map_get(model.merged_topics, audit_name);
@@ -14052,7 +14056,7 @@ function update3(model, msg) {
       let e = declarations[0];
       _block = new Error(e);
     }
-    let merged_declarations = _block;
+    let merged_declaration_dict = _block;
     return [
       (() => {
         let _record = model;
@@ -14064,13 +14068,14 @@ function update3(model, msg) {
           insert(
             model.audit_declarations,
             audit_name,
-            merged_declarations
+            merged_declaration_dict
           ),
+          insert(model.audit_declaration_lists, audit_name, declarations),
           insert(
             model.audit_interface,
             audit_name,
             map3(
-              merged_declarations,
+              declarations,
               (declarations2) => {
                 return gather_interface_data(
                   declarations2,
@@ -14131,7 +14136,7 @@ function update3(model, msg) {
                 (audit_declarations2) => {
                   if (merged_topics$1.isOk()) {
                     let merged_topics$2 = merged_topics$1[0];
-                    return build_topics(
+                    return build_merged_topics(
                       audit_declarations2,
                       merged_topics$2,
                       get_combined_declaration
@@ -14143,6 +14148,7 @@ function update3(model, msg) {
               );
             }
           ),
+          _record.audit_declaration_lists,
           _record.audit_interface,
           insert(model.merged_topics, audit_name, merged_topics$1),
           upsert(
@@ -14152,7 +14158,7 @@ function update3(model, msg) {
               let discussions$1 = unwrap(discussions, new_map());
               if (merged_topics$1.isOk()) {
                 let merged_topics$2 = merged_topics$1[0];
-                return build_topics(
+                return build_merged_topics(
                   discussions$1,
                   merged_topics$2,
                   get_combined_discussion
@@ -14189,6 +14195,7 @@ function update3(model, msg) {
             _record.audit_metadata,
             _record.source_files,
             _record.audit_declarations,
+            _record.audit_declaration_lists,
             _record.audit_interface,
             _record.merged_topics,
             insert(
@@ -14202,7 +14209,7 @@ function update3(model, msg) {
                     return note.parent_id;
                   }
                 );
-                return build_topics(
+                return build_merged_topics(
                   _pipe$1,
                   (() => {
                     let $ = map_get(model.merged_topics, audit_name);
@@ -14252,6 +14259,7 @@ function update3(model, msg) {
           _record.audit_metadata,
           _record.source_files,
           _record.audit_declarations,
+          _record.audit_declaration_lists,
           _record.audit_interface,
           _record.merged_topics,
           _record.discussions,
@@ -14331,6 +14339,7 @@ function update3(model, msg) {
                         _record.audit_metadata,
                         _record.source_files,
                         _record.audit_declarations,
+                        _record.audit_declaration_lists,
                         _record.audit_interface,
                         _record.merged_topics,
                         _record.discussions,
@@ -14349,6 +14358,7 @@ function update3(model, msg) {
                         _record.audit_metadata,
                         _record.source_files,
                         _record.audit_declarations,
+                        _record.audit_declaration_lists,
                         _record.audit_interface,
                         _record.merged_topics,
                         _record.discussions,
@@ -14382,7 +14392,7 @@ function update3(model, msg) {
     echo4(
       "Unselecting discussion " + inspect2(kind),
       "src/o11a_client.gleam",
-      579
+      589
     );
     return [
       (() => {
@@ -14394,6 +14404,7 @@ function update3(model, msg) {
             _record.audit_metadata,
             _record.source_files,
             _record.audit_declarations,
+            _record.audit_declaration_lists,
             _record.audit_interface,
             _record.merged_topics,
             _record.discussions,
@@ -14412,6 +14423,7 @@ function update3(model, msg) {
             _record.audit_metadata,
             _record.source_files,
             _record.audit_declarations,
+            _record.audit_declaration_lists,
             _record.audit_interface,
             _record.merged_topics,
             _record.discussions,
@@ -14444,6 +14456,7 @@ function update3(model, msg) {
               _record.audit_metadata,
               _record.source_files,
               _record.audit_declarations,
+              _record.audit_declaration_lists,
               _record.audit_interface,
               _record.merged_topics,
               _record.discussions,
@@ -14501,7 +14514,7 @@ function update3(model, msg) {
         return [model, none()];
       },
       (page_path) => {
-        echo4("User clicked inside discussion", "src/o11a_client.gleam", 643);
+        echo4("User clicked inside discussion", "src/o11a_client.gleam", 653);
         let _block;
         let $ = !isEqual(
           model.selected_discussion,
@@ -14517,6 +14530,7 @@ function update3(model, msg) {
             _record.audit_metadata,
             _record.source_files,
             _record.audit_declarations,
+            _record.audit_declaration_lists,
             _record.audit_interface,
             _record.merged_topics,
             _record.discussions,
@@ -14546,6 +14560,7 @@ function update3(model, msg) {
             _record.audit_metadata,
             _record.source_files,
             _record.audit_declarations,
+            _record.audit_declaration_lists,
             _record.audit_interface,
             _record.merged_topics,
             _record.discussions,
@@ -14575,6 +14590,7 @@ function update3(model, msg) {
             _record.audit_metadata,
             _record.source_files,
             _record.audit_declarations,
+            _record.audit_declaration_lists,
             _record.audit_interface,
             _record.merged_topics,
             _record.discussions,
@@ -14593,7 +14609,7 @@ function update3(model, msg) {
       }
     );
   } else if (msg instanceof UserClickedOutsideDiscussion) {
-    echo4("User clicked outside discussion", "src/o11a_client.gleam", 672);
+    echo4("User clicked outside discussion", "src/o11a_client.gleam", 682);
     return [
       (() => {
         let _record = model;
@@ -14603,6 +14619,7 @@ function update3(model, msg) {
           _record.audit_metadata,
           _record.source_files,
           _record.audit_declarations,
+          _record.audit_declaration_lists,
           _record.audit_interface,
           _record.merged_topics,
           _record.discussions,
@@ -14670,7 +14687,7 @@ function update3(model, msg) {
           echo4(
             "Focusing discussion input, user is typing",
             "src/o11a_client.gleam",
-            710
+            720
           );
           set_is_user_typing(true);
           return [
@@ -14682,6 +14699,7 @@ function update3(model, msg) {
                 _record.audit_metadata,
                 _record.source_files,
                 _record.audit_declarations,
+                _record.audit_declaration_lists,
                 _record.audit_interface,
                 _record.merged_topics,
                 _record.discussions,
@@ -14710,6 +14728,7 @@ function update3(model, msg) {
                 _record.audit_metadata,
                 _record.source_files,
                 _record.audit_declarations,
+                _record.audit_declaration_lists,
                 _record.audit_interface,
                 _record.merged_topics,
                 _record.discussions,
@@ -14726,7 +14745,7 @@ function update3(model, msg) {
             none()
           ];
         } else if (discussion_effect instanceof UnfocusDiscussionInput) {
-          echo4("Unfocusing discussion input", "src/o11a_client.gleam", 741);
+          echo4("Unfocusing discussion input", "src/o11a_client.gleam", 751);
           set_is_user_typing(false);
           return [model, none()];
         } else if (discussion_effect instanceof MaximizeDiscussion) {
@@ -14739,6 +14758,7 @@ function update3(model, msg) {
                 _record.audit_metadata,
                 _record.source_files,
                 _record.audit_declarations,
+                _record.audit_declaration_lists,
                 _record.audit_interface,
                 _record.merged_topics,
                 _record.discussions,
@@ -14766,6 +14786,7 @@ function update3(model, msg) {
                 _record.audit_metadata,
                 _record.source_files,
                 _record.audit_declarations,
+                _record.audit_declaration_lists,
                 _record.audit_interface,
                 _record.merged_topics,
                 _record.discussions,
@@ -14803,6 +14824,7 @@ function update3(model, msg) {
               _record.audit_metadata,
               _record.source_files,
               _record.audit_declarations,
+              _record.audit_declaration_lists,
               _record.audit_interface,
               _record.merged_topics,
               _record.discussions,
