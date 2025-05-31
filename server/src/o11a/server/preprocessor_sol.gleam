@@ -98,7 +98,7 @@ pub fn preprocess_source(
         let topic_merges = dict.insert(topic_merges, line_topic_id, topic_id)
 
         #(
-          max_topic_id,
+          new_max_topic_id,
           preprocessor.SingleDeclarationLine(topic_id: line_topic_id),
           [
             preprocessor.Declaration(
