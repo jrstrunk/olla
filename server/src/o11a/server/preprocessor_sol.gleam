@@ -2164,16 +2164,33 @@ fn do_node_to_signature_nodes(node, top_level top_level: BlockLevel) {
       )
       |> list.append([preprocessor.PreProcessedNode(element: ")")])
 
-    Identifier(reference_id:, name:, ..) -> {
-      let topic_id =
-        preprocessor.node_id_to_topic_id(reference_id, preprocessor.Solidity)
-      case top_level {
-        TopLevel -> [
-          preprocessor.PreProcessedDeclaration(topic_id:, tokens: name),
+    Identifier(reference_id:, name:, ..) ->
+      case reference_id < 0 {
+        True -> [
+          preprocessor.PreProcessedNode(
+            element: html.span([attribute.class("global-variable")], [
+              html.text(name),
+            ])
+            |> element.to_string,
+          ),
         ]
-        Nested -> [preprocessor.PreProcessedReference(topic_id:, tokens: name)]
+        False -> {
+          let topic_id =
+            preprocessor.node_id_to_topic_id(
+              reference_id,
+              preprocessor.Solidity,
+            )
+
+          case top_level {
+            TopLevel -> [
+              preprocessor.PreProcessedDeclaration(topic_id:, tokens: name),
+            ]
+            Nested -> [
+              preprocessor.PreProcessedReference(topic_id:, tokens: name),
+            ]
+          }
+        }
       }
-    }
 
     Modifier(reference_id:, name:, arguments:, ..) ->
       [
