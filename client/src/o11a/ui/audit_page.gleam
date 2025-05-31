@@ -225,6 +225,7 @@ fn inline_comment_preview_view(
               ),
               attribute.class("comment-preview"),
               attribute.class(classes.discussion_entry),
+              attribute.class(topic_id),
               attribute.attribute("tabindex", "0"),
               event.on_focus(UserSelectedDiscussionEntry(
                 kind: EntryFocus,
@@ -291,6 +292,7 @@ fn inline_comment_preview_view(
               attribute.class("inline-comment font-code code-extras"),
               attribute.class("new-thread-preview"),
               attribute.class(classes.discussion_entry),
+              attribute.class(topic_id),
               attribute.attribute("tabindex", "0"),
               event.on_focus(UserSelectedDiscussionEntry(
                 kind: EntryFocus,

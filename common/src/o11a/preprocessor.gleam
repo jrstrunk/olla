@@ -16,13 +16,23 @@ pub type Declaration {
     signature: List(PreProcessedNode),
     scope: Scope,
     kind: DeclarationKind,
+    source_map: SourceMap,
     references: List(Reference),
   )
 }
 
 pub fn encode_declaration(declaration: Declaration) -> json.Json {
   case declaration {
-    Declaration(id:, topic_id:, name:, scope:, signature:, kind:, references:) ->
+    Declaration(
+      id:,
+      topic_id:,
+      name:,
+      scope:,
+      signature:,
+      kind:,
+      source_map:,
+      references:,
+    ) ->
       json.object([
         #("i", json.int(id)),
         #("t", json.string(topic_id)),
@@ -30,6 +40,7 @@ pub fn encode_declaration(declaration: Declaration) -> json.Json {
         #("s", encode_scope(scope)),
         #("g", json.array(signature, encode_pre_processed_node)),
         #("k", encode_declaration_kind(kind)),
+        #("c", encode_source_map(source_map)),
         #("r", json.array(references, encode_reference)),
       ])
   }
@@ -42,6 +53,7 @@ pub fn declaration_decoder() -> decode.Decoder(Declaration) {
   use scope <- decode.field("s", scope_decoder())
   use signature <- decode.field("g", decode.list(pre_processed_node_decoder()))
   use kind <- decode.field("k", decode_declaration_kind())
+  use source_map <- decode.field("c", source_map_decoder())
   use references <- decode.field("r", decode.list(reference_decoder()))
   decode.success(Declaration(
     id:,
@@ -50,6 +62,7 @@ pub fn declaration_decoder() -> decode.Decoder(Declaration) {
     scope:,
     signature:,
     kind:,
+    source_map:,
     references:,
   ))
 }
@@ -61,6 +74,7 @@ pub const unknown_declaration = Declaration(
   [],
   Scope("", option.None, option.None),
   UnknownDeclaration,
+  SourceMap(-1, -1),
   [],
 )
 
@@ -141,6 +155,25 @@ pub fn reference_to_link(reference: Reference) {
       }
     option.None -> ""
   }
+}
+
+pub type SourceMap {
+  SourceMap(start: Int, length: Int)
+}
+
+fn encode_source_map(source_map: SourceMap) -> json.Json {
+  let SourceMap(start:, length:) = source_map
+  json.object([#("start", json.int(start)), #("length", json.int(length))])
+}
+
+fn source_map_decoder() -> decode.Decoder(SourceMap) {
+  use start <- decode.field("start", decode.int)
+  use length <- decode.field("length", decode.int)
+  decode.success(SourceMap(start:, length:))
+}
+
+pub fn get_source_map_end(source_map: SourceMap) {
+  source_map.start + source_map.length
 }
 
 pub type DeclarationKind {

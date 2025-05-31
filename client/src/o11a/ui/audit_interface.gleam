@@ -1,4 +1,5 @@
 import gleam/dict
+import gleam/int
 import gleam/list
 import gleam/option
 import gleam/string
@@ -182,6 +183,9 @@ pub fn gather_interface_data(
           Ok(ContractDeclaration(contract, declaration))
         _, _ -> Error(Nil)
       }
+    })
+    |> list.sort(by: fn(a, b) {
+      int.compare(a.dec.source_map.start, b.dec.source_map.start)
     })
 
   let file_contracts =

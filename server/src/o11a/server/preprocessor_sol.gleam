@@ -116,6 +116,7 @@ pub fn preprocess_source(
                 ),
               ],
               kind: preprocessor.LineDeclaration,
+              source_map: preprocessor.SourceMap(-1, -1),
               references: [],
             ),
           ],
@@ -152,6 +153,7 @@ pub fn preprocess_source(
                 ),
               ],
               kind: preprocessor.LineDeclaration,
+              source_map: preprocessor.SourceMap(-1, -1),
               references: [],
             ),
           ],
@@ -323,16 +325,17 @@ pub fn consume_part(
   rest rest,
   style_node_tokens style_node_tokens,
 ) {
-  use <- given.that(node.source_map == SourceMap(-1, -1), return: fn() {
-    #(total_consumed_count, current_line, processed, rest)
-  })
+  use <- given.that(
+    node.source_map == preprocessor.SourceMap(-1, -1),
+    return: fn() { #(total_consumed_count, current_line, processed, rest) },
+  )
 
   let gap_to_consume =
     int.min(node.source_map.start - total_consumed_count, string.length(rest))
 
   let node_to_consume =
     int.min(
-      get_source_map_end(node.source_map) - total_consumed_count,
+      preprocessor.get_source_map_end(node.source_map) - total_consumed_count,
       string.length(rest),
     )
 
@@ -369,7 +372,7 @@ pub fn consume_part(
       }
     }
     False, True -> {
-      let node_end = get_source_map_end(node.source_map)
+      let node_end = preprocessor.get_source_map_end(node.source_map)
       let #(node_tokens, consumed_count, rest, reached_newline) =
         consume_line(rest, for: node_end - total_consumed_count)
 
@@ -806,7 +809,7 @@ fn do_enumerate_node_declarations(
         do_enumerate_node_declarations(declarations, node, parent_scope)
       })
     ImportDirectiveNode(..) | StructuredDocumentationNode(..) -> declarations
-    ContractDefinitionNode(id:, name:, nodes:, contract_kind:, ..) -> {
+    ContractDefinitionNode(id:, name:, nodes:, contract_kind:, source_map:, ..) -> {
       let children_scope =
         preprocessor.Scope(..parent_scope, contract: option.Some(name))
 
@@ -825,6 +828,7 @@ fn do_enumerate_node_declarations(
             scope: parent_scope,
             signature: get_signature_nodes(node),
             kind: preprocessor.ContractDeclaration(contract_kind),
+            source_map:,
             references: [],
           ),
         ),
@@ -842,6 +846,7 @@ fn do_enumerate_node_declarations(
       parameters:,
       return_parameters:,
       body:,
+      source_map:,
       ..,
     ) -> {
       let name = case function_kind {
@@ -867,6 +872,7 @@ fn do_enumerate_node_declarations(
             scope: parent_scope,
             signature: get_signature_nodes(node),
             kind: preprocessor.FunctionDeclaration(function_kind),
+            source_map:,
             references: [],
           ),
         ),
@@ -885,7 +891,15 @@ fn do_enumerate_node_declarations(
         option.None -> declarations
       }
     }
-    ModifierDefinitionNode(id:, parameters:, nodes:, body:, name:, ..) -> {
+    ModifierDefinitionNode(
+      id:,
+      parameters:,
+      nodes:,
+      body:,
+      name:,
+      source_map:,
+      ..,
+    ) -> {
       let children_scope =
         preprocessor.Scope(..parent_scope, member: option.Some(name))
 
@@ -904,6 +918,7 @@ fn do_enumerate_node_declarations(
             scope: parent_scope,
             signature: get_signature_nodes(node),
             kind: preprocessor.ModifierDeclaration,
+            source_map:,
             references: [],
           ),
         ),
@@ -926,7 +941,7 @@ fn do_enumerate_node_declarations(
         do_enumerate_node_declarations(declarations, parameter, parent_scope)
       })
     }
-    ErrorDefinitionNode(id:, name:, nodes:, parameters:, ..) -> {
+    ErrorDefinitionNode(id:, name:, nodes:, parameters:, source_map:) -> {
       let childern_scope =
         preprocessor.Scope(..parent_scope, member: option.Some(name))
 
@@ -945,6 +960,7 @@ fn do_enumerate_node_declarations(
             scope: parent_scope,
             signature: get_signature_nodes(node),
             kind: preprocessor.ErrorDeclaration,
+            source_map:,
             references: [],
           ),
         ),
@@ -955,7 +971,7 @@ fn do_enumerate_node_declarations(
       })
       |> do_enumerate_node_declarations(parameters, childern_scope)
     }
-    EventDefinitionNode(id:, name:, nodes:, parameters:, ..) -> {
+    EventDefinitionNode(id:, name:, nodes:, parameters:, source_map:) -> {
       let childern_scope =
         preprocessor.Scope(..parent_scope, member: option.Some(name))
 
@@ -974,6 +990,7 @@ fn do_enumerate_node_declarations(
             scope: parent_scope,
             signature: get_signature_nodes(node),
             kind: preprocessor.EventDeclaration,
+            source_map:,
             references: [],
           ),
         ),
@@ -984,7 +1001,7 @@ fn do_enumerate_node_declarations(
       })
       |> do_enumerate_node_declarations(parameters, childern_scope)
     }
-    VariableDeclarationNode(id:, name:, constant:, ..) -> {
+    VariableDeclarationNode(id:, name:, constant:, source_map:, ..) -> {
       let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
       let #(id_acc, declarations) = declarations
@@ -1003,6 +1020,7 @@ fn do_enumerate_node_declarations(
               True -> preprocessor.ConstantDeclaration
               False -> preprocessor.VariableDeclaration
             },
+            source_map:,
             references: [],
           ),
         ),
@@ -1047,7 +1065,7 @@ fn do_enumerate_node_declarations(
 
       do_enumerate_node_declarations(declarations, body, parent_scope)
     }
-    EnumDefinition(id:, name:, members:, nodes:, ..) -> {
+    EnumDefinition(id:, name:, members:, nodes:, source_map:) -> {
       let children_scope =
         preprocessor.Scope(..parent_scope, member: option.Some(name))
 
@@ -1066,6 +1084,7 @@ fn do_enumerate_node_declarations(
             scope: parent_scope,
             signature: get_signature_nodes(node),
             kind: preprocessor.EnumDeclaration,
+            source_map:,
             references: [],
           ),
         ),
@@ -1078,7 +1097,7 @@ fn do_enumerate_node_declarations(
         do_enumerate_node_declarations(declarations, statement, children_scope)
       })
     }
-    EnumValue(id:, name:, ..) -> {
+    EnumValue(id:, name:, source_map:) -> {
       let #(id_acc, declarations) = declarations
       let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
       #(
@@ -1093,12 +1112,13 @@ fn do_enumerate_node_declarations(
             scope: parent_scope,
             signature: get_signature_nodes(node),
             kind: preprocessor.EnumValueDeclaration,
+            source_map:,
             references: [],
           ),
         ),
       )
     }
-    StructDefinition(id:, name:, members:, nodes:, ..) -> {
+    StructDefinition(id:, name:, members:, nodes:, source_map:) -> {
       let children_scope =
         preprocessor.Scope(..parent_scope, member: option.Some(name))
 
@@ -1117,6 +1137,7 @@ fn do_enumerate_node_declarations(
             scope: parent_scope,
             signature: get_signature_nodes(node),
             kind: preprocessor.StructDeclaration,
+            source_map:,
             references: [],
           ),
         ),
@@ -2216,17 +2237,27 @@ pub fn ast_decoder(for audit_name) -> decode.Decoder(AST) {
 pub const empty_ast = AST(id: -1, absolute_path: "", nodes: [])
 
 pub type Node {
-  Node(id: Int, source_map: SourceMap, node_type: String, nodes: List(Node))
-  NamedNode(id: Int, source_map: SourceMap, name: String, nodes: List(Node))
+  Node(
+    id: Int,
+    source_map: preprocessor.SourceMap,
+    node_type: String,
+    nodes: List(Node),
+  )
+  NamedNode(
+    id: Int,
+    source_map: preprocessor.SourceMap,
+    name: String,
+    nodes: List(Node),
+  )
   ImportDirectiveNode(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     file: String,
     absolute_path: String,
   )
   ContractDefinitionNode(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     name: String,
     contract_kind: preprocessor.ContractKind,
     base_contracts: List(Node),
@@ -2234,7 +2265,7 @@ pub type Node {
   )
   VariableDeclarationNode(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     name: String,
     constant: Bool,
     mutability: String,
@@ -2245,21 +2276,21 @@ pub type Node {
   )
   ErrorDefinitionNode(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     name: String,
     nodes: List(Node),
     parameters: Node,
   )
   EventDefinitionNode(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     name: String,
     parameters: Node,
     nodes: List(Node),
   )
   FunctionDefinitionNode(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     name: String,
     function_kind: preprocessor.FunctionKind,
     parameters: Node,
@@ -2273,44 +2304,56 @@ pub type Node {
   )
   ModifierDefinitionNode(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     name: String,
     parameters: Node,
     nodes: List(Node),
     body: option.Option(Node),
     documentation: option.Option(Node),
   )
-  ParameterListNode(id: Int, source_map: SourceMap, parameters: List(Node))
+  ParameterListNode(
+    id: Int,
+    source_map: preprocessor.SourceMap,
+    parameters: List(Node),
+  )
   BlockNode(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     nodes: List(Node),
     statements: List(Node),
     expression: option.Option(Node),
   )
-  StructuredDocumentationNode(id: Int, source_map: SourceMap, text: String)
+  StructuredDocumentationNode(
+    id: Int,
+    source_map: preprocessor.SourceMap,
+    text: String,
+  )
   ExpressionStatementNode(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     expression: option.Option(Node),
   )
-  EmitStatementNode(id: Int, source_map: SourceMap, event_call: Node)
+  EmitStatementNode(
+    id: Int,
+    source_map: preprocessor.SourceMap,
+    event_call: Node,
+  )
   VariableDeclarationStatementNode(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     declarations: List(option.Option(Node)),
     initial_value: option.Option(Node),
   )
   IfStatementNode(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     condition: Node,
     true_body: Node,
     false_body: option.Option(Node),
   )
   ForStatementNode(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     initialization_expression: option.Option(Node),
     condition: option.Option(Node),
     loop_expression: option.Option(Node),
@@ -2318,52 +2361,56 @@ pub type Node {
   )
   RevertStatementNode(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     expression: option.Option(Node),
   )
-  Expression(id: Int, source_map: SourceMap, expression: option.Option(Node))
+  Expression(
+    id: Int,
+    source_map: preprocessor.SourceMap,
+    expression: option.Option(Node),
+  )
   Identifier(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     name: String,
     reference_id: Int,
     expression: option.Option(Node),
   )
   FunctionCall(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     arguments: List(Node),
     kind: FunctionCallKind,
     expression: option.Option(Node),
   )
   Assignment(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     left_hand_side: Node,
     right_hand_side: Node,
   )
   BinaryOperation(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     left_expression: Node,
     right_expression: Node,
     operator: String,
   )
   UnaryOperation(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     expression: Node,
     operator: String,
   )
   IndexAccess(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     base: Node,
     index: option.Option(Node),
   )
   Modifier(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     name: String,
     kind: ModifierKind,
     reference_id: Int,
@@ -2371,17 +2418,35 @@ pub type Node {
   )
   IdentifierPath(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     name: String,
     reference_id: Int,
   )
-  BaseContract(id: Int, source_map: SourceMap, name: String, reference_id: Int)
-  TupleExpression(id: Int, source_map: SourceMap, nodes: List(Node))
-  ElementaryTypeNameExpression(id: Int, source_map: SourceMap, name: String)
-  Literal(id: Int, source_map: SourceMap, kind: LiteralKind, value: String)
+  BaseContract(
+    id: Int,
+    source_map: preprocessor.SourceMap,
+    name: String,
+    reference_id: Int,
+  )
+  TupleExpression(
+    id: Int,
+    source_map: preprocessor.SourceMap,
+    nodes: List(Node),
+  )
+  ElementaryTypeNameExpression(
+    id: Int,
+    source_map: preprocessor.SourceMap,
+    name: String,
+  )
+  Literal(
+    id: Int,
+    source_map: preprocessor.SourceMap,
+    kind: LiteralKind,
+    value: String,
+  )
   MemberAccess(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     name: String,
     is_global_access: Bool,
     reference_id: option.Option(Int),
@@ -2389,55 +2454,56 @@ pub type Node {
   )
   Conditional(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     condition: Node,
     false_expression: Node,
     true_expression: Node,
   )
   EnumDefinition(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     name: String,
     nodes: List(Node),
     members: List(Node),
   )
-  EnumValue(id: Int, source_map: SourceMap, name: String)
+  EnumValue(id: Int, source_map: preprocessor.SourceMap, name: String)
   StructDefinition(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     name: String,
     nodes: List(Node),
     members: List(Node),
   )
-  UserDefinedTypeName(id: Int, source_map: SourceMap, path_node: Node)
-  ArrayTypeName(id: Int, source_map: SourceMap, base_type: Node)
+  UserDefinedTypeName(
+    id: Int,
+    source_map: preprocessor.SourceMap,
+    path_node: Node,
+  )
+  ArrayTypeName(id: Int, source_map: preprocessor.SourceMap, base_type: Node)
   NewExpression(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     type_name: Node,
     arguments: option.Option(List(Node)),
   )
   FunctionCallOptions(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     expression: option.Option(Node),
     options: List(Node),
   )
-  Mapping(id: Int, source_map: SourceMap, key_type: Node, value_type: Node)
+  Mapping(
+    id: Int,
+    source_map: preprocessor.SourceMap,
+    key_type: Node,
+    value_type: Node,
+  )
   UsingForDirective(
     id: Int,
-    source_map: SourceMap,
+    source_map: preprocessor.SourceMap,
     library_name: Node,
     type_name: Node,
   )
-}
-
-pub type SourceMap {
-  SourceMap(start: Int, length: Int)
-}
-
-fn get_source_map_end(source_map: SourceMap) {
-  source_map.start + source_map.length
 }
 
 fn source_map_from_string(source_map_string) {
@@ -2447,12 +2513,12 @@ fn source_map_from_string(source_map_string) {
       let length = int.parse(length_string)
 
       case start, length {
-        Ok(start), Ok(length) -> SourceMap(start, length)
+        Ok(start), Ok(length) -> preprocessor.SourceMap(start, length)
         Error(..), _ -> panic as "Failed to parse source map start"
         _, Error(..) -> panic as "Failed to parse source map length"
       }
     }
-    _ -> SourceMap(-1, -1)
+    _ -> preprocessor.SourceMap(-1, -1)
     // panic as { "Failed to split source map string" <> source_map_string }
   }
 }
@@ -2647,11 +2713,17 @@ fn node_decoder() -> decode.Decoder(Node) {
       let #(name, source_map) = case function_kind {
         preprocessor.Constructor -> #(
           "constructor",
-          SourceMap(location.start, 11),
+          preprocessor.SourceMap(location.start, 11),
         )
         preprocessor.Function -> #(name, name_location)
-        preprocessor.Fallback -> #("fallback", SourceMap(location.start, 8))
-        preprocessor.Receive -> #("receive", SourceMap(location.start, 7))
+        preprocessor.Fallback -> #(
+          "fallback",
+          preprocessor.SourceMap(location.start, 8),
+        )
+        preprocessor.Receive -> #(
+          "receive",
+          preprocessor.SourceMap(location.start, 7),
+        )
       }
 
       decode.success(FunctionDefinitionNode(

@@ -724,6 +724,19 @@ function round2(x2) {
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/int.mjs
+function compare(a2, b) {
+  let $ = a2 === b;
+  if ($) {
+    return new Eq();
+  } else {
+    let $1 = a2 < b;
+    if ($1) {
+      return new Lt();
+    } else {
+      return new Gt();
+    }
+  }
+}
 function min(a2, b) {
   let $ = a2 < b;
   if ($) {
@@ -8280,7 +8293,7 @@ function base_name(path2) {
 
 // build/dev/javascript/o11a_common/o11a/preprocessor.mjs
 var Declaration = class extends CustomType {
-  constructor(id2, topic_id, name2, signature, scope, kind, references) {
+  constructor(id2, topic_id, name2, signature, scope, kind, source_map, references) {
     super();
     this.id = id2;
     this.topic_id = topic_id;
@@ -8288,6 +8301,7 @@ var Declaration = class extends CustomType {
     this.signature = signature;
     this.scope = scope;
     this.kind = kind;
+    this.source_map = source_map;
     this.references = references;
   }
 };
@@ -8297,6 +8311,13 @@ var Scope = class extends CustomType {
     this.file = file;
     this.contract = contract;
     this.member = member;
+  }
+};
+var SourceMap = class extends CustomType {
+  constructor(start4, length4) {
+    super();
+    this.start = start4;
+    this.length = length4;
   }
 };
 var ContractDeclaration = class extends CustomType {
@@ -8502,6 +8523,21 @@ function reference_to_link(reference) {
       return "";
     }
   })();
+}
+function source_map_decoder() {
+  return field(
+    "start",
+    int2,
+    (start4) => {
+      return field(
+        "length",
+        int2,
+        (length4) => {
+          return success(new SourceMap(start4, length4));
+        }
+      );
+    }
+  );
 }
 function decode_declaration_kind() {
   return map4(
@@ -8845,19 +8881,26 @@ function declaration_decoder() {
                         decode_declaration_kind(),
                         (kind) => {
                           return field(
-                            "r",
-                            list2(reference_decoder()),
-                            (references) => {
-                              return success(
-                                new Declaration(
-                                  id2,
-                                  topic_id,
-                                  name2,
-                                  signature,
-                                  scope,
-                                  kind,
-                                  references
-                                )
+                            "c",
+                            source_map_decoder(),
+                            (source_map) => {
+                              return field(
+                                "r",
+                                list2(reference_decoder()),
+                                (references) => {
+                                  return success(
+                                    new Declaration(
+                                      id2,
+                                      topic_id,
+                                      name2,
+                                      signature,
+                                      scope,
+                                      kind,
+                                      source_map,
+                                      references
+                                    )
+                                  );
+                                }
                               );
                             }
                           );
@@ -8939,6 +8982,7 @@ var unknown_declaration = /* @__PURE__ */ new Declaration(
     /* @__PURE__ */ new None()
   ),
   /* @__PURE__ */ new UnknownDeclaration(),
+  /* @__PURE__ */ new SourceMap(-1, -1),
   /* @__PURE__ */ toList([])
 );
 
@@ -9084,6 +9128,7 @@ function get_combined_declaration(parent_topic_id, declarations, topic_merges) {
               _record.signature,
               _record.scope,
               _record.kind,
+              _record.source_map,
               append2(
                 next_declaration.references,
                 existing_decl.references
@@ -10432,7 +10477,7 @@ function gather_interface_data(declarations, in_scope_files) {
   let declarations_in_scope = _block;
   let _block$1;
   let _pipe$2 = declarations_in_scope;
-  _block$1 = filter_map(
+  let _pipe$3 = filter_map(
     _pipe$2,
     (declaration) => {
       let $ = declaration.scope.contract;
@@ -10445,11 +10490,17 @@ function gather_interface_data(declarations, in_scope_files) {
       }
     }
   );
+  _block$1 = sort(
+    _pipe$3,
+    (a2, b) => {
+      return compare(a2.dec.source_map.start, b.dec.source_map.start);
+    }
+  );
   let contract_member_declarations_in_scope = _block$1;
   let _block$2;
-  let _pipe$3 = declarations_in_scope;
-  let _pipe$4 = filter(
-    _pipe$3,
+  let _pipe$4 = declarations_in_scope;
+  let _pipe$5 = filter(
+    _pipe$4,
     (declaration) => {
       let $ = declaration.kind;
       if ($ instanceof ContractDeclaration) {
@@ -10459,24 +10510,24 @@ function gather_interface_data(declarations, in_scope_files) {
       }
     }
   );
-  let _pipe$5 = group(
-    _pipe$4,
+  let _pipe$6 = group(
+    _pipe$5,
     (declaration) => {
       return declaration.scope.file;
     }
   );
-  let _pipe$6 = map_values(
-    _pipe$5,
+  let _pipe$7 = map_values(
+    _pipe$6,
     (_, value3) => {
-      let _pipe$62 = map2(value3, (declaration) => {
+      let _pipe$72 = map2(value3, (declaration) => {
         return declaration;
       });
-      return unique(_pipe$62);
+      return unique(_pipe$72);
     }
   );
-  let _pipe$7 = map_to_list(_pipe$6);
+  let _pipe$8 = map_to_list(_pipe$7);
   _block$2 = map2(
-    _pipe$7,
+    _pipe$8,
     (contracts) => {
       return new FileContract(contracts[0], contracts[1]);
     }
@@ -12373,6 +12424,7 @@ function inline_comment_preview_view(parent_notes, topic_id, element_line_number
             ),
             class$("comment-preview"),
             class$(discussion_entry),
+            class$(topic_id),
             attribute2("tabindex", "0"),
             on_focus(
               new UserSelectedDiscussionEntry(
@@ -12466,6 +12518,7 @@ function inline_comment_preview_view(parent_notes, topic_id, element_line_number
             class$("inline-comment font-code code-extras"),
             class$("new-thread-preview"),
             class$(discussion_entry),
+            class$(topic_id),
             attribute2("tabindex", "0"),
             on_focus(
               new UserSelectedDiscussionEntry(
