@@ -2459,6 +2459,33 @@ function find2(loop$list, loop$is_desired) {
     }
   }
 }
+function intersperse_loop(loop$list, loop$separator, loop$acc) {
+  while (true) {
+    let list4 = loop$list;
+    let separator = loop$separator;
+    let acc = loop$acc;
+    if (list4.hasLength(0)) {
+      return reverse(acc);
+    } else {
+      let first$1 = list4.head;
+      let rest$1 = list4.tail;
+      loop$list = rest$1;
+      loop$separator = separator;
+      loop$acc = prepend(first$1, prepend(separator, acc));
+    }
+  }
+}
+function intersperse(list4, elem) {
+  if (list4.hasLength(0)) {
+    return list4;
+  } else if (list4.hasLength(1)) {
+    return list4;
+  } else {
+    let first$1 = list4.head;
+    let rest$1 = list4.tail;
+    return intersperse_loop(rest$1, elem, toList([first$1]));
+  }
+}
 function unique_loop(loop$list, loop$seen, loop$acc) {
   while (true) {
     let list4 = loop$list;
@@ -6781,6 +6808,9 @@ function ul(attrs, children) {
 function a(attrs, children) {
   return element2("a", attrs, children);
 }
+function br(attrs) {
+  return element2("br", attrs, empty_list);
+}
 function span(attrs, children) {
   return element2("span", attrs, children);
 }
@@ -8451,6 +8481,14 @@ var PreProcessedGapNode = class extends CustomType {
     this.leading_spaces = leading_spaces;
   }
 };
+var FormatterNewline = class extends CustomType {
+};
+var FormatterBlock = class extends CustomType {
+  constructor(nodes) {
+    super();
+    this.nodes = nodes;
+  }
+};
 function scope_decoder() {
   return field(
     "f",
@@ -8847,6 +8885,16 @@ function pre_processed_node_decoder() {
                 );
               }
             );
+          }
+        );
+      } else if (variant === "fl") {
+        return success(new FormatterNewline());
+      } else if (variant === "fb") {
+        return field(
+          "n",
+          list2(pre_processed_node_decoder()),
+          (nodes) => {
+            return success(new FormatterBlock(nodes));
           }
         );
       } else {
@@ -10201,85 +10249,205 @@ function view(notes, audit_name) {
 }
 
 // build/dev/javascript/o11a_client/o11a/ui/node_renderer.mjs
-function render_topic_signature(signatures, declarations) {
-  let _pipe = map_fold(
-    signatures,
-    0,
-    (index5, node) => {
-      if (node instanceof PreProcessedDeclaration) {
-        let topic_id = node.topic_id;
-        let tokens = node.tokens;
-        let _block;
-        let _pipe2 = map_get(declarations, topic_id);
-        _block = unwrap2(_pipe2, unknown_declaration);
-        let declaration = _block;
-        let rendered_node = span(
-          toList([class$("relative")]),
-          toList([
-            span(
-              toList([
-                class$(
-                  declaration_kind_to_string(declaration.kind)
-                )
-              ]),
-              toList([text3(tokens)])
-            )
-          ])
-        );
-        return [index5, rendered_node];
-      } else if (node instanceof PreProcessedReference) {
-        let topic_id = node.topic_id;
-        let tokens = node.tokens;
-        let new_index = index5 + 1;
-        let _block;
-        let _pipe2 = map_get(declarations, topic_id);
-        _block = unwrap2(_pipe2, unknown_declaration);
-        let referenced_declaraion = _block;
-        let rendered_node = span(
-          toList([class$("relative")]),
-          toList([
-            span(
-              toList([
-                class$(
-                  declaration_kind_to_string(
-                    referenced_declaraion.kind
-                  )
-                ),
-                class$(
-                  "N" + to_string(referenced_declaraion.id)
-                )
-              ]),
-              toList([text3(tokens)])
-            )
-          ])
-        );
-        return [new_index, rendered_node];
-      } else if (node instanceof PreProcessedNode) {
-        let element4 = node.element;
+var RenderedLine = class extends CustomType {
+  constructor(indent, nodes) {
+    super();
+    this.indent = indent;
+    this.nodes = nodes;
+  }
+};
+function split_lines(nodes, indent) {
+  let $ = fold2(
+    nodes,
+    [toList([]), toList([])],
+    (acc, node) => {
+      let current_line2 = acc[0];
+      let block_lines2 = acc[1];
+      if (node instanceof FormatterNewline) {
         return [
-          index5,
-          unsafe_raw_html(
-            "preprocessed-node",
-            "span",
-            toList([]),
-            element4
+          toList([]),
+          prepend(
+            new RenderedLine(
+              (() => {
+                if (indent) {
+                  return "\xA0\xA0";
+                } else {
+                  return "";
+                }
+              })(),
+              current_line2
+            ),
+            block_lines2
           )
+        ];
+      } else if (node instanceof FormatterBlock) {
+        let nodes$1 = node.nodes;
+        return [
+          toList([]),
+          append2(split_lines(nodes$1, true), block_lines2)
         ];
       } else {
-        let element4 = node.element;
-        return [
-          index5,
-          unsafe_raw_html(
-            "preprocessed-node",
-            "span",
-            toList([]),
-            element4
-          )
-        ];
+        return [prepend(node, current_line2), block_lines2];
       }
     }
   );
-  return second(_pipe);
+  let current_line = $[0];
+  let block_lines = $[1];
+  return prepend(
+    new RenderedLine(
+      (() => {
+        if (indent) {
+          return "\xA0\xA0";
+        } else {
+          return "";
+        }
+      })(),
+      current_line
+    ),
+    block_lines
+  );
+}
+function render_topic_signature(signature, declarations) {
+  let _pipe = split_lines(signature, false);
+  let _pipe$1 = fold2(
+    _pipe,
+    toList([]),
+    (rendered_lines, rendered_line) => {
+      let _block;
+      let _pipe$12 = rendered_line.nodes;
+      let _pipe$22 = reverse(_pipe$12);
+      let _pipe$3 = map_fold(
+        _pipe$22,
+        [0, false],
+        (index5, node) => {
+          let index$1 = index5[0];
+          let indented = index5[1];
+          if (node instanceof PreProcessedDeclaration) {
+            let topic_id = node.topic_id;
+            let tokens = node.tokens;
+            let _block$1;
+            let _pipe$32 = map_get(declarations, topic_id);
+            _block$1 = unwrap2(
+              _pipe$32,
+              unknown_declaration
+            );
+            let declaration = _block$1;
+            let rendered_node = span(
+              toList([class$("relative")]),
+              toList([
+                (() => {
+                  if (indented) {
+                    return fragment2(toList([]));
+                  } else {
+                    return text3(rendered_line.indent);
+                  }
+                })(),
+                span(
+                  toList([
+                    class$(
+                      declaration_kind_to_string(declaration.kind)
+                    )
+                  ]),
+                  toList([text3(tokens)])
+                )
+              ])
+            );
+            return [[index$1, true], rendered_node];
+          } else if (node instanceof PreProcessedReference) {
+            let topic_id = node.topic_id;
+            let tokens = node.tokens;
+            let new_index = index$1 + 1;
+            let _block$1;
+            let _pipe$32 = map_get(declarations, topic_id);
+            _block$1 = unwrap2(
+              _pipe$32,
+              unknown_declaration
+            );
+            let referenced_declaraion = _block$1;
+            let rendered_node = span(
+              toList([class$("relative")]),
+              toList([
+                (() => {
+                  if (indented) {
+                    return fragment2(toList([]));
+                  } else {
+                    return text3(rendered_line.indent);
+                  }
+                })(),
+                span(
+                  toList([
+                    class$(
+                      declaration_kind_to_string(
+                        referenced_declaraion.kind
+                      )
+                    ),
+                    class$(
+                      "N" + to_string(referenced_declaraion.id)
+                    )
+                  ]),
+                  toList([text3(tokens)])
+                )
+              ])
+            );
+            return [[new_index, true], rendered_node];
+          } else if (node instanceof PreProcessedNode) {
+            let element4 = node.element;
+            return [
+              [index$1, true],
+              fragment2(
+                toList([
+                  (() => {
+                    if (indented) {
+                      return fragment2(toList([]));
+                    } else {
+                      return text3(rendered_line.indent);
+                    }
+                  })(),
+                  unsafe_raw_html(
+                    "preprocessed-node",
+                    "span",
+                    toList([]),
+                    element4
+                  )
+                ])
+              )
+            ];
+          } else if (node instanceof PreProcessedGapNode) {
+            let element4 = node.element;
+            return [
+              [index$1, true],
+              fragment2(
+                toList([
+                  (() => {
+                    if (indented) {
+                      return fragment2(toList([]));
+                    } else {
+                      return text3(rendered_line.indent);
+                    }
+                  })(),
+                  unsafe_raw_html(
+                    "preprocessed-node",
+                    "span",
+                    toList([]),
+                    element4
+                  )
+                ])
+              )
+            ];
+          } else if (node instanceof FormatterNewline) {
+            return [[index$1, indented], fragment2(toList([]))];
+          } else {
+            return [[index$1, indented], fragment2(toList([]))];
+          }
+        }
+      );
+      _block = second(_pipe$3);
+      let new_line = _block;
+      return prepend(new_line, rendered_lines);
+    }
+  );
+  let _pipe$2 = intersperse(_pipe$1, toList([br(toList([]))]));
+  return flatten2(_pipe$2);
 }
 
 // build/dev/javascript/o11a_client/o11a/ui/audit_interface.mjs
@@ -10336,14 +10504,16 @@ function contract_members_view(contract, title2, declarations_of_type, declarati
   } else {
     let items$1 = items;
     return div(
-      toList([class$("ml-[1rem] mb-[1rem]")]),
+      toList([class$("ml-[1rem] mb-[1.5rem]")]),
       prepend(
         p(toList([]), toList([text3(title2)])),
         map2(
           items$1,
           (declaration) => {
             return p(
-              toList([class$("ml-[1rem]")]),
+              toList([
+                class$("ml-[1rem] mb-[1rem] leading-[1.1875rem]")
+              ]),
               toList([
                 a(
                   toList([
@@ -12811,7 +12981,7 @@ function preprocessed_nodes_view(loc, discussion, declarations, selected_discuss
             element$1
           )
         ];
-      } else {
+      } else if (element4 instanceof PreProcessedGapNode) {
         let element$1 = element4.element;
         return [
           index5,
@@ -12822,6 +12992,10 @@ function preprocessed_nodes_view(loc, discussion, declarations, selected_discuss
             element$1
           )
         ];
+      } else if (element4 instanceof FormatterNewline) {
+        return [index5, fragment2(toList([]))];
+      } else {
+        return [index5, fragment2(toList([]))];
       }
     }
   );

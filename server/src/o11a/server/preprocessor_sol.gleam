@@ -168,7 +168,9 @@ pub fn preprocess_source(
           preprocessor.PreProcessedDeclaration(..)
           | preprocessor.PreProcessedReference(..) -> acc + 1
           preprocessor.PreProcessedNode(..)
-          | preprocessor.PreProcessedGapNode(..) -> acc
+          | preprocessor.PreProcessedGapNode(..)
+          | preprocessor.FormatterNewline
+          | preprocessor.FormatterBlock(..) -> acc
         }
       })
 
@@ -1787,11 +1789,16 @@ fn do_count_node_references_multi(
   })
 }
 
-fn get_signature_nodes(node) {
-  do_node_to_signature_nodes(node, top_level: True)
+type BlockLevel {
+  TopLevel
+  Nested
 }
 
-fn do_node_to_signature_nodes(node, top_level top_level) {
+fn get_signature_nodes(node) {
+  do_node_to_signature_nodes(node, top_level: TopLevel)
+}
+
+fn do_node_to_signature_nodes(node, top_level top_level: BlockLevel) {
   case node {
     ErrorDefinitionNode(id:, name:, parameters:, ..) ->
       [
@@ -1805,7 +1812,7 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
         ),
         preprocessor.PreProcessedNode(element: "("),
       ]
-      |> list.append(do_node_to_signature_nodes(parameters, top_level: False))
+      |> list.append(do_node_to_signature_nodes(parameters, top_level: Nested))
       |> list.append([preprocessor.PreProcessedNode(element: ")")])
 
     StructDefinition(id:, name:, members:, ..) ->
@@ -1820,14 +1827,20 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
           topic_id: preprocessor.node_id_to_topic_id(id, preprocessor.Solidity),
           tokens: name,
         ),
-        preprocessor.PreProcessedNode(element: " { "),
+        preprocessor.PreProcessedNode(element: " {"),
+        preprocessor.FormatterNewline,
       ]
-      |> list.append(
-        list.map(members, do_node_to_signature_nodes(_, top_level: False))
-        |> list.intersperse([preprocessor.PreProcessedNode(element: "; ")])
-        |> list.flatten,
-      )
-      |> list.append([preprocessor.PreProcessedNode(element: " }")])
+      |> list.append([
+        preprocessor.FormatterBlock(
+          list.map(members, do_node_to_signature_nodes(_, top_level: Nested))
+          |> list.intersperse([
+            preprocessor.PreProcessedNode(element: ";"),
+            preprocessor.FormatterNewline,
+          ])
+          |> list.flatten,
+        ),
+      ])
+      |> list.append([preprocessor.PreProcessedNode(element: "}")])
 
     EnumDefinition(id:, name:, members:, ..) ->
       [
@@ -1839,18 +1852,24 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
           topic_id: preprocessor.node_id_to_topic_id(id, preprocessor.Solidity),
           tokens: name,
         ),
-        preprocessor.PreProcessedNode(element: " { "),
+        preprocessor.PreProcessedNode(element: " {"),
+        preprocessor.FormatterNewline,
       ]
-      |> list.append(
-        list.map(members, do_node_to_signature_nodes(_, top_level: False))
-        |> list.intersperse([preprocessor.PreProcessedNode(element: ", ")])
-        |> list.flatten,
-      )
-      |> list.append([preprocessor.PreProcessedNode(element: " }")])
+      |> list.append([
+        preprocessor.FormatterBlock(
+          list.map(members, do_node_to_signature_nodes(_, top_level: Nested))
+          |> list.intersperse([
+            preprocessor.PreProcessedNode(element: ","),
+            preprocessor.FormatterNewline,
+          ])
+          |> list.flatten,
+        ),
+      ])
+      |> list.append([preprocessor.PreProcessedNode(element: "}")])
 
     EnumValue(id:, name:, ..) ->
       case top_level {
-        True -> [
+        TopLevel -> [
           preprocessor.PreProcessedNode(
             element: html.span([attribute.class("keyword")], [
               html.text("enum value "),
@@ -1865,7 +1884,7 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
             tokens: name,
           ),
         ]
-        False -> [
+        Nested -> [
           preprocessor.PreProcessedReference(
             topic_id: preprocessor.node_id_to_topic_id(
               id,
@@ -1914,7 +1933,7 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
         ]
       }
       |> list.append([preprocessor.PreProcessedNode(element: "(")])
-      |> list.append(do_node_to_signature_nodes(parameters, top_level: False))
+      |> list.append(do_node_to_signature_nodes(parameters, top_level: Nested))
       |> list.append([
         preprocessor.PreProcessedNode(
           element: element.fragment([
@@ -1929,19 +1948,29 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
           |> element.to_string,
         ),
       ])
-      |> list.append(case modifiers |> list.length > 0 {
+      |> list.append(case list.length(modifiers) > 0 {
         True ->
-          [preprocessor.PreProcessedNode(element: " ")]
-          |> list.append(
-            list.map(modifiers, do_node_to_signature_nodes(_, top_level: False))
-            |> list.intersperse([preprocessor.PreProcessedNode(element: " ")])
-            |> list.flatten,
-          )
+          [preprocessor.FormatterNewline]
+          |> list.append([
+            preprocessor.FormatterBlock(
+              list.map(modifiers, do_node_to_signature_nodes(
+                _,
+                top_level: Nested,
+              ))
+              |> list.intersperse([preprocessor.PreProcessedNode(element: " ")])
+              |> list.flatten,
+            ),
+          ])
         False -> []
       })
       |> list.append(case return_parameters {
         ParameterListNode(parameters: [_, ..], ..) ->
-          [
+          // case list.length(modifiers) > 0 {
+          //   True -> [preprocessor.FormatterNewline]
+          //   False -> []
+          // }|ff
+          []
+          |> list.append([
             preprocessor.PreProcessedNode(
               element: element.fragment([
                 html.span([attribute.class("keyword")], [html.text(" returns ")]),
@@ -1949,8 +1978,8 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
               ])
               |> element.to_string,
             ),
-          ]
-          |> list.append(do_node_to_signature_nodes(return_parameters, False))
+          ])
+          |> list.append(do_node_to_signature_nodes(return_parameters, Nested))
           |> list.append([preprocessor.PreProcessedNode(element: ")")])
         _ -> []
       })
@@ -1969,10 +1998,10 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
         ),
         preprocessor.PreProcessedNode(element: "("),
       ]
-      |> list.append(do_node_to_signature_nodes(parameters, top_level: False))
+      |> list.append(do_node_to_signature_nodes(parameters, top_level: Nested))
       |> list.append([preprocessor.PreProcessedNode(element: ")")])
 
-    ContractDefinitionNode(id:, name:, contract_kind:, ..) -> [
+    ContractDefinitionNode(id:, name:, contract_kind:, base_contracts:, ..) -> [
       preprocessor.PreProcessedNode(
         element: html.span([attribute.class("keyword")], [
           html.text(preprocessor.contract_kind_to_string(contract_kind) <> " "),
@@ -1981,6 +2010,33 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
       ),
       preprocessor.PreProcessedDeclaration(
         topic_id: preprocessor.node_id_to_topic_id(id, preprocessor.Solidity),
+        tokens: name,
+      ),
+      ..case base_contracts {
+        [] -> []
+        _ -> [
+          preprocessor.PreProcessedNode(
+            element: html.span([attribute.class("keyword")], [html.text(" is ")])
+            |> element.to_string,
+          ),
+          ..{
+            list.map(base_contracts, do_node_to_signature_nodes(
+              _,
+              top_level: Nested,
+            ))
+            |> list.intersperse([preprocessor.PreProcessedNode(element: ", ")])
+            |> list.flatten
+          }
+        ]
+      }
+    ]
+
+    BaseContract(reference_id:, name:, ..) -> [
+      preprocessor.PreProcessedReference(
+        topic_id: preprocessor.node_id_to_topic_id(
+          reference_id,
+          preprocessor.Solidity,
+        ),
         tokens: name,
       ),
     ]
@@ -1997,13 +2053,27 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
         ),
         preprocessor.PreProcessedNode(element: "("),
       ]
-      |> list.append(do_node_to_signature_nodes(parameters, top_level: False))
+      |> list.append(do_node_to_signature_nodes(parameters, top_level: Nested))
       |> list.append([preprocessor.PreProcessedNode(element: ")")])
 
     ParameterListNode(parameters:, ..) ->
-      list.map(parameters, do_node_to_signature_nodes(_, top_level: False))
-      |> list.intersperse([preprocessor.PreProcessedNode(element: ", ")])
-      |> list.flatten
+      case parameters {
+        [] -> []
+        _ -> [
+          preprocessor.FormatterNewline,
+          preprocessor.FormatterBlock(
+            list.map(parameters, do_node_to_signature_nodes(
+              _,
+              top_level: Nested,
+            ))
+            |> list.intersperse([
+              preprocessor.PreProcessedNode(element: ","),
+              preprocessor.FormatterNewline,
+            ])
+            |> list.flatten,
+          ),
+        ]
+      }
 
     VariableDeclarationNode(
       id:,
@@ -2049,10 +2119,11 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
             preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
           case top_level {
-            True ->
+            TopLevel ->
               preprocessor.PreProcessedDeclaration(topic_id:, tokens: name)
 
-            False -> preprocessor.PreProcessedReference(topic_id:, tokens: name)
+            Nested ->
+              preprocessor.PreProcessedReference(topic_id:, tokens: name)
           }
         },
       ])
@@ -2062,7 +2133,7 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
             element: html.span([attribute.class("operator")], [html.text(" = ")])
             |> element.to_string,
           ),
-          ..do_node_to_signature_nodes(value, False)
+          ..do_node_to_signature_nodes(value, Nested)
         ]
 
         _, _ -> []
@@ -2084,27 +2155,33 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
     ]
 
     FunctionCall(expression: option.Some(expr), arguments:, ..) ->
-      do_node_to_signature_nodes(expr, False)
+      do_node_to_signature_nodes(expr, Nested)
       |> list.append([preprocessor.PreProcessedNode(element: "(")])
       |> list.append(
-        list.map(arguments, do_node_to_signature_nodes(_, top_level: False))
+        list.map(arguments, do_node_to_signature_nodes(_, top_level: Nested))
         |> list.intersperse([preprocessor.PreProcessedNode(element: ", ")])
         |> list.flatten,
       )
       |> list.append([preprocessor.PreProcessedNode(element: ")")])
 
-    Identifier(id:, name:, ..) -> {
-      let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
+    Identifier(reference_id:, name:, ..) -> {
+      let topic_id =
+        preprocessor.node_id_to_topic_id(reference_id, preprocessor.Solidity)
       case top_level {
-        True -> [preprocessor.PreProcessedDeclaration(topic_id:, tokens: name)]
-        False -> [preprocessor.PreProcessedReference(topic_id:, tokens: name)]
+        TopLevel -> [
+          preprocessor.PreProcessedDeclaration(topic_id:, tokens: name),
+        ]
+        Nested -> [preprocessor.PreProcessedReference(topic_id:, tokens: name)]
       }
     }
 
-    Modifier(id:, name:, arguments:, ..) ->
+    Modifier(reference_id:, name:, arguments:, ..) ->
       [
         preprocessor.PreProcessedDeclaration(
-          topic_id: preprocessor.node_id_to_topic_id(id, preprocessor.Solidity),
+          topic_id: preprocessor.node_id_to_topic_id(
+            reference_id,
+            preprocessor.Solidity,
+          ),
           tokens: name,
         ),
       ]
@@ -2112,7 +2189,7 @@ fn do_node_to_signature_nodes(node, top_level top_level) {
         Some(args) ->
           [preprocessor.PreProcessedNode(element: "(")]
           |> list.append(
-            list.map(args, do_node_to_signature_nodes(_, top_level: False))
+            list.map(args, do_node_to_signature_nodes(_, top_level: Nested))
             |> list.intersperse([preprocessor.PreProcessedNode(element: ", ")])
             |> list.flatten,
           )

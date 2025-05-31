@@ -572,6 +572,8 @@ pub type PreProcessedNode {
   PreProcessedReference(topic_id: String, tokens: String)
   PreProcessedNode(element: String)
   PreProcessedGapNode(element: String, leading_spaces: Int)
+  FormatterNewline
+  FormatterBlock(nodes: List(PreProcessedNode))
 }
 
 fn encode_pre_processed_node(pre_processed_node: PreProcessedNode) -> json.Json {
@@ -599,6 +601,12 @@ fn encode_pre_processed_node(pre_processed_node: PreProcessedNode) -> json.Json 
         #("e", json.string(pre_processed_node.element)),
         #("s", json.int(pre_processed_node.leading_spaces)),
       ])
+    FormatterNewline -> json.object([#("v", json.string("fl"))])
+    FormatterBlock(nodes) ->
+      json.object([
+        #("v", json.string("fb")),
+        #("n", json.array(nodes, encode_pre_processed_node)),
+      ])
   }
 }
 
@@ -623,6 +631,11 @@ fn pre_processed_node_decoder() -> decode.Decoder(PreProcessedNode) {
       use element <- decode.field("e", decode.string)
       use leading_spaces <- decode.field("s", decode.int)
       decode.success(PreProcessedGapNode(element:, leading_spaces:))
+    }
+    "fl" -> decode.success(FormatterNewline)
+    "fb" -> {
+      use nodes <- decode.field("n", decode.list(pre_processed_node_decoder()))
+      decode.success(FormatterBlock(nodes:))
     }
     _ -> decode.failure(PreProcessedNode(""), "PreProcessedNode")
   }

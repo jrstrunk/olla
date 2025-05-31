@@ -141,10 +141,10 @@ fn contract_members_view(
   case items {
     [] -> element.fragment([])
     items ->
-      html.div([attribute.class("ml-[1rem] mb-[1rem]")], [
+      html.div([attribute.class("ml-[1rem] mb-[1.5rem]")], [
         html.p([], [html.text(title)]),
         ..list.map(items, fn(declaration) {
-          html.p([attribute.class("ml-[1rem]")], [
+          html.p([attribute.class("ml-[1rem] mb-[1rem] leading-[1.1875rem]")], [
             html.a(
               [attribute.href(preprocessor.declaration_to_link(declaration))],
               node_renderer.render_topic_signature(

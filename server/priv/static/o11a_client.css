@@ -584,6 +584,10 @@ video {
   margin-bottom: .75rem;
 }
 
+.mb-\[1\.5rem\] {
+  margin-bottom: 1.5rem;
+}
+
 .mb-\[1rem\] {
   margin-bottom: 1rem;
 }
@@ -797,6 +801,10 @@ video {
 
 .not-italic {
   font-style: normal;
+}
+
+.leading-\[1\.1875rem\] {
+  line-height: 1.1875rem;
 }
 
 .underline {
