@@ -522,8 +522,30 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     )
 
     UserEnteredKey(browser_event:) -> {
+      // If we have a selected discussion, use that as the active line and
+      // column numbers so we can activate it with keyboard shortcuts
+      let #(active_line_number, active_column_number) = case
+        get_selected_discussion_key(model)
+      {
+        option.Some(discussion_key) -> #(
+          discussion_key.line_number,
+          discussion_key.column_number,
+        )
+        option.None -> #(
+          model.keyboard_model.cursor_line_number,
+          model.keyboard_model.cursor_column_number,
+        )
+      }
+
       let #(keyboard_model, effect) =
-        page_navigation.do_page_navigation(browser_event, model.keyboard_model)
+        page_navigation.do_page_navigation(
+          browser_event,
+          page_navigation.Model(
+            ..model.keyboard_model,
+            active_line_number:,
+            active_column_number:,
+          ),
+        )
       #(Model(..model, keyboard_model:), effect)
     }
 
@@ -1153,7 +1175,7 @@ fn selected_node_highlighter(model: Model) {
   }
 }
 
-fn get_selected_discussion(model: Model) {
+fn get_selected_discussion_key(model: Model) {
   case
     model.focused_discussion,
     model.clicked_discussion,
@@ -1164,7 +1186,14 @@ fn get_selected_discussion(model: Model) {
     | _, option.Some(discussion), _, _
     | _, _, option.Some(discussion), _
     | _, _, _, option.Some(discussion)
-    ->
+    -> option.Some(discussion)
+    option.None, option.None, option.None, option.None -> option.None
+  }
+}
+
+fn get_selected_discussion(model: Model) {
+  case get_selected_discussion_key(model) {
+    option.Some(discussion) ->
       dict.get(model.discussion_models, discussion)
       |> result.map(fn(model) {
         option.Some(audit_page.DiscussionReference(
@@ -1174,7 +1203,7 @@ fn get_selected_discussion(model: Model) {
         ))
       })
       |> result.unwrap(option.None)
-    option.None, option.None, option.None, option.None -> option.None
+    option.None -> option.None
   }
 }
 

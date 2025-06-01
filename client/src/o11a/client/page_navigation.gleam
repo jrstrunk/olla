@@ -13,6 +13,8 @@ pub type Model {
   Model(
     cursor_line_number: Int,
     cursor_column_number: Int,
+    active_line_number: Int,
+    active_column_number: Int,
     current_line_column_count: Int,
     line_count: Int,
   )
@@ -22,6 +24,8 @@ pub fn init() {
   Model(
     cursor_line_number: 16,
     cursor_column_number: 1,
+    active_line_number: 16,
+    active_column_number: 1,
     current_line_column_count: 16,
     line_count: 16,
   )
@@ -190,8 +194,8 @@ fn handle_input_focus(event, model: Model, else_do) {
       Ok(#(
         model,
         focus_line_discussion_input(
-          model.cursor_line_number,
-          model.cursor_column_number,
+          model.active_line_number,
+          model.active_column_number,
         ),
       ))
     _, _ -> else_do()

@@ -3483,15 +3483,6 @@ function array2(entries, inner_type) {
   return preprocessed_array(_pipe$1);
 }
 
-// build/dev/javascript/gleam_stdlib/gleam/bool.mjs
-function guard(requirement, consequence, alternative) {
-  if (requirement) {
-    return consequence;
-  } else {
-    return alternative();
-  }
-}
-
 // build/dev/javascript/gleam_stdlib/gleam/uri.mjs
 var Uri = class extends CustomType {
   constructor(scheme, userinfo, host, port, path2, query, fragment3) {
@@ -4356,6 +4347,15 @@ var empty = /* @__PURE__ */ new Uri(
 );
 function parse2(uri_string) {
   return parse_scheme_loop(uri_string, uri_string, empty, 0);
+}
+
+// build/dev/javascript/gleam_stdlib/gleam/bool.mjs
+function guard(requirement, consequence, alternative) {
+  if (requirement) {
+    return consequence;
+  } else {
+    return alternative();
+  }
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/function.mjs
@@ -9655,16 +9655,18 @@ function is_user_typing() {
 
 // build/dev/javascript/o11a_client/o11a/client/page_navigation.mjs
 var Model = class extends CustomType {
-  constructor(current_line_number, current_column_number, current_line_column_count, line_count) {
+  constructor(cursor_line_number, cursor_column_number, active_line_number, active_column_number, current_line_column_count, line_count) {
     super();
-    this.current_line_number = current_line_number;
-    this.current_column_number = current_column_number;
+    this.cursor_line_number = cursor_line_number;
+    this.cursor_column_number = cursor_column_number;
+    this.active_line_number = active_line_number;
+    this.active_column_number = active_column_number;
     this.current_line_column_count = current_line_column_count;
     this.line_count = line_count;
   }
 };
 function init2() {
-  return new Model(16, 1, 16, 16);
+  return new Model(16, 1, 16, 1, 16, 16);
 }
 function prevent_default(event4) {
   let $ = is_user_typing();
@@ -9765,7 +9767,7 @@ function focus_line_discussion(line_number, column_number) {
       echo2(
         "focus line discussion",
         "src/o11a/client/page_navigation.gleam",
-        260
+        264
       );
       let _block;
       let _pipe = discussion_entry2(line_number, column_number);
@@ -9774,7 +9776,7 @@ function focus_line_discussion(line_number, column_number) {
         new$9("Failed to find line discussion to focus")
       );
       let _pipe$2 = map3(_pipe$1, focus);
-      _block = echo2(_pipe$2, "src/o11a/client/page_navigation.gleam", 267);
+      _block = echo2(_pipe$2, "src/o11a/client/page_navigation.gleam", 271);
       let $ = _block;
       return void 0;
     }
@@ -9787,8 +9789,8 @@ function handle_input_escape(event4, model, else_do) {
       [
         model,
         focus_line_discussion(
-          model.current_line_number,
-          model.current_column_number
+          model.cursor_line_number,
+          model.cursor_column_number
         )
       ]
     );
@@ -9798,7 +9800,7 @@ function handle_input_escape(event4, model, else_do) {
 }
 function move_focus_line(model, step) {
   return map3(
-    find_next_discussion_line(model, model.current_line_number, step),
+    find_next_discussion_line(model, model.cursor_line_number, step),
     (_use0) => {
       let new_line = _use0[0];
       let column_count = _use0[1];
@@ -9806,15 +9808,17 @@ function move_focus_line(model, step) {
         (() => {
           let _record = model;
           return new Model(
-            _record.current_line_number,
-            _record.current_column_number,
+            _record.cursor_line_number,
+            _record.cursor_column_number,
+            _record.active_line_number,
+            _record.active_column_number,
             column_count,
             _record.line_count
           );
         })(),
         focus_line_discussion(
           new_line,
-          min(column_count, model.current_column_number)
+          min(column_count, model.cursor_column_number)
         )
       ];
     }
@@ -9824,20 +9828,20 @@ function move_focus_column(model, step) {
   echo2(
     "moving focus column by " + to_string(step),
     "src/o11a/client/page_navigation.gleam",
-    156
+    160
   );
   let _block;
-  let _pipe = max(1, model.current_column_number + step);
+  let _pipe = max(1, model.cursor_column_number + step);
   _block = min(_pipe, model.current_line_column_count);
   let new_column = _block;
   echo2(
     "new column " + to_string(new_column),
     "src/o11a/client/page_navigation.gleam",
-    161
+    165
   );
   let _pipe$1 = [
     model,
-    focus_line_discussion(model.current_line_number, new_column)
+    focus_line_discussion(model.cursor_line_number, new_column)
   ];
   return new Ok(_pipe$1);
 }
@@ -9870,7 +9874,7 @@ function blur_line_discussion(line_number, column_number) {
       echo2(
         "blurring line discussion",
         "src/o11a/client/page_navigation.gleam",
-        277
+        281
       );
       let _block;
       let _pipe = discussion_entry2(line_number, column_number);
@@ -9891,8 +9895,8 @@ function handle_discussion_escape(event4, model, else_do) {
       [
         model,
         blur_line_discussion(
-          model.current_line_number,
-          model.current_column_number
+          model.cursor_line_number,
+          model.cursor_column_number
         )
       ]
     );
@@ -9923,8 +9927,8 @@ function handle_input_focus(event4, model, else_do) {
       [
         model,
         focus_line_discussion_input(
-          model.current_line_number,
-          model.current_column_number
+          model.active_line_number,
+          model.active_column_number
         )
       ]
     );
@@ -14030,8 +14034,8 @@ function parse_route(uri) {
   }
 }
 function on_url_change(uri) {
-  echo4("on_url_change", "src/o11a_client.gleam", 146);
-  echo4(uri, "src/o11a_client.gleam", 147);
+  echo4("on_url_change", "src/o11a_client.gleam", 145);
+  echo4(uri, "src/o11a_client.gleam", 146);
   let _pipe = parse_route(uri);
   return new OnRouteChange(_pipe);
 }
@@ -14308,6 +14312,39 @@ function submit_note(audit_name, topic_id, note_submission, discussion_model) {
     )
   );
 }
+function selected_node_highlighter(model) {
+  let $ = model.selected_node_id;
+  if ($ instanceof Some) {
+    let selected_node_id = $[0];
+    return style2(
+      toList([]),
+      ".N" + to_string(selected_node_id) + " { background-color: var(--highlight-color); border-radius: 0.15rem; }"
+    );
+  } else {
+    return fragment2(toList([]));
+  }
+}
+function get_selected_discussion_key(model) {
+  let $ = model.focused_discussion;
+  let $1 = model.clicked_discussion;
+  let $2 = model.stickied_discussion;
+  let $3 = model.selected_discussion;
+  if ($ instanceof Some) {
+    let discussion = $[0];
+    return new Some(discussion);
+  } else if ($1 instanceof Some) {
+    let discussion = $1[0];
+    return new Some(discussion);
+  } else if ($2 instanceof Some) {
+    let discussion = $2[0];
+    return new Some(discussion);
+  } else if ($3 instanceof Some) {
+    let discussion = $3[0];
+    return new Some(discussion);
+  } else {
+    return new None();
+  }
+}
 function update3(model, msg) {
   if (msg instanceof OnRouteChange) {
     let route2 = msg.route;
@@ -14421,8 +14458,10 @@ function update3(model, msg) {
           (() => {
             let _record$1 = model.keyboard_model;
             return new Model(
-              _record$1.current_line_number,
-              _record$1.current_column_number,
+              _record$1.cursor_line_number,
+              _record$1.cursor_column_number,
+              _record$1.active_line_number,
+              _record$1.active_column_number,
               _record$1.current_line_column_count,
               (() => {
                 if (source_files.isOk()) {
@@ -14473,7 +14512,7 @@ function update3(model, msg) {
             throw makeError(
               "panic",
               "o11a_client",
-              382,
+              381,
               "",
               "`panic` expression evaluated.",
               {}
@@ -14696,12 +14735,36 @@ function update3(model, msg) {
     return [model, fetch_discussion(audit_name)];
   } else if (msg instanceof UserEnteredKey) {
     let browser_event = msg.browser_event;
-    let $ = do_page_navigation(
+    let _block;
+    let $1 = get_selected_discussion_key(model);
+    if ($1 instanceof Some) {
+      let discussion_key = $1[0];
+      _block = [discussion_key.line_number, discussion_key.column_number];
+    } else {
+      _block = [
+        model.keyboard_model.cursor_line_number,
+        model.keyboard_model.cursor_column_number
+      ];
+    }
+    let $ = _block;
+    let active_line_number = $[0];
+    let active_column_number = $[1];
+    let $2 = do_page_navigation(
       browser_event,
-      model.keyboard_model
+      (() => {
+        let _record = model.keyboard_model;
+        return new Model(
+          _record.cursor_line_number,
+          _record.cursor_column_number,
+          active_line_number,
+          active_column_number,
+          _record.current_line_column_count,
+          _record.line_count
+        );
+      })()
     );
-    let keyboard_model = $[0];
-    let effect = $[1];
+    let keyboard_model = $2[0];
+    let effect = $2[1];
     return [
       (() => {
         let _record = model;
@@ -14826,6 +14889,8 @@ function update3(model, msg) {
                           return new Model(
                             line_number,
                             column_number,
+                            _record$1.active_line_number,
+                            _record$1.active_column_number,
                             _record$1.current_line_column_count,
                             _record$1.line_count
                           );
@@ -15006,7 +15071,7 @@ function update3(model, msg) {
     echo4(
       "User unhovered discussion entry " + to_string(line_number),
       "src/o11a_client.gleam",
-      674
+      695
     );
     return [
       model,
@@ -15021,7 +15086,7 @@ function update3(model, msg) {
                 let timer_id = setTimeout2(
                   200,
                   () => {
-                    echo4("Unsticking discussion", "src/o11a_client.gleam", 685);
+                    echo4("Unsticking discussion", "src/o11a_client.gleam", 706);
                     return dispatch(new ClientUnsetStickyDiscussion());
                   }
                 );
@@ -15042,7 +15107,7 @@ function update3(model, msg) {
     echo4(
       "User hovered discussion entry " + to_string(line_number),
       "src/o11a_client.gleam",
-      697
+      718
     );
     return [
       model,
@@ -15073,7 +15138,7 @@ function update3(model, msg) {
     ];
   } else if (msg instanceof UserStartedStickyCloseTimer) {
     let timer_id = msg.timer_id;
-    echo4("User started sticky close timer", "src/o11a_client.gleam", 723);
+    echo4("User started sticky close timer", "src/o11a_client.gleam", 744);
     return [
       (() => {
         let _record = model;
@@ -15206,7 +15271,7 @@ function update3(model, msg) {
         return [model, none()];
       },
       (page_path) => {
-        echo4("User clicked inside discussion", "src/o11a_client.gleam", 789);
+        echo4("User clicked inside discussion", "src/o11a_client.gleam", 810);
         let _block;
         let $ = !isEqual(
           model.selected_discussion,
@@ -15310,7 +15375,7 @@ function update3(model, msg) {
       }
     );
   } else if (msg instanceof UserClickedOutsideDiscussion) {
-    echo4("User clicked outside discussion", "src/o11a_client.gleam", 818);
+    echo4("User clicked outside discussion", "src/o11a_client.gleam", 839);
     return [
       (() => {
         let _record = model;
@@ -15391,7 +15456,7 @@ function update3(model, msg) {
           echo4(
             "Focusing discussion input, user is typing",
             "src/o11a_client.gleam",
-            856
+            877
           );
           set_is_user_typing(true);
           return [
@@ -15455,7 +15520,7 @@ function update3(model, msg) {
             none()
           ];
         } else if (discussion_effect instanceof UnfocusDiscussionInput) {
-          echo4("Unfocusing discussion input", "src/o11a_client.gleam", 887);
+          echo4("Unfocusing discussion input", "src/o11a_client.gleam", 908);
           set_is_user_typing(false);
           return [model, none()];
         } else if (discussion_effect instanceof MaximizeDiscussion) {
@@ -15573,73 +15638,10 @@ function update3(model, msg) {
     return [model, none()];
   }
 }
-function selected_node_highlighter(model) {
-  let $ = model.selected_node_id;
-  if ($ instanceof Some) {
-    let selected_node_id = $[0];
-    return style2(
-      toList([]),
-      ".N" + to_string(selected_node_id) + " { background-color: var(--highlight-color); border-radius: 0.15rem; }"
-    );
-  } else {
-    return fragment2(toList([]));
-  }
-}
 function get_selected_discussion(model) {
-  let $ = model.focused_discussion;
-  let $1 = model.clicked_discussion;
-  let $2 = model.stickied_discussion;
-  let $3 = model.selected_discussion;
+  let $ = get_selected_discussion_key(model);
   if ($ instanceof Some) {
     let discussion = $[0];
-    let _pipe = map_get(model.discussion_models, discussion);
-    let _pipe$1 = map3(
-      _pipe,
-      (model2) => {
-        return new Some(
-          new DiscussionReference(
-            discussion.line_number,
-            discussion.column_number,
-            model2
-          )
-        );
-      }
-    );
-    return unwrap2(_pipe$1, new None());
-  } else if ($1 instanceof Some) {
-    let discussion = $1[0];
-    let _pipe = map_get(model.discussion_models, discussion);
-    let _pipe$1 = map3(
-      _pipe,
-      (model2) => {
-        return new Some(
-          new DiscussionReference(
-            discussion.line_number,
-            discussion.column_number,
-            model2
-          )
-        );
-      }
-    );
-    return unwrap2(_pipe$1, new None());
-  } else if ($2 instanceof Some) {
-    let discussion = $2[0];
-    let _pipe = map_get(model.discussion_models, discussion);
-    let _pipe$1 = map3(
-      _pipe,
-      (model2) => {
-        return new Some(
-          new DiscussionReference(
-            discussion.line_number,
-            discussion.column_number,
-            model2
-          )
-        );
-      }
-    );
-    return unwrap2(_pipe$1, new None());
-  } else if ($3 instanceof Some) {
-    let discussion = $3[0];
     let _pipe = map_get(model.discussion_models, discussion);
     let _pipe$1 = map3(
       _pipe,
