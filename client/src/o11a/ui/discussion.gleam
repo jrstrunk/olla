@@ -332,12 +332,12 @@ pub fn overlay_view(
       case model.is_reference && !model.show_reference_discussion {
         True ->
           html.div([attribute.class("overlay p-[.5rem]")], [
-            reference_header_view(model, current_thread_notes),
+            reference_header_view(model, current_thread_notes, notes),
           ])
         False ->
           element.fragment([
             html.div([attribute.class("overlay p-[.5rem]")], [
-              thread_header_view(model, references),
+              thread_header_view(model, references, notes),
               case
                 option.is_some(model.active_thread)
                 || list.length(current_thread_notes) > 0
@@ -361,10 +361,10 @@ pub fn panel_view(model: Model, notes, references) {
 
   html.div([attribute.style("padding", ".5rem")], [
     case model.is_reference {
-      True -> reference_header_view(model, current_thread_notes)
+      True -> reference_header_view(model, current_thread_notes, notes)
       False -> element.fragment([])
     },
-    thread_header_view(model, references),
+    thread_header_view(model, references, notes),
     case
       option.is_some(model.active_thread)
       || list.length(current_thread_notes) > 0
@@ -380,7 +380,7 @@ pub fn panel_view(model: Model, notes, references) {
   ])
 }
 
-fn reference_header_view(model: Model, current_thread_notes) {
+fn reference_header_view(model: Model, current_thread_notes, notes) {
   element.fragment([
     html.div(
       [
@@ -389,7 +389,10 @@ fn reference_header_view(model: Model, current_thread_notes) {
         ),
       ],
       [
-        html.span([attribute.class("pt-[.1rem]")], get_topic_title(model)),
+        html.span(
+          [attribute.class("pt-[.1rem]")],
+          get_topic_title(model, notes),
+        ),
         html.button(
           [
             event.on_click(UserToggledReferenceDiscussion),
@@ -425,7 +428,7 @@ fn reference_header_view(model: Model, current_thread_notes) {
   ])
 }
 
-fn thread_header_view(model: Model, references) {
+fn thread_header_view(model: Model, references, notes) {
   case model.active_thread {
     option.Some(active_thread) ->
       html.div([], [
@@ -460,7 +463,10 @@ fn thread_header_view(model: Model, references) {
             ),
           ],
           [
-            html.span([attribute.class("pt-[.1rem]")], get_topic_title(model)),
+            html.span(
+              [attribute.class("pt-[.1rem]")],
+              get_topic_title(model, notes),
+            ),
             html.div([], [
               case model.is_reference {
                 True ->
@@ -718,10 +724,15 @@ fn on_input_keydown(enter_msg, up_msg) {
   })
 }
 
-fn get_topic_title(model: Model) {
+fn get_topic_title(model: Model, notes) {
   case dict.get(model.declarations, model.topic_id) {
     Ok(dec) ->
-      dec.signature |> node_renderer.render_topic_signature(model.declarations)
+      dec.signature
+      |> node_renderer.render_topic_signature(
+        model.declarations,
+        notes,
+        suppress_declaration: True,
+      )
     Error(Nil) -> [html.span([], [html.text("unknown")])]
   }
 }

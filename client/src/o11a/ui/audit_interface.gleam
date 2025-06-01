@@ -6,6 +6,7 @@ import gleam/string
 import lustre/attribute
 import lustre/element
 import lustre/element/html
+import o11a/computed_note
 import o11a/preprocessor
 import o11a/ui/node_renderer
 
@@ -45,7 +46,7 @@ pub type ContractDeclaration {
   ContractDeclaration(contract: String, dec: preprocessor.Declaration)
 }
 
-pub fn view(interface_data: InterfaceData, audit_name, declarations) {
+pub fn view(interface_data: InterfaceData, audit_name, declarations, discussion) {
   html.div([attribute.class("p-[1rem]")], [
     // Page header
     html.h1([], [
@@ -70,6 +71,7 @@ pub fn view(interface_data: InterfaceData, audit_name, declarations) {
               "Constants",
               interface_data.contract_constants,
               declarations,
+              discussion,
             ),
             // List of variables in contract
             contract_members_view(
@@ -77,6 +79,7 @@ pub fn view(interface_data: InterfaceData, audit_name, declarations) {
               "State Variables",
               interface_data.contract_variables,
               declarations,
+              discussion,
             ),
             // List of structs in contract
             contract_members_view(
@@ -84,6 +87,7 @@ pub fn view(interface_data: InterfaceData, audit_name, declarations) {
               "Structs",
               interface_data.contract_structs,
               declarations,
+              discussion,
             ),
             // List of enums in contract
             contract_members_view(
@@ -91,6 +95,7 @@ pub fn view(interface_data: InterfaceData, audit_name, declarations) {
               "Enums",
               interface_data.contract_enums,
               declarations,
+              discussion,
             ),
             // List of events in contract
             contract_members_view(
@@ -98,6 +103,7 @@ pub fn view(interface_data: InterfaceData, audit_name, declarations) {
               "Events",
               interface_data.contract_events,
               declarations,
+              discussion,
             ),
             // List of errors in contract
             contract_members_view(
@@ -105,6 +111,7 @@ pub fn view(interface_data: InterfaceData, audit_name, declarations) {
               "Errors",
               interface_data.contract_errors,
               declarations,
+              discussion,
             ),
             // List of functions in contract
             contract_members_view(
@@ -112,6 +119,7 @@ pub fn view(interface_data: InterfaceData, audit_name, declarations) {
               "Functions",
               interface_data.contract_functions,
               declarations,
+              discussion,
             ),
             // List of modifiers in contract
             contract_members_view(
@@ -119,6 +127,7 @@ pub fn view(interface_data: InterfaceData, audit_name, declarations) {
               "Modifiers",
               interface_data.contract_modifiers,
               declarations,
+              discussion,
             ),
           ])
         })
@@ -132,6 +141,7 @@ fn contract_members_view(
   title,
   declarations_of_type: List(preprocessor.Declaration),
   declarations: dict.Dict(String, preprocessor.Declaration),
+  discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
 ) {
   let items =
     list.filter(declarations_of_type, fn(declaration) {
@@ -150,6 +160,8 @@ fn contract_members_view(
               node_renderer.render_topic_signature(
                 declaration.signature,
                 declarations,
+                discussion,
+                suppress_declaration: False,
               ),
             ),
           ])

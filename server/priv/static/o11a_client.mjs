@@ -2159,13 +2159,13 @@ var Descending = class extends CustomType {
 function length_loop(loop$list, loop$count) {
   while (true) {
     let list4 = loop$list;
-    let count = loop$count;
+    let count2 = loop$count;
     if (list4.atLeastLength(1)) {
       let list$1 = list4.tail;
       loop$list = list$1;
-      loop$count = count + 1;
+      loop$count = count2 + 1;
     } else {
-      return count;
+      return count2;
     }
   }
 }
@@ -2401,6 +2401,20 @@ function fold2(loop$list, loop$initial, loop$fun) {
     }
   }
 }
+function count(list4, predicate) {
+  return fold2(
+    list4,
+    0,
+    (acc, value3) => {
+      let $ = predicate(value3);
+      if ($) {
+        return acc + 1;
+      } else {
+        return acc;
+      }
+    }
+  );
+}
 function group(list4, key2) {
   return fold2(list4, new_map(), update_group(key2));
 }
@@ -2455,6 +2469,26 @@ function find2(loop$list, loop$is_desired) {
       } else {
         loop$list = rest$1;
         loop$is_desired = is_desired;
+      }
+    }
+  }
+}
+function find_map(loop$list, loop$fun) {
+  while (true) {
+    let list4 = loop$list;
+    let fun = loop$fun;
+    if (list4.hasLength(0)) {
+      return new Error(void 0);
+    } else {
+      let first$1 = list4.head;
+      let rest$1 = list4.tail;
+      let $ = fun(first$1);
+      if ($.isOk()) {
+        let first$2 = $[0];
+        return new Ok(first$2);
+      } else {
+        loop$list = rest$1;
+        loop$fun = fun;
       }
     }
   }
@@ -4994,28 +5028,28 @@ var Update = class extends CustomType {
   }
 };
 var Move = class extends CustomType {
-  constructor(kind, key2, before, count) {
+  constructor(kind, key2, before, count2) {
     super();
     this.kind = kind;
     this.key = key2;
     this.before = before;
-    this.count = count;
+    this.count = count2;
   }
 };
 var RemoveKey = class extends CustomType {
-  constructor(kind, key2, count) {
+  constructor(kind, key2, count2) {
     super();
     this.kind = kind;
     this.key = key2;
-    this.count = count;
+    this.count = count2;
   }
 };
 var Replace = class extends CustomType {
-  constructor(kind, from2, count, with$) {
+  constructor(kind, from2, count2, with$) {
     super();
     this.kind = kind;
     this.from = from2;
-    this.count = count;
+    this.count = count2;
     this.with = with$;
   }
 };
@@ -5028,11 +5062,11 @@ var Insert = class extends CustomType {
   }
 };
 var Remove = class extends CustomType {
-  constructor(kind, from2, count) {
+  constructor(kind, from2, count2) {
     super();
     this.kind = kind;
     this.from = from2;
-    this.count = count;
+    this.count = count2;
   }
 };
 function new$4(index5, removed, changes, children) {
@@ -5051,24 +5085,24 @@ function update(added, removed) {
   return new Update(update_kind, added, removed);
 }
 var move_kind = 3;
-function move(key2, before, count) {
-  return new Move(move_kind, key2, before, count);
+function move(key2, before, count2) {
+  return new Move(move_kind, key2, before, count2);
 }
 var remove_key_kind = 4;
-function remove_key(key2, count) {
-  return new RemoveKey(remove_key_kind, key2, count);
+function remove_key(key2, count2) {
+  return new RemoveKey(remove_key_kind, key2, count2);
 }
 var replace_kind = 5;
-function replace2(from2, count, with$) {
-  return new Replace(replace_kind, from2, count, with$);
+function replace2(from2, count2, with$) {
+  return new Replace(replace_kind, from2, count2, with$);
 }
 var insert_kind = 6;
 function insert4(children, before) {
   return new Insert(insert_kind, children, before);
 }
 var remove_kind = 7;
-function remove2(from2, count) {
-  return new Remove(remove_kind, from2, count);
+function remove2(from2, count2) {
+  return new Remove(remove_kind, from2, count2);
 }
 
 // build/dev/javascript/lustre/lustre/vdom/diff.mjs
@@ -5425,12 +5459,12 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
         loop$events = events;
       } else if (prev_does_exist.isOk() && next_did_exist.isOk()) {
         let match = next_did_exist[0];
-        let count = advance(next);
+        let count2 = advance(next);
         let before = node_index - moved_offset;
-        let move2 = move(next.key, before, count);
+        let move2 = move(next.key, before, count2);
         let changes$1 = prepend(move2, changes);
         let moved$1 = insert2(moved, next.key);
-        let moved_offset$1 = moved_offset + count;
+        let moved_offset$1 = moved_offset + count2;
         loop$old = prepend(match, old);
         loop$old_keyed = old_keyed;
         loop$new = new$10;
@@ -5446,10 +5480,10 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
         loop$mapper = mapper;
         loop$events = events;
       } else if (!prev_does_exist.isOk() && next_did_exist.isOk()) {
-        let count = advance(prev);
-        let moved_offset$1 = moved_offset - count;
+        let count2 = advance(prev);
+        let moved_offset$1 = moved_offset - count2;
         let events$1 = remove_child(events, path2, node_index, prev);
-        let remove5 = remove_key(prev.key, count);
+        let remove5 = remove_key(prev.key, count2);
         let changes$1 = prepend(remove5, changes);
         loop$old = old_remaining;
         loop$old_keyed = old_keyed;
@@ -5467,7 +5501,7 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
         loop$events = events$1;
       } else if (prev_does_exist.isOk() && !next_did_exist.isOk()) {
         let before = node_index - moved_offset;
-        let count = advance(next);
+        let count2 = advance(next);
         let events$1 = add_child(events, mapper, path2, node_index, next);
         let insert5 = insert4(toList([next]), before);
         let changes$1 = prepend(insert5, changes);
@@ -5476,9 +5510,9 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
         loop$new = new_remaining;
         loop$new_keyed = new_keyed;
         loop$moved = moved;
-        loop$moved_offset = moved_offset + count;
+        loop$moved_offset = moved_offset + count2;
         loop$removed = removed;
-        loop$node_index = node_index + count;
+        loop$node_index = node_index + count2;
         loop$patch_index = patch_index;
         loop$path = path2;
         loop$changes = changes$1;
@@ -5876,10 +5910,10 @@ var Reconciler = class {
     });
     insertBefore(node, fragment3, childAt(node, before));
   }
-  #move(node, key2, before, count) {
+  #move(node, key2, before, count2) {
     let el = getKeyedChild(node, key2);
     const beforeEl = childAt(node, before);
-    for (let i = 0; i < count && el !== null; ++i) {
+    for (let i = 0; i < count2 && el !== null; ++i) {
       const next = el.nextSibling;
       if (SUPPORTS_MOVE_BEFORE) {
         node.moveBefore(el, beforeEl);
@@ -5889,14 +5923,14 @@ var Reconciler = class {
       el = next;
     }
   }
-  #removeKey(node, key2, count) {
-    this.#removeFromChild(node, getKeyedChild(node, key2), count);
+  #removeKey(node, key2, count2) {
+    this.#removeFromChild(node, getKeyedChild(node, key2), count2);
   }
-  #remove(node, from2, count) {
-    this.#removeFromChild(node, childAt(node, from2), count);
+  #remove(node, from2, count2) {
+    this.#removeFromChild(node, childAt(node, from2), count2);
   }
-  #removeFromChild(parent, child, count) {
-    while (count-- > 0 && child !== null) {
+  #removeFromChild(parent, child, count2) {
+    while (count2-- > 0 && child !== null) {
       const next = child.nextSibling;
       const key2 = child[meta].key;
       if (key2) {
@@ -5909,8 +5943,8 @@ var Reconciler = class {
       child = next;
     }
   }
-  #replace(parent, from2, count, child) {
-    this.#remove(parent, from2, count);
+  #replace(parent, from2, count2, child) {
+    this.#remove(parent, from2, count2);
     const el = this.#createElement(child);
     addKeyedChild(parent, el);
     insertBefore(parent, el, childAt(parent, from2));
@@ -6692,18 +6726,18 @@ function none2() {
 function count_fragment_children(loop$children, loop$count) {
   while (true) {
     let children = loop$children;
-    let count = loop$count;
+    let count2 = loop$count;
     if (children.hasLength(0)) {
-      return count;
+      return count2;
     } else if (children.atLeastLength(1) && children.head instanceof Fragment) {
       let children_count = children.head.children_count;
       let rest = children.tail;
       loop$children = rest;
-      loop$count = count + children_count;
+      loop$count = count2 + children_count;
     } else {
       let rest = children.tail;
       loop$children = rest;
-      loop$count = count + 1;
+      loop$count = count2 + 1;
     }
   }
 }
@@ -10248,11 +10282,102 @@ function view(notes, audit_name) {
   );
 }
 
+// build/dev/javascript/o11a_client/o11a/ui/formatter.mjs
+function split_info_comment(comment, contains_expanded_message, leading_spaces) {
+  let comment_length = string_length(comment);
+  let columns_remaining = 80 - leading_spaces;
+  let $ = comment_length <= columns_remaining;
+  if ($) {
+    return toList([
+      comment + (() => {
+        if (contains_expanded_message) {
+          return "^";
+        } else {
+          return "";
+        }
+      })()
+    ]);
+  } else {
+    let _block;
+    let _pipe = slice(comment, 0, columns_remaining);
+    _block = reverse3(_pipe);
+    let backwards = _block;
+    let _block$1;
+    let _pipe$1 = backwards;
+    let _pipe$2 = split_once(_pipe$1, " ");
+    let _pipe$3 = unwrap2(_pipe$2, ["", backwards]);
+    let _pipe$4 = second(_pipe$3);
+    _block$1 = string_length(_pipe$4);
+    let in_limit_comment_length = _block$1;
+    let rest = slice(
+      comment,
+      in_limit_comment_length + 1,
+      comment_length
+    );
+    return prepend(
+      slice(comment, 0, in_limit_comment_length),
+      split_info_comment(rest, contains_expanded_message, leading_spaces)
+    );
+  }
+}
+function split_info_note(note, leading_spaces) {
+  let _pipe = note.message;
+  let _pipe$1 = split_info_comment(
+    _pipe,
+    !isEqual(note.expanded_message, new None()),
+    leading_spaces
+  );
+  return index_map(
+    _pipe$1,
+    (comment, index5) => {
+      return [note.note_id + to_string(index5), comment];
+    }
+  );
+}
+function get_notes(discussion, leading_spaces, topic_id) {
+  let _block;
+  let _pipe = map_get(discussion, topic_id);
+  let _pipe$1 = unwrap2(_pipe, toList([]));
+  _block = filter_map(
+    _pipe$1,
+    (note) => {
+      let $ = note.parent_id === topic_id;
+      if ($) {
+        return new Ok(note);
+      } else {
+        return new Error(void 0);
+      }
+    }
+  );
+  let parent_notes = _block;
+  let _block$1;
+  let _pipe$2 = parent_notes;
+  let _pipe$3 = filter(
+    _pipe$2,
+    (computed_note) => {
+      return isEqual(
+        computed_note.significance,
+        new Informational2()
+      );
+    }
+  );
+  let _pipe$4 = map2(
+    _pipe$3,
+    (_capture) => {
+      return split_info_note(_capture, leading_spaces);
+    }
+  );
+  _block$1 = flatten2(_pipe$4);
+  let info_notes = _block$1;
+  return [parent_notes, info_notes];
+}
+
 // build/dev/javascript/o11a_client/o11a/ui/node_renderer.mjs
-var RenderedLine = class extends CustomType {
-  constructor(indent, nodes) {
+var SignatureLine = class extends CustomType {
+  constructor(indent, indent_num, nodes) {
     super();
     this.indent = indent;
+    this.indent_num = indent_num;
     this.nodes = nodes;
   }
 };
@@ -10267,12 +10392,19 @@ function split_lines(nodes, indent) {
         return [
           toList([]),
           prepend(
-            new RenderedLine(
+            new SignatureLine(
               (() => {
                 if (indent) {
                   return "\xA0\xA0";
                 } else {
                   return "";
+                }
+              })(),
+              (() => {
+                if (indent) {
+                  return 2;
+                } else {
+                  return 0;
                 }
               })(),
               current_line2
@@ -10294,7 +10426,7 @@ function split_lines(nodes, indent) {
   let current_line = $[0];
   let block_lines = $[1];
   return prepend(
-    new RenderedLine(
+    new SignatureLine(
       (() => {
         if (indent) {
           return "\xA0\xA0";
@@ -10302,18 +10434,87 @@ function split_lines(nodes, indent) {
           return "";
         }
       })(),
+      (() => {
+        if (indent) {
+          return 2;
+        } else {
+          return 0;
+        }
+      })(),
       current_line
     ),
     block_lines
   );
 }
-function render_topic_signature(signature, declarations) {
+function get_signature_line_topic_id(line2, suppress_declaration) {
+  let topic_count = count(
+    line2.nodes,
+    (node) => {
+      if (node instanceof PreProcessedDeclaration) {
+        return !suppress_declaration;
+      } else if (node instanceof PreProcessedReference) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  );
+  let $ = topic_count === 1;
+  if ($) {
+    let $1 = find_map(
+      line2.nodes,
+      (node) => {
+        if (node instanceof PreProcessedDeclaration) {
+          let topic_id2 = node.topic_id;
+          return new Ok(topic_id2);
+        } else if (node instanceof PreProcessedReference) {
+          let topic_id2 = node.topic_id;
+          return new Ok(topic_id2);
+        } else {
+          return new Error(void 0);
+        }
+      }
+    );
+    if (!$1.isOk()) {
+      throw makeError(
+        "let_assert",
+        "o11a/ui/node_renderer",
+        79,
+        "get_signature_line_topic_id",
+        "Pattern match failed, no pattern matched the value.",
+        { value: $1 }
+      );
+    }
+    let topic_id = $1[0];
+    return new Some(topic_id);
+  } else {
+    return new None();
+  }
+}
+function render_topic_signature(signature, declarations, discussion, suppress_declaration) {
   let _pipe = split_lines(signature, false);
   let _pipe$1 = fold2(
     _pipe,
     toList([]),
     (rendered_lines, rendered_line) => {
+      let line_topic_id = get_signature_line_topic_id(
+        rendered_line,
+        suppress_declaration
+      );
       let _block;
+      if (line_topic_id instanceof Some) {
+        let line_topic_id$1 = line_topic_id[0];
+        _block = get_notes(
+          discussion,
+          rendered_line.indent_num,
+          line_topic_id$1
+        );
+      } else {
+        _block = [toList([]), toList([])];
+      }
+      let $ = _block;
+      let info_notes = $[1];
+      let _block$1;
       let _pipe$12 = rendered_line.nodes;
       let _pipe$22 = reverse(_pipe$12);
       let _pipe$3 = map_fold(
@@ -10325,30 +10526,36 @@ function render_topic_signature(signature, declarations) {
           if (node instanceof PreProcessedDeclaration) {
             let topic_id = node.topic_id;
             let tokens = node.tokens;
-            let _block$1;
+            let _block$2;
             let _pipe$32 = map_get(declarations, topic_id);
-            _block$1 = unwrap2(
+            _block$2 = unwrap2(
               _pipe$32,
               unknown_declaration
             );
-            let declaration = _block$1;
-            let rendered_node = span(
-              toList([class$("relative")]),
+            let declaration = _block$2;
+            let rendered_node = fragment2(
               toList([
-                (() => {
-                  if (indented) {
-                    return fragment2(toList([]));
-                  } else {
-                    return text3(rendered_line.indent);
-                  }
-                })(),
                 span(
+                  toList([class$("relative")]),
                   toList([
-                    class$(
-                      declaration_kind_to_string(declaration.kind)
+                    (() => {
+                      if (indented) {
+                        return fragment2(toList([]));
+                      } else {
+                        return text3(rendered_line.indent);
+                      }
+                    })(),
+                    span(
+                      toList([
+                        class$(
+                          declaration_kind_to_string(
+                            declaration.kind
+                          )
+                        )
+                      ]),
+                      toList([text3(tokens)])
                     )
-                  ]),
-                  toList([text3(tokens)])
+                  ])
                 )
               ])
             );
@@ -10357,13 +10564,13 @@ function render_topic_signature(signature, declarations) {
             let topic_id = node.topic_id;
             let tokens = node.tokens;
             let new_index = index$1 + 1;
-            let _block$1;
+            let _block$2;
             let _pipe$32 = map_get(declarations, topic_id);
-            _block$1 = unwrap2(
+            _block$2 = unwrap2(
               _pipe$32,
               unknown_declaration
             );
-            let referenced_declaraion = _block$1;
+            let referenced_declaraion = _block$2;
             let rendered_node = span(
               toList([class$("relative")]),
               toList([
@@ -10441,9 +10648,24 @@ function render_topic_signature(signature, declarations) {
           }
         }
       );
-      _block = second(_pipe$3);
-      let new_line = _block;
-      return prepend(new_line, rendered_lines);
+      _block$1 = second(_pipe$3);
+      let new_line = _block$1;
+      let new_line$1 = prepend(
+        fragment2(
+          map2(
+            info_notes,
+            (note) => {
+              let note_message = note[1];
+              return p(
+                toList([class$("comment italic")]),
+                toList([text3(rendered_line.indent + note_message)])
+              );
+            }
+          )
+        ),
+        new_line
+      );
+      return prepend(new_line$1, rendered_lines);
     }
   );
   let _pipe$2 = intersperse(_pipe$1, toList([br(toList([]))]));
@@ -10492,7 +10714,7 @@ function empty_interface_data() {
     toList([])
   );
 }
-function contract_members_view(contract, title2, declarations_of_type, declarations) {
+function contract_members_view(contract, title2, declarations_of_type, declarations, discussion) {
   let items = filter(
     declarations_of_type,
     (declaration) => {
@@ -10523,7 +10745,9 @@ function contract_members_view(contract, title2, declarations_of_type, declarati
                   ]),
                   render_topic_signature(
                     declaration.signature,
-                    declarations
+                    declarations,
+                    discussion,
+                    false
                   )
                 )
               ])
@@ -10534,7 +10758,7 @@ function contract_members_view(contract, title2, declarations_of_type, declarati
     );
   }
 }
-function view2(interface_data, audit_name, declarations) {
+function view2(interface_data, audit_name, declarations, discussion) {
   return div(
     toList([class$("p-[1rem]")]),
     prepend(
@@ -10579,49 +10803,57 @@ function view2(interface_data, audit_name, declarations) {
                         contract.name,
                         "Constants",
                         interface_data.contract_constants,
-                        declarations
+                        declarations,
+                        discussion
                       ),
                       contract_members_view(
                         contract.name,
                         "State Variables",
                         interface_data.contract_variables,
-                        declarations
+                        declarations,
+                        discussion
                       ),
                       contract_members_view(
                         contract.name,
                         "Structs",
                         interface_data.contract_structs,
-                        declarations
+                        declarations,
+                        discussion
                       ),
                       contract_members_view(
                         contract.name,
                         "Enums",
                         interface_data.contract_enums,
-                        declarations
+                        declarations,
+                        discussion
                       ),
                       contract_members_view(
                         contract.name,
                         "Events",
                         interface_data.contract_events,
-                        declarations
+                        declarations,
+                        discussion
                       ),
                       contract_members_view(
                         contract.name,
                         "Errors",
                         interface_data.contract_errors,
-                        declarations
+                        declarations,
+                        discussion
                       ),
                       contract_members_view(
                         contract.name,
                         "Functions",
                         interface_data.contract_functions,
-                        declarations
+                        declarations,
+                        discussion
                       ),
                       contract_members_view(
                         contract.name,
                         "Modifiers",
                         interface_data.contract_modifiers,
-                        declarations
+                        declarations,
+                        discussion
                       )
                     ])
                   );
@@ -12104,17 +12336,22 @@ function new_message_input_view(model, current_thread_notes) {
     ])
   );
 }
-function get_topic_title(model) {
+function get_topic_title(model, notes) {
   let $ = map_get(model.declarations, model.topic_id);
   if ($.isOk()) {
     let dec = $[0];
     let _pipe = dec.signature;
-    return render_topic_signature(_pipe, model.declarations);
+    return render_topic_signature(
+      _pipe,
+      model.declarations,
+      notes,
+      true
+    );
   } else {
     return toList([span(toList([]), toList([text3("unknown")]))]);
   }
 }
-function reference_header_view(model, current_thread_notes) {
+function reference_header_view(model, current_thread_notes, notes) {
   return fragment2(
     toList([
       div(
@@ -12126,7 +12363,7 @@ function reference_header_view(model, current_thread_notes) {
         toList([
           span(
             toList([class$("pt-[.1rem]")]),
-            get_topic_title(model)
+            get_topic_title(model, notes)
           ),
           button(
             toList([
@@ -12177,7 +12414,7 @@ function reference_header_view(model, current_thread_notes) {
     ])
   );
 }
-function thread_header_view(model, references) {
+function thread_header_view(model, references, notes) {
   let $ = model.active_thread;
   if ($ instanceof Some) {
     let active_thread = $[0];
@@ -12230,7 +12467,7 @@ function thread_header_view(model, references) {
           toList([
             span(
               toList([class$("pt-[.1rem]")]),
-              get_topic_title(model)
+              get_topic_title(model, notes)
             ),
             div(
               toList([]),
@@ -12300,7 +12537,7 @@ function overlay_view(model, notes, declarations) {
         if ($) {
           return div(
             toList([class$("overlay p-[.5rem]")]),
-            toList([reference_header_view(model, current_thread_notes)])
+            toList([reference_header_view(model, current_thread_notes, notes)])
           );
         } else {
           return fragment2(
@@ -12308,7 +12545,7 @@ function overlay_view(model, notes, declarations) {
               div(
                 toList([class$("overlay p-[.5rem]")]),
                 toList([
-                  thread_header_view(model, references),
+                  thread_header_view(model, references, notes),
                   (() => {
                     let $1 = is_some(model.active_thread) || length2(
                       current_thread_notes
@@ -13000,94 +13237,6 @@ function preprocessed_nodes_view(loc, discussion, declarations, selected_discuss
     }
   );
   return second(_pipe);
-}
-function split_info_comment(comment, contains_expanded_message, leading_spaces) {
-  let comment_length = string_length(comment);
-  let columns_remaining = 80 - leading_spaces;
-  let $ = comment_length <= columns_remaining;
-  if ($) {
-    return toList([
-      comment + (() => {
-        if (contains_expanded_message) {
-          return "^";
-        } else {
-          return "";
-        }
-      })()
-    ]);
-  } else {
-    let _block;
-    let _pipe = slice(comment, 0, columns_remaining);
-    _block = reverse3(_pipe);
-    let backwards = _block;
-    let _block$1;
-    let _pipe$1 = backwards;
-    let _pipe$2 = split_once(_pipe$1, " ");
-    let _pipe$3 = unwrap2(_pipe$2, ["", backwards]);
-    let _pipe$4 = second(_pipe$3);
-    _block$1 = string_length(_pipe$4);
-    let in_limit_comment_length = _block$1;
-    let rest = slice(
-      comment,
-      in_limit_comment_length + 1,
-      comment_length
-    );
-    return prepend(
-      slice(comment, 0, in_limit_comment_length),
-      split_info_comment(rest, contains_expanded_message, leading_spaces)
-    );
-  }
-}
-function split_info_note(note, leading_spaces) {
-  let _pipe = note.message;
-  let _pipe$1 = split_info_comment(
-    _pipe,
-    !isEqual(note.expanded_message, new None()),
-    leading_spaces
-  );
-  return index_map(
-    _pipe$1,
-    (comment, index5) => {
-      return [note.note_id + to_string(index5), comment];
-    }
-  );
-}
-function get_notes(discussion, leading_spaces, topic_id) {
-  let _block;
-  let _pipe = map_get(discussion, topic_id);
-  let _pipe$1 = unwrap2(_pipe, toList([]));
-  _block = filter_map(
-    _pipe$1,
-    (note) => {
-      let $ = note.parent_id === topic_id;
-      if ($) {
-        return new Ok(note);
-      } else {
-        return new Error(void 0);
-      }
-    }
-  );
-  let parent_notes = _block;
-  let _block$1;
-  let _pipe$2 = parent_notes;
-  let _pipe$3 = filter(
-    _pipe$2,
-    (computed_note) => {
-      return isEqual(
-        computed_note.significance,
-        new Informational2()
-      );
-    }
-  );
-  let _pipe$4 = map2(
-    _pipe$3,
-    (_capture) => {
-      return split_info_note(_capture, leading_spaces);
-    }
-  );
-  _block$1 = flatten2(_pipe$4);
-  let info_notes = _block$1;
-  return [parent_notes, info_notes];
 }
 function line_container_view(discussion, declarations, loc, line_topic_id, selected_discussion) {
   let $ = get_notes(discussion, loc.leading_spaces, line_topic_id);
@@ -15203,6 +15352,10 @@ function view6(model) {
       _block$1 = new_map();
     }
     let declarations = _block$1;
+    let _block$2;
+    let _pipe = map_get(model.discussions, audit_name);
+    _block$2 = unwrap2(_pipe, new_map());
+    let discussion = _block$2;
     return div(
       toList([]),
       toList([
@@ -15213,7 +15366,12 @@ function view6(model) {
           toList([])
         ),
         view5(
-          view2(interface_data, audit_name, declarations),
+          view2(
+            interface_data,
+            audit_name,
+            declarations,
+            discussion
+          ),
           new None(),
           model.file_tree,
           audit_name,

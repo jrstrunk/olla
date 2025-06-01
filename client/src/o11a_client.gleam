@@ -934,13 +934,22 @@ fn view(model: Model) {
         _ -> dict.new()
       }
 
+      let discussion =
+        dict.get(model.discussions, audit_name)
+        |> result.unwrap(dict.new())
+
       html.div([], [
         server_component.element(
           [server_component.route("/component-discussion/" <> audit_name)],
           [],
         ),
         audit_tree.view(
-          audit_interface.view(interface_data, audit_name, declarations),
+          audit_interface.view(
+            interface_data,
+            audit_name,
+            declarations,
+            discussion,
+          ),
           option.None,
           model.file_tree,
           audit_name,
