@@ -3483,6 +3483,15 @@ function array2(entries, inner_type) {
   return preprocessed_array(_pipe$1);
 }
 
+// build/dev/javascript/gleam_stdlib/gleam/bool.mjs
+function guard(requirement, consequence, alternative) {
+  if (requirement) {
+    return consequence;
+  } else {
+    return alternative();
+  }
+}
+
 // build/dev/javascript/gleam_stdlib/gleam/uri.mjs
 var Uri = class extends CustomType {
   constructor(scheme, userinfo, host, port, path2, query, fragment3) {
@@ -4347,15 +4356,6 @@ var empty = /* @__PURE__ */ new Uri(
 );
 function parse2(uri_string) {
   return parse_scheme_loop(uri_string, uri_string, empty, 0);
-}
-
-// build/dev/javascript/gleam_stdlib/gleam/bool.mjs
-function guard(requirement, consequence, alternative) {
-  if (requirement) {
-    return consequence;
-  } else {
-    return alternative();
-  }
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/function.mjs
@@ -9434,6 +9434,14 @@ async function import_(string6) {
   }
 }
 
+// build/dev/javascript/plinth/global_ffi.mjs
+function setTimeout2(delay, callback) {
+  return globalThis.setTimeout(callback, delay);
+}
+function clearTimeout2(timer) {
+  globalThis.clearTimeout(timer);
+}
+
 // build/dev/javascript/snag/snag.mjs
 var Snag = class extends CustomType {
   constructor(issue, cause) {
@@ -12758,6 +12766,20 @@ var UserClickedInsideDiscussion = class extends CustomType {
     this.column_number = column_number;
   }
 };
+var UserHoveredInsideDiscussion = class extends CustomType {
+  constructor(line_number, column_number) {
+    super();
+    this.line_number = line_number;
+    this.column_number = column_number;
+  }
+};
+var UserUnhoveredInsideDiscussion = class extends CustomType {
+  constructor(line_number, column_number) {
+    super();
+    this.line_number = line_number;
+    this.column_number = column_number;
+  }
+};
 var EntryHover = class extends CustomType {
 };
 var EntryFocus = class extends CustomType {
@@ -12820,6 +12842,18 @@ function inline_comment_preview_view(parent_notes, topic_id, element_line_number
             let _pipe = element_column_number;
             return to_string(_pipe);
           })()
+        ),
+        on_mouse_enter(
+          new UserHoveredInsideDiscussion(
+            element_line_number,
+            element_column_number
+          )
+        ),
+        on_mouse_leave(
+          new UserUnhoveredInsideDiscussion(
+            element_line_number,
+            element_column_number
+          )
         )
       ]),
       toList([
@@ -12916,6 +12950,18 @@ function inline_comment_preview_view(parent_notes, topic_id, element_line_number
             let _pipe = element_column_number;
             return to_string(_pipe);
           })()
+        ),
+        on_mouse_enter(
+          new UserHoveredInsideDiscussion(
+            element_line_number,
+            element_column_number
+          )
+        ),
+        on_mouse_leave(
+          new UserUnhoveredInsideDiscussion(
+            element_line_number,
+            element_column_number
+          )
         )
       ]),
       toList([
@@ -13001,6 +13047,18 @@ function declaration_node_view(topic_id, tokens, discussion, declarations, eleme
           let _pipe$1 = element_column_number;
           return to_string(_pipe$1);
         })()
+      ),
+      on_mouse_enter(
+        new UserHoveredInsideDiscussion(
+          element_line_number,
+          element_column_number
+        )
+      ),
+      on_mouse_leave(
+        new UserUnhoveredInsideDiscussion(
+          element_line_number,
+          element_column_number
+        )
       )
     ]),
     toList([
@@ -13090,6 +13148,18 @@ function reference_node_view(topic_id, tokens, discussion, declarations, element
           let _pipe$1 = element_column_number;
           return to_string(_pipe$1);
         })()
+      ),
+      on_mouse_enter(
+        new UserHoveredInsideDiscussion(
+          element_line_number,
+          element_column_number
+        )
+      ),
+      on_mouse_leave(
+        new UserUnhoveredInsideDiscussion(
+          element_line_number,
+          element_column_number
+        )
       )
     ]),
     toList([
@@ -13729,7 +13799,7 @@ function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
 
 // build/dev/javascript/o11a_client/o11a_client.mjs
 var Model3 = class extends CustomType {
-  constructor(route2, file_tree, audit_metadata, source_files, audit_declarations, audit_declaration_lists, audit_interface, merged_topics, discussions, discussion_models, keyboard_model, selected_discussion, selected_node_id, focused_discussion, clicked_discussion) {
+  constructor(route2, file_tree, audit_metadata, source_files, audit_declarations, audit_declaration_lists, audit_interface, merged_topics, discussions, discussion_models, keyboard_model, selected_discussion, selected_node_id, focused_discussion, clicked_discussion, stickied_discussion, selected_discussion_set_sticky_timer, stickied_discussion_unset_sticky_timer) {
     super();
     this.route = route2;
     this.file_tree = file_tree;
@@ -13746,6 +13816,9 @@ var Model3 = class extends CustomType {
     this.selected_node_id = selected_node_id;
     this.focused_discussion = focused_discussion;
     this.clicked_discussion = clicked_discussion;
+    this.stickied_discussion = stickied_discussion;
+    this.selected_discussion_set_sticky_timer = selected_discussion_set_sticky_timer;
+    this.stickied_discussion_unset_sticky_timer = stickied_discussion_unset_sticky_timer;
   }
 };
 var O11aHomeRoute = class extends CustomType {
@@ -13853,6 +13926,41 @@ var UserUnselectedDiscussionEntry2 = class extends CustomType {
     this.kind = kind;
   }
 };
+var UserStartedStickyOpenTimer = class extends CustomType {
+  constructor(timer_id) {
+    super();
+    this.timer_id = timer_id;
+  }
+};
+var UserStartedStickyCloseTimer = class extends CustomType {
+  constructor(timer_id) {
+    super();
+    this.timer_id = timer_id;
+  }
+};
+var UserHoveredInsideDiscussion2 = class extends CustomType {
+  constructor(line_number, column_number) {
+    super();
+    this.line_number = line_number;
+    this.column_number = column_number;
+  }
+};
+var UserUnhoveredInsideDiscussion2 = class extends CustomType {
+  constructor(line_number, column_number) {
+    super();
+    this.line_number = line_number;
+    this.column_number = column_number;
+  }
+};
+var ClientSetStickyDiscussion = class extends CustomType {
+  constructor(line_number, column_number) {
+    super();
+    this.line_number = line_number;
+    this.column_number = column_number;
+  }
+};
+var ClientUnsetStickyDiscussion = class extends CustomType {
+};
 var UserClickedDiscussionEntry2 = class extends CustomType {
   constructor(line_number, column_number) {
     super();
@@ -13922,8 +14030,8 @@ function parse_route(uri) {
   }
 }
 function on_url_change(uri) {
-  echo4("on_url_change", "src/o11a_client.gleam", 138);
-  echo4(uri, "src/o11a_client.gleam", 139);
+  echo4("on_url_change", "src/o11a_client.gleam", 146);
+  echo4(uri, "src/o11a_client.gleam", 147);
   let _pipe = parse_route(uri);
   return new OnRouteChange(_pipe);
 }
@@ -14142,6 +14250,9 @@ function init4(_) {
     new None(),
     new None(),
     new None(),
+    new None(),
+    new None(),
+    new None(),
     new None()
   );
   return [
@@ -14218,7 +14329,10 @@ function update3(model, msg) {
           _record.selected_discussion,
           _record.selected_node_id,
           _record.focused_discussion,
-          _record.clicked_discussion
+          _record.clicked_discussion,
+          _record.stickied_discussion,
+          _record.selected_discussion_set_sticky_timer,
+          _record.stickied_discussion_unset_sticky_timer
         );
       })(),
       route_change_effect(model, route2)
@@ -14269,7 +14383,10 @@ function update3(model, msg) {
           _record.selected_discussion,
           _record.selected_node_id,
           _record.focused_discussion,
-          _record.clicked_discussion
+          _record.clicked_discussion,
+          _record.stickied_discussion,
+          _record.selected_discussion_set_sticky_timer,
+          _record.stickied_discussion_unset_sticky_timer
         );
       })(),
       none()
@@ -14320,7 +14437,10 @@ function update3(model, msg) {
           _record.selected_discussion,
           _record.selected_node_id,
           _record.focused_discussion,
-          _record.clicked_discussion
+          _record.clicked_discussion,
+          _record.stickied_discussion,
+          _record.selected_discussion_set_sticky_timer,
+          _record.stickied_discussion_unset_sticky_timer
         );
       })(),
       none()
@@ -14353,7 +14473,7 @@ function update3(model, msg) {
             throw makeError(
               "panic",
               "o11a_client",
-              368,
+              382,
               "",
               "`panic` expression evaluated.",
               {}
@@ -14422,7 +14542,10 @@ function update3(model, msg) {
           _record.selected_discussion,
           _record.selected_node_id,
           _record.focused_discussion,
-          _record.clicked_discussion
+          _record.clicked_discussion,
+          _record.stickied_discussion,
+          _record.selected_discussion_set_sticky_timer,
+          _record.stickied_discussion_unset_sticky_timer
         );
       })(),
       none()
@@ -14496,7 +14619,10 @@ function update3(model, msg) {
           _record.selected_discussion,
           _record.selected_node_id,
           _record.focused_discussion,
-          _record.clicked_discussion
+          _record.clicked_discussion,
+          _record.stickied_discussion,
+          _record.selected_discussion_set_sticky_timer,
+          _record.stickied_discussion_unset_sticky_timer
         );
       })(),
       none()
@@ -14552,7 +14678,10 @@ function update3(model, msg) {
             _record.selected_discussion,
             _record.selected_node_id,
             _record.focused_discussion,
-            _record.clicked_discussion
+            _record.clicked_discussion,
+            _record.stickied_discussion,
+            _record.selected_discussion_set_sticky_timer,
+            _record.stickied_discussion_unset_sticky_timer
           );
         })(),
         none()
@@ -14591,7 +14720,10 @@ function update3(model, msg) {
           _record.selected_discussion,
           _record.selected_node_id,
           _record.focused_discussion,
-          _record.clicked_discussion
+          _record.clicked_discussion,
+          _record.stickied_discussion,
+          _record.selected_discussion_set_sticky_timer,
+          _record.stickied_discussion_unset_sticky_timer
         );
       })(),
       effect
@@ -14671,7 +14803,10 @@ function update3(model, msg) {
                         new Some(selected_discussion),
                         node_id,
                         _record.focused_discussion,
-                        _record.clicked_discussion
+                        _record.clicked_discussion,
+                        _record.stickied_discussion,
+                        _record.selected_discussion_set_sticky_timer,
+                        _record.stickied_discussion_unset_sticky_timer
                       );
                     } else {
                       let _record = model;
@@ -14698,11 +14833,37 @@ function update3(model, msg) {
                         _record.selected_discussion,
                         node_id,
                         new Some(selected_discussion),
-                        _record.clicked_discussion
+                        _record.clicked_discussion,
+                        new None(),
+                        _record.selected_discussion_set_sticky_timer,
+                        _record.stickied_discussion_unset_sticky_timer
                       );
                     }
                   })(),
-                  none()
+                  (() => {
+                    if (kind instanceof EntryHover) {
+                      return from(
+                        (dispatch) => {
+                          let timer_id = setTimeout2(
+                            300,
+                            () => {
+                              return dispatch(
+                                new ClientSetStickyDiscussion(
+                                  line_number,
+                                  column_number
+                                )
+                              );
+                            }
+                          );
+                          return dispatch(
+                            new UserStartedStickyOpenTimer(timer_id)
+                          );
+                        }
+                      );
+                    } else {
+                      return none();
+                    }
+                  })()
                 ];
               }
             );
@@ -14712,11 +14873,6 @@ function update3(model, msg) {
     );
   } else if (msg instanceof UserUnselectedDiscussionEntry2) {
     let kind = msg.kind;
-    echo4(
-      "Unselecting discussion " + inspect2(kind),
-      "src/o11a_client.gleam",
-      589
-    );
     return [
       (() => {
         if (kind instanceof EntryHover) {
@@ -14736,7 +14892,10 @@ function update3(model, msg) {
             new None(),
             new None(),
             _record.focused_discussion,
-            _record.clicked_discussion
+            _record.clicked_discussion,
+            _record.stickied_discussion,
+            _record.selected_discussion_set_sticky_timer,
+            _record.stickied_discussion_unset_sticky_timer
           );
         } else {
           let _record = model;
@@ -14755,9 +14914,216 @@ function update3(model, msg) {
             _record.selected_discussion,
             new None(),
             new None(),
-            _record.clicked_discussion
+            _record.clicked_discussion,
+            _record.stickied_discussion,
+            _record.selected_discussion_set_sticky_timer,
+            _record.stickied_discussion_unset_sticky_timer
           );
         }
+      })(),
+      from(
+        (_) => {
+          let $ = model.selected_discussion_set_sticky_timer;
+          if ($ instanceof Some) {
+            let timer_id = $[0];
+            return clearTimeout2(timer_id);
+          } else {
+            return void 0;
+          }
+        }
+      )
+    ];
+  } else if (msg instanceof UserStartedStickyOpenTimer) {
+    let timer_id = msg.timer_id;
+    return [
+      (() => {
+        let _record = model;
+        return new Model3(
+          _record.route,
+          _record.file_tree,
+          _record.audit_metadata,
+          _record.source_files,
+          _record.audit_declarations,
+          _record.audit_declaration_lists,
+          _record.audit_interface,
+          _record.merged_topics,
+          _record.discussions,
+          _record.discussion_models,
+          _record.keyboard_model,
+          _record.selected_discussion,
+          _record.selected_node_id,
+          _record.focused_discussion,
+          _record.clicked_discussion,
+          _record.stickied_discussion,
+          new Some(timer_id),
+          _record.stickied_discussion_unset_sticky_timer
+        );
+      })(),
+      none()
+    ];
+  } else if (msg instanceof ClientSetStickyDiscussion) {
+    let line_number = msg.line_number;
+    let column_number = msg.column_number;
+    return ok(
+      get_page_route_from_model(model),
+      (_) => {
+        return [model, none()];
+      },
+      (page_path) => {
+        return [
+          (() => {
+            let _record = model;
+            return new Model3(
+              _record.route,
+              _record.file_tree,
+              _record.audit_metadata,
+              _record.source_files,
+              _record.audit_declarations,
+              _record.audit_declaration_lists,
+              _record.audit_interface,
+              _record.merged_topics,
+              _record.discussions,
+              _record.discussion_models,
+              _record.keyboard_model,
+              _record.selected_discussion,
+              _record.selected_node_id,
+              _record.focused_discussion,
+              _record.clicked_discussion,
+              new Some(
+                new DiscussionKey(page_path, line_number, column_number)
+              ),
+              new None(),
+              _record.stickied_discussion_unset_sticky_timer
+            );
+          })(),
+          none()
+        ];
+      }
+    );
+  } else if (msg instanceof UserUnhoveredInsideDiscussion2) {
+    let line_number = msg.line_number;
+    let column_number = msg.column_number;
+    echo4(
+      "User unhovered discussion entry " + to_string(line_number),
+      "src/o11a_client.gleam",
+      674
+    );
+    return [
+      model,
+      (() => {
+        let $ = model.stickied_discussion;
+        if ($ instanceof Some) {
+          let discussion_key = $[0];
+          let $1 = line_number === discussion_key.line_number && column_number === discussion_key.column_number;
+          if ($1) {
+            return from(
+              (dispatch) => {
+                let timer_id = setTimeout2(
+                  200,
+                  () => {
+                    echo4("Unsticking discussion", "src/o11a_client.gleam", 685);
+                    return dispatch(new ClientUnsetStickyDiscussion());
+                  }
+                );
+                return dispatch(new UserStartedStickyCloseTimer(timer_id));
+              }
+            );
+          } else {
+            return none();
+          }
+        } else {
+          return none();
+        }
+      })()
+    ];
+  } else if (msg instanceof UserHoveredInsideDiscussion2) {
+    let line_number = msg.line_number;
+    let column_number = msg.column_number;
+    echo4(
+      "User hovered discussion entry " + to_string(line_number),
+      "src/o11a_client.gleam",
+      697
+    );
+    return [
+      model,
+      (() => {
+        let $ = model.stickied_discussion;
+        if ($ instanceof Some) {
+          let discussion_key = $[0];
+          let $1 = line_number === discussion_key.line_number && column_number === discussion_key.column_number;
+          if ($1) {
+            return from(
+              (_) => {
+                let $2 = model.stickied_discussion_unset_sticky_timer;
+                if ($2 instanceof Some) {
+                  let timer_id = $2[0];
+                  return clearTimeout2(timer_id);
+                } else {
+                  return void 0;
+                }
+              }
+            );
+          } else {
+            return none();
+          }
+        } else {
+          return none();
+        }
+      })()
+    ];
+  } else if (msg instanceof UserStartedStickyCloseTimer) {
+    let timer_id = msg.timer_id;
+    echo4("User started sticky close timer", "src/o11a_client.gleam", 723);
+    return [
+      (() => {
+        let _record = model;
+        return new Model3(
+          _record.route,
+          _record.file_tree,
+          _record.audit_metadata,
+          _record.source_files,
+          _record.audit_declarations,
+          _record.audit_declaration_lists,
+          _record.audit_interface,
+          _record.merged_topics,
+          _record.discussions,
+          _record.discussion_models,
+          _record.keyboard_model,
+          _record.selected_discussion,
+          _record.selected_node_id,
+          _record.focused_discussion,
+          _record.clicked_discussion,
+          _record.stickied_discussion,
+          _record.selected_discussion_set_sticky_timer,
+          new Some(timer_id)
+        );
+      })(),
+      none()
+    ];
+  } else if (msg instanceof ClientUnsetStickyDiscussion) {
+    return [
+      (() => {
+        let _record = model;
+        return new Model3(
+          _record.route,
+          _record.file_tree,
+          _record.audit_metadata,
+          _record.source_files,
+          _record.audit_declarations,
+          _record.audit_declaration_lists,
+          _record.audit_interface,
+          _record.merged_topics,
+          _record.discussions,
+          _record.discussion_models,
+          _record.keyboard_model,
+          _record.selected_discussion,
+          _record.selected_node_id,
+          _record.focused_discussion,
+          _record.clicked_discussion,
+          new None(),
+          _record.selected_discussion_set_sticky_timer,
+          new None()
+        );
       })(),
       none()
     ];
@@ -14790,7 +15156,10 @@ function update3(model, msg) {
               _record.focused_discussion,
               new Some(
                 new DiscussionKey(page_path, line_number, column_number)
-              )
+              ),
+              new None(),
+              _record.selected_discussion_set_sticky_timer,
+              _record.stickied_discussion_unset_sticky_timer
             );
           })(),
           from(
@@ -14837,7 +15206,7 @@ function update3(model, msg) {
         return [model, none()];
       },
       (page_path) => {
-        echo4("User clicked inside discussion", "src/o11a_client.gleam", 653);
+        echo4("User clicked inside discussion", "src/o11a_client.gleam", 789);
         let _block;
         let $ = !isEqual(
           model.selected_discussion,
@@ -14862,7 +15231,10 @@ function update3(model, msg) {
             new None(),
             _record.selected_node_id,
             _record.focused_discussion,
-            _record.clicked_discussion
+            _record.clicked_discussion,
+            _record.stickied_discussion,
+            _record.selected_discussion_set_sticky_timer,
+            _record.stickied_discussion_unset_sticky_timer
           );
         } else {
           _block = model;
@@ -14892,7 +15264,10 @@ function update3(model, msg) {
             _record.selected_discussion,
             _record.selected_node_id,
             new None(),
-            _record.clicked_discussion
+            _record.clicked_discussion,
+            _record.stickied_discussion,
+            _record.selected_discussion_set_sticky_timer,
+            _record.stickied_discussion_unset_sticky_timer
           );
         } else {
           _block$1 = model$1;
@@ -14922,7 +15297,10 @@ function update3(model, msg) {
             _record.selected_discussion,
             _record.selected_node_id,
             _record.focused_discussion,
-            new None()
+            new None(),
+            _record.stickied_discussion,
+            _record.selected_discussion_set_sticky_timer,
+            _record.stickied_discussion_unset_sticky_timer
           );
         } else {
           _block$2 = model$2;
@@ -14932,7 +15310,7 @@ function update3(model, msg) {
       }
     );
   } else if (msg instanceof UserClickedOutsideDiscussion) {
-    echo4("User clicked outside discussion", "src/o11a_client.gleam", 682);
+    echo4("User clicked outside discussion", "src/o11a_client.gleam", 818);
     return [
       (() => {
         let _record = model;
@@ -14951,7 +15329,10 @@ function update3(model, msg) {
           new None(),
           _record.selected_node_id,
           new None(),
-          new None()
+          new None(),
+          _record.stickied_discussion,
+          _record.selected_discussion_set_sticky_timer,
+          _record.stickied_discussion_unset_sticky_timer
         );
       })(),
       none()
@@ -15010,7 +15391,7 @@ function update3(model, msg) {
           echo4(
             "Focusing discussion input, user is typing",
             "src/o11a_client.gleam",
-            720
+            856
           );
           set_is_user_typing(true);
           return [
@@ -15033,7 +15414,10 @@ function update3(model, msg) {
                 new Some(
                   new DiscussionKey(page_path, line_number$1, column_number$1)
                 ),
-                _record.clicked_discussion
+                _record.clicked_discussion,
+                _record.stickied_discussion,
+                _record.selected_discussion_set_sticky_timer,
+                _record.stickied_discussion_unset_sticky_timer
               );
             })(),
             none()
@@ -15062,13 +15446,16 @@ function update3(model, msg) {
                 new Some(
                   new DiscussionKey(page_path, line_number$1, column_number$1)
                 ),
-                _record.clicked_discussion
+                _record.clicked_discussion,
+                _record.stickied_discussion,
+                _record.selected_discussion_set_sticky_timer,
+                _record.stickied_discussion_unset_sticky_timer
               );
             })(),
             none()
           ];
         } else if (discussion_effect instanceof UnfocusDiscussionInput) {
-          echo4("Unfocusing discussion input", "src/o11a_client.gleam", 751);
+          echo4("Unfocusing discussion input", "src/o11a_client.gleam", 887);
           set_is_user_typing(false);
           return [model, none()];
         } else if (discussion_effect instanceof MaximizeDiscussion) {
@@ -15094,7 +15481,10 @@ function update3(model, msg) {
                 _record.selected_discussion,
                 _record.selected_node_id,
                 _record.focused_discussion,
-                _record.clicked_discussion
+                _record.clicked_discussion,
+                _record.stickied_discussion,
+                _record.selected_discussion_set_sticky_timer,
+                _record.stickied_discussion_unset_sticky_timer
               );
             })(),
             none()
@@ -15122,7 +15512,10 @@ function update3(model, msg) {
                 _record.selected_discussion,
                 _record.selected_node_id,
                 _record.focused_discussion,
-                _record.clicked_discussion
+                _record.clicked_discussion,
+                _record.stickied_discussion,
+                _record.selected_discussion_set_sticky_timer,
+                _record.stickied_discussion_unset_sticky_timer
               );
             })(),
             none()
@@ -15164,7 +15557,10 @@ function update3(model, msg) {
               _record.selected_discussion,
               _record.selected_node_id,
               _record.focused_discussion,
-              _record.clicked_discussion
+              _record.clicked_discussion,
+              _record.stickied_discussion,
+              _record.selected_discussion_set_sticky_timer,
+              _record.stickied_discussion_unset_sticky_timer
             );
           })(),
           none()
@@ -15192,7 +15588,8 @@ function selected_node_highlighter(model) {
 function get_selected_discussion(model) {
   let $ = model.focused_discussion;
   let $1 = model.clicked_discussion;
-  let $2 = model.selected_discussion;
+  let $2 = model.stickied_discussion;
+  let $3 = model.selected_discussion;
   if ($ instanceof Some) {
     let discussion = $[0];
     let _pipe = map_get(model.discussion_models, discussion);
@@ -15227,6 +15624,22 @@ function get_selected_discussion(model) {
     return unwrap2(_pipe$1, new None());
   } else if ($2 instanceof Some) {
     let discussion = $2[0];
+    let _pipe = map_get(model.discussion_models, discussion);
+    let _pipe$1 = map3(
+      _pipe,
+      (model2) => {
+        return new Some(
+          new DiscussionReference(
+            discussion.line_number,
+            discussion.column_number,
+            model2
+          )
+        );
+      }
+    );
+    return unwrap2(_pipe$1, new None());
+  } else if ($3 instanceof Some) {
+    let discussion = $3[0];
     let _pipe = map_get(model.discussion_models, discussion);
     let _pipe$1 = map3(
       _pipe,
@@ -15301,9 +15714,17 @@ function map_audit_page_msg(msg) {
     let line_number = msg.line_number;
     let column_number = msg.column_number;
     return new UserClickedInsideDiscussion2(line_number, column_number);
-  } else {
+  } else if (msg instanceof UserCtrlClickedNode) {
     let uri = msg.uri;
     return new UserCtrlClickedNode2(uri);
+  } else if (msg instanceof UserHoveredInsideDiscussion) {
+    let line_number = msg.line_number;
+    let column_number = msg.column_number;
+    return new UserHoveredInsideDiscussion2(line_number, column_number);
+  } else {
+    let line_number = msg.line_number;
+    let column_number = msg.column_number;
+    return new UserUnhoveredInsideDiscussion2(line_number, column_number);
   }
 }
 function view6(model) {

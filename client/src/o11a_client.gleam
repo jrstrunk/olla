@@ -35,6 +35,7 @@ import o11a/ui/discussion
 import plinth/browser/element as browser_element
 import plinth/browser/event as browser_event
 import plinth/browser/window
+import plinth/javascript/global
 
 pub fn main() {
   io.println("Starting client controller")
@@ -80,6 +81,9 @@ pub type Model {
     selected_node_id: option.Option(Int),
     focused_discussion: option.Option(DiscussionKey),
     clicked_discussion: option.Option(DiscussionKey),
+    stickied_discussion: option.Option(DiscussionKey),
+    selected_discussion_set_sticky_timer: option.Option(global.TimerID),
+    stickied_discussion_unset_sticky_timer: option.Option(global.TimerID),
   )
 }
 
@@ -117,6 +121,9 @@ fn init(_) -> #(Model, Effect(Msg)) {
       selected_node_id: option.None,
       focused_discussion: option.None,
       clicked_discussion: option.None,
+      stickied_discussion: option.None,
+      selected_discussion_set_sticky_timer: option.None,
+      stickied_discussion_unset_sticky_timer: option.None,
     )
 
   #(
@@ -272,6 +279,12 @@ pub type Msg {
     is_reference: Bool,
   )
   UserUnselectedDiscussionEntry(kind: audit_page.DiscussionSelectKind)
+  UserStartedStickyOpenTimer(timer_id: global.TimerID)
+  UserStartedStickyCloseTimer(timer_id: global.TimerID)
+  UserHoveredInsideDiscussion(line_number: Int, column_number: Int)
+  UserUnhoveredInsideDiscussion(line_number: Int, column_number: Int)
+  ClientSetStickyDiscussion(line_number: Int, column_number: Int)
+  ClientUnsetStickyDiscussion
   UserClickedDiscussionEntry(line_number: Int, column_number: Int)
   UserCtrlClickedNode(uri: String)
   UserClickedInsideDiscussion(line_number: Int, column_number: Int)
@@ -576,17 +589,30 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               selected_node_id: node_id,
               keyboard_model: page_navigation.Model(
                 ..model.keyboard_model,
-                current_line_number: line_number,
-                current_column_number: column_number,
+                cursor_line_number: line_number,
+                cursor_column_number: column_number,
               ),
+              stickied_discussion: option.None,
             )
         },
-        effect.none(),
+        case kind {
+          audit_page.EntryHover ->
+            effect.from(fn(dispatch) {
+              let timer_id =
+                global.set_timeout(300, fn() {
+                  dispatch(ClientSetStickyDiscussion(
+                    line_number:,
+                    column_number:,
+                  ))
+                })
+              dispatch(UserStartedStickyOpenTimer(timer_id))
+            })
+          audit_page.EntryFocus -> effect.none()
+        },
       )
     }
 
     UserUnselectedDiscussionEntry(kind:) -> {
-      echo "Unselecting discussion " <> string.inspect(kind)
       #(
         case kind {
           audit_page.EntryHover ->
@@ -602,6 +628,114 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               selected_node_id: option.None,
             )
         },
+        effect.from(fn(_dispatch) {
+          case model.selected_discussion_set_sticky_timer {
+            option.Some(timer_id) -> {
+              global.clear_timeout(timer_id)
+            }
+            option.None -> Nil
+          }
+        }),
+      )
+    }
+
+    UserStartedStickyOpenTimer(timer_id) -> {
+      #(
+        Model(
+          ..model,
+          selected_discussion_set_sticky_timer: option.Some(timer_id),
+        ),
+        effect.none(),
+      )
+    }
+
+    ClientSetStickyDiscussion(line_number:, column_number:) -> {
+      use page_path <- given.ok(
+        get_page_route_from_model(model),
+        else_return: fn(_) { #(model, effect.none()) },
+      )
+
+      #(
+        Model(
+          ..model,
+          stickied_discussion: option.Some(DiscussionKey(
+            page_path:,
+            line_number:,
+            column_number:,
+          )),
+          selected_discussion_set_sticky_timer: option.None,
+        ),
+        effect.none(),
+      )
+    }
+
+    UserUnhoveredInsideDiscussion(line_number:, column_number:) -> {
+      echo "User unhovered discussion entry " <> int.to_string(line_number)
+      #(model, case model.stickied_discussion {
+        option.Some(discussion_key) ->
+          case
+            line_number == discussion_key.line_number
+            && column_number == discussion_key.column_number
+          {
+            True ->
+              effect.from(fn(dispatch) {
+                let timer_id =
+                  global.set_timeout(200, fn() {
+                    echo "Unsticking discussion"
+                    dispatch(ClientUnsetStickyDiscussion)
+                  })
+                dispatch(UserStartedStickyCloseTimer(timer_id))
+              })
+            False -> effect.none()
+          }
+        option.None -> effect.none()
+      })
+    }
+
+    UserHoveredInsideDiscussion(line_number:, column_number:) -> {
+      echo "User hovered discussion entry " <> int.to_string(line_number)
+      // Do not clear the timer in the state generically without checking the
+      // hovered line and col number here, as hovering any element will clear 
+      // the timer if so
+      #(model, case model.stickied_discussion {
+        option.Some(discussion_key) ->
+          case
+            line_number == discussion_key.line_number
+            && column_number == discussion_key.column_number
+          {
+            True ->
+              effect.from(fn(_dispatch) {
+                case model.stickied_discussion_unset_sticky_timer {
+                  option.Some(timer_id) -> {
+                    global.clear_timeout(timer_id)
+                  }
+                  option.None -> Nil
+                }
+              })
+            False -> effect.none()
+          }
+        option.None -> effect.none()
+      })
+    }
+
+    UserStartedStickyCloseTimer(timer_id) -> {
+      echo "User started sticky close timer"
+      #(
+        Model(
+          ..model,
+          stickied_discussion_unset_sticky_timer: option.Some(timer_id),
+        ),
+        effect.none(),
+      )
+    }
+
+    ClientUnsetStickyDiscussion -> {
+      #(
+        Model(
+          ..model,
+          stickied_discussion: option.None,
+          stickied_discussion_unset_sticky_timer: option.None,
+        ),
         effect.none(),
       )
     }
@@ -620,6 +754,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             line_number:,
             column_number:,
           )),
+          stickied_discussion: option.None,
         ),
         effect.from(fn(_dispatch) {
           let res =
@@ -1022,11 +1157,13 @@ fn get_selected_discussion(model: Model) {
   case
     model.focused_discussion,
     model.clicked_discussion,
+    model.stickied_discussion,
     model.selected_discussion
   {
-    option.Some(discussion), _, _
-    | _, option.Some(discussion), _
-    | _, _, option.Some(discussion)
+    option.Some(discussion), _, _, _
+    | _, option.Some(discussion), _, _
+    | _, _, option.Some(discussion), _
+    | _, _, _, option.Some(discussion)
     ->
       dict.get(model.discussion_models, discussion)
       |> result.map(fn(model) {
@@ -1037,7 +1174,7 @@ fn get_selected_discussion(model: Model) {
         ))
       })
       |> result.unwrap(option.None)
-    option.None, option.None, option.None -> option.None
+    option.None, option.None, option.None, option.None -> option.None
   }
 }
 
@@ -1082,5 +1219,9 @@ fn map_audit_page_msg(msg) {
     audit_page.UserClickedInsideDiscussion(line_number:, column_number:) ->
       UserClickedInsideDiscussion(line_number:, column_number:)
     audit_page.UserCtrlClickedNode(uri:) -> UserCtrlClickedNode(uri:)
+    audit_page.UserHoveredInsideDiscussion(line_number:, column_number:) ->
+      UserHoveredInsideDiscussion(line_number:, column_number:)
+    audit_page.UserUnhoveredInsideDiscussion(line_number:, column_number:) ->
+      UserUnhoveredInsideDiscussion(line_number:, column_number:)
   }
 }

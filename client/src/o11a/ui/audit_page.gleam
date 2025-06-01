@@ -56,6 +56,8 @@ pub type Msg(msg) {
     update: #(discussion.Model, discussion.Effect),
   )
   UserClickedInsideDiscussion(line_number: Int, column_number: Int)
+  UserHoveredInsideDiscussion(line_number: Int, column_number: Int)
+  UserUnhoveredInsideDiscussion(line_number: Int, column_number: Int)
 }
 
 pub type DiscussionSelectKind {
@@ -217,6 +219,14 @@ fn inline_comment_preview_view(
             element_line_number |> int.to_string,
             element_column_number |> int.to_string,
           ),
+          event.on_mouse_enter(UserHoveredInsideDiscussion(
+            element_line_number,
+            element_column_number,
+          )),
+          event.on_mouse_leave(UserUnhoveredInsideDiscussion(
+            element_line_number,
+            element_column_number,
+          )),
         ],
         [
           html.span(
@@ -286,6 +296,14 @@ fn inline_comment_preview_view(
             element_line_number |> int.to_string,
             element_column_number |> int.to_string,
           ),
+          event.on_mouse_enter(UserHoveredInsideDiscussion(
+            element_line_number,
+            element_column_number,
+          )),
+          event.on_mouse_leave(UserUnhoveredInsideDiscussion(
+            element_line_number,
+            element_column_number,
+          )),
         ],
         [
           html.span(
@@ -417,6 +435,14 @@ fn declaration_node_view(
         element_line_number |> int.to_string,
         element_column_number |> int.to_string,
       ),
+                    event.on_mouse_enter(UserHoveredInsideDiscussion(
+                element_line_number,
+                element_column_number,
+              )),
+              event.on_mouse_leave(UserUnhoveredInsideDiscussion(
+                element_line_number,
+                element_column_number,
+              )),
     ],
     [
       html.span(
@@ -463,7 +489,8 @@ fn declaration_node_view(
             element_line_number,
             element_column_number,
           ))
-          |> event.stop_propagation,
+            |> event.stop_propagation,
+
         ],
         element_line_number:,
         element_column_number:,
@@ -494,7 +521,14 @@ fn reference_node_view(
       attributes.encode_grid_location_data(
         element_line_number |> int.to_string,
         element_column_number |> int.to_string,
-      ),
+      ),              event.on_mouse_enter(UserHoveredInsideDiscussion(
+                element_line_number,
+                element_column_number,
+              )),
+              event.on_mouse_leave(UserUnhoveredInsideDiscussion(
+                element_line_number,
+                element_column_number,
+              )),
     ],
     [
       html.span(
@@ -546,7 +580,8 @@ fn reference_node_view(
             element_line_number,
             element_column_number,
           ))
-          |> event.stop_propagation,
+            |> event.stop_propagation,
+
         ],
         discussion:,
         declarations:,

@@ -552,6 +552,10 @@ video {
   position: relative;
 }
 
+.sticky {
+  position: sticky;
+}
+
 .bottom-\[1\.75rem\] {
   bottom: 1.75rem;
 }

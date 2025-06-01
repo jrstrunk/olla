@@ -11,8 +11,8 @@ import snag
 
 pub type Model {
   Model(
-    current_line_number: Int,
-    current_column_number: Int,
+    cursor_line_number: Int,
+    cursor_column_number: Int,
     current_line_column_count: Int,
     line_count: Int,
   )
@@ -20,8 +20,8 @@ pub type Model {
 
 pub fn init() {
   Model(
-    current_line_number: 16,
-    current_column_number: 1,
+    cursor_line_number: 16,
+    cursor_column_number: 1,
     current_line_column_count: 16,
     line_count: 16,
   )
@@ -83,8 +83,8 @@ fn handle_input_escape(event, model: Model, else_do) {
       Ok(#(
         model,
         focus_line_discussion(
-          line_number: model.current_line_number,
-          column_number: model.current_column_number,
+          line_number: model.cursor_line_number,
+          column_number: model.cursor_column_number,
         ),
       ))
 
@@ -98,8 +98,8 @@ fn handle_expanded_input_focus(event, model, else_do) {
       Ok(#(model, effect.none()))
       // let exp =
       // get_line_discussion_expanded_input(
-      // storage.current_line_number(),
-      // storage.current_column_number(),
+      // storage.cursor_line_number(),
+      // storage.cursor_column_number(),
       // )
     }
     _, _ -> else_do()
@@ -139,7 +139,7 @@ fn handle_keyboard_navigation(event, model, else_do) {
 fn move_focus_line(model: Model, by step) {
   use #(new_line, column_count) <- result.map(find_next_discussion_line(
     model,
-    model.current_line_number,
+    model.cursor_line_number,
     step,
   ))
 
@@ -147,7 +147,7 @@ fn move_focus_line(model: Model, by step) {
     Model(..model, current_line_column_count: column_count),
     focus_line_discussion(
       line_number: new_line,
-      column_number: int.min(column_count, model.current_column_number),
+      column_number: int.min(column_count, model.cursor_column_number),
     ),
   )
 }
@@ -155,14 +155,14 @@ fn move_focus_line(model: Model, by step) {
 fn move_focus_column(model: Model, by step) {
   echo "moving focus column by " <> int.to_string(step)
   let new_column =
-    int.max(1, model.current_column_number + step)
+    int.max(1, model.cursor_column_number + step)
     |> int.min(model.current_line_column_count)
 
   echo "new column " <> int.to_string(new_column)
   #(
     model,
     focus_line_discussion(
-      line_number: model.current_line_number,
+      line_number: model.cursor_line_number,
       column_number: new_column,
     ),
   )
@@ -175,8 +175,8 @@ fn handle_discussion_escape(event, model: Model, else_do) {
       Ok(#(
         model,
         blur_line_discussion(
-          line_number: model.current_line_number,
-          column_number: model.current_column_number,
+          line_number: model.cursor_line_number,
+          column_number: model.cursor_column_number,
         ),
       ))
 
@@ -190,8 +190,8 @@ fn handle_input_focus(event, model: Model, else_do) {
       Ok(#(
         model,
         focus_line_discussion_input(
-          model.current_line_number,
-          model.current_column_number,
+          model.cursor_line_number,
+          model.cursor_column_number,
         ),
       ))
     _, _ -> else_do()
