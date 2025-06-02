@@ -8433,9 +8433,9 @@ var Fallback = class extends CustomType {
 var Receive = class extends CustomType {
 };
 var Reference2 = class extends CustomType {
-  constructor(parent_id, scope, kind, source) {
+  constructor(parent_topic_id, scope, kind, source) {
     super();
-    this.parent_id = parent_id;
+    this.parent_topic_id = parent_topic_id;
     this.scope = scope;
     this.kind = kind;
     this.source = source;
@@ -8791,8 +8791,8 @@ function source_kind_decoder() {
 function reference_decoder() {
   return field(
     "i",
-    int2,
-    (parent_id) => {
+    string3,
+    (parent_topic_id) => {
       return field(
         "s",
         scope_decoder(),
@@ -8806,7 +8806,7 @@ function reference_decoder() {
                 source_kind_decoder(),
                 (source) => {
                   return success(
-                    new Reference2(parent_id, scope, kind, source)
+                    new Reference2(parent_topic_id, scope, kind, source)
                   );
                 }
               );
@@ -12427,6 +12427,10 @@ function reference_header_view(model, current_thread_notes, notes) {
   );
 }
 function thread_header_view(model, references, notes) {
+  let _block;
+  let _pipe = map_get(model.declarations, model.topic_id);
+  _block = unwrap2(_pipe, unknown_declaration);
+  let declaration = _block;
   let $ = model.active_thread;
   if ($ instanceof Some) {
     let active_thread = $[0];
@@ -12509,7 +12513,17 @@ function thread_header_view(model, references, notes) {
             )
           ])
         ),
-        references_view(references)
+        (() => {
+          let $1 = (() => {
+            let _pipe$1 = declaration.scope.member;
+            return is_some(_pipe$1);
+          })();
+          if ($1) {
+            return fragment2(toList([]));
+          } else {
+            return references_view(references);
+          }
+        })()
       ])
     );
   }

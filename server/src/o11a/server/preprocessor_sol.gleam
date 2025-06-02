@@ -1167,7 +1167,7 @@ pub fn count_references(declarations, in ast: AST) {
         contract: option.None,
         member: option.None,
       ),
-      0,
+      "",
       preprocessor.AccessReference,
     )
   })
@@ -1177,7 +1177,7 @@ fn do_count_node_references(
   declarations,
   node: Node,
   parent_scope: preprocessor.Scope,
-  parent_id: Int,
+  parent_topic_id: String,
   parent_reference_kind: preprocessor.NodeReferenceKind,
 ) {
   case node {
@@ -1193,7 +1193,7 @@ fn do_count_node_references(
         declarations,
         nodes,
         parent_scope,
-        parent_id,
+        parent_topic_id,
         parent_reference_kind,
       )
 
@@ -1208,17 +1208,19 @@ fn do_count_node_references(
       let children_scope =
         preprocessor.Scope(..parent_scope, contract: option.Some(name))
 
+      let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
+
       do_count_node_references_multi(
         declarations,
         nodes,
         children_scope,
-        id,
+        topic_id,
         parent_reference_kind,
       )
       |> do_count_node_references_multi(
         base_contracts,
         children_scope,
-        id,
+        topic_id,
         parent_reference_kind,
       )
     }
@@ -1245,32 +1247,34 @@ fn do_count_node_references(
           }),
         )
 
+      let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
+
       let declarations =
         list.fold(nodes, declarations, fn(declarations, node) {
           do_count_node_references(
             declarations,
             node,
             children_scope,
-            id,
+            topic_id,
             parent_reference_kind,
           )
         })
         |> do_count_node_references(
           parameters,
           children_scope,
-          id,
+          topic_id,
           parent_reference_kind,
         )
         |> do_count_node_references(
           return_parameters,
           children_scope,
-          id,
+          topic_id,
           parent_reference_kind,
         )
         |> do_count_node_references_multi(
           modifiers,
           children_scope,
-          id,
+          topic_id,
           parent_reference_kind,
         )
 
@@ -1280,7 +1284,7 @@ fn do_count_node_references(
             declarations,
             body,
             children_scope,
-            id,
+            topic_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1290,18 +1294,20 @@ fn do_count_node_references(
       let children_scope =
         preprocessor.Scope(..parent_scope, member: option.Some(name))
 
+      let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
+
       let declarations =
         do_count_node_references_multi(
           declarations,
           nodes,
           children_scope,
-          id,
+          topic_id,
           parent_reference_kind,
         )
         |> do_count_node_references(
           parameters,
           children_scope,
-          id,
+          topic_id,
           parent_reference_kind,
         )
 
@@ -1311,7 +1317,7 @@ fn do_count_node_references(
             declarations,
             body,
             children_scope,
-            id,
+            topic_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1322,13 +1328,13 @@ fn do_count_node_references(
         declarations,
         nodes,
         parent_scope,
-        parent_id,
+        parent_topic_id,
         parent_reference_kind,
       )
       |> do_count_node_references_multi(
         statements,
         parent_scope,
-        parent_id,
+        parent_topic_id,
         parent_reference_kind,
       )
     }
@@ -1339,7 +1345,7 @@ fn do_count_node_references(
             declarations,
             expression,
             parent_scope,
-            parent_id,
+            parent_topic_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1349,7 +1355,7 @@ fn do_count_node_references(
         declarations,
         event_call,
         parent_scope,
-        parent_id,
+        parent_topic_id,
         parent_reference_kind,
       )
 
@@ -1360,7 +1366,7 @@ fn do_count_node_references(
             declarations,
             initial_value,
             parent_scope,
-            parent_id,
+            parent_topic_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1371,13 +1377,13 @@ fn do_count_node_references(
           declarations,
           condition,
           parent_scope,
-          parent_id,
+          parent_topic_id,
           parent_reference_kind,
         )
         |> do_count_node_references(
           true_body,
           parent_scope,
-          parent_id,
+          parent_topic_id,
           parent_reference_kind,
         )
 
@@ -1387,7 +1393,7 @@ fn do_count_node_references(
             declarations,
             false_body,
             parent_scope,
-            parent_id,
+            parent_topic_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1406,7 +1412,7 @@ fn do_count_node_references(
             declarations,
             init,
             parent_scope,
-            parent_id,
+            parent_topic_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1418,7 +1424,7 @@ fn do_count_node_references(
               declarations,
               condition,
               parent_scope,
-              parent_id,
+              parent_topic_id,
               parent_reference_kind,
             )
           option.None -> declarations
@@ -1431,7 +1437,7 @@ fn do_count_node_references(
               declarations,
               loop,
               parent_scope,
-              parent_id,
+              parent_topic_id,
               parent_reference_kind,
             )
           option.None -> declarations
@@ -1440,7 +1446,7 @@ fn do_count_node_references(
       |> do_count_node_references(
         body,
         parent_scope,
-        parent_id,
+        parent_topic_id,
         parent_reference_kind,
       )
     RevertStatementNode(expression:, ..) ->
@@ -1450,7 +1456,7 @@ fn do_count_node_references(
             declarations,
             expression,
             parent_scope,
-            parent_id,
+            parent_topic_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1463,7 +1469,7 @@ fn do_count_node_references(
             declarations,
             expression,
             parent_scope,
-            parent_id,
+            parent_topic_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1476,7 +1482,7 @@ fn do_count_node_references(
             declarations,
             expression,
             parent_scope,
-            parent_id,
+            parent_topic_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1484,7 +1490,7 @@ fn do_count_node_references(
       |> add_reference(
         reference_id,
         preprocessor.Reference(
-          parent_id:,
+          parent_topic_id:,
           scope: parent_scope,
           kind: parent_reference_kind,
           source: preprocessor.Solidity,
@@ -1499,7 +1505,7 @@ fn do_count_node_references(
             reference_id,
             preprocessor.Reference(
               scope: parent_scope,
-              parent_id:,
+              parent_topic_id:,
               kind: parent_reference_kind,
               source: preprocessor.Solidity,
             ),
@@ -1513,7 +1519,7 @@ fn do_count_node_references(
               declarations,
               expression,
               parent_scope,
-              parent_id,
+              parent_topic_id,
               parent_reference_kind,
             )
           option.None -> declarations
@@ -1527,7 +1533,7 @@ fn do_count_node_references(
             declarations,
             expression,
             parent_scope,
-            parent_id,
+            parent_topic_id,
             preprocessor.CallReference,
           )
         option.None -> declarations
@@ -1535,7 +1541,7 @@ fn do_count_node_references(
       |> do_count_node_references_multi(
         arguments,
         parent_scope,
-        parent_id,
+        parent_topic_id,
         parent_reference_kind,
       )
     Assignment(left_hand_side:, right_hand_side:, ..) ->
@@ -1543,13 +1549,13 @@ fn do_count_node_references(
         declarations,
         left_hand_side,
         parent_scope,
-        parent_id,
+        parent_topic_id,
         preprocessor.MutationReference,
       )
       |> do_count_node_references(
         right_hand_side,
         parent_scope,
-        parent_id,
+        parent_topic_id,
         parent_reference_kind,
       )
 
@@ -1558,13 +1564,13 @@ fn do_count_node_references(
         declarations,
         left_expression,
         parent_scope,
-        parent_id,
+        parent_topic_id,
         parent_reference_kind,
       )
       |> do_count_node_references(
         right_expression,
         parent_scope,
-        parent_id,
+        parent_topic_id,
         parent_reference_kind,
       )
 
@@ -1573,7 +1579,7 @@ fn do_count_node_references(
         declarations,
         expression,
         parent_scope,
-        parent_id,
+        parent_topic_id,
         parent_reference_kind,
       )
 
@@ -1584,7 +1590,7 @@ fn do_count_node_references(
             declarations,
             index,
             parent_scope,
-            parent_id,
+            parent_topic_id,
             parent_reference_kind,
           )
         option.None -> declarations
@@ -1592,7 +1598,7 @@ fn do_count_node_references(
       |> do_count_node_references(
         base,
         parent_scope,
-        parent_id,
+        parent_topic_id,
         parent_reference_kind,
       )
 
@@ -1602,7 +1608,7 @@ fn do_count_node_references(
         reference_id,
         preprocessor.Reference(
           scope: parent_scope,
-          parent_id:,
+          parent_topic_id:,
           kind: preprocessor.CallReference,
           source: preprocessor.Solidity,
         ),
@@ -1614,7 +1620,7 @@ fn do_count_node_references(
               declarations,
               arguments,
               parent_scope,
-              parent_id,
+              parent_topic_id,
               parent_reference_kind,
             )
           option.None -> declarations
@@ -1626,7 +1632,7 @@ fn do_count_node_references(
         reference_id,
         preprocessor.Reference(
           scope: parent_scope,
-          parent_id:,
+          parent_topic_id:,
           kind: parent_reference_kind,
           source: preprocessor.Solidity,
         ),
@@ -1637,7 +1643,7 @@ fn do_count_node_references(
         reference_id,
         preprocessor.Reference(
           scope: parent_scope,
-          parent_id:,
+          parent_topic_id:,
           kind: preprocessor.InheritanceReference,
           source: preprocessor.Solidity,
         ),
@@ -1647,19 +1653,19 @@ fn do_count_node_references(
         declarations,
         condition,
         parent_scope,
-        parent_id,
+        parent_topic_id,
         parent_reference_kind,
       )
       |> do_count_node_references(
         true_expression,
         parent_scope,
-        parent_id,
+        parent_topic_id,
         parent_reference_kind,
       )
       |> do_count_node_references(
         false_expression,
         parent_scope,
-        parent_id,
+        parent_topic_id,
         parent_reference_kind,
       )
     UserDefinedTypeName(path_node:, ..) ->
@@ -1667,7 +1673,7 @@ fn do_count_node_references(
         declarations,
         path_node,
         parent_scope,
-        parent_id,
+        parent_topic_id,
         preprocessor.TypeReference,
       )
     NewExpression(type_name:, arguments:, ..) ->
@@ -1675,7 +1681,7 @@ fn do_count_node_references(
         declarations,
         type_name,
         parent_scope,
-        parent_id,
+        parent_topic_id,
         preprocessor.TypeReference,
       )
       |> fn(declarations) {
@@ -1685,7 +1691,7 @@ fn do_count_node_references(
               declarations,
               arguments,
               parent_scope,
-              parent_id,
+              parent_topic_id,
               parent_reference_kind,
             )
           option.None -> declarations
@@ -1696,7 +1702,7 @@ fn do_count_node_references(
         declarations,
         base_type,
         parent_scope,
-        parent_id,
+        parent_topic_id,
         preprocessor.TypeReference,
       )
     FunctionCallOptions(options:, expression:, ..) ->
@@ -1706,7 +1712,7 @@ fn do_count_node_references(
             declarations,
             expression,
             parent_scope,
-            parent_id,
+            parent_topic_id,
             preprocessor.CallReference,
           )
         option.None -> declarations
@@ -1714,7 +1720,7 @@ fn do_count_node_references(
       |> do_count_node_references_multi(
         options,
         parent_scope,
-        parent_id,
+        parent_topic_id,
         parent_reference_kind,
       )
     Mapping(key_type:, value_type:, ..) ->
@@ -1722,13 +1728,13 @@ fn do_count_node_references(
         declarations,
         key_type,
         parent_scope,
-        parent_id,
+        parent_topic_id,
         preprocessor.TypeReference,
       )
       |> do_count_node_references(
         value_type,
         parent_scope,
-        parent_id,
+        parent_topic_id,
         preprocessor.TypeReference,
       )
     UsingForDirective(library_name:, ..) ->
@@ -1736,7 +1742,7 @@ fn do_count_node_references(
         declarations,
         library_name,
         parent_scope,
-        parent_id,
+        parent_topic_id,
         preprocessor.UsingReference,
       )
   }
@@ -1775,7 +1781,7 @@ fn do_count_node_references_multi(
   declarations,
   nodes: List(Node),
   parent_scope,
-  parent_id: Int,
+  parent_topic_id: String,
   parent_reference_kind: preprocessor.NodeReferenceKind,
 ) {
   list.fold(nodes, declarations, fn(declarations, node) {
@@ -1783,7 +1789,7 @@ fn do_count_node_references_multi(
       declarations,
       node,
       parent_scope,
-      parent_id,
+      parent_topic_id,
       parent_reference_kind,
     )
   })

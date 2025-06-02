@@ -310,7 +310,7 @@ pub fn function_kind_from_string(kind) {
 /// code
 pub type Reference {
   Reference(
-    parent_id: Int,
+    parent_topic_id: String,
     scope: Scope,
     kind: NodeReferenceKind,
     source: SourceKind,
@@ -318,9 +318,9 @@ pub type Reference {
 }
 
 pub fn encode_reference(node_reference: Reference) {
-  let Reference(parent_id:, scope:, kind:, source:) = node_reference
+  let Reference(parent_topic_id:, scope:, kind:, source:) = node_reference
   json.object([
-    #("i", json.int(parent_id)),
+    #("i", json.string(parent_topic_id)),
     #("s", encode_scope(scope)),
     #("k", encode_node_reference_kind(kind)),
     #("c", encode_source_kind(source)),
@@ -328,11 +328,11 @@ pub fn encode_reference(node_reference: Reference) {
 }
 
 pub fn reference_decoder() {
-  use parent_id <- decode.field("i", decode.int)
+  use parent_topic_id <- decode.field("i", decode.string)
   use scope <- decode.field("s", scope_decoder())
   use kind <- decode.field("k", node_reference_kind_decoder())
   use source <- decode.field("c", source_kind_decoder())
-  decode.success(Reference(scope:, parent_id:, kind:, source:))
+  decode.success(Reference(scope:, parent_topic_id:, kind:, source:))
 }
 
 pub type NodeReferenceKind {
