@@ -429,6 +429,10 @@ fn reference_header_view(model: Model, current_thread_notes, notes) {
 }
 
 fn thread_header_view(model: Model, references, notes) {
+  let declaration =
+    dict.get(model.declarations, model.topic_id)
+    |> result.unwrap(preprocessor.unknown_declaration)
+
   case model.active_thread {
     option.Some(active_thread) ->
       html.div([], [
@@ -489,7 +493,13 @@ fn thread_header_view(model: Model, references, notes) {
             ]),
           ],
         ),
-        references_view(references),
+        // If the declaration is inside a member, then it is a local variable
+        // and will only ever be accessed inside that scope, so no need to
+        // show that
+        case declaration.scope.member |> option.is_some {
+          True -> element.fragment([])
+          False -> references_view(references)
+        },
       ])
   }
 }
