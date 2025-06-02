@@ -41,6 +41,7 @@ pub type Model {
 pub type Msg(msg) {
   UserSelectedDiscussionEntry(
     kind: DiscussionSelectKind,
+    view_id: String,
     line_number: Int,
     column_number: Int,
     node_id: option.Option(Int),
@@ -48,16 +49,33 @@ pub type Msg(msg) {
     is_reference: Bool,
   )
   UserUnselectedDiscussionEntry(kind: DiscussionSelectKind)
-  UserClickedDiscussionEntry(line_number: Int, column_number: Int)
+  UserClickedDiscussionEntry(
+    view_id: String,
+    line_number: Int,
+    column_number: Int,
+  )
   UserCtrlClickedNode(uri: String)
   UserUpdatedDiscussion(
+    view_id: String,
     line_number: Int,
     column_number: Int,
     update: #(discussion.Model, discussion.Effect),
   )
-  UserClickedInsideDiscussion(line_number: Int, column_number: Int)
-  UserHoveredInsideDiscussion(line_number: Int, column_number: Int)
-  UserUnhoveredInsideDiscussion(line_number: Int, column_number: Int)
+  UserClickedInsideDiscussion(
+    view_id: String,
+    line_number: Int,
+    column_number: Int,
+  )
+  UserHoveredInsideDiscussion(
+    view_id: String,
+    line_number: Int,
+    column_number: Int,
+  )
+  UserUnhoveredInsideDiscussion(
+    view_id: String,
+    line_number: Int,
+    column_number: Int,
+  )
 }
 
 pub type DiscussionSelectKind {
@@ -66,6 +84,7 @@ pub type DiscussionSelectKind {
 }
 
 pub fn view(
+  page_path page_path: String,
   preprocessed_source preprocessed_source: List(preprocessor.PreProcessedLine),
   discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
   declarations declarations: dict.Dict(String, preprocessor.Declaration),
@@ -79,6 +98,7 @@ pub fn view(
     ],
     list.map(preprocessed_source, loc_view(
       _,
+      page_path,
       discussion:,
       declarations:,
       selected_discussion:,
@@ -88,6 +108,7 @@ pub fn view(
 
 fn loc_view(
   loc: preprocessor.PreProcessedLine,
+  page_path page_path: String,
   discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
   declarations declarations,
   selected_discussion selected_discussion: option.Option(DiscussionReference),
@@ -99,6 +120,7 @@ fn loc_view(
           html.text(loc.line_number_text),
         ]),
         ..preprocessed_nodes_view(
+          page_path,
           loc,
           selected_discussion:,
           discussion:,
@@ -109,6 +131,7 @@ fn loc_view(
 
     preprocessor.SingleDeclarationLine(topic_id:) ->
       line_container_view(
+        page_path,
         discussion:,
         declarations:,
         loc:,
@@ -118,6 +141,7 @@ fn loc_view(
 
     preprocessor.NonEmptyLine(topic_id:) ->
       line_container_view(
+        page_path,
         discussion:,
         declarations:,
         loc:,
@@ -128,6 +152,7 @@ fn loc_view(
 }
 
 fn line_container_view(
+  page_path page_path: String,
   discussion discussion,
   declarations declarations,
   loc loc: preprocessor.PreProcessedLine,
@@ -177,13 +202,15 @@ fn line_container_view(
           html.text(loc.line_number_text),
         ]),
         element.fragment(preprocessed_nodes_view(
+          page_path,
           loc,
           selected_discussion:,
           discussion:,
           declarations:,
         )),
         inline_comment_preview_view(
-          parent_notes,
+          page_path:,
+          parent_notes:,
           topic_id: line_topic_id,
           element_line_number: loc.line_number,
           element_column_number: column_count,
@@ -197,10 +224,11 @@ fn line_container_view(
 }
 
 fn inline_comment_preview_view(
-  parent_notes: List(computed_note.ComputedNote),
+  page_path page_path: String,
+  parent_notes parent_notes: List(computed_note.ComputedNote),
   topic_id topic_id: String,
-  element_line_number element_line_number,
-  element_column_number element_column_number,
+  element_line_number line_number,
+  element_column_number column_number,
   selected_discussion selected_discussion: option.Option(DiscussionReference),
   discussion discussion,
   declarations declarations,
@@ -216,16 +244,18 @@ fn inline_comment_preview_view(
         [
           attribute.class("relative"),
           attributes.encode_grid_location_data(
-            element_line_number |> int.to_string,
-            element_column_number |> int.to_string,
+            line_number |> int.to_string,
+            column_number |> int.to_string,
           ),
           event.on_mouse_enter(UserHoveredInsideDiscussion(
-            element_line_number,
-            element_column_number,
+            view_id: page_path,
+            line_number:,
+            column_number:,
           )),
           event.on_mouse_leave(UserUnhoveredInsideDiscussion(
-            element_line_number,
-            element_column_number,
+            view_id: page_path,
+            line_number:,
+            column_number:,
           )),
         ],
         [
@@ -240,8 +270,9 @@ fn inline_comment_preview_view(
               attribute.attribute("tabindex", "0"),
               event.on_focus(UserSelectedDiscussionEntry(
                 kind: EntryFocus,
-                line_number: element_line_number,
-                column_number: element_column_number,
+                view_id: page_path,
+                line_number:,
+                column_number:,
                 node_id: option.None,
                 topic_id:,
                 is_reference: False,
@@ -249,8 +280,9 @@ fn inline_comment_preview_view(
               event.on_blur(UserUnselectedDiscussionEntry(kind: EntryFocus)),
               event.on_mouse_enter(UserSelectedDiscussionEntry(
                 kind: EntryHover,
-                line_number: element_line_number,
-                column_number: element_column_number,
+                view_id: page_path,
+                line_number:,
+                column_number:,
                 node_id: option.None,
                 topic_id:,
                 is_reference: False,
@@ -259,8 +291,9 @@ fn inline_comment_preview_view(
                 kind: EntryHover,
               )),
               eventx.on_non_ctrl_click(UserClickedDiscussionEntry(
-                line_number: element_line_number,
-                column_number: element_column_number,
+                view_id: page_path,
+                line_number:,
+                column_number:,
               ))
                 |> event.stop_propagation,
             ],
@@ -274,13 +307,14 @@ fn inline_comment_preview_view(
           discussion_view(
             [
               event.on_click(UserClickedInsideDiscussion(
-                element_line_number,
-                element_column_number,
+                view_id: page_path,
+                line_number:,
+                column_number:,
               ))
               |> event.stop_propagation,
             ],
-            element_line_number:,
-            element_column_number:,
+            line_number:,
+            column_number:,
             selected_discussion:,
             discussion:,
             declarations:,
@@ -293,16 +327,18 @@ fn inline_comment_preview_view(
         [
           attribute.class("relative"),
           attributes.encode_grid_location_data(
-            element_line_number |> int.to_string,
-            element_column_number |> int.to_string,
+            line_number |> int.to_string,
+            column_number |> int.to_string,
           ),
           event.on_mouse_enter(UserHoveredInsideDiscussion(
-            element_line_number,
-            element_column_number,
+            view_id: page_path,
+            line_number:,
+            column_number:,
           )),
           event.on_mouse_leave(UserUnhoveredInsideDiscussion(
-            element_line_number,
-            element_column_number,
+            view_id: page_path,
+            line_number:,
+            column_number:,
           )),
         ],
         [
@@ -315,8 +351,9 @@ fn inline_comment_preview_view(
               attribute.attribute("tabindex", "0"),
               event.on_focus(UserSelectedDiscussionEntry(
                 kind: EntryFocus,
-                line_number: element_line_number,
-                column_number: element_column_number,
+                view_id: page_path,
+                line_number:,
+                column_number:,
                 node_id: option.None,
                 topic_id:,
                 is_reference: False,
@@ -324,8 +361,9 @@ fn inline_comment_preview_view(
               event.on_blur(UserUnselectedDiscussionEntry(kind: EntryFocus)),
               event.on_mouse_enter(UserSelectedDiscussionEntry(
                 kind: EntryHover,
-                line_number: element_line_number,
-                column_number: element_column_number,
+                view_id: page_path,
+                line_number:,
+                column_number:,
                 node_id: option.None,
                 topic_id:,
                 is_reference: False,
@@ -334,8 +372,9 @@ fn inline_comment_preview_view(
                 kind: EntryHover,
               )),
               eventx.on_non_ctrl_click(UserClickedDiscussionEntry(
-                line_number: element_line_number,
-                column_number: element_column_number,
+                view_id: page_path,
+                line_number:,
+                column_number:,
               ))
                 |> event.stop_propagation,
             ],
@@ -344,13 +383,14 @@ fn inline_comment_preview_view(
           discussion_view(
             [
               event.on_click(UserClickedInsideDiscussion(
-                element_line_number,
-                element_column_number,
+                view_id: page_path,
+                line_number:,
+                column_number:,
               ))
               |> event.stop_propagation,
             ],
-            element_line_number:,
-            element_column_number:,
+            line_number:,
+            column_number:,
             selected_discussion:,
             discussion:,
             declarations:,
@@ -361,6 +401,7 @@ fn inline_comment_preview_view(
 }
 
 fn preprocessed_nodes_view(
+  page_path: String,
   loc: preprocessor.PreProcessedLine,
   discussion discussion,
   declarations declarations,
@@ -373,8 +414,9 @@ fn preprocessed_nodes_view(
         #(
           new_column_index,
           declaration_node_view(
-            topic_id,
-            tokens,
+            page_path:,
+            topic_id:,
+            tokens:,
             element_line_number: loc.line_number,
             element_column_number: new_column_index,
             selected_discussion:,
@@ -389,8 +431,9 @@ fn preprocessed_nodes_view(
         #(
           new_column_index,
           reference_node_view(
-            topic_id,
-            tokens,
+            page_path:,
+            topic_id:,
+            tokens:,
             element_line_number: loc.line_number,
             element_column_number: new_column_index,
             selected_discussion:,
@@ -416,12 +459,13 @@ fn preprocessed_nodes_view(
 }
 
 fn declaration_node_view(
-  topic_id,
+  page_path page_path: String,
+  topic_id topic_id: String,
   tokens tokens: String,
   discussion discussion,
   declarations declarations,
-  element_line_number element_line_number,
-  element_column_number element_column_number,
+  element_line_number line_number,
+  element_column_number column_number,
   selected_discussion selected_discussion: option.Option(DiscussionReference),
 ) {
   let node_declaration =
@@ -432,16 +476,18 @@ fn declaration_node_view(
     [
       attribute.class("relative"),
       attributes.encode_grid_location_data(
-        element_line_number |> int.to_string,
-        element_column_number |> int.to_string,
+        line_number |> int.to_string,
+        column_number |> int.to_string,
       ),
       event.on_mouse_enter(UserHoveredInsideDiscussion(
-        element_line_number,
-        element_column_number,
+        view_id: page_path,
+        line_number:,
+        column_number:,
       )),
       event.on_mouse_leave(UserUnhoveredInsideDiscussion(
-        element_line_number,
-        element_column_number,
+        view_id: page_path,
+        line_number:,
+        column_number:,
       )),
     ],
     [
@@ -459,8 +505,9 @@ fn declaration_node_view(
           attribute.attribute("tabindex", "0"),
           event.on_focus(UserSelectedDiscussionEntry(
             kind: EntryFocus,
-            line_number: element_line_number,
-            column_number: element_column_number,
+            view_id: page_path,
+            line_number:,
+            column_number:,
             node_id: option.Some(node_declaration.id),
             topic_id: topic_id,
             is_reference: False,
@@ -468,16 +515,18 @@ fn declaration_node_view(
           event.on_blur(UserUnselectedDiscussionEntry(kind: EntryFocus)),
           event.on_mouse_enter(UserSelectedDiscussionEntry(
             kind: EntryHover,
-            line_number: element_line_number,
-            column_number: element_column_number,
+            view_id: page_path,
+            line_number:,
+            column_number:,
             node_id: option.Some(node_declaration.id),
             topic_id: topic_id,
             is_reference: False,
           )),
           event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: EntryHover)),
           event.on_click(UserClickedDiscussionEntry(
-            line_number: element_line_number,
-            column_number: element_column_number,
+            view_id: page_path,
+            line_number:,
+            column_number:,
           ))
             |> event.stop_propagation,
         ],
@@ -486,13 +535,14 @@ fn declaration_node_view(
       discussion_view(
         [
           event.on_click(UserClickedInsideDiscussion(
-            element_line_number,
-            element_column_number,
+            view_id: page_path,
+            line_number:,
+            column_number:,
           ))
           |> event.stop_propagation,
         ],
-        element_line_number:,
-        element_column_number:,
+        line_number: line_number,
+        column_number: column_number,
         selected_discussion:,
         discussion:,
         declarations:,
@@ -502,12 +552,13 @@ fn declaration_node_view(
 }
 
 fn reference_node_view(
-  topic_id: String,
-  tokens: String,
+  page_path page_path: String,
+  topic_id topic_id: String,
+  tokens tokens: String,
   discussion discussion,
   declarations declarations,
-  element_line_number element_line_number,
-  element_column_number element_column_number,
+  element_line_number line_number,
+  element_column_number column_number,
   selected_discussion selected_discussion: option.Option(DiscussionReference),
 ) {
   let referenced_node_declaration =
@@ -518,16 +569,18 @@ fn reference_node_view(
     [
       attribute.class("relative"),
       attributes.encode_grid_location_data(
-        element_line_number |> int.to_string,
-        element_column_number |> int.to_string,
+        line_number |> int.to_string,
+        column_number |> int.to_string,
       ),
       event.on_mouse_enter(UserHoveredInsideDiscussion(
-        element_line_number,
-        element_column_number,
+        view_id: page_path,
+        line_number:,
+        column_number:,
       )),
       event.on_mouse_leave(UserUnhoveredInsideDiscussion(
-        element_line_number,
-        element_column_number,
+        view_id: page_path,
+        line_number:,
+        column_number:,
       )),
     ],
     [
@@ -545,8 +598,9 @@ fn reference_node_view(
           attribute.attribute("tabindex", "0"),
           event.on_focus(UserSelectedDiscussionEntry(
             kind: EntryFocus,
-            line_number: element_line_number,
-            column_number: element_column_number,
+            view_id: page_path,
+            line_number:,
+            column_number:,
             node_id: option.Some(referenced_node_declaration.id),
             topic_id:,
             is_reference: True,
@@ -554,8 +608,9 @@ fn reference_node_view(
           event.on_blur(UserUnselectedDiscussionEntry(kind: EntryFocus)),
           event.on_mouse_enter(UserSelectedDiscussionEntry(
             kind: EntryHover,
-            line_number: element_line_number,
-            column_number: element_column_number,
+            view_id: page_path,
+            line_number:,
+            column_number:,
             node_id: option.Some(referenced_node_declaration.id),
             topic_id:,
             is_reference: True,
@@ -566,8 +621,9 @@ fn reference_node_view(
               uri: preprocessor.declaration_to_link(referenced_node_declaration),
             ),
             non_ctrl_click: option.Some(UserClickedDiscussionEntry(
-              line_number: element_line_number,
-              column_number: element_column_number,
+              view_id: page_path,
+              line_number:,
+              column_number:,
             )),
           )
             |> event.stop_propagation,
@@ -577,15 +633,16 @@ fn reference_node_view(
       discussion_view(
         [
           event.on_click(UserClickedInsideDiscussion(
-            element_line_number,
-            element_column_number,
+            view_id: page_path,
+            line_number:,
+            column_number:,
           ))
           |> event.stop_propagation,
         ],
         discussion:,
         declarations:,
-        element_line_number:,
-        element_column_number:,
+        line_number:,
+        column_number:,
         selected_discussion:,
       ),
     ],
@@ -596,15 +653,15 @@ fn discussion_view(
   attrs,
   discussion discussion,
   declarations declarations,
-  element_line_number element_line_number,
-  element_column_number element_column_number,
+  line_number line_number,
+  column_number column_number,
   selected_discussion selected_discussion: option.Option(DiscussionReference),
 ) {
   case selected_discussion {
     option.Some(selected_discussion) ->
       case
-        element_line_number == selected_discussion.line_number
-        && element_column_number == selected_discussion.column_number
+        line_number == selected_discussion.line_number
+        && column_number == selected_discussion.column_number
       {
         True ->
           html.div(attrs, [
@@ -623,6 +680,7 @@ fn discussion_view(
 
 fn map_discussion_msg(msg, selected_discussion: DiscussionReference) {
   UserUpdatedDiscussion(
+    view_id: selected_discussion.model.view_id,
     line_number: selected_discussion.line_number,
     column_number: selected_discussion.column_number,
     update: discussion.update(selected_discussion.model, msg),

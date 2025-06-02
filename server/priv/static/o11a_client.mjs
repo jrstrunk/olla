@@ -9489,23 +9489,388 @@ function non_empty_line(line_number) {
     new$9("Failed to find non-empty line")
   );
 }
-function discussion_entry2(line_number, column_number) {
+function discussion_entry2(view_id, line_number, column_number) {
   return querySelector(
-    echo(
-      ".dl" + to_string(line_number) + ".dc" + to_string(
-        column_number
-      ) + " ." + discussion_entry,
-      "src/o11a/client/selectors.gleam",
-      17
-    )
+    "#" + view_id + " .dl" + to_string(line_number) + ".dc" + to_string(
+      column_number
+    ) + " ." + discussion_entry
   );
 }
-function discussion_input(line_number, column_number) {
+function discussion_input(view_id, line_number, column_number) {
   return querySelector(
-    ".dl" + to_string(line_number) + ".dc" + to_string(
+    "#" + view_id + " .dl" + to_string(line_number) + ".dc" + to_string(
       column_number
     ) + " input"
   );
+}
+
+// build/dev/javascript/o11a_client/storage.mjs
+var is_user_typing_storage = false;
+function set_is_user_typing(value3) {
+  is_user_typing_storage = value3;
+}
+function is_user_typing() {
+  return is_user_typing_storage;
+}
+
+// build/dev/javascript/o11a_client/o11a/client/page_navigation.mjs
+var Model = class extends CustomType {
+  constructor(current_view_id, cursor_line_number, cursor_column_number, active_line_number, active_column_number, current_line_column_count, line_count) {
+    super();
+    this.current_view_id = current_view_id;
+    this.cursor_line_number = cursor_line_number;
+    this.cursor_column_number = cursor_column_number;
+    this.active_line_number = active_line_number;
+    this.active_column_number = active_column_number;
+    this.current_line_column_count = current_line_column_count;
+    this.line_count = line_count;
+  }
+};
+function init2(current_view_id) {
+  return new Model(current_view_id, 16, 1, 16, 1, 16, 16);
+}
+function prevent_default(event4) {
+  let $ = is_user_typing();
+  if ($) {
+    let $1 = ctrlKey(event4);
+    let $2 = key(event4);
+    if ($1 && $2 === "e") {
+      return preventDefault(event4);
+    } else if ($2 === "Escape") {
+      return preventDefault(event4);
+    } else {
+      return void 0;
+    }
+  } else {
+    let $1 = key(event4);
+    if ($1 === "ArrowUp") {
+      return preventDefault(event4);
+    } else if ($1 === "ArrowDown") {
+      return preventDefault(event4);
+    } else if ($1 === "ArrowLeft") {
+      return preventDefault(event4);
+    } else if ($1 === "ArrowRight") {
+      return preventDefault(event4);
+    } else if ($1 === "PageUp") {
+      return preventDefault(event4);
+    } else if ($1 === "PageDown") {
+      return preventDefault(event4);
+    } else if ($1 === "Enter") {
+      return preventDefault(event4);
+    } else if ($1 === "e") {
+      return preventDefault(event4);
+    } else if ($1 === "Escape") {
+      return preventDefault(event4);
+    } else {
+      return void 0;
+    }
+  }
+}
+function handle_expanded_input_focus(event4, model, else_do) {
+  let $ = ctrlKey(event4);
+  let $1 = key(event4);
+  if ($ && $1 === "e") {
+    return new Ok([model, none()]);
+  } else {
+    return else_do();
+  }
+}
+function find_next_discussion_line(loop$model, loop$current_line, loop$step) {
+  while (true) {
+    let model = loop$model;
+    let current_line = loop$current_line;
+    let step = loop$step;
+    if (step > 0 && current_line === model.line_count) {
+      return error(
+        "Line is " + to_string(model.line_count) + ", cannot go further down"
+      );
+    } else if (step < 0 && current_line === 1) {
+      return error("Line is 1, cannot go further up");
+    } else if (step === 0) {
+      return error("Step is zero");
+    } else {
+      let next_line = max(
+        1,
+        min(model.line_count, current_line + step)
+      );
+      let $ = non_empty_line(next_line);
+      if ($.isOk()) {
+        let line2 = $[0];
+        return map3(
+          read_column_count_data(line2),
+          (column_count) => {
+            return [next_line, column_count];
+          }
+        );
+      } else {
+        loop$model = model;
+        loop$current_line = next_line;
+        loop$step = (() => {
+          if (step > 0 && next_line === model.line_count) {
+            return -1;
+          } else if (step > 0) {
+            return 1;
+          } else if (step < 0 && next_line === 1) {
+            return 1;
+          } else if (step < 0) {
+            return -1;
+          } else {
+            return 0;
+          }
+        })();
+      }
+    }
+  }
+}
+function focus_line_discussion(view_id, line_number, column_number) {
+  return from(
+    (_) => {
+      echo(
+        "focus line discussion",
+        "src/o11a/client/page_navigation.gleam",
+        272
+      );
+      let _block;
+      let _pipe = discussion_entry2(
+        view_id,
+        line_number,
+        column_number
+      );
+      let _pipe$1 = replace_error(
+        _pipe,
+        new$9("Failed to find line discussion to focus")
+      );
+      let _pipe$2 = map3(_pipe$1, focus);
+      _block = echo(_pipe$2, "src/o11a/client/page_navigation.gleam", 279);
+      let $ = _block;
+      return void 0;
+    }
+  );
+}
+function handle_input_escape(event4, model, else_do) {
+  let $ = key(event4);
+  if ($ === "Escape") {
+    return new Ok(
+      [
+        model,
+        focus_line_discussion(
+          model.current_view_id,
+          model.cursor_line_number,
+          model.cursor_column_number
+        )
+      ]
+    );
+  } else {
+    return else_do();
+  }
+}
+function move_focus_line(model, step) {
+  return map3(
+    find_next_discussion_line(model, model.cursor_line_number, step),
+    (_use0) => {
+      let new_line = _use0[0];
+      let column_count = _use0[1];
+      return [
+        (() => {
+          let _record = model;
+          return new Model(
+            _record.current_view_id,
+            _record.cursor_line_number,
+            _record.cursor_column_number,
+            _record.active_line_number,
+            _record.active_column_number,
+            column_count,
+            _record.line_count
+          );
+        })(),
+        focus_line_discussion(
+          model.current_view_id,
+          new_line,
+          min(column_count, model.cursor_column_number)
+        )
+      ];
+    }
+  );
+}
+function move_focus_column(model, step) {
+  echo(
+    "moving focus column by " + to_string(step),
+    "src/o11a/client/page_navigation.gleam",
+    164
+  );
+  let _block;
+  let _pipe = max(1, model.cursor_column_number + step);
+  _block = min(_pipe, model.current_line_column_count);
+  let new_column = _block;
+  echo(
+    "new column " + to_string(new_column),
+    "src/o11a/client/page_navigation.gleam",
+    169
+  );
+  let _pipe$1 = [
+    model,
+    focus_line_discussion(
+      model.current_view_id,
+      model.cursor_line_number,
+      new_column
+    )
+  ];
+  return new Ok(_pipe$1);
+}
+function handle_keyboard_navigation(event4, model, else_do) {
+  let $ = shiftKey(event4);
+  let $1 = key(event4);
+  if (!$ && $1 === "ArrowUp") {
+    return move_focus_line(model, -1);
+  } else if (!$ && $1 === "ArrowDown") {
+    return move_focus_line(model, 1);
+  } else if ($ && $1 === "ArrowUp") {
+    return move_focus_line(model, -5);
+  } else if ($ && $1 === "ArrowDown") {
+    return move_focus_line(model, 5);
+  } else if ($1 === "PageUp") {
+    return move_focus_line(model, -20);
+  } else if ($1 === "PageDown") {
+    return move_focus_line(model, 20);
+  } else if ($1 === "ArrowLeft") {
+    return move_focus_column(model, -1);
+  } else if ($1 === "ArrowRight") {
+    return move_focus_column(model, 1);
+  } else {
+    return else_do();
+  }
+}
+function blur_line_discussion(view_id, line_number, column_number) {
+  return from(
+    (_) => {
+      echo(
+        "blurring line discussion",
+        "src/o11a/client/page_navigation.gleam",
+        290
+      );
+      let _block;
+      let _pipe = discussion_entry2(
+        view_id,
+        line_number,
+        column_number
+      );
+      let _pipe$1 = replace_error(
+        _pipe,
+        new$9("Failed to find line discussion to focus")
+      );
+      _block = map3(_pipe$1, blur);
+      let $ = _block;
+      return void 0;
+    }
+  );
+}
+function handle_discussion_escape(event4, model, else_do) {
+  let $ = key(event4);
+  if ($ === "Escape") {
+    return new Ok(
+      [
+        model,
+        blur_line_discussion(
+          model.current_view_id,
+          model.cursor_line_number,
+          model.cursor_column_number
+        )
+      ]
+    );
+  } else {
+    return else_do();
+  }
+}
+function focus_line_discussion_input(view_id, line_number, column_number) {
+  return from(
+    (_) => {
+      let _block;
+      let _pipe = discussion_input(
+        view_id,
+        line_number,
+        column_number
+      );
+      let _pipe$1 = replace_error(
+        _pipe,
+        new$9("Failed to find line discussion input to focus")
+      );
+      _block = map3(_pipe$1, focus);
+      let $ = _block;
+      return void 0;
+    }
+  );
+}
+function handle_input_focus(event4, model, else_do) {
+  let $ = ctrlKey(event4);
+  let $1 = key(event4);
+  if (!$ && $1 === "e") {
+    return new Ok(
+      [
+        model,
+        focus_line_discussion_input(
+          model.current_view_id,
+          model.active_line_number,
+          model.active_column_number
+        )
+      ]
+    );
+  } else {
+    return else_do();
+  }
+}
+function do_page_navigation(event4, model) {
+  let _block;
+  let $ = is_user_typing();
+  if ($) {
+    _block = handle_expanded_input_focus(
+      event4,
+      model,
+      () => {
+        return handle_input_escape(
+          event4,
+          model,
+          () => {
+            return new Ok([model, none()]);
+          }
+        );
+      }
+    );
+  } else {
+    _block = handle_keyboard_navigation(
+      event4,
+      model,
+      () => {
+        return handle_input_focus(
+          event4,
+          model,
+          () => {
+            return handle_expanded_input_focus(
+              event4,
+              model,
+              () => {
+                return handle_discussion_escape(
+                  event4,
+                  model,
+                  () => {
+                    return new Ok([model, none()]);
+                  }
+                );
+              }
+            );
+          }
+        );
+      }
+    );
+  }
+  let res = _block;
+  if (res.isOk()) {
+    let model_effect = res[0];
+    return model_effect;
+  } else {
+    let e = res[0];
+    console_log(line_print(e));
+    return [model, none()];
+  }
 }
 function echo(value3, file, line2) {
   const grey = "\x1B[90m";
@@ -9637,489 +10002,6 @@ function echo$inspectBitArray(bitArray) {
   }
 }
 function echo$isDict(value3) {
-  try {
-    return value3 instanceof Dict;
-  } catch {
-    return false;
-  }
-}
-
-// build/dev/javascript/o11a_client/storage.mjs
-var is_user_typing_storage = false;
-function set_is_user_typing(value3) {
-  is_user_typing_storage = value3;
-}
-function is_user_typing() {
-  return is_user_typing_storage;
-}
-
-// build/dev/javascript/o11a_client/o11a/client/page_navigation.mjs
-var Model = class extends CustomType {
-  constructor(cursor_line_number, cursor_column_number, active_line_number, active_column_number, current_line_column_count, line_count) {
-    super();
-    this.cursor_line_number = cursor_line_number;
-    this.cursor_column_number = cursor_column_number;
-    this.active_line_number = active_line_number;
-    this.active_column_number = active_column_number;
-    this.current_line_column_count = current_line_column_count;
-    this.line_count = line_count;
-  }
-};
-function init2() {
-  return new Model(16, 1, 16, 1, 16, 16);
-}
-function prevent_default(event4) {
-  let $ = is_user_typing();
-  if ($) {
-    let $1 = ctrlKey(event4);
-    let $2 = key(event4);
-    if ($1 && $2 === "e") {
-      return preventDefault(event4);
-    } else if ($2 === "Escape") {
-      return preventDefault(event4);
-    } else {
-      return void 0;
-    }
-  } else {
-    let $1 = key(event4);
-    if ($1 === "ArrowUp") {
-      return preventDefault(event4);
-    } else if ($1 === "ArrowDown") {
-      return preventDefault(event4);
-    } else if ($1 === "ArrowLeft") {
-      return preventDefault(event4);
-    } else if ($1 === "ArrowRight") {
-      return preventDefault(event4);
-    } else if ($1 === "PageUp") {
-      return preventDefault(event4);
-    } else if ($1 === "PageDown") {
-      return preventDefault(event4);
-    } else if ($1 === "Enter") {
-      return preventDefault(event4);
-    } else if ($1 === "e") {
-      return preventDefault(event4);
-    } else if ($1 === "Escape") {
-      return preventDefault(event4);
-    } else {
-      return void 0;
-    }
-  }
-}
-function handle_expanded_input_focus(event4, model, else_do) {
-  let $ = ctrlKey(event4);
-  let $1 = key(event4);
-  if ($ && $1 === "e") {
-    return new Ok([model, none()]);
-  } else {
-    return else_do();
-  }
-}
-function find_next_discussion_line(loop$model, loop$current_line, loop$step) {
-  while (true) {
-    let model = loop$model;
-    let current_line = loop$current_line;
-    let step = loop$step;
-    if (step > 0 && current_line === model.line_count) {
-      return error(
-        "Line is " + to_string(model.line_count) + ", cannot go further down"
-      );
-    } else if (step < 0 && current_line === 1) {
-      return error("Line is 1, cannot go further up");
-    } else if (step === 0) {
-      return error("Step is zero");
-    } else {
-      let next_line = max(
-        1,
-        min(model.line_count, current_line + step)
-      );
-      let $ = non_empty_line(next_line);
-      if ($.isOk()) {
-        let line2 = $[0];
-        return map3(
-          read_column_count_data(line2),
-          (column_count) => {
-            return [next_line, column_count];
-          }
-        );
-      } else {
-        loop$model = model;
-        loop$current_line = next_line;
-        loop$step = (() => {
-          if (step > 0 && next_line === model.line_count) {
-            return -1;
-          } else if (step > 0) {
-            return 1;
-          } else if (step < 0 && next_line === 1) {
-            return 1;
-          } else if (step < 0) {
-            return -1;
-          } else {
-            return 0;
-          }
-        })();
-      }
-    }
-  }
-}
-function focus_line_discussion(line_number, column_number) {
-  return from(
-    (_) => {
-      echo2(
-        "focus line discussion",
-        "src/o11a/client/page_navigation.gleam",
-        264
-      );
-      let _block;
-      let _pipe = discussion_entry2(line_number, column_number);
-      let _pipe$1 = replace_error(
-        _pipe,
-        new$9("Failed to find line discussion to focus")
-      );
-      let _pipe$2 = map3(_pipe$1, focus);
-      _block = echo2(_pipe$2, "src/o11a/client/page_navigation.gleam", 271);
-      let $ = _block;
-      return void 0;
-    }
-  );
-}
-function handle_input_escape(event4, model, else_do) {
-  let $ = key(event4);
-  if ($ === "Escape") {
-    return new Ok(
-      [
-        model,
-        focus_line_discussion(
-          model.cursor_line_number,
-          model.cursor_column_number
-        )
-      ]
-    );
-  } else {
-    return else_do();
-  }
-}
-function move_focus_line(model, step) {
-  return map3(
-    find_next_discussion_line(model, model.cursor_line_number, step),
-    (_use0) => {
-      let new_line = _use0[0];
-      let column_count = _use0[1];
-      return [
-        (() => {
-          let _record = model;
-          return new Model(
-            _record.cursor_line_number,
-            _record.cursor_column_number,
-            _record.active_line_number,
-            _record.active_column_number,
-            column_count,
-            _record.line_count
-          );
-        })(),
-        focus_line_discussion(
-          new_line,
-          min(column_count, model.cursor_column_number)
-        )
-      ];
-    }
-  );
-}
-function move_focus_column(model, step) {
-  echo2(
-    "moving focus column by " + to_string(step),
-    "src/o11a/client/page_navigation.gleam",
-    160
-  );
-  let _block;
-  let _pipe = max(1, model.cursor_column_number + step);
-  _block = min(_pipe, model.current_line_column_count);
-  let new_column = _block;
-  echo2(
-    "new column " + to_string(new_column),
-    "src/o11a/client/page_navigation.gleam",
-    165
-  );
-  let _pipe$1 = [
-    model,
-    focus_line_discussion(model.cursor_line_number, new_column)
-  ];
-  return new Ok(_pipe$1);
-}
-function handle_keyboard_navigation(event4, model, else_do) {
-  let $ = shiftKey(event4);
-  let $1 = key(event4);
-  if (!$ && $1 === "ArrowUp") {
-    return move_focus_line(model, -1);
-  } else if (!$ && $1 === "ArrowDown") {
-    return move_focus_line(model, 1);
-  } else if ($ && $1 === "ArrowUp") {
-    return move_focus_line(model, -5);
-  } else if ($ && $1 === "ArrowDown") {
-    return move_focus_line(model, 5);
-  } else if ($1 === "PageUp") {
-    return move_focus_line(model, -20);
-  } else if ($1 === "PageDown") {
-    return move_focus_line(model, 20);
-  } else if ($1 === "ArrowLeft") {
-    return move_focus_column(model, -1);
-  } else if ($1 === "ArrowRight") {
-    return move_focus_column(model, 1);
-  } else {
-    return else_do();
-  }
-}
-function blur_line_discussion(line_number, column_number) {
-  return from(
-    (_) => {
-      echo2(
-        "blurring line discussion",
-        "src/o11a/client/page_navigation.gleam",
-        281
-      );
-      let _block;
-      let _pipe = discussion_entry2(line_number, column_number);
-      let _pipe$1 = replace_error(
-        _pipe,
-        new$9("Failed to find line discussion to focus")
-      );
-      _block = map3(_pipe$1, blur);
-      let $ = _block;
-      return void 0;
-    }
-  );
-}
-function handle_discussion_escape(event4, model, else_do) {
-  let $ = key(event4);
-  if ($ === "Escape") {
-    return new Ok(
-      [
-        model,
-        blur_line_discussion(
-          model.cursor_line_number,
-          model.cursor_column_number
-        )
-      ]
-    );
-  } else {
-    return else_do();
-  }
-}
-function focus_line_discussion_input(line_number, column_number) {
-  return from(
-    (_) => {
-      let _block;
-      let _pipe = discussion_input(line_number, column_number);
-      let _pipe$1 = replace_error(
-        _pipe,
-        new$9("Failed to find line discussion input to focus")
-      );
-      _block = map3(_pipe$1, focus);
-      let $ = _block;
-      return void 0;
-    }
-  );
-}
-function handle_input_focus(event4, model, else_do) {
-  let $ = ctrlKey(event4);
-  let $1 = key(event4);
-  if (!$ && $1 === "e") {
-    return new Ok(
-      [
-        model,
-        focus_line_discussion_input(
-          model.active_line_number,
-          model.active_column_number
-        )
-      ]
-    );
-  } else {
-    return else_do();
-  }
-}
-function do_page_navigation(event4, model) {
-  let _block;
-  let $ = is_user_typing();
-  if ($) {
-    _block = handle_expanded_input_focus(
-      event4,
-      model,
-      () => {
-        return handle_input_escape(
-          event4,
-          model,
-          () => {
-            return new Ok([model, none()]);
-          }
-        );
-      }
-    );
-  } else {
-    _block = handle_keyboard_navigation(
-      event4,
-      model,
-      () => {
-        return handle_input_focus(
-          event4,
-          model,
-          () => {
-            return handle_expanded_input_focus(
-              event4,
-              model,
-              () => {
-                return handle_discussion_escape(
-                  event4,
-                  model,
-                  () => {
-                    return new Ok([model, none()]);
-                  }
-                );
-              }
-            );
-          }
-        );
-      }
-    );
-  }
-  let res = _block;
-  if (res.isOk()) {
-    let model_effect = res[0];
-    return model_effect;
-  } else {
-    let e = res[0];
-    console_log(line_print(e));
-    return [model, none()];
-  }
-}
-function echo2(value3, file, line2) {
-  const grey = "\x1B[90m";
-  const reset_color = "\x1B[39m";
-  const file_line = `${file}:${line2}`;
-  const string_value = echo$inspect2(value3);
-  if (globalThis.process?.stderr?.write) {
-    const string6 = `${grey}${file_line}${reset_color}
-${string_value}
-`;
-    process.stderr.write(string6);
-  } else if (globalThis.Deno) {
-    const string6 = `${grey}${file_line}${reset_color}
-${string_value}
-`;
-    globalThis.Deno.stderr.writeSync(new TextEncoder().encode(string6));
-  } else {
-    const string6 = `${file_line}
-${string_value}`;
-    globalThis.console.log(string6);
-  }
-  return value3;
-}
-function echo$inspectString2(str) {
-  let new_str = '"';
-  for (let i = 0; i < str.length; i++) {
-    let char = str[i];
-    if (char == "\n") new_str += "\\n";
-    else if (char == "\r") new_str += "\\r";
-    else if (char == "	") new_str += "\\t";
-    else if (char == "\f") new_str += "\\f";
-    else if (char == "\\") new_str += "\\\\";
-    else if (char == '"') new_str += '\\"';
-    else if (char < " " || char > "~" && char < "\xA0") {
-      new_str += "\\u{" + char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0") + "}";
-    } else {
-      new_str += char;
-    }
-  }
-  new_str += '"';
-  return new_str;
-}
-function echo$inspectDict2(map7) {
-  let body2 = "dict.from_list([";
-  let first2 = true;
-  let key_value_pairs = [];
-  map7.forEach((value3, key2) => {
-    key_value_pairs.push([key2, value3]);
-  });
-  key_value_pairs.sort();
-  key_value_pairs.forEach(([key2, value3]) => {
-    if (!first2) body2 = body2 + ", ";
-    body2 = body2 + "#(" + echo$inspect2(key2) + ", " + echo$inspect2(value3) + ")";
-    first2 = false;
-  });
-  return body2 + "])";
-}
-function echo$inspectCustomType2(record) {
-  const props = globalThis.Object.keys(record).map((label) => {
-    const value3 = echo$inspect2(record[label]);
-    return isNaN(parseInt(label)) ? `${label}: ${value3}` : value3;
-  }).join(", ");
-  return props ? `${record.constructor.name}(${props})` : record.constructor.name;
-}
-function echo$inspectObject2(v) {
-  const name2 = Object.getPrototypeOf(v)?.constructor?.name || "Object";
-  const props = [];
-  for (const k of Object.keys(v)) {
-    props.push(`${echo$inspect2(k)}: ${echo$inspect2(v[k])}`);
-  }
-  const body2 = props.length ? " " + props.join(", ") + " " : "";
-  const head = name2 === "Object" ? "" : name2 + " ";
-  return `//js(${head}{${body2}})`;
-}
-function echo$inspect2(v) {
-  const t = typeof v;
-  if (v === true) return "True";
-  if (v === false) return "False";
-  if (v === null) return "//js(null)";
-  if (v === void 0) return "Nil";
-  if (t === "string") return echo$inspectString2(v);
-  if (t === "bigint" || t === "number") return v.toString();
-  if (globalThis.Array.isArray(v))
-    return `#(${v.map(echo$inspect2).join(", ")})`;
-  if (v instanceof List)
-    return `[${v.toArray().map(echo$inspect2).join(", ")}]`;
-  if (v instanceof UtfCodepoint)
-    return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
-  if (v instanceof BitArray) return echo$inspectBitArray2(v);
-  if (v instanceof CustomType) return echo$inspectCustomType2(v);
-  if (echo$isDict2(v)) return echo$inspectDict2(v);
-  if (v instanceof Set)
-    return `//js(Set(${[...v].map(echo$inspect2).join(", ")}))`;
-  if (v instanceof RegExp) return `//js(${v})`;
-  if (v instanceof Date) return `//js(Date("${v.toISOString()}"))`;
-  if (v instanceof Function) {
-    const args = [];
-    for (const i of Array(v.length).keys())
-      args.push(String.fromCharCode(i + 97));
-    return `//fn(${args.join(", ")}) { ... }`;
-  }
-  return echo$inspectObject2(v);
-}
-function echo$inspectBitArray2(bitArray) {
-  let endOfAlignedBytes = bitArray.bitOffset + 8 * Math.trunc(bitArray.bitSize / 8);
-  let alignedBytes = bitArraySlice(
-    bitArray,
-    bitArray.bitOffset,
-    endOfAlignedBytes
-  );
-  let remainingUnalignedBits = bitArray.bitSize % 8;
-  if (remainingUnalignedBits > 0) {
-    let remainingBits = bitArraySliceToInt(
-      bitArray,
-      endOfAlignedBytes,
-      bitArray.bitSize,
-      false,
-      false
-    );
-    let alignedBytesArray = Array.from(alignedBytes.rawBuffer);
-    let suffix = `${remainingBits}:size(${remainingUnalignedBits})`;
-    if (alignedBytesArray.length === 0) {
-      return `<<${suffix}>>`;
-    } else {
-      return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}, ${suffix}>>`;
-    }
-  } else {
-    return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}>>`;
-  }
-}
-function echo$isDict2(value3) {
   try {
     return value3 instanceof Dict;
   } catch {
@@ -11444,11 +11326,12 @@ function pencil(attributes) {
 
 // build/dev/javascript/o11a_client/o11a/ui/discussion.mjs
 var Model2 = class extends CustomType {
-  constructor(is_reference, show_reference_discussion, user_name, line_number, column_number, topic_id, current_note_draft, current_thread_id, active_thread, show_expanded_message_box, current_expanded_message_draft, expanded_messages, editing_note, declarations) {
+  constructor(is_reference, show_reference_discussion, user_name, view_id, line_number, column_number, topic_id, current_note_draft, current_thread_id, active_thread, show_expanded_message_box, current_expanded_message_draft, expanded_messages, editing_note, declarations) {
     super();
     this.is_reference = is_reference;
     this.show_reference_discussion = show_reference_discussion;
     this.user_name = user_name;
+    this.view_id = view_id;
     this.line_number = line_number;
     this.column_number = column_number;
     this.topic_id = topic_id;
@@ -11532,40 +11415,45 @@ var SubmitNote = class extends CustomType {
   }
 };
 var FocusDiscussionInput = class extends CustomType {
-  constructor(line_number, column_number) {
+  constructor(view_id, line_number, column_number) {
     super();
+    this.view_id = view_id;
     this.line_number = line_number;
     this.column_number = column_number;
   }
 };
 var FocusExpandedDiscussionInput = class extends CustomType {
-  constructor(line_number, column_number) {
+  constructor(view_id, line_number, column_number) {
     super();
+    this.view_id = view_id;
     this.line_number = line_number;
     this.column_number = column_number;
   }
 };
 var UnfocusDiscussionInput = class extends CustomType {
-  constructor(line_number, column_number) {
+  constructor(view_id, line_number, column_number) {
     super();
+    this.view_id = view_id;
     this.line_number = line_number;
     this.column_number = column_number;
   }
 };
 var MaximizeDiscussion = class extends CustomType {
-  constructor(line_number, column_number) {
+  constructor(view_id, line_number, column_number) {
     super();
+    this.view_id = view_id;
     this.line_number = line_number;
     this.column_number = column_number;
   }
 };
 var None3 = class extends CustomType {
 };
-function init3(line_number, column_number, topic_id, is_reference, declarations) {
+function init3(view_id, line_number, column_number, topic_id, is_reference, declarations) {
   return new Model2(
     is_reference,
     false,
     "guest",
+    view_id,
     line_number,
     column_number,
     topic_id,
@@ -11858,6 +11746,7 @@ function update2(model, msg) {
           _record.is_reference,
           _record.show_reference_discussion,
           _record.user_name,
+          _record.view_id,
           _record.line_number,
           _record.column_number,
           _record.topic_id,
@@ -11874,10 +11763,10 @@ function update2(model, msg) {
       new None3()
     ];
   } else if (msg instanceof UserSubmittedNote) {
-    echo3(
+    echo2(
       "Submitting note! " + model.current_note_draft + " " + model.topic_id,
       "src/o11a/ui/discussion.gleam",
-      109
+      116
     );
     let _block;
     let _pipe = model.current_note_draft;
@@ -11962,6 +11851,7 @@ function update2(model, msg) {
               _record.is_reference,
               _record.show_reference_discussion,
               _record.user_name,
+              _record.view_id,
               _record.line_number,
               _record.column_number,
               _record.topic_id,
@@ -11989,6 +11879,7 @@ function update2(model, msg) {
           _record.is_reference,
           _record.show_reference_discussion,
           _record.user_name,
+          _record.view_id,
           _record.line_number,
           _record.column_number,
           _record.topic_id,
@@ -12038,6 +11929,7 @@ function update2(model, msg) {
           _record.is_reference,
           _record.show_reference_discussion,
           _record.user_name,
+          _record.view_id,
           _record.line_number,
           _record.column_number,
           _record.topic_id,
@@ -12062,6 +11954,7 @@ function update2(model, msg) {
           _record.is_reference,
           _record.show_reference_discussion,
           _record.user_name,
+          _record.view_id,
           _record.line_number,
           _record.column_number,
           _record.topic_id,
@@ -12086,6 +11979,7 @@ function update2(model, msg) {
           _record.is_reference,
           _record.show_reference_discussion,
           _record.user_name,
+          _record.view_id,
           _record.line_number,
           _record.column_number,
           _record.topic_id,
@@ -12112,6 +12006,7 @@ function update2(model, msg) {
             _record.is_reference,
             _record.show_reference_discussion,
             _record.user_name,
+            _record.view_id,
             _record.line_number,
             _record.column_number,
             _record.topic_id,
@@ -12135,6 +12030,7 @@ function update2(model, msg) {
             _record.is_reference,
             _record.show_reference_discussion,
             _record.user_name,
+            _record.view_id,
             _record.line_number,
             _record.column_number,
             _record.topic_id,
@@ -12154,7 +12050,11 @@ function update2(model, msg) {
   } else if (msg instanceof UserFocusedInput) {
     return [
       model,
-      new FocusDiscussionInput(model.line_number, model.column_number)
+      new FocusDiscussionInput(
+        model.view_id,
+        model.line_number,
+        model.column_number
+      )
     ];
   } else if (msg instanceof UserFocusedExpandedInput) {
     return [
@@ -12164,6 +12064,7 @@ function update2(model, msg) {
           _record.is_reference,
           _record.show_reference_discussion,
           _record.user_name,
+          _record.view_id,
           _record.line_number,
           _record.column_number,
           _record.topic_id,
@@ -12177,17 +12078,29 @@ function update2(model, msg) {
           _record.declarations
         );
       })(),
-      new FocusExpandedDiscussionInput(model.line_number, model.column_number)
+      new FocusExpandedDiscussionInput(
+        model.view_id,
+        model.line_number,
+        model.column_number
+      )
     ];
   } else if (msg instanceof UserUnfocusedInput) {
     return [
       model,
-      new UnfocusDiscussionInput(model.line_number, model.column_number)
+      new UnfocusDiscussionInput(
+        model.view_id,
+        model.line_number,
+        model.column_number
+      )
     ];
   } else if (msg instanceof UserMaximizeThread) {
     return [
       model,
-      new MaximizeDiscussion(model.line_number, model.column_number)
+      new MaximizeDiscussion(
+        model.view_id,
+        model.line_number,
+        model.column_number
+      )
     ];
   } else if (msg instanceof UserEditedNote) {
     let note = msg[0];
@@ -12200,6 +12113,7 @@ function update2(model, msg) {
             _record.is_reference,
             _record.show_reference_discussion,
             _record.user_name,
+            _record.view_id,
             _record.line_number,
             _record.column_number,
             _record.topic_id,
@@ -12233,6 +12147,7 @@ function update2(model, msg) {
           _record.is_reference,
           _record.show_reference_discussion,
           _record.user_name,
+          _record.view_id,
           _record.line_number,
           _record.column_number,
           _record.topic_id,
@@ -12256,6 +12171,7 @@ function update2(model, msg) {
           _record.is_reference,
           !model.show_reference_discussion,
           _record.user_name,
+          _record.view_id,
           _record.line_number,
           _record.column_number,
           _record.topic_id,
@@ -12593,11 +12509,11 @@ function overlay_view(model, notes, declarations) {
     ])
   );
 }
-function echo3(value3, file, line2) {
+function echo2(value3, file, line2) {
   const grey = "\x1B[90m";
   const reset_color = "\x1B[39m";
   const file_line = `${file}:${line2}`;
-  const string_value = echo$inspect3(value3);
+  const string_value = echo$inspect2(value3);
   if (globalThis.process?.stderr?.write) {
     const string6 = `${grey}${file_line}${reset_color}
 ${string_value}
@@ -12615,7 +12531,7 @@ ${string_value}`;
   }
   return value3;
 }
-function echo$inspectString3(str) {
+function echo$inspectString2(str) {
   let new_str = '"';
   for (let i = 0; i < str.length; i++) {
     let char = str[i];
@@ -12634,7 +12550,7 @@ function echo$inspectString3(str) {
   new_str += '"';
   return new_str;
 }
-function echo$inspectDict3(map7) {
+function echo$inspectDict2(map7) {
   let body2 = "dict.from_list([";
   let first2 = true;
   let key_value_pairs = [];
@@ -12644,47 +12560,47 @@ function echo$inspectDict3(map7) {
   key_value_pairs.sort();
   key_value_pairs.forEach(([key2, value3]) => {
     if (!first2) body2 = body2 + ", ";
-    body2 = body2 + "#(" + echo$inspect3(key2) + ", " + echo$inspect3(value3) + ")";
+    body2 = body2 + "#(" + echo$inspect2(key2) + ", " + echo$inspect2(value3) + ")";
     first2 = false;
   });
   return body2 + "])";
 }
-function echo$inspectCustomType3(record) {
+function echo$inspectCustomType2(record) {
   const props = globalThis.Object.keys(record).map((label) => {
-    const value3 = echo$inspect3(record[label]);
+    const value3 = echo$inspect2(record[label]);
     return isNaN(parseInt(label)) ? `${label}: ${value3}` : value3;
   }).join(", ");
   return props ? `${record.constructor.name}(${props})` : record.constructor.name;
 }
-function echo$inspectObject3(v) {
+function echo$inspectObject2(v) {
   const name2 = Object.getPrototypeOf(v)?.constructor?.name || "Object";
   const props = [];
   for (const k of Object.keys(v)) {
-    props.push(`${echo$inspect3(k)}: ${echo$inspect3(v[k])}`);
+    props.push(`${echo$inspect2(k)}: ${echo$inspect2(v[k])}`);
   }
   const body2 = props.length ? " " + props.join(", ") + " " : "";
   const head = name2 === "Object" ? "" : name2 + " ";
   return `//js(${head}{${body2}})`;
 }
-function echo$inspect3(v) {
+function echo$inspect2(v) {
   const t = typeof v;
   if (v === true) return "True";
   if (v === false) return "False";
   if (v === null) return "//js(null)";
   if (v === void 0) return "Nil";
-  if (t === "string") return echo$inspectString3(v);
+  if (t === "string") return echo$inspectString2(v);
   if (t === "bigint" || t === "number") return v.toString();
   if (globalThis.Array.isArray(v))
-    return `#(${v.map(echo$inspect3).join(", ")})`;
+    return `#(${v.map(echo$inspect2).join(", ")})`;
   if (v instanceof List)
-    return `[${v.toArray().map(echo$inspect3).join(", ")}]`;
+    return `[${v.toArray().map(echo$inspect2).join(", ")}]`;
   if (v instanceof UtfCodepoint)
     return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
-  if (v instanceof BitArray) return echo$inspectBitArray3(v);
-  if (v instanceof CustomType) return echo$inspectCustomType3(v);
-  if (echo$isDict3(v)) return echo$inspectDict3(v);
+  if (v instanceof BitArray) return echo$inspectBitArray2(v);
+  if (v instanceof CustomType) return echo$inspectCustomType2(v);
+  if (echo$isDict2(v)) return echo$inspectDict2(v);
   if (v instanceof Set)
-    return `//js(Set(${[...v].map(echo$inspect3).join(", ")}))`;
+    return `//js(Set(${[...v].map(echo$inspect2).join(", ")}))`;
   if (v instanceof RegExp) return `//js(${v})`;
   if (v instanceof Date) return `//js(Date("${v.toISOString()}"))`;
   if (v instanceof Function) {
@@ -12693,9 +12609,9 @@ function echo$inspect3(v) {
       args.push(String.fromCharCode(i + 97));
     return `//fn(${args.join(", ")}) { ... }`;
   }
-  return echo$inspectObject3(v);
+  return echo$inspectObject2(v);
 }
-function echo$inspectBitArray3(bitArray) {
+function echo$inspectBitArray2(bitArray) {
   let endOfAlignedBytes = bitArray.bitOffset + 8 * Math.trunc(bitArray.bitSize / 8);
   let alignedBytes = bitArraySlice(
     bitArray,
@@ -12722,7 +12638,7 @@ function echo$inspectBitArray3(bitArray) {
     return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}>>`;
   }
 }
-function echo$isDict3(value3) {
+function echo$isDict2(value3) {
   try {
     return value3 instanceof Dict;
   } catch {
@@ -12740,9 +12656,10 @@ var DiscussionReference = class extends CustomType {
   }
 };
 var UserSelectedDiscussionEntry = class extends CustomType {
-  constructor(kind, line_number, column_number, node_id, topic_id, is_reference) {
+  constructor(kind, view_id, line_number, column_number, node_id, topic_id, is_reference) {
     super();
     this.kind = kind;
+    this.view_id = view_id;
     this.line_number = line_number;
     this.column_number = column_number;
     this.node_id = node_id;
@@ -12757,8 +12674,9 @@ var UserUnselectedDiscussionEntry = class extends CustomType {
   }
 };
 var UserClickedDiscussionEntry = class extends CustomType {
-  constructor(line_number, column_number) {
+  constructor(view_id, line_number, column_number) {
     super();
+    this.view_id = view_id;
     this.line_number = line_number;
     this.column_number = column_number;
   }
@@ -12770,30 +12688,34 @@ var UserCtrlClickedNode = class extends CustomType {
   }
 };
 var UserUpdatedDiscussion = class extends CustomType {
-  constructor(line_number, column_number, update4) {
+  constructor(view_id, line_number, column_number, update4) {
     super();
+    this.view_id = view_id;
     this.line_number = line_number;
     this.column_number = column_number;
     this.update = update4;
   }
 };
 var UserClickedInsideDiscussion = class extends CustomType {
-  constructor(line_number, column_number) {
+  constructor(view_id, line_number, column_number) {
     super();
+    this.view_id = view_id;
     this.line_number = line_number;
     this.column_number = column_number;
   }
 };
 var UserHoveredInsideDiscussion = class extends CustomType {
-  constructor(line_number, column_number) {
+  constructor(view_id, line_number, column_number) {
     super();
+    this.view_id = view_id;
     this.line_number = line_number;
     this.column_number = column_number;
   }
 };
 var UserUnhoveredInsideDiscussion = class extends CustomType {
-  constructor(line_number, column_number) {
+  constructor(view_id, line_number, column_number) {
     super();
+    this.view_id = view_id;
     this.line_number = line_number;
     this.column_number = column_number;
   }
@@ -12804,15 +12726,16 @@ var EntryFocus = class extends CustomType {
 };
 function map_discussion_msg(msg, selected_discussion) {
   return new UserUpdatedDiscussion(
+    selected_discussion.model.view_id,
     selected_discussion.line_number,
     selected_discussion.column_number,
     update2(selected_discussion.model, msg)
   );
 }
-function discussion_view(attrs, discussion, declarations, element_line_number, element_column_number, selected_discussion) {
+function discussion_view(attrs, discussion, declarations, line_number, column_number, selected_discussion) {
   if (selected_discussion instanceof Some) {
     let selected_discussion$1 = selected_discussion[0];
-    let $ = element_line_number === selected_discussion$1.line_number && element_column_number === selected_discussion$1.column_number;
+    let $ = line_number === selected_discussion$1.line_number && column_number === selected_discussion$1.column_number;
     if ($) {
       return div(
         attrs,
@@ -12839,7 +12762,7 @@ function discussion_view(attrs, discussion, declarations, element_line_number, e
     return fragment2(toList([]));
   }
 }
-function inline_comment_preview_view(parent_notes, topic_id, element_line_number, element_column_number, selected_discussion, discussion, declarations) {
+function inline_comment_preview_view(page_path, parent_notes, topic_id, line_number, column_number, selected_discussion, discussion, declarations) {
   let note_result = find2(
     parent_notes,
     (note) => {
@@ -12853,24 +12776,22 @@ function inline_comment_preview_view(parent_notes, topic_id, element_line_number
         class$("relative"),
         encode_grid_location_data(
           (() => {
-            let _pipe = element_line_number;
+            let _pipe = line_number;
             return to_string(_pipe);
           })(),
           (() => {
-            let _pipe = element_column_number;
+            let _pipe = column_number;
             return to_string(_pipe);
           })()
         ),
         on_mouse_enter(
-          new UserHoveredInsideDiscussion(
-            element_line_number,
-            element_column_number
-          )
+          new UserHoveredInsideDiscussion(page_path, line_number, column_number)
         ),
         on_mouse_leave(
           new UserUnhoveredInsideDiscussion(
-            element_line_number,
-            element_column_number
+            page_path,
+            line_number,
+            column_number
           )
         )
       ]),
@@ -12887,8 +12808,9 @@ function inline_comment_preview_view(parent_notes, topic_id, element_line_number
             on_focus(
               new UserSelectedDiscussionEntry(
                 new EntryFocus(),
-                element_line_number,
-                element_column_number,
+                page_path,
+                line_number,
+                column_number,
                 new None(),
                 topic_id,
                 false
@@ -12898,8 +12820,9 @@ function inline_comment_preview_view(parent_notes, topic_id, element_line_number
             on_mouse_enter(
               new UserSelectedDiscussionEntry(
                 new EntryHover(),
-                element_line_number,
-                element_column_number,
+                page_path,
+                line_number,
+                column_number,
                 new None(),
                 topic_id,
                 false
@@ -12911,8 +12834,9 @@ function inline_comment_preview_view(parent_notes, topic_id, element_line_number
             (() => {
               let _pipe = on_non_ctrl_click(
                 new UserClickedDiscussionEntry(
-                  element_line_number,
-                  element_column_number
+                  page_path,
+                  line_number,
+                  column_number
                 )
               );
               return stop_propagation(_pipe);
@@ -12940,8 +12864,9 @@ function inline_comment_preview_view(parent_notes, topic_id, element_line_number
             (() => {
               let _pipe = on_click(
                 new UserClickedInsideDiscussion(
-                  element_line_number,
-                  element_column_number
+                  page_path,
+                  line_number,
+                  column_number
                 )
               );
               return stop_propagation(_pipe);
@@ -12949,8 +12874,8 @@ function inline_comment_preview_view(parent_notes, topic_id, element_line_number
           ]),
           discussion,
           declarations,
-          element_line_number,
-          element_column_number,
+          line_number,
+          column_number,
           selected_discussion
         )
       ])
@@ -12961,24 +12886,22 @@ function inline_comment_preview_view(parent_notes, topic_id, element_line_number
         class$("relative"),
         encode_grid_location_data(
           (() => {
-            let _pipe = element_line_number;
+            let _pipe = line_number;
             return to_string(_pipe);
           })(),
           (() => {
-            let _pipe = element_column_number;
+            let _pipe = column_number;
             return to_string(_pipe);
           })()
         ),
         on_mouse_enter(
-          new UserHoveredInsideDiscussion(
-            element_line_number,
-            element_column_number
-          )
+          new UserHoveredInsideDiscussion(page_path, line_number, column_number)
         ),
         on_mouse_leave(
           new UserUnhoveredInsideDiscussion(
-            element_line_number,
-            element_column_number
+            page_path,
+            line_number,
+            column_number
           )
         )
       ]),
@@ -12993,8 +12916,9 @@ function inline_comment_preview_view(parent_notes, topic_id, element_line_number
             on_focus(
               new UserSelectedDiscussionEntry(
                 new EntryFocus(),
-                element_line_number,
-                element_column_number,
+                page_path,
+                line_number,
+                column_number,
                 new None(),
                 topic_id,
                 false
@@ -13004,8 +12928,9 @@ function inline_comment_preview_view(parent_notes, topic_id, element_line_number
             on_mouse_enter(
               new UserSelectedDiscussionEntry(
                 new EntryHover(),
-                element_line_number,
-                element_column_number,
+                page_path,
+                line_number,
+                column_number,
                 new None(),
                 topic_id,
                 false
@@ -13017,8 +12942,9 @@ function inline_comment_preview_view(parent_notes, topic_id, element_line_number
             (() => {
               let _pipe = on_non_ctrl_click(
                 new UserClickedDiscussionEntry(
-                  element_line_number,
-                  element_column_number
+                  page_path,
+                  line_number,
+                  column_number
                 )
               );
               return stop_propagation(_pipe);
@@ -13031,8 +12957,9 @@ function inline_comment_preview_view(parent_notes, topic_id, element_line_number
             (() => {
               let _pipe = on_click(
                 new UserClickedInsideDiscussion(
-                  element_line_number,
-                  element_column_number
+                  page_path,
+                  line_number,
+                  column_number
                 )
               );
               return stop_propagation(_pipe);
@@ -13040,15 +12967,15 @@ function inline_comment_preview_view(parent_notes, topic_id, element_line_number
           ]),
           discussion,
           declarations,
-          element_line_number,
-          element_column_number,
+          line_number,
+          column_number,
           selected_discussion
         )
       ])
     );
   }
 }
-function declaration_node_view(topic_id, tokens, discussion, declarations, element_line_number, element_column_number, selected_discussion) {
+function declaration_node_view(page_path, topic_id, tokens, discussion, declarations, line_number, column_number, selected_discussion) {
   let _block;
   let _pipe = map_get(declarations, topic_id);
   _block = unwrap2(_pipe, unknown_declaration);
@@ -13058,25 +12985,19 @@ function declaration_node_view(topic_id, tokens, discussion, declarations, eleme
       class$("relative"),
       encode_grid_location_data(
         (() => {
-          let _pipe$1 = element_line_number;
+          let _pipe$1 = line_number;
           return to_string(_pipe$1);
         })(),
         (() => {
-          let _pipe$1 = element_column_number;
+          let _pipe$1 = column_number;
           return to_string(_pipe$1);
         })()
       ),
       on_mouse_enter(
-        new UserHoveredInsideDiscussion(
-          element_line_number,
-          element_column_number
-        )
+        new UserHoveredInsideDiscussion(page_path, line_number, column_number)
       ),
       on_mouse_leave(
-        new UserUnhoveredInsideDiscussion(
-          element_line_number,
-          element_column_number
-        )
+        new UserUnhoveredInsideDiscussion(page_path, line_number, column_number)
       )
     ]),
     toList([
@@ -13095,8 +13016,9 @@ function declaration_node_view(topic_id, tokens, discussion, declarations, eleme
           on_focus(
             new UserSelectedDiscussionEntry(
               new EntryFocus(),
-              element_line_number,
-              element_column_number,
+              page_path,
+              line_number,
+              column_number,
               new Some(node_declaration.id),
               topic_id,
               false
@@ -13106,8 +13028,9 @@ function declaration_node_view(topic_id, tokens, discussion, declarations, eleme
           on_mouse_enter(
             new UserSelectedDiscussionEntry(
               new EntryHover(),
-              element_line_number,
-              element_column_number,
+              page_path,
+              line_number,
+              column_number,
               new Some(node_declaration.id),
               topic_id,
               false
@@ -13119,8 +13042,9 @@ function declaration_node_view(topic_id, tokens, discussion, declarations, eleme
           (() => {
             let _pipe$1 = on_click(
               new UserClickedDiscussionEntry(
-                element_line_number,
-                element_column_number
+                page_path,
+                line_number,
+                column_number
               )
             );
             return stop_propagation(_pipe$1);
@@ -13133,8 +13057,9 @@ function declaration_node_view(topic_id, tokens, discussion, declarations, eleme
           (() => {
             let _pipe$1 = on_click(
               new UserClickedInsideDiscussion(
-                element_line_number,
-                element_column_number
+                page_path,
+                line_number,
+                column_number
               )
             );
             return stop_propagation(_pipe$1);
@@ -13142,14 +13067,14 @@ function declaration_node_view(topic_id, tokens, discussion, declarations, eleme
         ]),
         discussion,
         declarations,
-        element_line_number,
-        element_column_number,
+        line_number,
+        column_number,
         selected_discussion
       )
     ])
   );
 }
-function reference_node_view(topic_id, tokens, discussion, declarations, element_line_number, element_column_number, selected_discussion) {
+function reference_node_view(page_path, topic_id, tokens, discussion, declarations, line_number, column_number, selected_discussion) {
   let _block;
   let _pipe = map_get(declarations, topic_id);
   _block = unwrap2(_pipe, unknown_declaration);
@@ -13159,25 +13084,19 @@ function reference_node_view(topic_id, tokens, discussion, declarations, element
       class$("relative"),
       encode_grid_location_data(
         (() => {
-          let _pipe$1 = element_line_number;
+          let _pipe$1 = line_number;
           return to_string(_pipe$1);
         })(),
         (() => {
-          let _pipe$1 = element_column_number;
+          let _pipe$1 = column_number;
           return to_string(_pipe$1);
         })()
       ),
       on_mouse_enter(
-        new UserHoveredInsideDiscussion(
-          element_line_number,
-          element_column_number
-        )
+        new UserHoveredInsideDiscussion(page_path, line_number, column_number)
       ),
       on_mouse_leave(
-        new UserUnhoveredInsideDiscussion(
-          element_line_number,
-          element_column_number
-        )
+        new UserUnhoveredInsideDiscussion(page_path, line_number, column_number)
       )
     ]),
     toList([
@@ -13199,8 +13118,9 @@ function reference_node_view(topic_id, tokens, discussion, declarations, element
           on_focus(
             new UserSelectedDiscussionEntry(
               new EntryFocus(),
-              element_line_number,
-              element_column_number,
+              page_path,
+              line_number,
+              column_number,
               new Some(referenced_node_declaration.id),
               topic_id,
               true
@@ -13210,8 +13130,9 @@ function reference_node_view(topic_id, tokens, discussion, declarations, element
           on_mouse_enter(
             new UserSelectedDiscussionEntry(
               new EntryHover(),
-              element_line_number,
-              element_column_number,
+              page_path,
+              line_number,
+              column_number,
               new Some(referenced_node_declaration.id),
               topic_id,
               true
@@ -13227,8 +13148,9 @@ function reference_node_view(topic_id, tokens, discussion, declarations, element
               ),
               new Some(
                 new UserClickedDiscussionEntry(
-                  element_line_number,
-                  element_column_number
+                  page_path,
+                  line_number,
+                  column_number
                 )
               )
             );
@@ -13242,8 +13164,9 @@ function reference_node_view(topic_id, tokens, discussion, declarations, element
           (() => {
             let _pipe$1 = on_click(
               new UserClickedInsideDiscussion(
-                element_line_number,
-                element_column_number
+                page_path,
+                line_number,
+                column_number
               )
             );
             return stop_propagation(_pipe$1);
@@ -13251,14 +13174,14 @@ function reference_node_view(topic_id, tokens, discussion, declarations, element
         ]),
         discussion,
         declarations,
-        element_line_number,
-        element_column_number,
+        line_number,
+        column_number,
         selected_discussion
       )
     ])
   );
 }
-function preprocessed_nodes_view(loc, discussion, declarations, selected_discussion) {
+function preprocessed_nodes_view(page_path, loc, discussion, declarations, selected_discussion) {
   let _pipe = map_fold(
     loc.elements,
     0,
@@ -13270,6 +13193,7 @@ function preprocessed_nodes_view(loc, discussion, declarations, selected_discuss
         return [
           new_column_index,
           declaration_node_view(
+            page_path,
             topic_id,
             tokens,
             discussion,
@@ -13286,6 +13210,7 @@ function preprocessed_nodes_view(loc, discussion, declarations, selected_discuss
         return [
           new_column_index,
           reference_node_view(
+            page_path,
             topic_id,
             tokens,
             discussion,
@@ -13326,7 +13251,7 @@ function preprocessed_nodes_view(loc, discussion, declarations, selected_discuss
   );
   return second(_pipe);
 }
-function line_container_view(discussion, declarations, loc, line_topic_id, selected_discussion) {
+function line_container_view(page_path, discussion, declarations, loc, line_topic_id, selected_discussion) {
   let $ = get_notes(discussion, loc.leading_spaces, line_topic_id);
   let parent_notes = $[0];
   let info_notes = $[1];
@@ -13390,6 +13315,7 @@ function line_container_view(discussion, declarations, loc, line_topic_id, selec
           ),
           fragment2(
             preprocessed_nodes_view(
+              page_path,
               loc,
               discussion,
               declarations,
@@ -13397,6 +13323,7 @@ function line_container_view(discussion, declarations, loc, line_topic_id, selec
             )
           ),
           inline_comment_preview_view(
+            page_path,
             parent_notes,
             line_topic_id,
             loc.line_number,
@@ -13410,7 +13337,7 @@ function line_container_view(discussion, declarations, loc, line_topic_id, selec
     ])
   );
 }
-function loc_view(loc, discussion, declarations, selected_discussion) {
+function loc_view(loc, page_path, discussion, declarations, selected_discussion) {
   let $ = loc.significance;
   if ($ instanceof EmptyLine) {
     return p(
@@ -13421,6 +13348,7 @@ function loc_view(loc, discussion, declarations, selected_discussion) {
           toList([text3(loc.line_number_text)])
         ),
         preprocessed_nodes_view(
+          page_path,
           loc,
           discussion,
           declarations,
@@ -13431,6 +13359,7 @@ function loc_view(loc, discussion, declarations, selected_discussion) {
   } else if ($ instanceof SingleDeclarationLine) {
     let topic_id = $.topic_id;
     return line_container_view(
+      page_path,
       discussion,
       declarations,
       loc,
@@ -13440,6 +13369,7 @@ function loc_view(loc, discussion, declarations, selected_discussion) {
   } else {
     let topic_id = $.topic_id;
     return line_container_view(
+      page_path,
       discussion,
       declarations,
       loc,
@@ -13448,7 +13378,7 @@ function loc_view(loc, discussion, declarations, selected_discussion) {
     );
   }
 }
-function view3(preprocessed_source, discussion, declarations, selected_discussion) {
+function view3(page_path, preprocessed_source, discussion, declarations, selected_discussion) {
   return div(
     toList([
       id("audit-page"),
@@ -13465,7 +13395,13 @@ function view3(preprocessed_source, discussion, declarations, selected_discussio
     map2(
       preprocessed_source,
       (_capture) => {
-        return loc_view(_capture, discussion, declarations, selected_discussion);
+        return loc_view(
+          _capture,
+          page_path,
+          discussion,
+          declarations,
+          selected_discussion
+        );
       }
     )
   );
@@ -13861,9 +13797,9 @@ var AuditPageRoute = class extends CustomType {
   }
 };
 var DiscussionKey = class extends CustomType {
-  constructor(page_path, line_number, column_number) {
+  constructor(view_id, line_number, column_number) {
     super();
-    this.page_path = page_path;
+    this.view_id = view_id;
     this.line_number = line_number;
     this.column_number = column_number;
   }
@@ -13928,9 +13864,10 @@ var UserEnteredKey = class extends CustomType {
   }
 };
 var UserSelectedDiscussionEntry2 = class extends CustomType {
-  constructor(kind, line_number, column_number, node_id, topic_id, is_reference) {
+  constructor(kind, view_id, line_number, column_number, node_id, topic_id, is_reference) {
     super();
     this.kind = kind;
+    this.view_id = view_id;
     this.line_number = line_number;
     this.column_number = column_number;
     this.node_id = node_id;
@@ -13957,22 +13894,25 @@ var UserStartedStickyCloseTimer = class extends CustomType {
   }
 };
 var UserHoveredInsideDiscussion2 = class extends CustomType {
-  constructor(line_number, column_number) {
+  constructor(view_id, line_number, column_number) {
     super();
+    this.view_id = view_id;
     this.line_number = line_number;
     this.column_number = column_number;
   }
 };
 var UserUnhoveredInsideDiscussion2 = class extends CustomType {
-  constructor(line_number, column_number) {
+  constructor(view_id, line_number, column_number) {
     super();
+    this.view_id = view_id;
     this.line_number = line_number;
     this.column_number = column_number;
   }
 };
 var ClientSetStickyDiscussion = class extends CustomType {
-  constructor(line_number, column_number) {
+  constructor(view_id, line_number, column_number) {
     super();
+    this.view_id = view_id;
     this.line_number = line_number;
     this.column_number = column_number;
   }
@@ -13980,8 +13920,9 @@ var ClientSetStickyDiscussion = class extends CustomType {
 var ClientUnsetStickyDiscussion = class extends CustomType {
 };
 var UserClickedDiscussionEntry2 = class extends CustomType {
-  constructor(line_number, column_number) {
+  constructor(view_id, line_number, column_number) {
     super();
+    this.view_id = view_id;
     this.line_number = line_number;
     this.column_number = column_number;
   }
@@ -13993,8 +13934,9 @@ var UserCtrlClickedNode2 = class extends CustomType {
   }
 };
 var UserClickedInsideDiscussion2 = class extends CustomType {
-  constructor(line_number, column_number) {
+  constructor(view_id, line_number, column_number) {
     super();
+    this.view_id = view_id;
     this.line_number = line_number;
     this.column_number = column_number;
   }
@@ -14002,8 +13944,9 @@ var UserClickedInsideDiscussion2 = class extends CustomType {
 var UserClickedOutsideDiscussion = class extends CustomType {
 };
 var UserUpdatedDiscussion2 = class extends CustomType {
-  constructor(line_number, column_number, update4) {
+  constructor(view_id, line_number, column_number, update4) {
     super();
+    this.view_id = view_id;
     this.line_number = line_number;
     this.column_number = column_number;
     this.update = update4;
@@ -14048,8 +13991,8 @@ function parse_route(uri) {
   }
 }
 function on_url_change(uri) {
-  echo4("on_url_change", "src/o11a_client.gleam", 145);
-  echo4(uri, "src/o11a_client.gleam", 146);
+  echo3("on_url_change", "src/o11a_client.gleam", 145);
+  echo3(uri, "src/o11a_client.gleam", 146);
   let _pipe = parse_route(uri);
   return new OnRouteChange(_pipe);
 }
@@ -14113,19 +14056,6 @@ function file_tree_from_route(route2, audit_metadata) {
     );
   }
 }
-function get_page_route_from_model(model) {
-  let $ = model.route;
-  if ($ instanceof AuditDashboardRoute) {
-    return new Error(void 0);
-  } else if ($ instanceof AuditInterfaceRoute) {
-    return new Error(void 0);
-  } else if ($ instanceof AuditPageRoute) {
-    let page_path = $.page_path;
-    return new Ok(page_path);
-  } else {
-    return new Error(void 0);
-  }
-}
 function get_audit_name_from_model(model) {
   let $ = model.route;
   if ($ instanceof AuditDashboardRoute) {
@@ -14139,6 +14069,17 @@ function get_audit_name_from_model(model) {
     return new Ok(audit_name);
   } else {
     return new Error(void 0);
+  }
+}
+function get_page_view_id_from_route(route2) {
+  if (route2 instanceof AuditDashboardRoute) {
+    return "dashboard";
+  } else if (route2 instanceof AuditInterfaceRoute) {
+    return "interface";
+  } else if (route2 instanceof AuditPageRoute) {
+    return "audit-page";
+  } else {
+    return "o11a";
   }
 }
 function fetch_metadata(model, audit_name) {
@@ -14264,7 +14205,7 @@ function init4(_) {
     new_map(),
     new_map(),
     new_map(),
-    init2(),
+    init2(get_page_view_id_from_route(route2)),
     new None(),
     new None(),
     new None(),
@@ -14362,6 +14303,20 @@ function get_selected_discussion_key(model) {
 function update3(model, msg) {
   if (msg instanceof OnRouteChange) {
     let route2 = msg.route;
+    let _block;
+    let _record$1 = model.keyboard_model;
+    _block = new Model(
+      (() => {
+        let _pipe = get_page_view_id_from_route(model.route);
+        return echo3(_pipe, "src/o11a_client.gleam", 332);
+      })(),
+      _record$1.cursor_line_number,
+      _record$1.cursor_column_number,
+      _record$1.active_line_number,
+      _record$1.active_column_number,
+      _record$1.current_line_column_count,
+      _record$1.line_count
+    );
     return [
       (() => {
         let _record = model;
@@ -14376,7 +14331,10 @@ function update3(model, msg) {
           _record.merged_topics,
           _record.discussions,
           _record.discussion_models,
-          _record.keyboard_model,
+          (() => {
+            let _pipe = _block;
+            return echo3(_pipe, "src/o11a_client.gleam", 334);
+          })(),
           _record.selected_discussion,
           _record.selected_node_id,
           _record.focused_discussion,
@@ -14472,6 +14430,7 @@ function update3(model, msg) {
           (() => {
             let _record$1 = model.keyboard_model;
             return new Model(
+              _record$1.current_view_id,
               _record$1.cursor_line_number,
               _record$1.cursor_column_number,
               _record$1.active_line_number,
@@ -14526,7 +14485,7 @@ function update3(model, msg) {
             throw makeError(
               "panic",
               "o11a_client",
-              381,
+              408,
               "",
               "`panic` expression evaluated.",
               {}
@@ -14768,6 +14727,7 @@ function update3(model, msg) {
       (() => {
         let _record = model.keyboard_model;
         return new Model(
+          _record.current_view_id,
           _record.cursor_line_number,
           _record.cursor_column_number,
           active_line_number,
@@ -14807,145 +14767,139 @@ function update3(model, msg) {
     ];
   } else if (msg instanceof UserSelectedDiscussionEntry2) {
     let kind = msg.kind;
+    let view_id = msg.view_id;
     let line_number = msg.line_number;
     let column_number = msg.column_number;
     let node_id = msg.node_id;
     let topic_id = msg.topic_id;
     let is_reference = msg.is_reference;
     return ok(
-      get_page_route_from_model(model),
+      get_audit_name_from_model(model),
       (_) => {
         return [model, none()];
       },
-      (page_path) => {
+      (audit_name) => {
         return ok(
-          get_audit_name_from_model(model),
+          (() => {
+            let $ = map_get(model.audit_declarations, audit_name);
+            if ($.isOk() && $[0].isOk()) {
+              let declarations = $[0][0];
+              return new Ok(declarations);
+            } else {
+              return new Error(void 0);
+            }
+          })(),
           (_) => {
             return [model, none()];
           },
-          (audit_name) => {
-            return ok(
-              (() => {
-                let $ = map_get(model.audit_declarations, audit_name);
-                if ($.isOk() && $[0].isOk()) {
-                  let declarations = $[0][0];
-                  return new Ok(declarations);
-                } else {
-                  return new Error(void 0);
-                }
-              })(),
-              (_) => {
-                return [model, none()];
-              },
-              (declarations) => {
-                let selected_discussion = new DiscussionKey(
-                  page_path,
+          (declarations) => {
+            let selected_discussion_key = new DiscussionKey(
+              view_id,
+              line_number,
+              column_number
+            );
+            let _block;
+            let $ = map_get(model.discussion_models, selected_discussion_key);
+            if ($.isOk()) {
+              _block = model.discussion_models;
+            } else {
+              _block = insert(
+                model.discussion_models,
+                selected_discussion_key,
+                init3(
+                  view_id,
                   line_number,
-                  column_number
-                );
-                let _block;
-                let $ = map_get(model.discussion_models, selected_discussion);
-                if ($.isOk()) {
-                  _block = model.discussion_models;
+                  column_number,
+                  topic_id,
+                  is_reference,
+                  declarations
+                )
+              );
+            }
+            let discussion_models = _block;
+            return [
+              (() => {
+                if (kind instanceof EntryHover) {
+                  let _record = model;
+                  return new Model3(
+                    _record.route,
+                    _record.file_tree,
+                    _record.audit_metadata,
+                    _record.source_files,
+                    _record.audit_declarations,
+                    _record.audit_declaration_lists,
+                    _record.audit_interface,
+                    _record.merged_topics,
+                    _record.discussions,
+                    discussion_models,
+                    _record.keyboard_model,
+                    new Some(selected_discussion_key),
+                    node_id,
+                    _record.focused_discussion,
+                    _record.clicked_discussion,
+                    _record.stickied_discussion,
+                    _record.selected_discussion_set_sticky_timer,
+                    _record.stickied_discussion_unset_sticky_timer
+                  );
                 } else {
-                  _block = insert(
-                    model.discussion_models,
-                    selected_discussion,
-                    init3(
-                      line_number,
-                      column_number,
-                      topic_id,
-                      is_reference,
-                      declarations
-                    )
+                  let _record = model;
+                  return new Model3(
+                    _record.route,
+                    _record.file_tree,
+                    _record.audit_metadata,
+                    _record.source_files,
+                    _record.audit_declarations,
+                    _record.audit_declaration_lists,
+                    _record.audit_interface,
+                    _record.merged_topics,
+                    _record.discussions,
+                    discussion_models,
+                    (() => {
+                      let _record$1 = model.keyboard_model;
+                      return new Model(
+                        _record$1.current_view_id,
+                        line_number,
+                        column_number,
+                        _record$1.active_line_number,
+                        _record$1.active_column_number,
+                        _record$1.current_line_column_count,
+                        _record$1.line_count
+                      );
+                    })(),
+                    _record.selected_discussion,
+                    node_id,
+                    new Some(selected_discussion_key),
+                    _record.clicked_discussion,
+                    new None(),
+                    _record.selected_discussion_set_sticky_timer,
+                    _record.stickied_discussion_unset_sticky_timer
                   );
                 }
-                let discussion_models = _block;
-                return [
-                  (() => {
-                    if (kind instanceof EntryHover) {
-                      let _record = model;
-                      return new Model3(
-                        _record.route,
-                        _record.file_tree,
-                        _record.audit_metadata,
-                        _record.source_files,
-                        _record.audit_declarations,
-                        _record.audit_declaration_lists,
-                        _record.audit_interface,
-                        _record.merged_topics,
-                        _record.discussions,
-                        discussion_models,
-                        _record.keyboard_model,
-                        new Some(selected_discussion),
-                        node_id,
-                        _record.focused_discussion,
-                        _record.clicked_discussion,
-                        _record.stickied_discussion,
-                        _record.selected_discussion_set_sticky_timer,
-                        _record.stickied_discussion_unset_sticky_timer
-                      );
-                    } else {
-                      let _record = model;
-                      return new Model3(
-                        _record.route,
-                        _record.file_tree,
-                        _record.audit_metadata,
-                        _record.source_files,
-                        _record.audit_declarations,
-                        _record.audit_declaration_lists,
-                        _record.audit_interface,
-                        _record.merged_topics,
-                        _record.discussions,
-                        discussion_models,
-                        (() => {
-                          let _record$1 = model.keyboard_model;
-                          return new Model(
-                            line_number,
-                            column_number,
-                            _record$1.active_line_number,
-                            _record$1.active_column_number,
-                            _record$1.current_line_column_count,
-                            _record$1.line_count
-                          );
-                        })(),
-                        _record.selected_discussion,
-                        node_id,
-                        new Some(selected_discussion),
-                        _record.clicked_discussion,
-                        new None(),
-                        _record.selected_discussion_set_sticky_timer,
-                        _record.stickied_discussion_unset_sticky_timer
-                      );
-                    }
-                  })(),
-                  (() => {
-                    if (kind instanceof EntryHover) {
-                      return from(
-                        (dispatch) => {
-                          let timer_id = setTimeout2(
-                            300,
-                            () => {
-                              return dispatch(
-                                new ClientSetStickyDiscussion(
-                                  line_number,
-                                  column_number
-                                )
-                              );
-                            }
-                          );
+              })(),
+              (() => {
+                if (kind instanceof EntryHover) {
+                  return from(
+                    (dispatch) => {
+                      let timer_id = setTimeout2(
+                        300,
+                        () => {
                           return dispatch(
-                            new UserStartedStickyOpenTimer(timer_id)
+                            new ClientSetStickyDiscussion(
+                              view_id,
+                              line_number,
+                              column_number
+                            )
                           );
                         }
                       );
-                    } else {
-                      return none();
+                      return dispatch(new UserStartedStickyOpenTimer(timer_id));
                     }
-                  })()
-                ];
-              }
-            );
+                  );
+                } else {
+                  return none();
+                }
+              })()
+            ];
           }
         );
       }
@@ -15041,51 +14995,45 @@ function update3(model, msg) {
       none()
     ];
   } else if (msg instanceof ClientSetStickyDiscussion) {
+    let view_id = msg.view_id;
     let line_number = msg.line_number;
     let column_number = msg.column_number;
-    return ok(
-      get_page_route_from_model(model),
-      (_) => {
-        return [model, none()];
-      },
-      (page_path) => {
-        return [
-          (() => {
-            let _record = model;
-            return new Model3(
-              _record.route,
-              _record.file_tree,
-              _record.audit_metadata,
-              _record.source_files,
-              _record.audit_declarations,
-              _record.audit_declaration_lists,
-              _record.audit_interface,
-              _record.merged_topics,
-              _record.discussions,
-              _record.discussion_models,
-              _record.keyboard_model,
-              _record.selected_discussion,
-              _record.selected_node_id,
-              _record.focused_discussion,
-              _record.clicked_discussion,
-              new Some(
-                new DiscussionKey(page_path, line_number, column_number)
-              ),
-              new None(),
-              _record.stickied_discussion_unset_sticky_timer
-            );
-          })(),
-          none()
-        ];
-      }
-    );
+    return [
+      (() => {
+        let _record = model;
+        return new Model3(
+          _record.route,
+          _record.file_tree,
+          _record.audit_metadata,
+          _record.source_files,
+          _record.audit_declarations,
+          _record.audit_declaration_lists,
+          _record.audit_interface,
+          _record.merged_topics,
+          _record.discussions,
+          _record.discussion_models,
+          _record.keyboard_model,
+          _record.selected_discussion,
+          _record.selected_node_id,
+          _record.focused_discussion,
+          _record.clicked_discussion,
+          new Some(
+            new DiscussionKey(view_id, line_number, column_number)
+          ),
+          new None(),
+          _record.stickied_discussion_unset_sticky_timer
+        );
+      })(),
+      none()
+    ];
   } else if (msg instanceof UserUnhoveredInsideDiscussion2) {
+    let view_id = msg.view_id;
     let line_number = msg.line_number;
     let column_number = msg.column_number;
-    echo4(
+    echo3(
       "User unhovered discussion entry " + to_string(line_number),
       "src/o11a_client.gleam",
-      695
+      716
     );
     return [
       model,
@@ -15093,14 +15041,14 @@ function update3(model, msg) {
         let $ = model.stickied_discussion;
         if ($ instanceof Some) {
           let discussion_key = $[0];
-          let $1 = line_number === discussion_key.line_number && column_number === discussion_key.column_number;
+          let $1 = line_number === discussion_key.line_number && column_number === discussion_key.column_number && view_id === discussion_key.view_id;
           if ($1) {
             return from(
               (dispatch) => {
                 let timer_id = setTimeout2(
                   200,
                   () => {
-                    echo4("Unsticking discussion", "src/o11a_client.gleam", 706);
+                    echo3("Unsticking discussion", "src/o11a_client.gleam", 728);
                     return dispatch(new ClientUnsetStickyDiscussion());
                   }
                 );
@@ -15116,12 +15064,13 @@ function update3(model, msg) {
       })()
     ];
   } else if (msg instanceof UserHoveredInsideDiscussion2) {
+    let view_id = msg.view_id;
     let line_number = msg.line_number;
     let column_number = msg.column_number;
-    echo4(
+    echo3(
       "User hovered discussion entry " + to_string(line_number),
       "src/o11a_client.gleam",
-      718
+      740
     );
     return [
       model,
@@ -15129,7 +15078,7 @@ function update3(model, msg) {
         let $ = model.stickied_discussion;
         if ($ instanceof Some) {
           let discussion_key = $[0];
-          let $1 = line_number === discussion_key.line_number && column_number === discussion_key.column_number;
+          let $1 = line_number === discussion_key.line_number && column_number === discussion_key.column_number && view_id === discussion_key.view_id;
           if ($1) {
             return from(
               (_) => {
@@ -15152,7 +15101,7 @@ function update3(model, msg) {
     ];
   } else if (msg instanceof UserStartedStickyCloseTimer) {
     let timer_id = msg.timer_id;
-    echo4("User started sticky close timer", "src/o11a_client.gleam", 744);
+    echo3("User started sticky close timer", "src/o11a_client.gleam", 767);
     return [
       (() => {
         let _record = model;
@@ -15207,59 +15156,53 @@ function update3(model, msg) {
       none()
     ];
   } else if (msg instanceof UserClickedDiscussionEntry2) {
+    let view_id = msg.view_id;
     let line_number = msg.line_number;
     let column_number = msg.column_number;
-    return ok(
-      get_page_route_from_model(model),
-      (_) => {
-        return [model, none()];
-      },
-      (page_path) => {
-        return [
-          (() => {
-            let _record = model;
-            return new Model3(
-              _record.route,
-              _record.file_tree,
-              _record.audit_metadata,
-              _record.source_files,
-              _record.audit_declarations,
-              _record.audit_declaration_lists,
-              _record.audit_interface,
-              _record.merged_topics,
-              _record.discussions,
-              _record.discussion_models,
-              _record.keyboard_model,
-              _record.selected_discussion,
-              _record.selected_node_id,
-              _record.focused_discussion,
-              new Some(
-                new DiscussionKey(page_path, line_number, column_number)
-              ),
-              new None(),
-              _record.selected_discussion_set_sticky_timer,
-              _record.stickied_discussion_unset_sticky_timer
-            );
-          })(),
-          from(
-            (_) => {
-              let _block;
-              let _pipe = discussion_input(
-                line_number,
-                column_number
-              );
-              _block = map3(_pipe, focus);
-              let res = _block;
-              if (res.isOk() && !res[0]) {
-                return void 0;
-              } else {
-                return console_log("Failed to focus discussion input");
-              }
-            }
-          )
-        ];
-      }
-    );
+    return [
+      (() => {
+        let _record = model;
+        return new Model3(
+          _record.route,
+          _record.file_tree,
+          _record.audit_metadata,
+          _record.source_files,
+          _record.audit_declarations,
+          _record.audit_declaration_lists,
+          _record.audit_interface,
+          _record.merged_topics,
+          _record.discussions,
+          _record.discussion_models,
+          _record.keyboard_model,
+          _record.selected_discussion,
+          _record.selected_node_id,
+          _record.focused_discussion,
+          new Some(
+            new DiscussionKey(view_id, line_number, column_number)
+          ),
+          new None(),
+          _record.selected_discussion_set_sticky_timer,
+          _record.stickied_discussion_unset_sticky_timer
+        );
+      })(),
+      from(
+        (_) => {
+          let _block;
+          let _pipe = discussion_input(
+            view_id,
+            line_number,
+            column_number
+          );
+          _block = map3(_pipe, focus);
+          let res = _block;
+          if (res.isOk() && !res[0]) {
+            return void 0;
+          } else {
+            return console_log("Failed to focus discussion input");
+          }
+        }
+      )
+    ];
   } else if (msg instanceof UserCtrlClickedNode2) {
     let uri = msg.uri;
     let _block;
@@ -15277,119 +15220,106 @@ function update3(model, msg) {
     let path$1 = "/" + path2;
     return [model, push(path$1, new None(), fragment3)];
   } else if (msg instanceof UserClickedInsideDiscussion2) {
+    let view_id = msg.view_id;
     let line_number = msg.line_number;
     let column_number = msg.column_number;
-    return ok(
-      get_page_route_from_model(model),
-      (_) => {
-        return [model, none()];
-      },
-      (page_path) => {
-        echo4("User clicked inside discussion", "src/o11a_client.gleam", 810);
-        let _block;
-        let $ = !isEqual(
-          model.selected_discussion,
-          new Some(
-            new DiscussionKey(page_path, line_number, column_number)
-          )
-        );
-        if ($) {
-          let _record = model;
-          _block = new Model3(
-            _record.route,
-            _record.file_tree,
-            _record.audit_metadata,
-            _record.source_files,
-            _record.audit_declarations,
-            _record.audit_declaration_lists,
-            _record.audit_interface,
-            _record.merged_topics,
-            _record.discussions,
-            _record.discussion_models,
-            _record.keyboard_model,
-            new None(),
-            _record.selected_node_id,
-            _record.focused_discussion,
-            _record.clicked_discussion,
-            _record.stickied_discussion,
-            _record.selected_discussion_set_sticky_timer,
-            _record.stickied_discussion_unset_sticky_timer
-          );
-        } else {
-          _block = model;
-        }
-        let model$1 = _block;
-        let _block$1;
-        let $1 = !isEqual(
-          model$1.focused_discussion,
-          new Some(
-            new DiscussionKey(page_path, line_number, column_number)
-          )
-        );
-        if ($1) {
-          let _record = model$1;
-          _block$1 = new Model3(
-            _record.route,
-            _record.file_tree,
-            _record.audit_metadata,
-            _record.source_files,
-            _record.audit_declarations,
-            _record.audit_declaration_lists,
-            _record.audit_interface,
-            _record.merged_topics,
-            _record.discussions,
-            _record.discussion_models,
-            _record.keyboard_model,
-            _record.selected_discussion,
-            _record.selected_node_id,
-            new None(),
-            _record.clicked_discussion,
-            _record.stickied_discussion,
-            _record.selected_discussion_set_sticky_timer,
-            _record.stickied_discussion_unset_sticky_timer
-          );
-        } else {
-          _block$1 = model$1;
-        }
-        let model$2 = _block$1;
-        let _block$2;
-        let $2 = !isEqual(
-          model$2.clicked_discussion,
-          new Some(
-            new DiscussionKey(page_path, line_number, column_number)
-          )
-        );
-        if ($2) {
-          let _record = model$2;
-          _block$2 = new Model3(
-            _record.route,
-            _record.file_tree,
-            _record.audit_metadata,
-            _record.source_files,
-            _record.audit_declarations,
-            _record.audit_declaration_lists,
-            _record.audit_interface,
-            _record.merged_topics,
-            _record.discussions,
-            _record.discussion_models,
-            _record.keyboard_model,
-            _record.selected_discussion,
-            _record.selected_node_id,
-            _record.focused_discussion,
-            new None(),
-            _record.stickied_discussion,
-            _record.selected_discussion_set_sticky_timer,
-            _record.stickied_discussion_unset_sticky_timer
-          );
-        } else {
-          _block$2 = model$2;
-        }
-        let model$3 = _block$2;
-        return [model$3, none()];
-      }
+    echo3("User clicked inside discussion", "src/o11a_client.gleam", 823);
+    let _block;
+    let $ = !isEqual(
+      model.selected_discussion,
+      new Some(new DiscussionKey(view_id, line_number, column_number))
     );
+    if ($) {
+      let _record = model;
+      _block = new Model3(
+        _record.route,
+        _record.file_tree,
+        _record.audit_metadata,
+        _record.source_files,
+        _record.audit_declarations,
+        _record.audit_declaration_lists,
+        _record.audit_interface,
+        _record.merged_topics,
+        _record.discussions,
+        _record.discussion_models,
+        _record.keyboard_model,
+        new None(),
+        _record.selected_node_id,
+        _record.focused_discussion,
+        _record.clicked_discussion,
+        _record.stickied_discussion,
+        _record.selected_discussion_set_sticky_timer,
+        _record.stickied_discussion_unset_sticky_timer
+      );
+    } else {
+      _block = model;
+    }
+    let model$1 = _block;
+    let _block$1;
+    let $1 = !isEqual(
+      model$1.focused_discussion,
+      new Some(new DiscussionKey(view_id, line_number, column_number))
+    );
+    if ($1) {
+      let _record = model$1;
+      _block$1 = new Model3(
+        _record.route,
+        _record.file_tree,
+        _record.audit_metadata,
+        _record.source_files,
+        _record.audit_declarations,
+        _record.audit_declaration_lists,
+        _record.audit_interface,
+        _record.merged_topics,
+        _record.discussions,
+        _record.discussion_models,
+        _record.keyboard_model,
+        _record.selected_discussion,
+        _record.selected_node_id,
+        new None(),
+        _record.clicked_discussion,
+        _record.stickied_discussion,
+        _record.selected_discussion_set_sticky_timer,
+        _record.stickied_discussion_unset_sticky_timer
+      );
+    } else {
+      _block$1 = model$1;
+    }
+    let model$2 = _block$1;
+    let _block$2;
+    let $2 = !isEqual(
+      model$2.clicked_discussion,
+      new Some(new DiscussionKey(view_id, line_number, column_number))
+    );
+    if ($2) {
+      let _record = model$2;
+      _block$2 = new Model3(
+        _record.route,
+        _record.file_tree,
+        _record.audit_metadata,
+        _record.source_files,
+        _record.audit_declarations,
+        _record.audit_declaration_lists,
+        _record.audit_interface,
+        _record.merged_topics,
+        _record.discussions,
+        _record.discussion_models,
+        _record.keyboard_model,
+        _record.selected_discussion,
+        _record.selected_node_id,
+        _record.focused_discussion,
+        new None(),
+        _record.stickied_discussion,
+        _record.selected_discussion_set_sticky_timer,
+        _record.stickied_discussion_unset_sticky_timer
+      );
+    } else {
+      _block$2 = model$2;
+    }
+    let model$3 = _block$2;
+    return [model$3, none()];
   } else if (msg instanceof UserClickedOutsideDiscussion) {
-    echo4("User clicked outside discussion", "src/o11a_client.gleam", 839);
+    echo3("User clicked outside discussion", "src/o11a_client.gleam", 852);
     return [
       (() => {
         let _record = model;
@@ -15417,235 +15347,222 @@ function update3(model, msg) {
       none()
     ];
   } else if (msg instanceof UserUpdatedDiscussion2) {
+    let view_id = msg.view_id;
     let line_number = msg.line_number;
     let column_number = msg.column_number;
     let update$1 = msg.update;
-    return ok(
-      get_page_route_from_model(model),
-      (_) => {
-        return [model, none()];
-      },
-      (page_path) => {
-        let discussion_model = update$1[0];
-        let discussion_effect = update$1[1];
-        if (discussion_effect instanceof SubmitNote) {
-          let note_submission = discussion_effect.note;
-          let topic_id = discussion_effect.topic_id;
-          return [
-            model,
-            (() => {
-              let $ = model.route;
-              if ($ instanceof AuditPageRoute) {
-                let audit_name = $.audit_name;
-                return submit_note(
-                  audit_name,
-                  topic_id,
-                  note_submission,
-                  discussion_model
-                );
-              } else if ($ instanceof AuditDashboardRoute) {
-                let audit_name = $.audit_name;
-                return submit_note(
-                  audit_name,
-                  topic_id,
-                  note_submission,
-                  discussion_model
-                );
-              } else if ($ instanceof AuditInterfaceRoute) {
-                let audit_name = $.audit_name;
-                return submit_note(
-                  audit_name,
-                  topic_id,
-                  note_submission,
-                  discussion_model
-                );
-              } else {
-                return none();
-              }
-            })()
-          ];
-        } else if (discussion_effect instanceof FocusDiscussionInput) {
-          let line_number$1 = discussion_effect.line_number;
-          let column_number$1 = discussion_effect.column_number;
-          echo4(
-            "Focusing discussion input, user is typing",
-            "src/o11a_client.gleam",
-            877
+    let discussion_model = update$1[0];
+    let discussion_effect = update$1[1];
+    if (discussion_effect instanceof SubmitNote) {
+      let note_submission = discussion_effect.note;
+      let topic_id = discussion_effect.topic_id;
+      return [
+        model,
+        (() => {
+          let $ = model.route;
+          if ($ instanceof AuditPageRoute) {
+            let audit_name = $.audit_name;
+            return submit_note(
+              audit_name,
+              topic_id,
+              note_submission,
+              discussion_model
+            );
+          } else if ($ instanceof AuditDashboardRoute) {
+            let audit_name = $.audit_name;
+            return submit_note(
+              audit_name,
+              topic_id,
+              note_submission,
+              discussion_model
+            );
+          } else if ($ instanceof AuditInterfaceRoute) {
+            let audit_name = $.audit_name;
+            return submit_note(
+              audit_name,
+              topic_id,
+              note_submission,
+              discussion_model
+            );
+          } else {
+            return none();
+          }
+        })()
+      ];
+    } else if (discussion_effect instanceof FocusDiscussionInput) {
+      let view_id$1 = discussion_effect.view_id;
+      let line_number$1 = discussion_effect.line_number;
+      let column_number$1 = discussion_effect.column_number;
+      echo3(
+        "Focusing discussion input, user is typing",
+        "src/o11a_client.gleam",
+        886
+      );
+      set_is_user_typing(true);
+      return [
+        (() => {
+          let _record = model;
+          return new Model3(
+            _record.route,
+            _record.file_tree,
+            _record.audit_metadata,
+            _record.source_files,
+            _record.audit_declarations,
+            _record.audit_declaration_lists,
+            _record.audit_interface,
+            _record.merged_topics,
+            _record.discussions,
+            _record.discussion_models,
+            _record.keyboard_model,
+            _record.selected_discussion,
+            _record.selected_node_id,
+            new Some(
+              new DiscussionKey(view_id$1, line_number$1, column_number$1)
+            ),
+            _record.clicked_discussion,
+            _record.stickied_discussion,
+            _record.selected_discussion_set_sticky_timer,
+            _record.stickied_discussion_unset_sticky_timer
           );
-          set_is_user_typing(true);
-          return [
-            (() => {
-              let _record = model;
-              return new Model3(
-                _record.route,
-                _record.file_tree,
-                _record.audit_metadata,
-                _record.source_files,
-                _record.audit_declarations,
-                _record.audit_declaration_lists,
-                _record.audit_interface,
-                _record.merged_topics,
-                _record.discussions,
-                _record.discussion_models,
-                _record.keyboard_model,
-                _record.selected_discussion,
-                _record.selected_node_id,
-                new Some(
-                  new DiscussionKey(page_path, line_number$1, column_number$1)
-                ),
-                _record.clicked_discussion,
-                _record.stickied_discussion,
-                _record.selected_discussion_set_sticky_timer,
-                _record.stickied_discussion_unset_sticky_timer
-              );
-            })(),
-            none()
-          ];
-        } else if (discussion_effect instanceof FocusExpandedDiscussionInput) {
-          let line_number$1 = discussion_effect.line_number;
-          let column_number$1 = discussion_effect.column_number;
-          set_is_user_typing(true);
-          return [
-            (() => {
-              let _record = model;
-              return new Model3(
-                _record.route,
-                _record.file_tree,
-                _record.audit_metadata,
-                _record.source_files,
-                _record.audit_declarations,
-                _record.audit_declaration_lists,
-                _record.audit_interface,
-                _record.merged_topics,
-                _record.discussions,
-                _record.discussion_models,
-                _record.keyboard_model,
-                _record.selected_discussion,
-                _record.selected_node_id,
-                new Some(
-                  new DiscussionKey(page_path, line_number$1, column_number$1)
-                ),
-                _record.clicked_discussion,
-                _record.stickied_discussion,
-                _record.selected_discussion_set_sticky_timer,
-                _record.stickied_discussion_unset_sticky_timer
-              );
-            })(),
-            none()
-          ];
-        } else if (discussion_effect instanceof UnfocusDiscussionInput) {
-          echo4("Unfocusing discussion input", "src/o11a_client.gleam", 908);
-          set_is_user_typing(false);
-          return [model, none()];
-        } else if (discussion_effect instanceof MaximizeDiscussion) {
-          return [
-            (() => {
-              let _record = model;
-              return new Model3(
-                _record.route,
-                _record.file_tree,
-                _record.audit_metadata,
-                _record.source_files,
-                _record.audit_declarations,
-                _record.audit_declaration_lists,
-                _record.audit_interface,
-                _record.merged_topics,
-                _record.discussions,
-                insert(
-                  model.discussion_models,
-                  new DiscussionKey(page_path, line_number, column_number),
-                  discussion_model
-                ),
-                _record.keyboard_model,
-                _record.selected_discussion,
-                _record.selected_node_id,
-                _record.focused_discussion,
-                _record.clicked_discussion,
-                _record.stickied_discussion,
-                _record.selected_discussion_set_sticky_timer,
-                _record.stickied_discussion_unset_sticky_timer
-              );
-            })(),
-            none()
-          ];
-        } else {
-          return [
-            (() => {
-              let _record = model;
-              return new Model3(
-                _record.route,
-                _record.file_tree,
-                _record.audit_metadata,
-                _record.source_files,
-                _record.audit_declarations,
-                _record.audit_declaration_lists,
-                _record.audit_interface,
-                _record.merged_topics,
-                _record.discussions,
-                insert(
-                  model.discussion_models,
-                  new DiscussionKey(page_path, line_number, column_number),
-                  discussion_model
-                ),
-                _record.keyboard_model,
-                _record.selected_discussion,
-                _record.selected_node_id,
-                _record.focused_discussion,
-                _record.clicked_discussion,
-                _record.stickied_discussion,
-                _record.selected_discussion_set_sticky_timer,
-                _record.stickied_discussion_unset_sticky_timer
-              );
-            })(),
-            none()
-          ];
-        }
-      }
-    );
+        })(),
+        none()
+      ];
+    } else if (discussion_effect instanceof FocusExpandedDiscussionInput) {
+      let view_id$1 = discussion_effect.view_id;
+      let line_number$1 = discussion_effect.line_number;
+      let column_number$1 = discussion_effect.column_number;
+      set_is_user_typing(true);
+      return [
+        (() => {
+          let _record = model;
+          return new Model3(
+            _record.route,
+            _record.file_tree,
+            _record.audit_metadata,
+            _record.source_files,
+            _record.audit_declarations,
+            _record.audit_declaration_lists,
+            _record.audit_interface,
+            _record.merged_topics,
+            _record.discussions,
+            _record.discussion_models,
+            _record.keyboard_model,
+            _record.selected_discussion,
+            _record.selected_node_id,
+            new Some(
+              new DiscussionKey(view_id$1, line_number$1, column_number$1)
+            ),
+            _record.clicked_discussion,
+            _record.stickied_discussion,
+            _record.selected_discussion_set_sticky_timer,
+            _record.stickied_discussion_unset_sticky_timer
+          );
+        })(),
+        none()
+      ];
+    } else if (discussion_effect instanceof UnfocusDiscussionInput) {
+      echo3("Unfocusing discussion input", "src/o11a_client.gleam", 925);
+      set_is_user_typing(false);
+      return [model, none()];
+    } else if (discussion_effect instanceof MaximizeDiscussion) {
+      return [
+        (() => {
+          let _record = model;
+          return new Model3(
+            _record.route,
+            _record.file_tree,
+            _record.audit_metadata,
+            _record.source_files,
+            _record.audit_declarations,
+            _record.audit_declaration_lists,
+            _record.audit_interface,
+            _record.merged_topics,
+            _record.discussions,
+            insert(
+              model.discussion_models,
+              new DiscussionKey(view_id, line_number, column_number),
+              discussion_model
+            ),
+            _record.keyboard_model,
+            _record.selected_discussion,
+            _record.selected_node_id,
+            _record.focused_discussion,
+            _record.clicked_discussion,
+            _record.stickied_discussion,
+            _record.selected_discussion_set_sticky_timer,
+            _record.stickied_discussion_unset_sticky_timer
+          );
+        })(),
+        none()
+      ];
+    } else {
+      return [
+        (() => {
+          let _record = model;
+          return new Model3(
+            _record.route,
+            _record.file_tree,
+            _record.audit_metadata,
+            _record.source_files,
+            _record.audit_declarations,
+            _record.audit_declaration_lists,
+            _record.audit_interface,
+            _record.merged_topics,
+            _record.discussions,
+            insert(
+              model.discussion_models,
+              new DiscussionKey(view_id, line_number, column_number),
+              discussion_model
+            ),
+            _record.keyboard_model,
+            _record.selected_discussion,
+            _record.selected_node_id,
+            _record.focused_discussion,
+            _record.clicked_discussion,
+            _record.stickied_discussion,
+            _record.selected_discussion_set_sticky_timer,
+            _record.stickied_discussion_unset_sticky_timer
+          );
+        })(),
+        none()
+      ];
+    }
   } else if (msg instanceof UserSuccessfullySubmittedNote) {
     let updated_model = msg.updated_model;
-    return ok(
-      get_page_route_from_model(model),
-      (_) => {
-        return [model, none()];
-      },
-      (page_path) => {
-        return [
-          (() => {
-            let _record = model;
-            return new Model3(
-              _record.route,
-              _record.file_tree,
-              _record.audit_metadata,
-              _record.source_files,
-              _record.audit_declarations,
-              _record.audit_declaration_lists,
-              _record.audit_interface,
-              _record.merged_topics,
-              _record.discussions,
-              insert(
-                model.discussion_models,
-                new DiscussionKey(
-                  page_path,
-                  updated_model.line_number,
-                  updated_model.column_number
-                ),
-                updated_model
-              ),
-              _record.keyboard_model,
-              _record.selected_discussion,
-              _record.selected_node_id,
-              _record.focused_discussion,
-              _record.clicked_discussion,
-              _record.stickied_discussion,
-              _record.selected_discussion_set_sticky_timer,
-              _record.stickied_discussion_unset_sticky_timer
-            );
-          })(),
-          none()
-        ];
-      }
-    );
+    return [
+      (() => {
+        let _record = model;
+        return new Model3(
+          _record.route,
+          _record.file_tree,
+          _record.audit_metadata,
+          _record.source_files,
+          _record.audit_declarations,
+          _record.audit_declaration_lists,
+          _record.audit_interface,
+          _record.merged_topics,
+          _record.discussions,
+          insert(
+            model.discussion_models,
+            new DiscussionKey(
+              updated_model.view_id,
+              updated_model.line_number,
+              updated_model.column_number
+            ),
+            updated_model
+          ),
+          _record.keyboard_model,
+          _record.selected_discussion,
+          _record.selected_node_id,
+          _record.focused_discussion,
+          _record.clicked_discussion,
+          _record.stickied_discussion,
+          _record.selected_discussion_set_sticky_timer,
+          _record.stickied_discussion_unset_sticky_timer
+        );
+      })(),
+      none()
+    ];
   } else {
     let error2 = msg.error;
     print("Failed to submit note: " + inspect2(error2));
@@ -15701,6 +15618,7 @@ function on_server_updated_topics(msg) {
 function map_audit_page_msg(msg) {
   if (msg instanceof UserSelectedDiscussionEntry) {
     let kind = msg.kind;
+    let view_id = msg.view_id;
     let line_number = msg.line_number;
     let column_number = msg.column_number;
     let node_id = msg.node_id;
@@ -15708,6 +15626,7 @@ function map_audit_page_msg(msg) {
     let is_reference = msg.is_reference;
     return new UserSelectedDiscussionEntry2(
       kind,
+      view_id,
       line_number,
       column_number,
       node_id,
@@ -15718,29 +15637,43 @@ function map_audit_page_msg(msg) {
     let kind = msg.kind;
     return new UserUnselectedDiscussionEntry2(kind);
   } else if (msg instanceof UserClickedDiscussionEntry) {
+    let view_id = msg.view_id;
     let line_number = msg.line_number;
     let column_number = msg.column_number;
-    return new UserClickedDiscussionEntry2(line_number, column_number);
+    return new UserClickedDiscussionEntry2(view_id, line_number, column_number);
   } else if (msg instanceof UserUpdatedDiscussion) {
+    let view_id = msg.view_id;
     let line_number = msg.line_number;
     let column_number = msg.column_number;
     let update$1 = msg.update;
-    return new UserUpdatedDiscussion2(line_number, column_number, update$1);
+    return new UserUpdatedDiscussion2(
+      view_id,
+      line_number,
+      column_number,
+      update$1
+    );
   } else if (msg instanceof UserClickedInsideDiscussion) {
+    let view_id = msg.view_id;
     let line_number = msg.line_number;
     let column_number = msg.column_number;
-    return new UserClickedInsideDiscussion2(line_number, column_number);
+    return new UserClickedInsideDiscussion2(view_id, line_number, column_number);
   } else if (msg instanceof UserCtrlClickedNode) {
     let uri = msg.uri;
     return new UserCtrlClickedNode2(uri);
   } else if (msg instanceof UserHoveredInsideDiscussion) {
+    let view_id = msg.view_id;
     let line_number = msg.line_number;
     let column_number = msg.column_number;
-    return new UserHoveredInsideDiscussion2(line_number, column_number);
+    return new UserHoveredInsideDiscussion2(view_id, line_number, column_number);
   } else {
+    let view_id = msg.view_id;
     let line_number = msg.line_number;
     let column_number = msg.column_number;
-    return new UserUnhoveredInsideDiscussion2(line_number, column_number);
+    return new UserUnhoveredInsideDiscussion2(
+      view_id,
+      line_number,
+      column_number
+    );
   }
 }
 function view6(model) {
@@ -15861,6 +15794,7 @@ function view6(model) {
         view5(
           (() => {
             let _pipe$3 = view3(
+              page_path,
               preprocessed_source,
               discussion,
               declarations,
@@ -15887,11 +15821,11 @@ function main() {
   let _pipe = application(init4, update3, view6);
   return start3(_pipe, "#app", void 0);
 }
-function echo4(value3, file, line2) {
+function echo3(value3, file, line2) {
   const grey = "\x1B[90m";
   const reset_color = "\x1B[39m";
   const file_line = `${file}:${line2}`;
-  const string_value = echo$inspect4(value3);
+  const string_value = echo$inspect3(value3);
   if (globalThis.process?.stderr?.write) {
     const string6 = `${grey}${file_line}${reset_color}
 ${string_value}
@@ -15909,7 +15843,7 @@ ${string_value}`;
   }
   return value3;
 }
-function echo$inspectString4(str) {
+function echo$inspectString3(str) {
   let new_str = '"';
   for (let i = 0; i < str.length; i++) {
     let char = str[i];
@@ -15928,7 +15862,7 @@ function echo$inspectString4(str) {
   new_str += '"';
   return new_str;
 }
-function echo$inspectDict4(map7) {
+function echo$inspectDict3(map7) {
   let body2 = "dict.from_list([";
   let first2 = true;
   let key_value_pairs = [];
@@ -15938,47 +15872,47 @@ function echo$inspectDict4(map7) {
   key_value_pairs.sort();
   key_value_pairs.forEach(([key2, value3]) => {
     if (!first2) body2 = body2 + ", ";
-    body2 = body2 + "#(" + echo$inspect4(key2) + ", " + echo$inspect4(value3) + ")";
+    body2 = body2 + "#(" + echo$inspect3(key2) + ", " + echo$inspect3(value3) + ")";
     first2 = false;
   });
   return body2 + "])";
 }
-function echo$inspectCustomType4(record) {
+function echo$inspectCustomType3(record) {
   const props = globalThis.Object.keys(record).map((label) => {
-    const value3 = echo$inspect4(record[label]);
+    const value3 = echo$inspect3(record[label]);
     return isNaN(parseInt(label)) ? `${label}: ${value3}` : value3;
   }).join(", ");
   return props ? `${record.constructor.name}(${props})` : record.constructor.name;
 }
-function echo$inspectObject4(v) {
+function echo$inspectObject3(v) {
   const name2 = Object.getPrototypeOf(v)?.constructor?.name || "Object";
   const props = [];
   for (const k of Object.keys(v)) {
-    props.push(`${echo$inspect4(k)}: ${echo$inspect4(v[k])}`);
+    props.push(`${echo$inspect3(k)}: ${echo$inspect3(v[k])}`);
   }
   const body2 = props.length ? " " + props.join(", ") + " " : "";
   const head = name2 === "Object" ? "" : name2 + " ";
   return `//js(${head}{${body2}})`;
 }
-function echo$inspect4(v) {
+function echo$inspect3(v) {
   const t = typeof v;
   if (v === true) return "True";
   if (v === false) return "False";
   if (v === null) return "//js(null)";
   if (v === void 0) return "Nil";
-  if (t === "string") return echo$inspectString4(v);
+  if (t === "string") return echo$inspectString3(v);
   if (t === "bigint" || t === "number") return v.toString();
   if (globalThis.Array.isArray(v))
-    return `#(${v.map(echo$inspect4).join(", ")})`;
+    return `#(${v.map(echo$inspect3).join(", ")})`;
   if (v instanceof List)
-    return `[${v.toArray().map(echo$inspect4).join(", ")}]`;
+    return `[${v.toArray().map(echo$inspect3).join(", ")}]`;
   if (v instanceof UtfCodepoint)
     return `//utfcodepoint(${String.fromCodePoint(v.value)})`;
-  if (v instanceof BitArray) return echo$inspectBitArray4(v);
-  if (v instanceof CustomType) return echo$inspectCustomType4(v);
-  if (echo$isDict4(v)) return echo$inspectDict4(v);
+  if (v instanceof BitArray) return echo$inspectBitArray3(v);
+  if (v instanceof CustomType) return echo$inspectCustomType3(v);
+  if (echo$isDict3(v)) return echo$inspectDict3(v);
   if (v instanceof Set)
-    return `//js(Set(${[...v].map(echo$inspect4).join(", ")}))`;
+    return `//js(Set(${[...v].map(echo$inspect3).join(", ")}))`;
   if (v instanceof RegExp) return `//js(${v})`;
   if (v instanceof Date) return `//js(Date("${v.toISOString()}"))`;
   if (v instanceof Function) {
@@ -15987,9 +15921,9 @@ function echo$inspect4(v) {
       args.push(String.fromCharCode(i + 97));
     return `//fn(${args.join(", ")}) { ... }`;
   }
-  return echo$inspectObject4(v);
+  return echo$inspectObject3(v);
 }
-function echo$inspectBitArray4(bitArray) {
+function echo$inspectBitArray3(bitArray) {
   let endOfAlignedBytes = bitArray.bitOffset + 8 * Math.trunc(bitArray.bitSize / 8);
   let alignedBytes = bitArraySlice(
     bitArray,
@@ -16016,7 +15950,7 @@ function echo$inspectBitArray4(bitArray) {
     return `<<${Array.from(alignedBytes.rawBuffer).join(", ")}>>`;
   }
 }
-function echo$isDict4(value3) {
+function echo$isDict3(value3) {
   try {
     return value3 instanceof Dict;
   } catch {

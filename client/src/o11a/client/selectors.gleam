@@ -12,22 +12,32 @@ pub fn non_empty_line(line_number) {
   |> result.replace_error(snag.new("Failed to find non-empty line"))
 }
 
-pub fn discussion_entry(line_number line_number, column_number column_number) {
+pub fn discussion_entry(
+  view_id view_id,
+  line_number line_number,
+  column_number column_number,
+) {
   document.query_selector(
-    echo {
-      ".dl"
-      <> int.to_string(line_number)
-      <> ".dc"
-      <> int.to_string(column_number)
-      <> " ."
-      <> classes.discussion_entry
-    },
+    "#"
+    <> view_id
+    <> " .dl"
+    <> int.to_string(line_number)
+    <> ".dc"
+    <> int.to_string(column_number)
+    <> " ."
+    <> classes.discussion_entry,
   )
 }
 
-pub fn discussion_input(line_number line_number, column_number column_number) {
+pub fn discussion_input(
+  view_id view_id,
+  line_number line_number,
+  column_number column_number,
+) {
   document.query_selector(
-    ".dl"
+    "#"
+    <> view_id
+    <> " .dl"
     <> int.to_string(line_number)
     <> ".dc"
     <> int.to_string(column_number)
@@ -36,11 +46,14 @@ pub fn discussion_input(line_number line_number, column_number column_number) {
 }
 
 pub fn discussion_expanded_input(
+  view_id view_id,
   line_number line_number,
   column_number column_number,
 ) {
   document.query_selector(
-    ".dl"
+    "#"
+    <> view_id
+    <> " .dl"
     <> int.to_string(line_number)
     <> ".dc"
     <> int.to_string(column_number)

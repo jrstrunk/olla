@@ -23,6 +23,7 @@ pub type Model {
     is_reference: Bool,
     show_reference_discussion: Bool,
     user_name: String,
+    view_id: String,
     line_number: Int,
     column_number: Int,
     topic_id: String,
@@ -47,6 +48,7 @@ pub type ActiveThread {
 }
 
 pub fn init(
+  view_id view_id,
   line_number line_number,
   column_number column_number,
   topic_id topic_id,
@@ -57,6 +59,7 @@ pub fn init(
     is_reference:,
     show_reference_discussion: False,
     user_name: "guest",
+    view_id:,
     line_number:,
     column_number:,
     topic_id:,
@@ -93,10 +96,14 @@ pub type Msg {
 
 pub type Effect {
   SubmitNote(note: note.NoteSubmission, topic_id: String)
-  FocusDiscussionInput(line_number: Int, column_number: Int)
-  FocusExpandedDiscussionInput(line_number: Int, column_number: Int)
-  UnfocusDiscussionInput(line_number: Int, column_number: Int)
-  MaximizeDiscussion(line_number: Int, column_number: Int)
+  FocusDiscussionInput(view_id: String, line_number: Int, column_number: Int)
+  FocusExpandedDiscussionInput(
+    view_id: String,
+    line_number: Int,
+    column_number: Int,
+  )
+  UnfocusDiscussionInput(view_id: String, line_number: Int, column_number: Int)
+  MaximizeDiscussion(view_id: String, line_number: Int, column_number: Int)
   None
 }
 
@@ -234,6 +241,7 @@ pub fn update(model: Model, msg: Msg) {
     UserFocusedInput -> #(
       model,
       FocusDiscussionInput(
+        view_id: model.view_id,
         line_number: model.line_number,
         column_number: model.column_number,
       ),
@@ -244,6 +252,7 @@ pub fn update(model: Model, msg: Msg) {
     UserFocusedExpandedInput -> #(
       Model(..model, show_expanded_message_box: True),
       FocusExpandedDiscussionInput(
+        view_id: model.view_id,
         line_number: model.line_number,
         column_number: model.column_number,
       ),
@@ -251,6 +260,7 @@ pub fn update(model: Model, msg: Msg) {
     UserUnfocusedInput -> #(
       model,
       UnfocusDiscussionInput(
+        view_id: model.view_id,
         line_number: model.line_number,
         column_number: model.column_number,
       ),
@@ -258,6 +268,7 @@ pub fn update(model: Model, msg: Msg) {
     UserMaximizeThread -> #(
       model,
       MaximizeDiscussion(
+        view_id: model.view_id,
         line_number: model.line_number,
         column_number: model.column_number,
       ),

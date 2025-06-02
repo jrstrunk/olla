@@ -11,6 +11,7 @@ import snag
 
 pub type Model {
   Model(
+    current_view_id: String,
     cursor_line_number: Int,
     cursor_column_number: Int,
     active_line_number: Int,
@@ -20,8 +21,9 @@ pub type Model {
   )
 }
 
-pub fn init() {
+pub fn init(current_view_id) {
   Model(
+    current_view_id:,
     cursor_line_number: 16,
     cursor_column_number: 1,
     active_line_number: 16,
@@ -87,6 +89,7 @@ fn handle_input_escape(event, model: Model, else_do) {
       Ok(#(
         model,
         focus_line_discussion(
+          view_id: model.current_view_id,
           line_number: model.cursor_line_number,
           column_number: model.cursor_column_number,
         ),
@@ -150,6 +153,7 @@ fn move_focus_line(model: Model, by step) {
   #(
     Model(..model, current_line_column_count: column_count),
     focus_line_discussion(
+      view_id: model.current_view_id,
       line_number: new_line,
       column_number: int.min(column_count, model.cursor_column_number),
     ),
@@ -166,6 +170,7 @@ fn move_focus_column(model: Model, by step) {
   #(
     model,
     focus_line_discussion(
+      view_id: model.current_view_id,
       line_number: model.cursor_line_number,
       column_number: new_column,
     ),
@@ -179,6 +184,7 @@ fn handle_discussion_escape(event, model: Model, else_do) {
       Ok(#(
         model,
         blur_line_discussion(
+          view_id: model.current_view_id,
           line_number: model.cursor_line_number,
           column_number: model.cursor_column_number,
         ),
@@ -194,8 +200,9 @@ fn handle_input_focus(event, model: Model, else_do) {
       Ok(#(
         model,
         focus_line_discussion_input(
-          model.active_line_number,
-          model.active_column_number,
+          view_id: model.current_view_id,
+          line_number: model.active_line_number,
+          column_number: model.active_column_number,
         ),
       ))
     _, _ -> else_do()
@@ -257,13 +264,14 @@ fn find_next_discussion_line(
 }
 
 fn focus_line_discussion(
+  view_id view_id: String,
   line_number line_number: Int,
   column_number column_number: Int,
 ) {
   effect.from(fn(_dispatch) {
     echo "focus line discussion"
     let _ =
-      selectors.discussion_entry(line_number:, column_number:)
+      selectors.discussion_entry(view_id:, line_number:, column_number:)
       |> result.replace_error(snag.new(
         "Failed to find line discussion to focus",
       ))
@@ -274,13 +282,14 @@ fn focus_line_discussion(
 }
 
 fn blur_line_discussion(
+  view_id view_id: String,
   line_number line_number: Int,
   column_number column_number: Int,
 ) {
   effect.from(fn(_dispatch) {
     echo "blurring line discussion"
     let _ =
-      selectors.discussion_entry(line_number:, column_number:)
+      selectors.discussion_entry(view_id:, line_number:, column_number:)
       |> result.replace_error(snag.new(
         "Failed to find line discussion to focus",
       ))
@@ -290,12 +299,13 @@ fn blur_line_discussion(
 }
 
 fn focus_line_discussion_input(
+  view_id view_id: String,
   line_number line_number: Int,
   column_number column_number: Int,
 ) {
   effect.from(fn(_dispatch) {
     let _ =
-      selectors.discussion_input(line_number:, column_number:)
+      selectors.discussion_input(view_id:, line_number:, column_number:)
       |> result.replace_error(snag.new(
         "Failed to find line discussion input to focus",
       ))

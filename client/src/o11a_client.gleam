@@ -95,7 +95,7 @@ pub type Route {
 }
 
 pub type DiscussionKey {
-  DiscussionKey(page_path: String, line_number: Int, column_number: Int)
+  DiscussionKey(view_id: String, line_number: Int, column_number: Int)
 }
 
 fn init(_) -> #(Model, Effect(Msg)) {
@@ -116,7 +116,7 @@ fn init(_) -> #(Model, Effect(Msg)) {
       discussions: dict.new(),
       discussion_models: dict.new(),
       audit_interface: dict.new(),
-      keyboard_model: page_navigation.init(),
+      keyboard_model: page_navigation.init(get_page_view_id_from_route(route)),
       selected_discussion: option.None,
       selected_node_id: option.None,
       focused_discussion: option.None,
@@ -220,21 +220,21 @@ fn file_tree_from_route(
   }
 }
 
-fn get_page_route_from_model(model: Model) {
-  case model.route {
-    AuditDashboardRoute(..) -> Error(Nil)
-    AuditInterfaceRoute(..) -> Error(Nil)
-    AuditPageRoute(page_path:, ..) -> Ok(page_path)
-    O11aHomeRoute -> Error(Nil)
-  }
-}
-
 fn get_audit_name_from_model(model: Model) {
   case model.route {
     AuditDashboardRoute(audit_name:) -> Ok(audit_name)
     AuditInterfaceRoute(audit_name:) -> Ok(audit_name)
     AuditPageRoute(audit_name:, ..) -> Ok(audit_name)
     O11aHomeRoute -> Error(Nil)
+  }
+}
+
+pub fn get_page_view_id_from_route(route) {
+  case route {
+    AuditDashboardRoute(..) -> "dashboard"
+    AuditInterfaceRoute(..) -> "interface"
+    AuditPageRoute(..) -> "audit-page"
+    O11aHomeRoute -> "o11a"
   }
 }
 
@@ -272,6 +272,7 @@ pub type Msg {
   )
   UserSelectedDiscussionEntry(
     kind: audit_page.DiscussionSelectKind,
+    view_id: String,
     line_number: Int,
     column_number: Int,
     node_id: option.Option(Int),
@@ -281,15 +282,36 @@ pub type Msg {
   UserUnselectedDiscussionEntry(kind: audit_page.DiscussionSelectKind)
   UserStartedStickyOpenTimer(timer_id: global.TimerID)
   UserStartedStickyCloseTimer(timer_id: global.TimerID)
-  UserHoveredInsideDiscussion(line_number: Int, column_number: Int)
-  UserUnhoveredInsideDiscussion(line_number: Int, column_number: Int)
-  ClientSetStickyDiscussion(line_number: Int, column_number: Int)
+  UserHoveredInsideDiscussion(
+    view_id: String,
+    line_number: Int,
+    column_number: Int,
+  )
+  UserUnhoveredInsideDiscussion(
+    view_id: String,
+    line_number: Int,
+    column_number: Int,
+  )
+  ClientSetStickyDiscussion(
+    view_id: String,
+    line_number: Int,
+    column_number: Int,
+  )
   ClientUnsetStickyDiscussion
-  UserClickedDiscussionEntry(line_number: Int, column_number: Int)
+  UserClickedDiscussionEntry(
+    view_id: String,
+    line_number: Int,
+    column_number: Int,
+  )
   UserCtrlClickedNode(uri: String)
-  UserClickedInsideDiscussion(line_number: Int, column_number: Int)
+  UserClickedInsideDiscussion(
+    view_id: String,
+    line_number: Int,
+    column_number: Int,
+  )
   UserClickedOutsideDiscussion
   UserUpdatedDiscussion(
+    view_id: String,
     line_number: Int,
     column_number: Int,
     update: #(discussion.Model, discussion.Effect),
@@ -305,6 +327,11 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         ..model,
         route:,
         file_tree: file_tree_from_route(route, model.audit_metadata),
+        keyboard_model: page_navigation.Model(
+            ..model.keyboard_model,
+            current_view_id: get_page_view_id_from_route(model.route) |> echo,
+          )
+          |> echo,
       ),
       route_change_effect(model, new_route: route),
     )
@@ -551,16 +578,13 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
     UserSelectedDiscussionEntry(
       kind:,
+      view_id:,
       line_number:,
       column_number:,
       node_id:,
       topic_id:,
       is_reference:,
     ) -> {
-      use page_path <- given.ok(
-        get_page_route_from_model(model),
-        else_return: fn(_) { #(model, effect.none()) },
-      )
       use audit_name <- given.ok(
         get_audit_name_from_model(model),
         else_return: fn(_) { #(model, effect.none()) },
@@ -573,18 +597,19 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         else_return: fn(_) { #(model, effect.none()) },
       )
 
-      let selected_discussion =
-        DiscussionKey(page_path:, line_number:, column_number:)
+      let selected_discussion_key =
+        DiscussionKey(view_id:, line_number:, column_number:)
 
       let discussion_models = case
-        dict.get(model.discussion_models, selected_discussion)
+        dict.get(model.discussion_models, selected_discussion_key)
       {
         Ok(..) -> model.discussion_models
         Error(Nil) ->
           dict.insert(
             model.discussion_models,
-            selected_discussion,
+            selected_discussion_key,
             discussion.init(
+              view_id:,
               line_number:,
               column_number:,
               topic_id:,
@@ -599,14 +624,14 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           audit_page.EntryHover ->
             Model(
               ..model,
-              selected_discussion: option.Some(selected_discussion),
+              selected_discussion: option.Some(selected_discussion_key),
               discussion_models:,
               selected_node_id: node_id,
             )
           audit_page.EntryFocus ->
             Model(
               ..model,
-              focused_discussion: option.Some(selected_discussion),
+              focused_discussion: option.Some(selected_discussion_key),
               discussion_models:,
               selected_node_id: node_id,
               keyboard_model: page_navigation.Model(
@@ -623,6 +648,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               let timer_id =
                 global.set_timeout(300, fn() {
                   dispatch(ClientSetStickyDiscussion(
+                    view_id:,
                     line_number:,
                     column_number:,
                   ))
@@ -671,17 +697,12 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       )
     }
 
-    ClientSetStickyDiscussion(line_number:, column_number:) -> {
-      use page_path <- given.ok(
-        get_page_route_from_model(model),
-        else_return: fn(_) { #(model, effect.none()) },
-      )
-
+    ClientSetStickyDiscussion(view_id:, line_number:, column_number:) -> {
       #(
         Model(
           ..model,
           stickied_discussion: option.Some(DiscussionKey(
-            page_path:,
+            view_id:,
             line_number:,
             column_number:,
           )),
@@ -691,13 +712,14 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       )
     }
 
-    UserUnhoveredInsideDiscussion(line_number:, column_number:) -> {
+    UserUnhoveredInsideDiscussion(view_id:, line_number:, column_number:) -> {
       echo "User unhovered discussion entry " <> int.to_string(line_number)
       #(model, case model.stickied_discussion {
         option.Some(discussion_key) ->
           case
             line_number == discussion_key.line_number
             && column_number == discussion_key.column_number
+            && view_id == discussion_key.view_id
           {
             True ->
               effect.from(fn(dispatch) {
@@ -714,7 +736,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       })
     }
 
-    UserHoveredInsideDiscussion(line_number:, column_number:) -> {
+    UserHoveredInsideDiscussion(view_id:, line_number:, column_number:) -> {
       echo "User hovered discussion entry " <> int.to_string(line_number)
       // Do not clear the timer in the state generically without checking the
       // hovered line and col number here, as hovering any element will clear 
@@ -724,6 +746,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           case
             line_number == discussion_key.line_number
             && column_number == discussion_key.column_number
+            && view_id == discussion_key.view_id
           {
             True ->
               effect.from(fn(_dispatch) {
@@ -762,17 +785,12 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       )
     }
 
-    UserClickedDiscussionEntry(line_number:, column_number:) -> {
-      use page_path <- given.ok(
-        get_page_route_from_model(model),
-        else_return: fn(_) { #(model, effect.none()) },
-      )
-
+    UserClickedDiscussionEntry(view_id:, line_number:, column_number:) -> {
       #(
         Model(
           ..model,
           clicked_discussion: option.Some(DiscussionKey(
-            page_path:,
+            view_id:,
             line_number:,
             column_number:,
           )),
@@ -780,7 +798,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         ),
         effect.from(fn(_dispatch) {
           let res =
-            selectors.discussion_input(line_number:, column_number:)
+            selectors.discussion_input(view_id:, line_number:, column_number:)
             |> result.map(browser_element.focus)
 
           case res {
@@ -801,16 +819,11 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       #(model, modem.push(path, option.None, fragment))
     }
 
-    UserClickedInsideDiscussion(line_number:, column_number:) -> {
-      use page_path <- given.ok(
-        get_page_route_from_model(model),
-        else_return: fn(_) { #(model, effect.none()) },
-      )
-
+    UserClickedInsideDiscussion(view_id:, line_number:, column_number:) -> {
       echo "User clicked inside discussion"
       let model = case
         model.selected_discussion
-        != option.Some(DiscussionKey(page_path:, line_number:, column_number:))
+        != option.Some(DiscussionKey(view_id:, line_number:, column_number:))
       {
         True -> Model(..model, selected_discussion: option.None)
         False -> model
@@ -818,7 +831,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
       let model = case
         model.focused_discussion
-        != option.Some(DiscussionKey(page_path:, line_number:, column_number:))
+        != option.Some(DiscussionKey(view_id:, line_number:, column_number:))
       {
         True -> Model(..model, focused_discussion: option.None)
         False -> model
@@ -826,7 +839,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
       let model = case
         model.clicked_discussion
-        != option.Some(DiscussionKey(page_path:, line_number:, column_number:))
+        != option.Some(DiscussionKey(view_id:, line_number:, column_number:))
       {
         True -> Model(..model, clicked_discussion: option.None)
         False -> model
@@ -848,11 +861,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       )
     }
 
-    UserUpdatedDiscussion(line_number:, column_number:, update:) -> {
-      use page_path <- given.ok(
-        get_page_route_from_model(model),
-        else_return: fn(_) { #(model, effect.none()) },
-      )
+    UserUpdatedDiscussion(view_id:, line_number:, column_number:, update:) -> {
       let #(discussion_model, discussion_effect) = update
 
       case discussion_effect {
@@ -873,14 +882,14 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           },
         )
 
-        discussion.FocusDiscussionInput(line_number, column_number) -> {
+        discussion.FocusDiscussionInput(view_id:, line_number:, column_number:) -> {
           echo "Focusing discussion input, user is typing"
           storage.set_is_user_typing(True)
           #(
             Model(
               ..model,
               focused_discussion: option.Some(DiscussionKey(
-                page_path:,
+                view_id:,
                 line_number:,
                 column_number:,
               )),
@@ -889,13 +898,17 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
         }
 
-        discussion.FocusExpandedDiscussionInput(line_number, column_number) -> {
+        discussion.FocusExpandedDiscussionInput(
+          view_id:,
+          line_number:,
+          column_number:,
+        ) -> {
           storage.set_is_user_typing(True)
           #(
             Model(
               ..model,
               focused_discussion: option.Some(DiscussionKey(
-                page_path:,
+                view_id:,
                 line_number:,
                 column_number:,
               )),
@@ -904,19 +917,23 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
         }
 
-        discussion.UnfocusDiscussionInput(_line_number, _column_number) -> {
+        discussion.UnfocusDiscussionInput(
+          _view_id,
+          _line_number,
+          _column_number,
+        ) -> {
           echo "Unfocusing discussion input"
           storage.set_is_user_typing(False)
           #(model, effect.none())
         }
 
-        discussion.MaximizeDiscussion(_line_number, _column_number)
+        discussion.MaximizeDiscussion(_view_id, _line_number, _column_number)
         | discussion.None -> #(
           Model(
             ..model,
             discussion_models: dict.insert(
               model.discussion_models,
-              DiscussionKey(page_path:, line_number:, column_number:),
+              DiscussionKey(view_id:, line_number:, column_number:),
               discussion_model,
             ),
           ),
@@ -926,18 +943,13 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     }
 
     UserSuccessfullySubmittedNote(updated_model) -> {
-      use page_path <- given.ok(
-        get_page_route_from_model(model),
-        else_return: fn(_) { #(model, effect.none()) },
-      )
-
       #(
         Model(
           ..model,
           discussion_models: dict.insert(
             model.discussion_models,
             DiscussionKey(
-              page_path:,
+              view_id: updated_model.view_id,
               line_number: updated_model.line_number,
               column_number: updated_model.column_number,
             ),
@@ -1144,6 +1156,7 @@ fn view(model: Model) {
         ),
         audit_tree.view(
           audit_page.view(
+            page_path:,
             preprocessed_source:,
             discussion:,
             declarations:,
@@ -1224,6 +1237,7 @@ fn on_server_updated_topics(msg) {
 fn map_audit_page_msg(msg) {
   case msg {
     audit_page.UserSelectedDiscussionEntry(
+      view_id:,
       kind:,
       line_number:,
       column_number:,
@@ -1233,6 +1247,7 @@ fn map_audit_page_msg(msg) {
     ) ->
       UserSelectedDiscussionEntry(
         kind:,
+        view_id:,
         line_number:,
         column_number:,
         node_id:,
@@ -1241,16 +1256,32 @@ fn map_audit_page_msg(msg) {
       )
     audit_page.UserUnselectedDiscussionEntry(kind:) ->
       UserUnselectedDiscussionEntry(kind:)
-    audit_page.UserClickedDiscussionEntry(line_number:, column_number:) ->
-      UserClickedDiscussionEntry(line_number:, column_number:)
-    audit_page.UserUpdatedDiscussion(line_number:, column_number:, update:) ->
-      UserUpdatedDiscussion(line_number:, column_number:, update:)
-    audit_page.UserClickedInsideDiscussion(line_number:, column_number:) ->
-      UserClickedInsideDiscussion(line_number:, column_number:)
+    audit_page.UserClickedDiscussionEntry(
+      view_id:,
+      line_number:,
+      column_number:,
+    ) -> UserClickedDiscussionEntry(view_id:, line_number:, column_number:)
+    audit_page.UserUpdatedDiscussion(
+      view_id:,
+      line_number:,
+      column_number:,
+      update:,
+    ) -> UserUpdatedDiscussion(view_id:, line_number:, column_number:, update:)
+    audit_page.UserClickedInsideDiscussion(
+      view_id:,
+      line_number:,
+      column_number:,
+    ) -> UserClickedInsideDiscussion(view_id:, line_number:, column_number:)
     audit_page.UserCtrlClickedNode(uri:) -> UserCtrlClickedNode(uri:)
-    audit_page.UserHoveredInsideDiscussion(line_number:, column_number:) ->
-      UserHoveredInsideDiscussion(line_number:, column_number:)
-    audit_page.UserUnhoveredInsideDiscussion(line_number:, column_number:) ->
-      UserUnhoveredInsideDiscussion(line_number:, column_number:)
+    audit_page.UserHoveredInsideDiscussion(
+      view_id:,
+      line_number:,
+      column_number:,
+    ) -> UserHoveredInsideDiscussion(view_id:, line_number:, column_number:)
+    audit_page.UserUnhoveredInsideDiscussion(
+      view_id:,
+      line_number:,
+      column_number:,
+    ) -> UserUnhoveredInsideDiscussion(view_id:, line_number:, column_number:)
   }
 }
