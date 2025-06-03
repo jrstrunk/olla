@@ -224,12 +224,10 @@ fn build_structured_notes(
       note.modifier != note.Edit && note.modifier != note.Delete
     })
     |> list.filter_map(fn(note) {
-      echo "found note " <> string.inspect(note)
       let thread_id = case note.modifier {
         note.Reference(original_note_id) -> original_note_id
         _ -> note.note_id
       }
-      echo "thread id " <> thread_id
 
       computed_note.from_note(note, pcd_dict.get(notes_dict, thread_id))
     })

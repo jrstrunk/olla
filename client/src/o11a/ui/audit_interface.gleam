@@ -8,7 +8,7 @@ import lustre/element
 import lustre/element/html
 import o11a/computed_note
 import o11a/preprocessor
-import o11a/ui/node_renderer
+import o11a/ui/discussion
 
 pub type InterfaceData {
   InterfaceData(
@@ -24,19 +24,17 @@ pub type InterfaceData {
   )
 }
 
-pub fn empty_interface_data() {
-  InterfaceData(
-    file_contracts: [],
-    contract_constants: [],
-    contract_variables: [],
-    contract_structs: [],
-    contract_enums: [],
-    contract_events: [],
-    contract_errors: [],
-    contract_functions: [],
-    contract_modifiers: [],
-  )
-}
+pub const empty_interface_data = InterfaceData(
+  file_contracts: [],
+  contract_constants: [],
+  contract_variables: [],
+  contract_structs: [],
+  contract_enums: [],
+  contract_events: [],
+  contract_errors: [],
+  contract_functions: [],
+  contract_modifiers: [],
+)
 
 pub type FileContract {
   FileContract(file_name: String, contracts: List(preprocessor.Declaration))
@@ -157,7 +155,7 @@ fn contract_members_view(
           html.p([attribute.class("ml-[1rem] mb-[1rem] leading-[1.1875rem]")], [
             html.a(
               [attribute.href(preprocessor.declaration_to_link(declaration))],
-              node_renderer.render_topic_signature(
+              discussion.topic_signature_view(
                 declaration.signature,
                 declarations,
                 discussion,

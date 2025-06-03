@@ -288,12 +288,18 @@ fn blur_line_discussion(
 ) {
   effect.from(fn(_dispatch) {
     echo "blurring line discussion"
-    let _ =
+    let element =
       selectors.discussion_entry(view_id:, line_number:, column_number:)
       |> result.replace_error(snag.new(
         "Failed to find line discussion to focus",
       ))
-      |> result.map(element.blur)
+
+    // First focus the element so that when we blur it, it will trigger
+    // the onBlur event. If the element is not focused and we try to blur it,
+    // it will fail and not trigger the onBlur event.
+    let _ = element |> result.map(element.focus)
+    let _ = element |> result.map(element.blur)
+
     Nil
   })
 }

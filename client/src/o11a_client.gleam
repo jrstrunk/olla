@@ -8,9 +8,9 @@ import gleam/list
 import gleam/option
 import gleam/result
 import gleam/string
-import gleam/uri.{type Uri}
+import gleam/uri
 import lustre
-import lustre/effect.{type Effect}
+import lustre/effect
 import lustre/element
 import lustre/element/html
 import lustre/event
@@ -75,7 +75,10 @@ pub type Model {
       String,
       dict.Dict(String, List(computed_note.ComputedNote)),
     ),
-    discussion_models: dict.Dict(DiscussionKey, discussion.Model),
+    discussion_models: dict.Dict(
+      DiscussionKey,
+      discussion.DiscussionOverlayModel,
+    ),
     keyboard_model: page_navigation.Model,
     selected_discussion: option.Option(DiscussionKey),
     selected_node_id: option.Option(Int),
@@ -98,7 +101,7 @@ pub type DiscussionKey {
   DiscussionKey(view_id: String, line_number: Int, column_number: Int)
 }
 
-fn init(_) -> #(Model, Effect(Msg)) {
+fn init(_) -> #(Model, effect.Effect(Msg)) {
   let route = case modem.initial_uri() {
     Ok(uri) -> parse_route(uri)
     Error(Nil) -> O11aHomeRoute
@@ -141,13 +144,13 @@ fn init(_) -> #(Model, Effect(Msg)) {
   )
 }
 
-fn on_url_change(uri: Uri) -> Msg {
+fn on_url_change(uri: uri.Uri) -> Msg {
   echo "on_url_change"
   echo uri
   parse_route(uri) |> OnRouteChange
 }
 
-fn parse_route(uri: Uri) -> Route {
+fn parse_route(uri: uri.Uri) -> Route {
   case uri.path_segments(uri.path) {
     [] | ["dashboard"] -> O11aHomeRoute
 
@@ -233,7 +236,7 @@ pub fn get_page_view_id_from_route(route) {
   case route {
     AuditDashboardRoute(..) -> "dashboard"
     AuditInterfaceRoute(..) -> "interface"
-    AuditPageRoute(..) -> "audit-page"
+    AuditPageRoute(..) -> audit_page.view_id
     O11aHomeRoute -> "o11a"
   }
 }
@@ -271,7 +274,7 @@ pub type Msg {
     ),
   )
   UserSelectedDiscussionEntry(
-    kind: audit_page.DiscussionSelectKind,
+    kind: discussion.DiscussionSelectKind,
     view_id: String,
     line_number: Int,
     column_number: Int,
@@ -279,7 +282,7 @@ pub type Msg {
     topic_id: String,
     is_reference: Bool,
   )
-  UserUnselectedDiscussionEntry(kind: audit_page.DiscussionSelectKind)
+  UserUnselectedDiscussionEntry(kind: discussion.DiscussionSelectKind)
   UserStartedStickyOpenTimer(timer_id: global.TimerID)
   UserStartedStickyCloseTimer(timer_id: global.TimerID)
   UserHoveredInsideDiscussion(
@@ -314,13 +317,18 @@ pub type Msg {
     view_id: String,
     line_number: Int,
     column_number: Int,
-    update: #(discussion.Model, discussion.Effect),
+    update: #(
+      discussion.DiscussionOverlayModel,
+      discussion.DiscussionOverlayEffect,
+    ),
   )
-  UserSuccessfullySubmittedNote(updated_model: discussion.Model)
+  UserSuccessfullySubmittedNote(
+    updated_model: discussion.DiscussionOverlayModel,
+  )
   UserFailedToSubmitNote(error: lustre_http.HttpError)
 }
 
-fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
+fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
     OnRouteChange(route:) -> #(
       Model(
@@ -621,14 +629,14 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
       #(
         case kind {
-          audit_page.EntryHover ->
+          discussion.Hover ->
             Model(
               ..model,
               selected_discussion: option.Some(selected_discussion_key),
               discussion_models:,
               selected_node_id: node_id,
             )
-          audit_page.EntryFocus ->
+          discussion.Focus ->
             Model(
               ..model,
               focused_discussion: option.Some(selected_discussion_key),
@@ -643,7 +651,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             )
         },
         case kind {
-          audit_page.EntryHover ->
+          discussion.Hover ->
             effect.from(fn(dispatch) {
               let timer_id =
                 global.set_timeout(300, fn() {
@@ -655,7 +663,7 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
                 })
               dispatch(UserStartedStickyOpenTimer(timer_id))
             })
-          audit_page.EntryFocus -> effect.none()
+          discussion.Focus -> effect.none()
         },
       )
     }
@@ -663,16 +671,17 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     UserUnselectedDiscussionEntry(kind:) -> {
       #(
         case kind {
-          audit_page.EntryHover ->
+          discussion.Hover ->
             Model(
               ..model,
               selected_discussion: option.None,
               selected_node_id: option.None,
             )
-          audit_page.EntryFocus ->
+          discussion.Focus ->
             Model(
               ..model,
               focused_discussion: option.None,
+              clicked_discussion: option.None,
               selected_node_id: option.None,
             )
         },
@@ -988,7 +997,7 @@ fn route_change_effect(model, new_route route: Route) {
   }
 }
 
-fn fetch_metadata(model: Model, audit_name: String) -> Effect(Msg) {
+fn fetch_metadata(model: Model, audit_name: String) {
   case dict.get(model.audit_metadata, audit_name) {
     Ok(Ok(..)) -> effect.none()
     _ ->
@@ -1002,7 +1011,7 @@ fn fetch_metadata(model: Model, audit_name: String) -> Effect(Msg) {
   }
 }
 
-fn fetch_source_file(model: Model, page_path: String) -> Effect(Msg) {
+fn fetch_source_file(model: Model, page_path: String) {
   case dict.get(model.source_files, page_path) {
     Ok(Ok(..)) -> effect.none()
     _ ->
@@ -1095,7 +1104,7 @@ fn view(model: Model) {
     AuditInterfaceRoute(audit_name:) -> {
       let interface_data = case dict.get(model.audit_interface, audit_name) {
         Ok(Ok(data)) -> data
-        _ -> audit_interface.empty_interface_data()
+        _ -> audit_interface.empty_interface_data
       }
 
       let declarations = case dict.get(model.audit_declarations, audit_name) {
@@ -1156,7 +1165,6 @@ fn view(model: Model) {
         ),
         audit_tree.view(
           audit_page.view(
-            page_path:,
             preprocessed_source:,
             discussion:,
             declarations:,
@@ -1209,7 +1217,8 @@ fn get_selected_discussion(model: Model) {
     option.Some(discussion) ->
       dict.get(model.discussion_models, discussion)
       |> result.map(fn(model) {
-        option.Some(audit_page.DiscussionReference(
+        option.Some(discussion.DiscussionReference(
+          view_id: discussion.view_id,
           line_number: discussion.line_number,
           column_number: discussion.column_number,
           model:,
@@ -1236,7 +1245,7 @@ fn on_server_updated_topics(msg) {
 
 fn map_audit_page_msg(msg) {
   case msg {
-    audit_page.UserSelectedDiscussionEntry(
+    discussion.UserSelectedDiscussionEntry(
       view_id:,
       kind:,
       line_number:,
@@ -1254,31 +1263,31 @@ fn map_audit_page_msg(msg) {
         topic_id:,
         is_reference:,
       )
-    audit_page.UserUnselectedDiscussionEntry(kind:) ->
+    discussion.UserUnselectedDiscussionEntry(kind:) ->
       UserUnselectedDiscussionEntry(kind:)
-    audit_page.UserClickedDiscussionEntry(
+    discussion.UserClickedDiscussionEntry(
       view_id:,
       line_number:,
       column_number:,
     ) -> UserClickedDiscussionEntry(view_id:, line_number:, column_number:)
-    audit_page.UserUpdatedDiscussion(
+    discussion.UserUpdatedDiscussion(
       view_id:,
       line_number:,
       column_number:,
       update:,
     ) -> UserUpdatedDiscussion(view_id:, line_number:, column_number:, update:)
-    audit_page.UserClickedInsideDiscussion(
+    discussion.UserClickedInsideDiscussion(
       view_id:,
       line_number:,
       column_number:,
     ) -> UserClickedInsideDiscussion(view_id:, line_number:, column_number:)
-    audit_page.UserCtrlClickedNode(uri:) -> UserCtrlClickedNode(uri:)
-    audit_page.UserHoveredInsideDiscussion(
+    discussion.UserCtrlClickedNode(uri:) -> UserCtrlClickedNode(uri:)
+    discussion.UserHoveredInsideDiscussion(
       view_id:,
       line_number:,
       column_number:,
     ) -> UserHoveredInsideDiscussion(view_id:, line_number:, column_number:)
-    audit_page.UserUnhoveredInsideDiscussion(
+    discussion.UserUnhoveredInsideDiscussion(
       view_id:,
       line_number:,
       column_number:,

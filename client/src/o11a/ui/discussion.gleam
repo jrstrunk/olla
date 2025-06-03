@@ -4,6 +4,7 @@ import gleam/dynamic/decode
 import gleam/int
 import gleam/list
 import gleam/option
+import gleam/pair
 import gleam/result
 import gleam/set
 import gleam/string
@@ -13,13 +14,618 @@ import lustre/attribute
 import lustre/element
 import lustre/element/html
 import lustre/event
+import o11a/attributes
+import o11a/classes
 import o11a/computed_note
 import o11a/note
 import o11a/preprocessor
-import o11a/ui/node_renderer
+import o11a/ui/formatter
+import plinth/javascript/global
 
-pub type Model {
-  Model(
+// Discussion Controller -------------------------------------------------------
+
+pub type DiscussionKey {
+  DiscussionKey(view_id: String, line_number: Int, column_number: Int)
+}
+
+pub type DiscussionReference {
+  DiscussionReference(
+    view_id: String,
+    line_number: Int,
+    column_number: Int,
+    model: DiscussionOverlayModel,
+  )
+}
+
+pub type DiscussionControllerModel {
+  DiscussionControllerModel(
+    selected_discussion_key: option.Option(DiscussionKey),
+    focused_discussion_key: option.Option(DiscussionKey),
+    clicked_discussion_key: option.Option(DiscussionKey),
+    stickied_discussion_key: option.Option(DiscussionKey),
+    set_sticky_discussion_timer: option.Option(global.TimerID),
+    unset_sticky_discussion_timer: option.Option(global.TimerID),
+  )
+}
+
+pub type DiscussionControllerMsg(msg) {
+  UserSelectedDiscussionEntry(
+    kind: DiscussionSelectKind,
+    view_id: String,
+    line_number: Int,
+    column_number: Int,
+    node_id: option.Option(Int),
+    topic_id: String,
+    is_reference: Bool,
+  )
+  UserUnselectedDiscussionEntry(kind: DiscussionSelectKind)
+  UserClickedDiscussionEntry(
+    view_id: String,
+    line_number: Int,
+    column_number: Int,
+  )
+  UserCtrlClickedNode(uri: String)
+  UserUpdatedDiscussion(
+    view_id: String,
+    line_number: Int,
+    column_number: Int,
+    update: #(DiscussionOverlayModel, DiscussionOverlayEffect),
+  )
+  UserClickedInsideDiscussion(
+    view_id: String,
+    line_number: Int,
+    column_number: Int,
+  )
+  UserHoveredInsideDiscussion(
+    view_id: String,
+    line_number: Int,
+    column_number: Int,
+  )
+  UserUnhoveredInsideDiscussion(
+    view_id: String,
+    line_number: Int,
+    column_number: Int,
+  )
+}
+
+pub type DiscussionSelectKind {
+  Hover
+  Focus
+}
+
+pub fn get_selected_discussion_key(model: DiscussionControllerModel) {
+  case
+    model.focused_discussion_key,
+    model.clicked_discussion_key,
+    model.stickied_discussion_key,
+    model.selected_discussion_key
+  {
+    option.Some(discussion), _, _, _
+    | _, option.Some(discussion), _, _
+    | _, _, option.Some(discussion), _
+    | _, _, _, option.Some(discussion)
+    -> option.Some(discussion)
+    option.None, option.None, option.None, option.None -> option.None
+  }
+}
+
+pub fn discussion_view(
+  attrs,
+  discussion discussion,
+  declarations declarations,
+  view_id view_id,
+  line_number line_number,
+  column_number column_number,
+  selected_discussion selected_discussion: option.Option(DiscussionReference),
+) {
+  case selected_discussion {
+    option.Some(selected_discussion) ->
+      case
+        line_number == selected_discussion.line_number
+        && column_number == selected_discussion.column_number
+        && view_id == selected_discussion.view_id
+      {
+        True ->
+          html.div(attrs, [
+            overlay_view(selected_discussion.model, discussion, declarations)
+            |> element.map(map_discussion_msg(_, selected_discussion)),
+          ])
+        False -> element.fragment([])
+      }
+    option.None -> element.fragment([])
+  }
+}
+
+fn map_discussion_msg(msg, selected_discussion: DiscussionReference) {
+  UserUpdatedDiscussion(
+    view_id: selected_discussion.model.view_id,
+    line_number: selected_discussion.line_number,
+    column_number: selected_discussion.column_number,
+    update: update(selected_discussion.model, msg),
+  )
+}
+
+// Discussion Node -------------------------------------------------------------
+
+type SignatureLine(msg) {
+  SignatureLine(
+    indent: String,
+    indent_num: Int,
+    nodes: List(preprocessor.PreProcessedNode),
+  )
+}
+
+fn split_lines(nodes, indent indent) {
+  let #(current_line, block_lines) =
+    list.fold(nodes, #([], []), fn(acc, node) {
+      let #(current_line, block_lines) = acc
+
+      case node {
+        preprocessor.FormatterNewline -> #([], [
+          SignatureLine(
+            indent: case indent {
+              True -> "\u{a0}\u{a0}"
+              False -> ""
+            },
+            indent_num: case indent {
+              True -> 2
+              False -> 0
+            },
+            nodes: current_line,
+          ),
+          ..block_lines
+        ])
+        preprocessor.FormatterBlock(nodes) -> #(
+          [],
+          list.append(split_lines(nodes, indent: True), block_lines),
+        )
+
+        _ -> #([node, ..current_line], block_lines)
+      }
+    })
+
+  [
+    SignatureLine(
+      indent: case indent {
+        True -> "\u{a0}\u{a0}"
+        False -> ""
+      },
+      indent_num: case indent {
+        True -> 2
+        False -> 0
+      },
+      nodes: current_line,
+    ),
+    ..block_lines
+  ]
+}
+
+fn get_signature_line_topic_id(line: SignatureLine(msg), suppress_declaration) {
+  let topic_count =
+    list.count(line.nodes, fn(node) {
+      case node {
+        preprocessor.PreProcessedDeclaration(..) -> !suppress_declaration
+        preprocessor.PreProcessedReference(..) -> True
+        _ -> False
+      }
+    })
+
+  case topic_count == 1 {
+    True -> {
+      let assert Ok(topic_id) =
+        list.find_map(line.nodes, fn(node) {
+          case node {
+            preprocessor.PreProcessedDeclaration(topic_id, ..)
+            | preprocessor.PreProcessedReference(topic_id, ..) -> Ok(topic_id)
+            _ -> Error(Nil)
+          }
+        })
+      option.Some(topic_id)
+    }
+    False -> option.None
+  }
+}
+
+pub fn topic_signature_view(
+  signature signature: List(preprocessor.PreProcessedNode),
+  declarations declarations,
+  discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
+  suppress_declaration suppress_declaration: Bool,
+) {
+  split_lines(signature, indent: False)
+  |> list.fold([], fn(rendered_lines, rendered_line) {
+    let line_topic_id =
+      get_signature_line_topic_id(rendered_line, suppress_declaration)
+
+    let #(_, info_notes) = case line_topic_id {
+      option.Some(line_topic_id) ->
+        formatter.get_notes(discussion, rendered_line.indent_num, line_topic_id)
+      option.None -> #([], [])
+    }
+
+    let new_line =
+      rendered_line.nodes
+      |> list.reverse
+      |> list.map_fold(#(0, False), fn(index, node) {
+        let #(index, indented) = index
+
+        case node {
+          preprocessor.PreProcessedDeclaration(topic_id:, tokens:) -> {
+            let declaration =
+              dict.get(declarations, topic_id)
+              |> result.unwrap(preprocessor.unknown_declaration)
+
+            let rendered_node =
+              element.fragment([
+                html.span([attribute.class("relative")], [
+                  case indented {
+                    True -> element.fragment([])
+                    False -> html.text(rendered_line.indent)
+                  },
+                  html.span(
+                    [
+                      attribute.class(preprocessor.declaration_kind_to_string(
+                        declaration.kind,
+                      )),
+                    ],
+                    [html.text(tokens)],
+                  ),
+                ]),
+              ])
+
+            #(#(index, True), rendered_node)
+          }
+
+          preprocessor.PreProcessedReference(topic_id:, tokens:) -> {
+            let new_index = index + 1
+
+            let referenced_declaraion =
+              dict.get(declarations, topic_id)
+              |> result.unwrap(preprocessor.unknown_declaration)
+
+            let rendered_node =
+              html.span([attribute.class("relative")], [
+                case indented {
+                  True -> element.fragment([])
+                  False -> html.text(rendered_line.indent)
+                },
+                html.span(
+                  [
+                    attribute.class(preprocessor.declaration_kind_to_string(
+                      referenced_declaraion.kind,
+                    )),
+                    attribute.class(
+                      "N" <> int.to_string(referenced_declaraion.id),
+                    ),
+                  ],
+                  [html.text(tokens)],
+                ),
+              ])
+
+            #(#(new_index, True), rendered_node)
+          }
+
+          preprocessor.PreProcessedNode(element:)
+          | preprocessor.PreProcessedGapNode(element:, ..) -> #(
+            #(index, True),
+            element.fragment([
+              case indented {
+                True -> element.fragment([])
+                False -> html.text(rendered_line.indent)
+              },
+              element.unsafe_raw_html("preprocessed-node", "span", [], element),
+            ]),
+          )
+
+          preprocessor.FormatterNewline | preprocessor.FormatterBlock(..) -> #(
+            #(index, indented),
+            element.fragment([]),
+          )
+        }
+      })
+      |> pair.second
+
+    let new_line = [
+      element.fragment(
+        list.map(info_notes, fn(note) {
+          let #(_note_index_id, note_message) = note
+          html.p([attribute.class("comment italic")], [
+            html.text(rendered_line.indent <> note_message),
+          ])
+        }),
+      ),
+      ..new_line
+    ]
+
+    [new_line, ..rendered_lines]
+  })
+  |> list.intersperse([html.br([])])
+  |> list.flatten
+}
+
+pub type NodeViewKind {
+  ReferenceView
+  DeclarationView
+  NewDiscussionPreview
+  CommentPreview
+}
+
+pub fn node_view(
+  view_id view_id: String,
+  topic_id topic_id: String,
+  tokens tokens: String,
+  discussion discussion,
+  declarations declarations,
+  line_number line_number,
+  column_number column_number,
+  selected_discussion selected_discussion: option.Option(DiscussionReference),
+  node_view_kind node_view_kind: NodeViewKind,
+) {
+  let attrs = case node_view_kind {
+    ReferenceView -> {
+      let node_declaration =
+        dict.get(declarations, topic_id)
+        |> result.unwrap(preprocessor.unknown_declaration)
+
+      reference_node_attributes(
+        view_id:,
+        line_number:,
+        column_number:,
+        node_declaration:,
+        topic_id:,
+      )
+    }
+    DeclarationView -> {
+      let node_declaration =
+        dict.get(declarations, topic_id)
+        |> result.unwrap(preprocessor.unknown_declaration)
+
+      declaration_node_attributes(
+        view_id:,
+        line_number:,
+        column_number:,
+        node_declaration:,
+        topic_id:,
+      )
+    }
+    NewDiscussionPreview ->
+      new_discussion_preview_attributes(
+        view_id:,
+        line_number:,
+        column_number:,
+        topic_id:,
+      )
+    CommentPreview ->
+      comment_preview_attributes(
+        view_id:,
+        line_number:,
+        column_number:,
+        topic_id:,
+      )
+  }
+
+  html.span(
+    [
+      attribute.class("relative"),
+      attributes.encode_grid_location_data(
+        line_number |> int.to_string,
+        column_number |> int.to_string,
+      ),
+      event.on_mouse_enter(UserHoveredInsideDiscussion(
+        view_id:,
+        line_number:,
+        column_number:,
+      )),
+      event.on_mouse_leave(UserUnhoveredInsideDiscussion(
+        view_id:,
+        line_number:,
+        column_number:,
+      )),
+    ],
+    [
+      html.span(attrs, [html.text(tokens)]),
+      discussion_view(
+        [
+          event.on_click(UserClickedInsideDiscussion(
+            view_id:,
+            line_number:,
+            column_number:,
+          ))
+          |> event.stop_propagation,
+        ],
+        discussion:,
+        declarations:,
+        view_id:,
+        line_number:,
+        column_number:,
+        selected_discussion:,
+      ),
+    ],
+  )
+}
+
+fn declaration_node_attributes(
+  view_id view_id: String,
+  line_number line_number: Int,
+  column_number column_number: Int,
+  node_declaration node_declaration: preprocessor.Declaration,
+  topic_id topic_id: String,
+) {
+  [
+    attribute.id(preprocessor.declaration_kind_to_string(node_declaration.kind)),
+    attribute.class(preprocessor.declaration_kind_to_string(
+      node_declaration.kind,
+    )),
+    attribute.class(
+      "declaration-preview N" <> int.to_string(node_declaration.id),
+    ),
+    attribute.class(classes.discussion_entry),
+    attribute.class(classes.discussion_entry_hover),
+    attribute.attribute("tabindex", "0"),
+    event.on_focus(UserSelectedDiscussionEntry(
+      kind: Focus,
+      view_id:,
+      line_number:,
+      column_number:,
+      node_id: option.Some(node_declaration.id),
+      topic_id:,
+      is_reference: False,
+    )),
+    event.on_blur(UserUnselectedDiscussionEntry(kind: Focus)),
+    event.on_mouse_enter(UserSelectedDiscussionEntry(
+      kind: Hover,
+      view_id:,
+      line_number:,
+      column_number:,
+      node_id: option.Some(node_declaration.id),
+      topic_id:,
+      is_reference: False,
+    )),
+    event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: Hover)),
+    event.on_click(UserClickedDiscussionEntry(
+      view_id:,
+      line_number:,
+      column_number:,
+    ))
+      |> event.stop_propagation,
+  ]
+}
+
+fn reference_node_attributes(
+  view_id view_id: String,
+  line_number line_number: Int,
+  column_number column_number: Int,
+  node_declaration node_declaration: preprocessor.Declaration,
+  topic_id topic_id: String,
+) {
+  [
+    attribute.class(preprocessor.declaration_kind_to_string(
+      node_declaration.kind,
+    )),
+    attribute.class("reference-preview N" <> int.to_string(node_declaration.id)),
+    attribute.class(classes.discussion_entry),
+    attribute.class(classes.discussion_entry_hover),
+    attribute.attribute("tabindex", "0"),
+    event.on_focus(UserSelectedDiscussionEntry(
+      kind: Focus,
+      view_id:,
+      line_number:,
+      column_number:,
+      node_id: option.Some(node_declaration.id),
+      topic_id:,
+      is_reference: True,
+    )),
+    event.on_blur(UserUnselectedDiscussionEntry(kind: Focus)),
+    event.on_mouse_enter(UserSelectedDiscussionEntry(
+      kind: Hover,
+      view_id:,
+      line_number:,
+      column_number:,
+      node_id: option.Some(node_declaration.id),
+      topic_id:,
+      is_reference: True,
+    )),
+    event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: Hover)),
+    eventx.on_ctrl_click(
+      ctrl_click: UserCtrlClickedNode(uri: preprocessor.declaration_to_link(
+        node_declaration,
+      )),
+      non_ctrl_click: option.Some(UserClickedDiscussionEntry(
+        view_id:,
+        line_number:,
+        column_number:,
+      )),
+    )
+      |> event.stop_propagation,
+  ]
+}
+
+fn new_discussion_preview_attributes(
+  view_id view_id: String,
+  line_number line_number: Int,
+  column_number column_number: Int,
+  topic_id topic_id: String,
+) {
+  [
+    attribute.class("inline-comment font-code code-extras"),
+    attribute.class("new-thread-preview"),
+    attribute.class(classes.discussion_entry),
+    attribute.class(topic_id),
+    attribute.attribute("tabindex", "0"),
+    event.on_focus(UserSelectedDiscussionEntry(
+      kind: Focus,
+      view_id:,
+      line_number:,
+      column_number:,
+      node_id: option.None,
+      topic_id:,
+      is_reference: False,
+    )),
+    event.on_blur(UserUnselectedDiscussionEntry(kind: Focus)),
+    event.on_mouse_enter(UserSelectedDiscussionEntry(
+      kind: Hover,
+      view_id:,
+      line_number:,
+      column_number:,
+      node_id: option.None,
+      topic_id:,
+      is_reference: False,
+    )),
+    event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: Hover)),
+    eventx.on_non_ctrl_click(UserClickedDiscussionEntry(
+      view_id:,
+      line_number:,
+      column_number:,
+    ))
+      |> event.stop_propagation,
+  ]
+}
+
+fn comment_preview_attributes(
+  view_id view_id: String,
+  line_number line_number: Int,
+  column_number column_number: Int,
+  topic_id topic_id: String,
+) {
+  [
+    attribute.class("inline-comment font-code code-extras font-code fade-in"),
+    attribute.class("comment-preview"),
+    attribute.class(classes.discussion_entry),
+    attribute.class(topic_id),
+    attribute.attribute("tabindex", "0"),
+    event.on_focus(UserSelectedDiscussionEntry(
+      kind: Focus,
+      view_id:,
+      line_number:,
+      column_number:,
+      node_id: option.None,
+      topic_id:,
+      is_reference: False,
+    )),
+    event.on_blur(UserUnselectedDiscussionEntry(kind: Focus)),
+    event.on_mouse_enter(UserSelectedDiscussionEntry(
+      kind: Hover,
+      view_id:,
+      line_number:,
+      column_number:,
+      node_id: option.None,
+      topic_id:,
+      is_reference: False,
+    )),
+    event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: Hover)),
+    eventx.on_non_ctrl_click(UserClickedDiscussionEntry(
+      view_id:,
+      line_number:,
+      column_number:,
+    ))
+      |> event.stop_propagation,
+  ]
+}
+
+// Discussion Overlay ----------------------------------------------------------
+
+pub type DiscussionOverlayModel {
+  DiscussionOverlayModel(
     is_reference: Bool,
     show_reference_discussion: Bool,
     user_name: String,
@@ -55,7 +661,7 @@ pub fn init(
   is_reference is_reference,
   declarations declarations,
 ) {
-  Model(
+  DiscussionOverlayModel(
     is_reference:,
     show_reference_discussion: False,
     user_name: "guest",
@@ -74,7 +680,7 @@ pub fn init(
   )
 }
 
-pub type Msg {
+pub type DiscussionOverlayMsg {
   UserWroteNote(String)
   UserSubmittedNote
   UserSwitchedToThread(
@@ -94,7 +700,7 @@ pub type Msg {
   UserToggledReferenceDiscussion
 }
 
-pub type Effect {
+pub type DiscussionOverlayEffect {
   SubmitNote(note: note.NoteSubmission, topic_id: String)
   FocusDiscussionInput(view_id: String, line_number: Int, column_number: Int)
   FocusExpandedDiscussionInput(
@@ -107,16 +713,16 @@ pub type Effect {
   None
 }
 
-pub fn update(model: Model, msg: Msg) {
+pub fn update(model: DiscussionOverlayModel, msg: DiscussionOverlayMsg) {
   case msg {
     UserWroteNote(draft) -> {
-      #(Model(..model, current_note_draft: draft), None)
+      #(DiscussionOverlayModel(..model, current_note_draft: draft), None)
     }
     UserSubmittedNote -> {
       echo "Submitting note! "
-      <> model.current_note_draft
-      <> " "
-      <> model.topic_id
+        <> model.current_note_draft
+        <> " "
+        <> model.topic_id
 
       let current_note_draft = model.current_note_draft |> string.trim
 
@@ -168,7 +774,7 @@ pub fn update(model: Model, msg: Msg) {
         )
 
       #(
-        Model(
+        DiscussionOverlayModel(
           ..model,
           current_note_draft: "",
           current_expanded_message_draft: option.None,
@@ -179,7 +785,7 @@ pub fn update(model: Model, msg: Msg) {
       )
     }
     UserSwitchedToThread(new_thread_id:, parent_note:) -> #(
-      Model(
+      DiscussionOverlayModel(
         ..model,
         current_thread_id: new_thread_id,
         active_thread: option.Some(ActiveThread(
@@ -202,7 +808,7 @@ pub fn update(model: Model, msg: Msg) {
         |> option.unwrap(model.topic_id)
 
       #(
-        Model(
+        DiscussionOverlayModel(
           ..model,
           current_thread_id: new_current_thread_id,
           active_thread: new_active_thread,
@@ -211,11 +817,11 @@ pub fn update(model: Model, msg: Msg) {
       )
     }
     UserToggledExpandedMessageBox(show_expanded_message_box) -> #(
-      Model(..model, show_expanded_message_box:),
+      DiscussionOverlayModel(..model, show_expanded_message_box:),
       None,
     )
     UserWroteExpandedMessage(expanded_message) -> #(
-      Model(
+      DiscussionOverlayModel(
         ..model,
         current_expanded_message_draft: option.Some(expanded_message),
       ),
@@ -224,14 +830,14 @@ pub fn update(model: Model, msg: Msg) {
     UserToggledExpandedMessage(for_note_id) ->
       case set.contains(model.expanded_messages, for_note_id) {
         True -> #(
-          Model(
+          DiscussionOverlayModel(
             ..model,
             expanded_messages: set.delete(model.expanded_messages, for_note_id),
           ),
           None,
         )
         False -> #(
-          Model(
+          DiscussionOverlayModel(
             ..model,
             expanded_messages: set.insert(model.expanded_messages, for_note_id),
           ),
@@ -250,7 +856,7 @@ pub fn update(model: Model, msg: Msg) {
     // to true. This makes sure the model state is in sync with any external
     // calls to focus the expanded message box.
     UserFocusedExpandedInput -> #(
-      Model(..model, show_expanded_message_box: True),
+      DiscussionOverlayModel(..model, show_expanded_message_box: True),
       FocusExpandedDiscussionInput(
         view_id: model.view_id,
         line_number: model.line_number,
@@ -276,7 +882,7 @@ pub fn update(model: Model, msg: Msg) {
     UserEditedNote(note) ->
       case note {
         Ok(note) -> #(
-          Model(
+          DiscussionOverlayModel(
             ..model,
             current_note_draft: get_message_classification_prefix(
                 note.significance,
@@ -294,7 +900,7 @@ pub fn update(model: Model, msg: Msg) {
         Error(Nil) -> #(model, None)
       }
     UserCancelledEdit -> #(
-      Model(
+      DiscussionOverlayModel(
         ..model,
         current_note_draft: "",
         current_expanded_message_draft: option.None,
@@ -304,7 +910,7 @@ pub fn update(model: Model, msg: Msg) {
       None,
     )
     UserToggledReferenceDiscussion -> #(
-      Model(
+      DiscussionOverlayModel(
         ..model,
         show_reference_discussion: !model.show_reference_discussion,
       ),
@@ -314,7 +920,7 @@ pub fn update(model: Model, msg: Msg) {
 }
 
 pub fn overlay_view(
-  model: Model,
+  model: DiscussionOverlayModel,
   notes: dict.Dict(String, List(computed_note.ComputedNote)),
   declarations: dict.Dict(String, preprocessor.Declaration),
 ) {
@@ -365,7 +971,7 @@ pub fn overlay_view(
   )
 }
 
-pub fn panel_view(model: Model, notes, references) {
+pub fn panel_view(model: DiscussionOverlayModel, notes, references) {
   let current_thread_notes =
     dict.get(notes, model.current_thread_id)
     |> result.unwrap([])
@@ -391,7 +997,11 @@ pub fn panel_view(model: Model, notes, references) {
   ])
 }
 
-fn reference_header_view(model: Model, current_thread_notes, notes) {
+fn reference_header_view(
+  model: DiscussionOverlayModel,
+  current_thread_notes,
+  notes,
+) {
   element.fragment([
     html.div(
       [
@@ -439,7 +1049,7 @@ fn reference_header_view(model: Model, current_thread_notes, notes) {
   ])
 }
 
-fn thread_header_view(model: Model, references, notes) {
+fn thread_header_view(model: DiscussionOverlayModel, references, notes) {
   let declaration =
     dict.get(model.declarations, model.topic_id)
     |> result.unwrap(preprocessor.unknown_declaration)
@@ -550,7 +1160,7 @@ fn reference_group_view(references: List(preprocessor.Reference), group_kind) {
 }
 
 fn comments_view(
-  model: Model,
+  model: DiscussionOverlayModel,
   current_thread_notes: List(computed_note.ComputedNote),
 ) {
   html.div(
@@ -635,7 +1245,7 @@ fn significance_badge_view(sig: computed_note.ComputedNoteSignificance) {
   }
 }
 
-fn new_message_input_view(model: Model, current_thread_notes) {
+fn new_message_input_view(model: DiscussionOverlayModel, current_thread_notes) {
   html.div([attribute.class("flex justify-between items-center gap-[.35rem]")], [
     html.button(
       [
@@ -677,7 +1287,7 @@ fn new_message_input_view(model: Model, current_thread_notes) {
   ])
 }
 
-fn expanded_message_view(model: Model) {
+fn expanded_message_view(model: DiscussionOverlayModel) {
   let expanded_message_style =
     "absolute overlay p-[.5rem] flex w-[100%] h-60 mt-2"
 
@@ -693,7 +1303,7 @@ fn expanded_message_view(model: Model) {
   )
 }
 
-fn expand_message_input_view(model: Model) {
+fn expand_message_input_view(model: DiscussionOverlayModel) {
   html.textarea(
     [
       attribute.id("expanded-message-box"),
@@ -745,11 +1355,11 @@ fn on_input_keydown(enter_msg, up_msg) {
   })
 }
 
-fn get_topic_title(model: Model, notes) {
+fn get_topic_title(model: DiscussionOverlayModel, notes) {
   case dict.get(model.declarations, model.topic_id) {
     Ok(dec) ->
       dec.signature
-      |> node_renderer.render_topic_signature(
+      |> topic_signature_view(
         model.declarations,
         notes,
         suppress_declaration: True,
