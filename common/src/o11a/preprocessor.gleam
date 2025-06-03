@@ -574,6 +574,7 @@ pub type PreProcessedNode {
   PreProcessedGapNode(element: String, leading_spaces: Int)
   FormatterNewline
   FormatterBlock(nodes: List(PreProcessedNode))
+  FormatterIndent
 }
 
 fn encode_pre_processed_node(pre_processed_node: PreProcessedNode) -> json.Json {
@@ -607,6 +608,7 @@ fn encode_pre_processed_node(pre_processed_node: PreProcessedNode) -> json.Json 
         #("v", json.string("fb")),
         #("n", json.array(nodes, encode_pre_processed_node)),
       ])
+    FormatterIndent -> json.object([#("v", json.string("fi"))])
   }
 }
 

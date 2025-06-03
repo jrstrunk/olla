@@ -235,7 +235,7 @@ fn get_audit_name_from_model(model: Model) {
 pub fn get_page_view_id_from_route(route) {
   case route {
     AuditDashboardRoute(..) -> "dashboard"
-    AuditInterfaceRoute(..) -> "interface"
+    AuditInterfaceRoute(..) -> audit_interface.view_id
     AuditPageRoute(..) -> audit_page.view_id
     O11aHomeRoute -> "o11a"
   }
@@ -617,7 +617,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
             model.discussion_models,
             selected_discussion_key,
             discussion.init(
-              view_id:,
+              view_id: view_id <> topic_id,
               line_number:,
               column_number:,
               topic_id:,
@@ -1102,6 +1102,8 @@ fn view(model: Model) {
     }
 
     AuditInterfaceRoute(audit_name:) -> {
+      let selected_discussion = get_selected_discussion(model)
+
       let interface_data = case dict.get(model.audit_interface, audit_name) {
         Ok(Ok(data)) -> data
         _ -> audit_interface.empty_interface_data
@@ -1127,6 +1129,7 @@ fn view(model: Model) {
             audit_name,
             declarations,
             discussion,
+            selected_discussion,
           ),
           option.None,
           model.file_tree,

@@ -147,14 +147,6 @@ fn map_discussion_msg(msg, selected_discussion: DiscussionReference) {
 
 // Discussion Node -------------------------------------------------------------
 
-type SignatureLine(msg) {
-  SignatureLine(
-    indent: String,
-    indent_num: Int,
-    nodes: List(preprocessor.PreProcessedNode),
-  )
-}
-
 fn split_lines(nodes, indent indent) {
   let #(current_line, block_lines) =
     list.fold(nodes, #([], []), fn(acc, node) {
@@ -162,17 +154,10 @@ fn split_lines(nodes, indent indent) {
 
       case node {
         preprocessor.FormatterNewline -> #([], [
-          SignatureLine(
-            indent: case indent {
-              True -> "\u{a0}\u{a0}"
-              False -> ""
-            },
-            indent_num: case indent {
-              True -> 2
-              False -> 0
-            },
-            nodes: current_line,
-          ),
+          case indent {
+            True -> [preprocessor.FormatterIndent, ..list.reverse(current_line)]
+            False -> list.reverse(current_line)
+          },
           ..block_lines
         ])
         preprocessor.FormatterBlock(nodes) -> #(
@@ -185,24 +170,20 @@ fn split_lines(nodes, indent indent) {
     })
 
   [
-    SignatureLine(
-      indent: case indent {
-        True -> "\u{a0}\u{a0}"
-        False -> ""
-      },
-      indent_num: case indent {
-        True -> 2
-        False -> 0
-      },
-      nodes: current_line,
-    ),
+    case indent {
+      True -> [preprocessor.FormatterIndent, ..list.reverse(current_line)]
+      False -> list.reverse(current_line)
+    },
     ..block_lines
   ]
 }
 
-fn get_signature_line_topic_id(line: SignatureLine(msg), suppress_declaration) {
+fn get_signature_line_topic_id(
+  line_nodes: List(preprocessor.PreProcessedNode),
+  suppress_declaration,
+) {
   let topic_count =
-    list.count(line.nodes, fn(node) {
+    list.count(line_nodes, fn(node) {
       case node {
         preprocessor.PreProcessedDeclaration(..) -> !suppress_declaration
         preprocessor.PreProcessedReference(..) -> True
@@ -213,7 +194,7 @@ fn get_signature_line_topic_id(line: SignatureLine(msg), suppress_declaration) {
   case topic_count == 1 {
     True -> {
       let assert Ok(topic_id) =
-        list.find_map(line.nodes, fn(node) {
+        list.find_map(line_nodes, fn(node) {
           case node {
             preprocessor.PreProcessedDeclaration(topic_id, ..)
             | preprocessor.PreProcessedReference(topic_id, ..) -> Ok(topic_id)
@@ -227,118 +208,113 @@ fn get_signature_line_topic_id(line: SignatureLine(msg), suppress_declaration) {
 }
 
 pub fn topic_signature_view(
+  view_id view_id: String,
   signature signature: List(preprocessor.PreProcessedNode),
-  declarations declarations,
+  declarations declarations: dict.Dict(String, preprocessor.Declaration),
   discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
   suppress_declaration suppress_declaration: Bool,
-) {
+  line_number_offset line_number_offset: Int,
+  selected_discussion selected_discussion: option.Option(DiscussionReference),
+) -> List(element.Element(DiscussionControllerMsg(msg))) {
   split_lines(signature, indent: False)
-  |> list.fold([], fn(rendered_lines, rendered_line) {
-    let line_topic_id =
-      get_signature_line_topic_id(rendered_line, suppress_declaration)
+  |> list.fold(#(line_number_offset, []), fn(acc, rendered_line_nodes) {
+    let #(line_number_offset, rendered_lines) = acc
+    let new_line_number = line_number_offset + 1
 
-    let #(_, info_notes) = case line_topic_id {
-      option.Some(line_topic_id) ->
-        formatter.get_notes(discussion, rendered_line.indent_num, line_topic_id)
-      option.None -> #([], [])
+    let indent_num = case rendered_line_nodes {
+      [preprocessor.FormatterIndent, ..] -> 2
+      _ -> 0
     }
 
-    let new_line =
-      rendered_line.nodes
-      |> list.reverse
-      |> list.map_fold(#(0, False), fn(index, node) {
-        let #(index, indented) = index
-
+    let #(_col_index, new_line) =
+      rendered_line_nodes
+      |> list.map_fold(0, fn(column_number, node) {
         case node {
           preprocessor.PreProcessedDeclaration(topic_id:, tokens:) -> {
-            let declaration =
-              dict.get(declarations, topic_id)
-              |> result.unwrap(preprocessor.unknown_declaration)
+            let new_column_number = case suppress_declaration {
+              True -> column_number
+              False -> column_number + 1
+            }
 
             let rendered_node =
-              element.fragment([
-                html.span([attribute.class("relative")], [
-                  case indented {
-                    True -> element.fragment([])
-                    False -> html.text(rendered_line.indent)
-                  },
-                  html.span(
-                    [
-                      attribute.class(preprocessor.declaration_kind_to_string(
-                        declaration.kind,
-                      )),
-                    ],
-                    [html.text(tokens)],
-                  ),
-                ]),
-              ])
+              node_view(
+                view_id:,
+                topic_id:,
+                tokens:,
+                discussion:,
+                declarations:,
+                line_number: new_line_number,
+                column_number: new_column_number,
+                selected_discussion:,
+                node_view_kind: DeclarationView,
+              )
 
-            #(#(index, True), rendered_node)
+            #(new_column_number, rendered_node)
           }
 
           preprocessor.PreProcessedReference(topic_id:, tokens:) -> {
-            let new_index = index + 1
-
-            let referenced_declaraion =
-              dict.get(declarations, topic_id)
-              |> result.unwrap(preprocessor.unknown_declaration)
+            let new_column_number = column_number + 1
 
             let rendered_node =
-              html.span([attribute.class("relative")], [
-                case indented {
-                  True -> element.fragment([])
-                  False -> html.text(rendered_line.indent)
-                },
-                html.span(
-                  [
-                    attribute.class(preprocessor.declaration_kind_to_string(
-                      referenced_declaraion.kind,
-                    )),
-                    attribute.class(
-                      "N" <> int.to_string(referenced_declaraion.id),
-                    ),
-                  ],
-                  [html.text(tokens)],
-                ),
-              ])
+              node_view(
+                view_id:,
+                topic_id:,
+                tokens:,
+                discussion:,
+                declarations:,
+                line_number: new_line_number,
+                column_number: new_column_number,
+                selected_discussion:,
+                node_view_kind: ReferenceView,
+              )
 
-            #(#(new_index, True), rendered_node)
+            #(new_column_number, rendered_node)
           }
 
           preprocessor.PreProcessedNode(element:)
           | preprocessor.PreProcessedGapNode(element:, ..) -> #(
-            #(index, True),
+            column_number,
             element.fragment([
-              case indented {
-                True -> element.fragment([])
-                False -> html.text(rendered_line.indent)
-              },
               element.unsafe_raw_html("preprocessed-node", "span", [], element),
             ]),
           )
 
+          preprocessor.FormatterIndent -> #(
+            column_number,
+            html.span([], [html.text("\u{a0}\u{a0}")]),
+          )
+
           preprocessor.FormatterNewline | preprocessor.FormatterBlock(..) -> #(
-            #(index, indented),
+            column_number,
             element.fragment([]),
           )
         }
       })
-      |> pair.second
+
+    let line_topic_id =
+      get_signature_line_topic_id(rendered_line_nodes, suppress_declaration)
+
+    let #(_, info_notes) = case line_topic_id {
+      option.Some(line_topic_id) ->
+        formatter.get_notes(discussion, indent_num, line_topic_id)
+      option.None -> #([], [])
+    }
 
     let new_line = [
       element.fragment(
         list.map(info_notes, fn(note) {
           let #(_note_index_id, note_message) = note
           html.p([attribute.class("comment italic")], [
-            html.text(rendered_line.indent <> note_message),
+            html.text(string.repeat("\u{a0}", indent_num) <> note_message),
           ])
         }),
       ),
       ..new_line
     ]
 
-    [new_line, ..rendered_lines]
+    #(new_line_number, [new_line, ..rendered_lines])
   })
+  |> pair.second
   |> list.intersperse([html.br([])])
   |> list.flatten
 }
@@ -641,6 +617,8 @@ pub type DiscussionOverlayModel {
     expanded_messages: set.Set(String),
     editing_note: option.Option(computed_note.ComputedNote),
     declarations: dict.Dict(String, preprocessor.Declaration),
+    selected_discussion: option.Option(DiscussionKey),
+    discussion_models: dict.Dict(DiscussionKey, DiscussionReference),
   )
 }
 
@@ -677,6 +655,8 @@ pub fn init(
     expanded_messages: set.new(),
     editing_note: option.None,
     declarations:,
+    selected_discussion: option.None,
+    discussion_models: dict.new(),
   )
 }
 
@@ -719,11 +699,6 @@ pub fn update(model: DiscussionOverlayModel, msg: DiscussionOverlayMsg) {
       #(DiscussionOverlayModel(..model, current_note_draft: draft), None)
     }
     UserSubmittedNote -> {
-      echo "Submitting note! "
-        <> model.current_note_draft
-        <> " "
-        <> model.topic_id
-
       let current_note_draft = model.current_note_draft |> string.trim
 
       let #(significance, message) =
@@ -1358,12 +1333,18 @@ fn on_input_keydown(enter_msg, up_msg) {
 fn get_topic_title(model: DiscussionOverlayModel, notes) {
   case dict.get(model.declarations, model.topic_id) {
     Ok(dec) ->
-      dec.signature
-      |> topic_signature_view(
-        model.declarations,
-        notes,
+      topic_signature_view(
+        view_id: model.view_id,
+        signature: dec.signature,
+        declarations: model.declarations,
+        discussion: notes,
         suppress_declaration: True,
+        line_number_offset: 0,
+        selected_discussion: dict.get(model.discussion_models, todo)
+          |> result.map(option.Some)
+          |> result.unwrap(option.None),
       )
     Error(Nil) -> [html.span([], [html.text("unknown")])]
   }
+  todo
 }

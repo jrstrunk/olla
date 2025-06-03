@@ -170,7 +170,8 @@ pub fn preprocess_source(
           preprocessor.PreProcessedNode(..)
           | preprocessor.PreProcessedGapNode(..)
           | preprocessor.FormatterNewline
-          | preprocessor.FormatterBlock(..) -> acc
+          | preprocessor.FormatterBlock(..)
+          | preprocessor.FormatterIndent -> acc
         }
       })
 

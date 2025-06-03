@@ -821,6 +821,24 @@ function concat_loop(loop$strings, loop$accumulator) {
 function concat2(strings) {
   return concat_loop(strings, "");
 }
+function repeat_loop(loop$string, loop$times, loop$acc) {
+  while (true) {
+    let string6 = loop$string;
+    let times = loop$times;
+    let acc = loop$acc;
+    let $ = times <= 0;
+    if ($) {
+      return acc;
+    } else {
+      loop$string = string6;
+      loop$times = times - 1;
+      loop$acc = acc + string6;
+    }
+  }
+}
+function repeat(string6, times) {
+  return repeat_loop(string6, times, "");
+}
 function join_loop(loop$strings, loop$separator, loop$accumulator) {
   while (true) {
     let strings = loop$strings;
@@ -2886,7 +2904,7 @@ function sort(list4, compare5) {
     }
   }
 }
-function repeat_loop(loop$item, loop$times, loop$acc) {
+function repeat_loop2(loop$item, loop$times, loop$acc) {
   while (true) {
     let item = loop$item;
     let times = loop$times;
@@ -2902,7 +2920,7 @@ function repeat_loop(loop$item, loop$times, loop$acc) {
   }
 }
 function repeat2(a2, times) {
-  return repeat_loop(a2, times, toList([]));
+  return repeat_loop2(a2, times, toList([]));
 }
 function key_set_loop(loop$list, loop$key, loop$value, loop$inspected) {
   while (true) {
@@ -9026,6 +9044,8 @@ var FormatterBlock = class extends CustomType {
     this.nodes = nodes;
   }
 };
+var FormatterIndent = class extends CustomType {
+};
 function scope_decoder() {
   return field(
     "f",
@@ -11218,10 +11238,8 @@ var Hover = class extends CustomType {
 var Focus = class extends CustomType {
 };
 var SignatureLine = class extends CustomType {
-  constructor(indent, indent_num, nodes) {
+  constructor(nodes) {
     super();
-    this.indent = indent;
-    this.indent_num = indent_num;
     this.nodes = nodes;
   }
 };
@@ -11370,19 +11388,14 @@ function split_lines(nodes, indent) {
             new SignatureLine(
               (() => {
                 if (indent) {
-                  return "\xA0\xA0";
+                  return prepend(
+                    new FormatterIndent(),
+                    reverse(current_line2)
+                  );
                 } else {
-                  return "";
+                  return reverse(current_line2);
                 }
-              })(),
-              (() => {
-                if (indent) {
-                  return 2;
-                } else {
-                  return 0;
-                }
-              })(),
-              current_line2
+              })()
             ),
             block_lines2
           )
@@ -11404,19 +11417,14 @@ function split_lines(nodes, indent) {
     new SignatureLine(
       (() => {
         if (indent) {
-          return "\xA0\xA0";
+          return prepend(
+            new FormatterIndent(),
+            reverse(current_line)
+          );
         } else {
-          return "";
+          return reverse(current_line);
         }
-      })(),
-      (() => {
-        if (indent) {
-          return 2;
-        } else {
-          return 0;
-        }
-      })(),
-      current_line
+      })()
     ),
     block_lines
   );
@@ -11455,15 +11463,15 @@ function get_signature_line_topic_id(line2, suppress_declaration) {
         "let_assert",
         FILEPATH2,
         "o11a/ui/discussion",
-        215,
+        197,
         "get_signature_line_topic_id",
         "Pattern match failed, no pattern matched the value.",
         {
           value: $1,
-          start: 5434,
-          end: 5719,
-          pattern_start: 5445,
-          pattern_end: 5457
+          start: 5232,
+          end: 5517,
+          pattern_start: 5243,
+          pattern_end: 5255
         }
       );
     }
@@ -11484,23 +11492,22 @@ function topic_signature_view(signature, declarations, discussion, suppress_decl
         suppress_declaration
       );
       let _block;
-      if (line_topic_id instanceof Some) {
-        let line_topic_id$1 = line_topic_id[0];
-        _block = get_notes(
-          discussion,
-          rendered_line.indent_num,
-          line_topic_id$1
-        );
+      let $ = rendered_line.nodes;
+      if ($ instanceof Empty) {
+        _block = 0;
       } else {
-        _block = [toList([]), toList([])];
+        let $12 = $.head;
+        if ($12 instanceof FormatterIndent) {
+          _block = 2;
+        } else {
+          _block = 0;
+        }
       }
-      let $ = _block;
-      let info_notes = $[1];
+      let indent_num = _block;
       let _block$1;
       let _pipe$12 = rendered_line.nodes;
-      let _pipe$22 = reverse(_pipe$12);
-      let _pipe$3 = map_fold(
-        _pipe$22,
+      let _pipe$22 = map_fold(
+        _pipe$12,
         [0, false],
         (index5, node) => {
           let index$1 = index5[0];
@@ -11508,25 +11515,18 @@ function topic_signature_view(signature, declarations, discussion, suppress_decl
           if (node instanceof PreProcessedDeclaration) {
             let topic_id = node.topic_id;
             let tokens = node.tokens;
-            let _block$2;
-            let _pipe$32 = map_get(declarations, topic_id);
-            _block$2 = unwrap2(
-              _pipe$32,
+            let _block$22;
+            let _pipe$23 = map_get(declarations, topic_id);
+            _block$22 = unwrap2(
+              _pipe$23,
               unknown_declaration
             );
-            let declaration = _block$2;
+            let declaration = _block$22;
             let rendered_node = fragment2(
               toList([
                 span(
                   toList([class$("relative")]),
                   toList([
-                    (() => {
-                      if (indented) {
-                        return fragment2(toList([]));
-                      } else {
-                        return text3(rendered_line.indent);
-                      }
-                    })(),
                     span(
                       toList([
                         class$(
@@ -11546,23 +11546,16 @@ function topic_signature_view(signature, declarations, discussion, suppress_decl
             let topic_id = node.topic_id;
             let tokens = node.tokens;
             let new_index = index$1 + 1;
-            let _block$2;
-            let _pipe$32 = map_get(declarations, topic_id);
-            _block$2 = unwrap2(
-              _pipe$32,
+            let _block$22;
+            let _pipe$23 = map_get(declarations, topic_id);
+            _block$22 = unwrap2(
+              _pipe$23,
               unknown_declaration
             );
-            let referenced_declaraion = _block$2;
+            let referenced_declaraion = _block$22;
             let rendered_node = span(
               toList([class$("relative")]),
               toList([
-                (() => {
-                  if (indented) {
-                    return fragment2(toList([]));
-                  } else {
-                    return text3(rendered_line.indent);
-                  }
-                })(),
                 span(
                   toList([
                     class$(
@@ -11585,13 +11578,6 @@ function topic_signature_view(signature, declarations, discussion, suppress_decl
               [index$1, true],
               fragment2(
                 toList([
-                  (() => {
-                    if (indented) {
-                      return fragment2(toList([]));
-                    } else {
-                      return text3(rendered_line.indent);
-                    }
-                  })(),
                   unsafe_raw_html(
                     "preprocessed-node",
                     "span",
@@ -11607,13 +11593,6 @@ function topic_signature_view(signature, declarations, discussion, suppress_decl
               [index$1, true],
               fragment2(
                 toList([
-                  (() => {
-                    if (indented) {
-                      return fragment2(toList([]));
-                    } else {
-                      return text3(rendered_line.indent);
-                    }
-                  })(),
                   unsafe_raw_html(
                     "preprocessed-node",
                     "span",
@@ -11625,13 +11604,27 @@ function topic_signature_view(signature, declarations, discussion, suppress_decl
             ];
           } else if (node instanceof FormatterNewline) {
             return [[index$1, indented], fragment2(toList([]))];
-          } else {
+          } else if (node instanceof FormatterBlock) {
             return [[index$1, indented], fragment2(toList([]))];
+          } else {
+            return [
+              [index$1, indented],
+              span(toList([]), toList([text3("\xA0\xA0")]))
+            ];
           }
         }
       );
-      _block$1 = second(_pipe$3);
+      _block$1 = second(_pipe$22);
       let new_line = _block$1;
+      let _block$2;
+      if (line_topic_id instanceof Some) {
+        let line_topic_id$1 = line_topic_id[0];
+        _block$2 = get_notes(discussion, indent_num, line_topic_id$1);
+      } else {
+        _block$2 = [toList([]), toList([])];
+      }
+      let $1 = _block$2;
+      let info_notes = $1[1];
       let new_line$1 = prepend(
         fragment2(
           map2(
@@ -11640,7 +11633,11 @@ function topic_signature_view(signature, declarations, discussion, suppress_decl
               let note_message = note[1];
               return p(
                 toList([class$("comment italic")]),
-                toList([text3(rendered_line.indent + note_message)])
+                toList([
+                  text3(
+                    repeat("\xA0", indent_num) + note_message
+                  )
+                ])
               );
             }
           )
@@ -12143,7 +12140,7 @@ function update2(model, msg) {
     echo2(
       "Submitting note! " + model.current_note_draft + " " + model.topic_id,
       "src/o11a/ui/discussion.gleam",
-      722
+      701
     );
     let _block;
     let _pipe = model.current_note_draft;
@@ -13699,6 +13696,8 @@ function preprocessed_nodes_view(loc, discussion, declarations, selected_discuss
           )
         ];
       } else if (element4 instanceof FormatterNewline) {
+        return [index5, fragment2(toList([]))];
+      } else if (element4 instanceof FormatterBlock) {
         return [index5, fragment2(toList([]))];
       } else {
         return [index5, fragment2(toList([]))];
