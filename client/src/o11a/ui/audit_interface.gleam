@@ -10,7 +10,7 @@ import o11a/computed_note
 import o11a/preprocessor
 import o11a/ui/discussion
 
-pub const view_id = "interface"
+pub const view_id = ["interface"]
 
 pub type InterfaceData {
   InterfaceData(

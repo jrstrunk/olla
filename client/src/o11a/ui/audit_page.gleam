@@ -19,7 +19,7 @@ import o11a/preprocessor
 import o11a/ui/discussion
 import o11a/ui/formatter
 
-pub const view_id = "audit-page"
+pub const view_id = ["audit-page"]
 
 pub type Model {
   Model(
@@ -39,9 +39,10 @@ pub fn view(
 ) {
   html.div(
     [
-      attribute.id(view_id),
+      attribute.id(discussion.view_id_to_string(view_id)),
       attribute.class("code-snippet"),
       attribute.data("lc", preprocessed_source |> list.length |> int.to_string),
+      event.on_click(discussion.UserClickedOutsideDiscussion(view_id:)),
     ],
     list.map(preprocessed_source, loc_view(
       _,
@@ -187,7 +188,6 @@ fn inline_comment_preview_view(
   case note_result {
     Ok(note) ->
       discussion.node_view(
-        view_id:,
         topic_id:,
         tokens: case string.length(note.message) > 40 {
           True -> note.message |> string.slice(0, length: 37) <> "⋯"
@@ -195,21 +195,26 @@ fn inline_comment_preview_view(
         },
         discussion:,
         declarations:,
-        line_number:,
-        column_number:,
+        discussion_id: discussion.DiscussionId(
+          view_id:,
+          line_number:,
+          column_number:,
+        ),
         selected_discussion:,
         node_view_kind: discussion.CommentPreview,
       )
 
     Error(Nil) ->
       discussion.node_view(
-        view_id:,
         topic_id:,
         tokens: "Start new thread",
         discussion:,
         declarations:,
-        line_number:,
-        column_number:,
+        discussion_id: discussion.DiscussionId(
+          view_id:,
+          line_number:,
+          column_number:,
+        ),
         selected_discussion:,
         node_view_kind: discussion.NewDiscussionPreview,
       )
@@ -231,11 +236,13 @@ fn preprocessed_nodes_view(
         #(
           new_column_index,
           discussion.node_view(
-            view_id:,
             topic_id:,
             tokens:,
-            line_number: loc.line_number,
-            column_number: new_column_index,
+            discussion_id: discussion.DiscussionId(
+              view_id:,
+              line_number: loc.line_number,
+              column_number: new_column_index,
+            ),
             selected_discussion:,
             discussion:,
             declarations:,
@@ -249,11 +256,13 @@ fn preprocessed_nodes_view(
         #(
           new_column_index,
           discussion.node_view(
-            view_id:,
             topic_id:,
             tokens:,
-            line_number: loc.line_number,
-            column_number: new_column_index,
+            discussion_id: discussion.DiscussionId(
+              view_id:,
+              line_number: loc.line_number,
+              column_number: new_column_index,
+            ),
             selected_discussion:,
             discussion:,
             declarations:,

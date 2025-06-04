@@ -5,13 +5,14 @@ import lustre/effect
 import o11a/client/attributes as client_attributes
 import o11a/client/selectors
 import o11a/client/storage
+import o11a/ui/discussion
 import plinth/browser/element
 import plinth/browser/event
 import snag
 
 pub type Model {
   Model(
-    current_view_id: String,
+    current_view_id: List(String),
     cursor_line_number: Int,
     cursor_column_number: Int,
     active_line_number: Int,
@@ -89,7 +90,7 @@ fn handle_input_escape(event, model: Model, else_do) {
       Ok(#(
         model,
         focus_line_discussion(
-          view_id: model.current_view_id,
+          view_id: discussion.view_id_to_string(model.current_view_id),
           line_number: model.cursor_line_number,
           column_number: model.cursor_column_number,
         ),
@@ -153,7 +154,7 @@ fn move_focus_line(model: Model, by step) {
   #(
     Model(..model, current_line_column_count: column_count),
     focus_line_discussion(
-      view_id: model.current_view_id,
+      view_id: discussion.view_id_to_string(model.current_view_id),
       line_number: new_line,
       column_number: int.min(column_count, model.cursor_column_number),
     ),
@@ -170,7 +171,7 @@ fn move_focus_column(model: Model, by step) {
   #(
     model,
     focus_line_discussion(
-      view_id: model.current_view_id,
+      view_id: discussion.view_id_to_string(model.current_view_id),
       line_number: model.cursor_line_number,
       column_number: new_column,
     ),
@@ -184,7 +185,7 @@ fn handle_discussion_escape(event, model: Model, else_do) {
       Ok(#(
         model,
         blur_line_discussion(
-          view_id: model.current_view_id,
+          view_id: discussion.view_id_to_string(model.current_view_id),
           line_number: model.cursor_line_number,
           column_number: model.cursor_column_number,
         ),
@@ -200,7 +201,7 @@ fn handle_input_focus(event, model: Model, else_do) {
       Ok(#(
         model,
         focus_line_discussion_input(
-          view_id: model.current_view_id,
+          view_id: discussion.view_id_to_string(model.current_view_id),
           line_number: model.active_line_number,
           column_number: model.active_column_number,
         ),

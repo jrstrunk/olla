@@ -24,67 +24,39 @@ import plinth/javascript/global
 
 // Discussion Controller -------------------------------------------------------
 
-pub type DiscussionKey {
-  DiscussionKey(view_id: String, line_number: Int, column_number: Int)
+pub type DiscussionId {
+  DiscussionId(view_id: List(String), line_number: Int, column_number: Int)
 }
 
 pub type DiscussionReference {
   DiscussionReference(
-    view_id: String,
-    line_number: Int,
-    column_number: Int,
+    discussion_id: DiscussionId,
     model: DiscussionOverlayModel,
   )
 }
 
-pub type DiscussionControllerModel {
-  DiscussionControllerModel(
-    selected_discussion_key: option.Option(DiscussionKey),
-    focused_discussion_key: option.Option(DiscussionKey),
-    clicked_discussion_key: option.Option(DiscussionKey),
-    stickied_discussion_key: option.Option(DiscussionKey),
-    set_sticky_discussion_timer: option.Option(global.TimerID),
-    unset_sticky_discussion_timer: option.Option(global.TimerID),
-  )
-}
-
-pub type DiscussionControllerMsg(msg) {
+pub type DiscussionControllerMsg {
   UserSelectedDiscussionEntry(
     kind: DiscussionSelectKind,
-    view_id: String,
-    line_number: Int,
-    column_number: Int,
+    discussion_id: DiscussionId,
     node_id: option.Option(Int),
     topic_id: String,
     is_reference: Bool,
   )
   UserUnselectedDiscussionEntry(kind: DiscussionSelectKind)
-  UserClickedDiscussionEntry(
-    view_id: String,
-    line_number: Int,
-    column_number: Int,
-  )
+  UserStartedStickyOpenTimer(timer_id: global.TimerID)
+  UserStartedStickyCloseTimer(timer_id: global.TimerID)
+  UserHoveredInsideDiscussion(discussion_id: DiscussionId)
+  UserUnhoveredInsideDiscussion(discussion_id: DiscussionId)
+  ClientSetStickyDiscussion(discussion_id: DiscussionId)
+  ClientUnsetStickyDiscussion
+  UserClickedDiscussionEntry(discussion_id: DiscussionId)
+  UserClickedInsideDiscussion(discussion_id: DiscussionId)
+  UserClickedOutsideDiscussion(view_id: List(String))
   UserCtrlClickedNode(uri: String)
   UserUpdatedDiscussion(
-    view_id: String,
-    line_number: Int,
-    column_number: Int,
+    discussion_id: DiscussionId,
     update: #(DiscussionOverlayModel, DiscussionOverlayEffect),
-  )
-  UserClickedInsideDiscussion(
-    view_id: String,
-    line_number: Int,
-    column_number: Int,
-  )
-  UserHoveredInsideDiscussion(
-    view_id: String,
-    line_number: Int,
-    column_number: Int,
-  )
-  UserUnhoveredInsideDiscussion(
-    view_id: String,
-    line_number: Int,
-    column_number: Int,
   )
 }
 
@@ -93,38 +65,326 @@ pub type DiscussionSelectKind {
   Focus
 }
 
-pub fn get_selected_discussion_key(model: DiscussionControllerModel) {
-  case
-    model.focused_discussion_key,
-    model.clicked_discussion_key,
-    model.stickied_discussion_key,
-    model.selected_discussion_key
-  {
-    option.Some(discussion), _, _, _
-    | _, option.Some(discussion), _, _
-    | _, _, option.Some(discussion), _
-    | _, _, _, option.Some(discussion)
-    -> option.Some(discussion)
-    option.None, option.None, option.None, option.None -> option.None
-  }
-}
+// pub fn discussion_controller_update(model: DiscussionControllerModel, msg) {
+//   case msg {
+//     UserSelectedDiscussionEntry(
+//       kind:,
+//       view_id:,
+//       line_number:,
+//       column_number:,
+//       node_id:,
+//       topic_id:,
+//       is_reference:,
+//     ) -> {
+//       let selected_discussion_id =
+//         DiscussionId(view_id:, line_number:, column_number:)
+
+//       let discussion_models = case
+//         dict.get(model.discussion_models, selected_discussion_id)
+//       {
+//         Ok(..) -> model.discussion_models
+//         Error(Nil) ->
+//           dict.insert(
+//             model.discussion_models,
+//             selected_discussion_id,
+//             init(
+//               view_id: view_id <> topic_id,
+//               line_number:,
+//               column_number:,
+//               topic_id:,
+//               is_reference:,
+//             ),
+//           )
+//       }
+
+//       #(
+//         case kind {
+//           Hover -> {
+//             let updated_model =
+//               DiscussionControllerModel(
+//                 ..model,
+//                 selected_discussion_id: option.Some(selected_discussion_id),
+//                 discussion_models:,
+//               )
+//             UserActivatedEntry(updated_model, node_id)
+//           }
+//           Focus -> {
+//             let updated_model =
+//               DiscussionControllerModel(
+//                 ..model,
+//                 focused_discussion_id: option.Some(selected_discussion_id),
+//                 discussion_models:,
+//                 stickied_discussion_id: option.None,
+//               )
+
+//             UserFocusedEntry(
+//               updated_model,
+//               node_id,
+//               view_id,
+//               line_number,
+//               column_number,
+//             )
+//           }
+//         },
+//         case kind {
+//           Hover ->
+//             effect.from(fn(dispatch) {
+//               let timer_id =
+//                 global.set_timeout(300, fn() {
+//                   dispatch(ClientSetStickyDiscussion(
+//                     view_id:,
+//                     line_number:,
+//                     column_number:,
+//                   ))
+//                 })
+//               dispatch(UserStartedStickyOpenTimer(timer_id))
+//             })
+//           Focus -> effect.none()
+//         },
+//       )
+//     }
+
+//     UserUnselectedDiscussionEntry(kind:) -> {
+//       #(
+//         case kind {
+//           Hover -> {
+//             let updated_model =
+//               DiscussionControllerModel(
+//                 ..model,
+//                 selected_discussion_id: option.None,
+//               )
+//             UserActivatedEntry(updated_model, node_id: option.None)
+//           }
+//           Focus -> {
+//             let updated_model =
+//               DiscussionControllerModel(
+//                 ..model,
+//                 focused_discussion_id: option.None,
+//                 clicked_discussion_id: option.None,
+//               )
+//             UserActivatedEntry(updated_model, node_id: option.None)
+//           }
+//         },
+//         effect.from(fn(_dispatch) {
+//           case model.set_sticky_discussion_timer {
+//             option.Some(timer_id) -> {
+//               global.clear_timeout(timer_id)
+//             }
+//             option.None -> Nil
+//           }
+//         }),
+//       )
+//     }
+
+//     UserStartedStickyOpenTimer(timer_id) -> {
+//       #(
+//         NoOp(
+//           DiscussionControllerModel(
+//             ..model,
+//             set_sticky_discussion_timer: option.Some(timer_id),
+//           ),
+//         ),
+//         effect.none(),
+//       )
+//     }
+
+//     ClientSetStickyDiscussion(view_id:, line_number:, column_number:) -> {
+//       #(
+//         NoOp(
+//           DiscussionControllerModel(
+//             ..model,
+//             stickied_discussion_id: option.Some(DiscussionId(
+//               view_id:,
+//               line_number:,
+//               column_number:,
+//             )),
+//             set_sticky_discussion_timer: option.None,
+//           ),
+//         ),
+//         effect.none(),
+//       )
+//     }
+
+//     UserUnhoveredInsideDiscussion(view_id:, line_number:, column_number:) -> {
+//       echo "User unhovered discussion entry " <> int.to_string(line_number)
+//       #(NoOp(model), case model.stickied_discussion_id {
+//         option.Some(discussion_id) ->
+//           case
+//             line_number == discussion_id.line_number
+//             && column_number == discussion_id.column_number
+//             && view_id == discussion_id.view_id
+//           {
+//             True ->
+//               effect.from(fn(dispatch) {
+//                 let timer_id =
+//                   global.set_timeout(200, fn() {
+//                     echo "Unsticking discussion"
+//                     dispatch(ClientUnsetStickyDiscussion)
+//                   })
+//                 dispatch(UserStartedStickyCloseTimer(timer_id))
+//               })
+//             False -> effect.none()
+//           }
+//         option.None -> effect.none()
+//       })
+//     }
+
+//     UserHoveredInsideDiscussion(view_id:, line_number:, column_number:) -> {
+//       echo "User hovered discussion entry " <> int.to_string(line_number)
+//       // Do not clear the timer in the state generically without checking the
+//       // hovered line and col number here, as hovering any element will clear 
+//       // the timer if so
+//       #(NoOp(model), case model.stickied_discussion_id {
+//         option.Some(discussion_id) ->
+//           case
+//             line_number == discussion_id.line_number
+//             && column_number == discussion_id.column_number
+//             && view_id == discussion_id.view_id
+//           {
+//             True ->
+//               effect.from(fn(_dispatch) {
+//                 case model.unset_sticky_discussion_timer {
+//                   option.Some(timer_id) -> {
+//                     global.clear_timeout(timer_id)
+//                   }
+//                   option.None -> Nil
+//                 }
+//               })
+//             False -> effect.none()
+//           }
+//         option.None -> effect.none()
+//       })
+//     }
+
+//     UserStartedStickyCloseTimer(timer_id) -> {
+//       echo "User started sticky close timer"
+//       #(
+//         NoOp(
+//           DiscussionControllerModel(
+//             ..model,
+//             unset_sticky_discussion_timer: option.Some(timer_id),
+//           ),
+//         ),
+//         effect.none(),
+//       )
+//     }
+
+//     ClientUnsetStickyDiscussion -> {
+//       #(
+//         NoOp(
+//           DiscussionControllerModel(
+//             ..model,
+//             stickied_discussion_id: option.None,
+//             unset_sticky_discussion_timer: option.None,
+//           ),
+//         ),
+//         effect.none(),
+//       )
+//     }
+
+//     UserClickedDiscussionEntry(view_id:, line_number:, column_number:) -> {
+//       #(
+//         NoOp(
+//           DiscussionControllerModel(
+//             ..model,
+//             clicked_discussion_id: option.Some(DiscussionId(
+//               view_id:,
+//               line_number:,
+//               column_number:,
+//             )),
+//             stickied_discussion_id: option.None,
+//           ),
+//         ),
+//         effect.from(fn(_dispatch) {
+//           let res =
+//             selectors.discussion_input(view_id:, line_number:, column_number:)
+//             |> result.map(browser_element.focus)
+
+//           case res {
+//             Ok(Nil) -> Nil
+//             Error(Nil) -> io.println_error("Failed to focus discussion input")
+//           }
+//         }),
+//       )
+//     }
+//     UserClickedInsideDiscussion(view_id:, line_number:, column_number:) -> {
+//       echo "User clicked inside discussion"
+//       let model = case
+//         model.selected_discussion_id
+//         != option.Some(DiscussionId(view_id:, line_number:, column_number:))
+//       {
+//         True ->
+//           DiscussionControllerModel(
+//             ..model,
+//             selected_discussion_id: option.None,
+//           )
+//         False -> model
+//       }
+
+//       let model = case
+//         model.focused_discussion_id
+//         != option.Some(DiscussionId(view_id:, line_number:, column_number:))
+//       {
+//         True ->
+//           DiscussionControllerModel(
+//             ..model,
+//             focused_discussion_id: option.None,
+//           )
+//         False -> model
+//       }
+
+//       let model = case
+//         model.clicked_discussion_id
+//         != option.Some(DiscussionId(view_id:, line_number:, column_number:))
+//       {
+//         True ->
+//           DiscussionControllerModel(
+//             ..model,
+//             clicked_discussion_id: option.None,
+//           )
+//         False -> model
+//       }
+
+//       #(NoOp(model), effect.none())
+//     }
+
+//     UserClickedOutsideDiscussion -> {
+//       echo "User clicked outside discussion"
+//       #(
+//         NoOp(
+//           DiscussionControllerModel(
+//             ..model,
+//             selected_discussion_id: option.None,
+//             focused_discussion_id: option.None,
+//             clicked_discussion_id: option.None,
+//           ),
+//         ),
+//         effect.none(),
+//       )
+//     }
+
+//     UserCtrlClickedNode(uri) -> {
+//       let #(path, fragment) = case string.split_once(uri, "#") {
+//         Ok(#(uri, fragment)) -> #(uri, option.Some(fragment))
+//         Error(..) -> #(uri, option.None)
+//       }
+//       let path = "/" <> path
+
+//       #(NoOp(model), modem.push(path, option.None, fragment))
+//     }
+//   }
+// }
 
 pub fn discussion_view(
   attrs,
   discussion discussion,
   declarations declarations,
-  view_id view_id,
-  line_number line_number,
-  column_number column_number,
+  discussion_id discussion_id,
   selected_discussion selected_discussion: option.Option(DiscussionReference),
 ) {
   case selected_discussion {
     option.Some(selected_discussion) ->
-      case
-        line_number == selected_discussion.line_number
-        && column_number == selected_discussion.column_number
-        && view_id == selected_discussion.view_id
-      {
+      case discussion_id == selected_discussion.discussion_id {
         True ->
           html.div(attrs, [
             overlay_view(selected_discussion.model, discussion, declarations)
@@ -138,9 +398,7 @@ pub fn discussion_view(
 
 fn map_discussion_msg(msg, selected_discussion: DiscussionReference) {
   UserUpdatedDiscussion(
-    view_id: selected_discussion.model.view_id,
-    line_number: selected_discussion.line_number,
-    column_number: selected_discussion.column_number,
+    selected_discussion.discussion_id,
     update: update(selected_discussion.model, msg),
   )
 }
@@ -208,14 +466,14 @@ fn get_signature_line_topic_id(
 }
 
 pub fn topic_signature_view(
-  view_id view_id: String,
+  view_id view_id: List(String),
   signature signature: List(preprocessor.PreProcessedNode),
   declarations declarations: dict.Dict(String, preprocessor.Declaration),
   discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
   suppress_declaration suppress_declaration: Bool,
   line_number_offset line_number_offset: Int,
   selected_discussion selected_discussion: option.Option(DiscussionReference),
-) -> List(element.Element(DiscussionControllerMsg(msg))) {
+) -> List(element.Element(DiscussionControllerMsg)) {
   split_lines(signature, indent: False)
   |> list.fold(#(line_number_offset, []), fn(acc, rendered_line_nodes) {
     let #(line_number_offset, rendered_lines) = acc
@@ -238,13 +496,15 @@ pub fn topic_signature_view(
 
             let rendered_node =
               node_view(
-                view_id:,
                 topic_id:,
                 tokens:,
                 discussion:,
                 declarations:,
-                line_number: new_line_number,
-                column_number: new_column_number,
+                discussion_id: DiscussionId(
+                  view_id:,
+                  line_number: new_line_number,
+                  column_number: new_column_number,
+                ),
                 selected_discussion:,
                 node_view_kind: DeclarationView,
               )
@@ -257,13 +517,15 @@ pub fn topic_signature_view(
 
             let rendered_node =
               node_view(
-                view_id:,
                 topic_id:,
                 tokens:,
                 discussion:,
                 declarations:,
-                line_number: new_line_number,
-                column_number: new_column_number,
+                discussion_id: DiscussionId(
+                  view_id:,
+                  line_number: new_line_number,
+                  column_number: new_column_number,
+                ),
                 selected_discussion:,
                 node_view_kind: ReferenceView,
               )
@@ -327,13 +589,11 @@ pub type NodeViewKind {
 }
 
 pub fn node_view(
-  view_id view_id: String,
   topic_id topic_id: String,
   tokens tokens: String,
   discussion discussion,
   declarations declarations,
-  line_number line_number,
-  column_number column_number,
+  discussion_id discussion_id,
   selected_discussion selected_discussion: option.Option(DiscussionReference),
   node_view_kind node_view_kind: NodeViewKind,
 ) {
@@ -343,77 +603,43 @@ pub fn node_view(
         dict.get(declarations, topic_id)
         |> result.unwrap(preprocessor.unknown_declaration)
 
-      reference_node_attributes(
-        view_id:,
-        line_number:,
-        column_number:,
-        node_declaration:,
-        topic_id:,
-      )
+      reference_node_attributes(discussion_id:, node_declaration:, topic_id:)
     }
+
     DeclarationView -> {
       let node_declaration =
         dict.get(declarations, topic_id)
         |> result.unwrap(preprocessor.unknown_declaration)
 
-      declaration_node_attributes(
-        view_id:,
-        line_number:,
-        column_number:,
-        node_declaration:,
-        topic_id:,
-      )
+      declaration_node_attributes(discussion_id:, node_declaration:, topic_id:)
     }
+
     NewDiscussionPreview ->
-      new_discussion_preview_attributes(
-        view_id:,
-        line_number:,
-        column_number:,
-        topic_id:,
-      )
-    CommentPreview ->
-      comment_preview_attributes(
-        view_id:,
-        line_number:,
-        column_number:,
-        topic_id:,
-      )
+      new_discussion_preview_attributes(discussion_id:, topic_id:)
+
+    CommentPreview -> comment_preview_attributes(discussion_id:, topic_id:)
   }
 
   html.span(
     [
       attribute.class("relative"),
       attributes.encode_grid_location_data(
-        line_number |> int.to_string,
-        column_number |> int.to_string,
+        line_number: discussion_id.line_number |> int.to_string,
+        column_number: discussion_id.column_number |> int.to_string,
       ),
-      event.on_mouse_enter(UserHoveredInsideDiscussion(
-        view_id:,
-        line_number:,
-        column_number:,
-      )),
-      event.on_mouse_leave(UserUnhoveredInsideDiscussion(
-        view_id:,
-        line_number:,
-        column_number:,
-      )),
+      event.on_mouse_enter(UserHoveredInsideDiscussion(discussion_id:)),
+      event.on_mouse_leave(UserUnhoveredInsideDiscussion(discussion_id:)),
     ],
     [
       html.span(attrs, [html.text(tokens)]),
       discussion_view(
         [
-          event.on_click(UserClickedInsideDiscussion(
-            view_id:,
-            line_number:,
-            column_number:,
-          ))
+          event.on_click(UserClickedInsideDiscussion(discussion_id:))
           |> event.stop_propagation,
         ],
         discussion:,
         declarations:,
-        view_id:,
-        line_number:,
-        column_number:,
+        discussion_id:,
         selected_discussion:,
       ),
     ],
@@ -421,9 +647,7 @@ pub fn node_view(
 }
 
 fn declaration_node_attributes(
-  view_id view_id: String,
-  line_number line_number: Int,
-  column_number column_number: Int,
+  discussion_id discussion_id: DiscussionId,
   node_declaration node_declaration: preprocessor.Declaration,
   topic_id topic_id: String,
 ) {
@@ -440,9 +664,7 @@ fn declaration_node_attributes(
     attribute.attribute("tabindex", "0"),
     event.on_focus(UserSelectedDiscussionEntry(
       kind: Focus,
-      view_id:,
-      line_number:,
-      column_number:,
+      discussion_id:,
       node_id: option.Some(node_declaration.id),
       topic_id:,
       is_reference: False,
@@ -450,27 +672,19 @@ fn declaration_node_attributes(
     event.on_blur(UserUnselectedDiscussionEntry(kind: Focus)),
     event.on_mouse_enter(UserSelectedDiscussionEntry(
       kind: Hover,
-      view_id:,
-      line_number:,
-      column_number:,
+      discussion_id:,
       node_id: option.Some(node_declaration.id),
       topic_id:,
       is_reference: False,
     )),
     event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: Hover)),
-    event.on_click(UserClickedDiscussionEntry(
-      view_id:,
-      line_number:,
-      column_number:,
-    ))
+    event.on_click(UserClickedDiscussionEntry(discussion_id:))
       |> event.stop_propagation,
   ]
 }
 
 fn reference_node_attributes(
-  view_id view_id: String,
-  line_number line_number: Int,
-  column_number column_number: Int,
+  discussion_id discussion_id: DiscussionId,
   node_declaration node_declaration: preprocessor.Declaration,
   topic_id topic_id: String,
 ) {
@@ -484,9 +698,7 @@ fn reference_node_attributes(
     attribute.attribute("tabindex", "0"),
     event.on_focus(UserSelectedDiscussionEntry(
       kind: Focus,
-      view_id:,
-      line_number:,
-      column_number:,
+      discussion_id:,
       node_id: option.Some(node_declaration.id),
       topic_id:,
       is_reference: True,
@@ -494,9 +706,7 @@ fn reference_node_attributes(
     event.on_blur(UserUnselectedDiscussionEntry(kind: Focus)),
     event.on_mouse_enter(UserSelectedDiscussionEntry(
       kind: Hover,
-      view_id:,
-      line_number:,
-      column_number:,
+      discussion_id:,
       node_id: option.Some(node_declaration.id),
       topic_id:,
       is_reference: True,
@@ -506,20 +716,14 @@ fn reference_node_attributes(
       ctrl_click: UserCtrlClickedNode(uri: preprocessor.declaration_to_link(
         node_declaration,
       )),
-      non_ctrl_click: option.Some(UserClickedDiscussionEntry(
-        view_id:,
-        line_number:,
-        column_number:,
-      )),
+      non_ctrl_click: option.Some(UserClickedDiscussionEntry(discussion_id:)),
     )
       |> event.stop_propagation,
   ]
 }
 
 fn new_discussion_preview_attributes(
-  view_id view_id: String,
-  line_number line_number: Int,
-  column_number column_number: Int,
+  discussion_id discussion_id: DiscussionId,
   topic_id topic_id: String,
 ) {
   [
@@ -530,9 +734,7 @@ fn new_discussion_preview_attributes(
     attribute.attribute("tabindex", "0"),
     event.on_focus(UserSelectedDiscussionEntry(
       kind: Focus,
-      view_id:,
-      line_number:,
-      column_number:,
+      discussion_id:,
       node_id: option.None,
       topic_id:,
       is_reference: False,
@@ -540,27 +742,19 @@ fn new_discussion_preview_attributes(
     event.on_blur(UserUnselectedDiscussionEntry(kind: Focus)),
     event.on_mouse_enter(UserSelectedDiscussionEntry(
       kind: Hover,
-      view_id:,
-      line_number:,
-      column_number:,
+      discussion_id:,
       node_id: option.None,
       topic_id:,
       is_reference: False,
     )),
     event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: Hover)),
-    eventx.on_non_ctrl_click(UserClickedDiscussionEntry(
-      view_id:,
-      line_number:,
-      column_number:,
-    ))
+    eventx.on_non_ctrl_click(UserClickedDiscussionEntry(discussion_id:))
       |> event.stop_propagation,
   ]
 }
 
 fn comment_preview_attributes(
-  view_id view_id: String,
-  line_number line_number: Int,
-  column_number column_number: Int,
+  discussion_id discussion_id: DiscussionId,
   topic_id topic_id: String,
 ) {
   [
@@ -571,9 +765,7 @@ fn comment_preview_attributes(
     attribute.attribute("tabindex", "0"),
     event.on_focus(UserSelectedDiscussionEntry(
       kind: Focus,
-      view_id:,
-      line_number:,
-      column_number:,
+      discussion_id:,
       node_id: option.None,
       topic_id:,
       is_reference: False,
@@ -581,19 +773,13 @@ fn comment_preview_attributes(
     event.on_blur(UserUnselectedDiscussionEntry(kind: Focus)),
     event.on_mouse_enter(UserSelectedDiscussionEntry(
       kind: Hover,
-      view_id:,
-      line_number:,
-      column_number:,
+      discussion_id:,
       node_id: option.None,
       topic_id:,
       is_reference: False,
     )),
     event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: Hover)),
-    eventx.on_non_ctrl_click(UserClickedDiscussionEntry(
-      view_id:,
-      line_number:,
-      column_number:,
-    ))
+    eventx.on_non_ctrl_click(UserClickedDiscussionEntry(discussion_id:))
       |> event.stop_propagation,
   ]
 }
@@ -605,10 +791,9 @@ pub type DiscussionOverlayModel {
     is_reference: Bool,
     show_reference_discussion: Bool,
     user_name: String,
-    view_id: String,
-    line_number: Int,
-    column_number: Int,
     topic_id: String,
+    view_id: List(String),
+    discussion_id: DiscussionId,
     current_note_draft: String,
     current_thread_id: String,
     active_thread: option.Option(ActiveThread),
@@ -617,8 +802,7 @@ pub type DiscussionOverlayModel {
     expanded_messages: set.Set(String),
     editing_note: option.Option(computed_note.ComputedNote),
     declarations: dict.Dict(String, preprocessor.Declaration),
-    selected_discussion: option.Option(DiscussionKey),
-    discussion_models: dict.Dict(DiscussionKey, DiscussionReference),
+    selected_discussion: option.Option(DiscussionId),
   )
 }
 
@@ -632,21 +816,18 @@ pub type ActiveThread {
 }
 
 pub fn init(
-  view_id view_id,
-  line_number line_number,
-  column_number column_number,
+  view_id view_id: List(String),
+  discussion_id discussion_id: DiscussionId,
   topic_id topic_id,
   is_reference is_reference,
-  declarations declarations,
 ) {
   DiscussionOverlayModel(
     is_reference:,
     show_reference_discussion: False,
     user_name: "guest",
-    view_id:,
-    line_number:,
-    column_number:,
     topic_id:,
+    view_id:,
+    discussion_id:,
     current_note_draft: "",
     current_thread_id: topic_id,
     active_thread: option.None,
@@ -654,9 +835,8 @@ pub fn init(
     current_expanded_message_draft: option.None,
     expanded_messages: set.new(),
     editing_note: option.None,
-    declarations:,
+    declarations: todo,
     selected_discussion: option.None,
-    discussion_models: dict.new(),
   )
 }
 
@@ -682,14 +862,10 @@ pub type DiscussionOverlayMsg {
 
 pub type DiscussionOverlayEffect {
   SubmitNote(note: note.NoteSubmission, topic_id: String)
-  FocusDiscussionInput(view_id: String, line_number: Int, column_number: Int)
-  FocusExpandedDiscussionInput(
-    view_id: String,
-    line_number: Int,
-    column_number: Int,
-  )
-  UnfocusDiscussionInput(view_id: String, line_number: Int, column_number: Int)
-  MaximizeDiscussion(view_id: String, line_number: Int, column_number: Int)
+  FocusDiscussionInput(discussion_id: DiscussionId)
+  FocusExpandedDiscussionInput(discussion_id: DiscussionId)
+  UnfocusDiscussionInput(discussion_id: DiscussionId)
+  MaximizeDiscussion(discussion_id: DiscussionId)
   None
 }
 
@@ -819,41 +995,16 @@ pub fn update(model: DiscussionOverlayModel, msg: DiscussionOverlayMsg) {
           None,
         )
       }
-    UserFocusedInput -> #(
-      model,
-      FocusDiscussionInput(
-        view_id: model.view_id,
-        line_number: model.line_number,
-        column_number: model.column_number,
-      ),
-    )
+    UserFocusedInput -> #(model, FocusDiscussionInput(model.discussion_id))
     // When the expanaded message box is focused, set the show_expanded_message_box
     // to true. This makes sure the model state is in sync with any external
     // calls to focus the expanded message box.
     UserFocusedExpandedInput -> #(
       DiscussionOverlayModel(..model, show_expanded_message_box: True),
-      FocusExpandedDiscussionInput(
-        view_id: model.view_id,
-        line_number: model.line_number,
-        column_number: model.column_number,
-      ),
+      FocusExpandedDiscussionInput(model.discussion_id),
     )
-    UserUnfocusedInput -> #(
-      model,
-      UnfocusDiscussionInput(
-        view_id: model.view_id,
-        line_number: model.line_number,
-        column_number: model.column_number,
-      ),
-    )
-    UserMaximizeThread -> #(
-      model,
-      MaximizeDiscussion(
-        view_id: model.view_id,
-        line_number: model.line_number,
-        column_number: model.column_number,
-      ),
-    )
+    UserUnfocusedInput -> #(model, UnfocusDiscussionInput(model.discussion_id))
+    UserMaximizeThread -> #(model, MaximizeDiscussion(model.discussion_id))
     UserEditedNote(note) ->
       case note {
         Ok(note) -> #(
@@ -915,7 +1066,7 @@ pub fn overlay_view(
       ),
       // The line discussion component is too close to the edge of the
       // screen, so we want to show it below the line
-      case model.line_number < 30 {
+      case model.discussion_id.line_number < 30 {
         True -> attribute.class("top-[1.75rem]")
         False -> attribute.class("bottom-[1.75rem]")
       },
@@ -1334,17 +1485,19 @@ fn get_topic_title(model: DiscussionOverlayModel, notes) {
   case dict.get(model.declarations, model.topic_id) {
     Ok(dec) ->
       topic_signature_view(
-        view_id: model.view_id,
+        view_id: model.discussion_id.view_id,
         signature: dec.signature,
         declarations: model.declarations,
         discussion: notes,
         suppress_declaration: True,
         line_number_offset: 0,
-        selected_discussion: dict.get(model.discussion_models, todo)
-          |> result.map(option.Some)
-          |> result.unwrap(option.None),
+        selected_discussion: todo,
       )
     Error(Nil) -> [html.span([], [html.text("unknown")])]
   }
   todo
+}
+
+pub fn view_id_to_string(view_id) {
+  string.join(view_id, "-")
 }

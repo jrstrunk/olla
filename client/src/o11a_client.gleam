@@ -1,4 +1,3 @@
-import given
 import gleam/dict
 import gleam/dynamic/decode
 import gleam/int
@@ -76,17 +75,17 @@ pub type Model {
       dict.Dict(String, List(computed_note.ComputedNote)),
     ),
     discussion_models: dict.Dict(
-      DiscussionKey,
+      discussion.DiscussionId,
       discussion.DiscussionOverlayModel,
     ),
     keyboard_model: page_navigation.Model,
-    selected_discussion: option.Option(DiscussionKey),
     selected_node_id: option.Option(Int),
-    focused_discussion: option.Option(DiscussionKey),
-    clicked_discussion: option.Option(DiscussionKey),
-    stickied_discussion: option.Option(DiscussionKey),
-    selected_discussion_set_sticky_timer: option.Option(global.TimerID),
-    stickied_discussion_unset_sticky_timer: option.Option(global.TimerID),
+    selected_discussion: option.Option(discussion.DiscussionId),
+    focused_discussion: option.Option(discussion.DiscussionId),
+    clicked_discussion: option.Option(discussion.DiscussionId),
+    stickied_discussion: option.Option(discussion.DiscussionId),
+    set_sticky_discussion_timer: option.Option(global.TimerID),
+    unset_sticky_discussion_timer: option.Option(global.TimerID),
   )
 }
 
@@ -95,10 +94,6 @@ pub type Route {
   AuditDashboardRoute(audit_name: String)
   AuditInterfaceRoute(audit_name: String)
   AuditPageRoute(audit_name: String, page_path: String)
-}
-
-pub type DiscussionKey {
-  DiscussionKey(view_id: String, line_number: Int, column_number: Int)
 }
 
 fn init(_) -> #(Model, effect.Effect(Msg)) {
@@ -125,8 +120,8 @@ fn init(_) -> #(Model, effect.Effect(Msg)) {
       focused_discussion: option.None,
       clicked_discussion: option.None,
       stickied_discussion: option.None,
-      selected_discussion_set_sticky_timer: option.None,
-      stickied_discussion_unset_sticky_timer: option.None,
+      set_sticky_discussion_timer: option.None,
+      unset_sticky_discussion_timer: option.None,
     )
 
   #(
@@ -223,21 +218,12 @@ fn file_tree_from_route(
   }
 }
 
-fn get_audit_name_from_model(model: Model) {
-  case model.route {
-    AuditDashboardRoute(audit_name:) -> Ok(audit_name)
-    AuditInterfaceRoute(audit_name:) -> Ok(audit_name)
-    AuditPageRoute(audit_name:, ..) -> Ok(audit_name)
-    O11aHomeRoute -> Error(Nil)
-  }
-}
-
 pub fn get_page_view_id_from_route(route) {
   case route {
-    AuditDashboardRoute(..) -> "dashboard"
+    AuditDashboardRoute(..) -> ["dashboard"]
     AuditInterfaceRoute(..) -> audit_interface.view_id
     AuditPageRoute(..) -> audit_page.view_id
-    O11aHomeRoute -> "o11a"
+    O11aHomeRoute -> ["o11a"]
   }
 }
 
@@ -273,55 +259,7 @@ pub type Msg {
       browser_event.UIEvent(browser_event.KeyboardEvent),
     ),
   )
-  UserSelectedDiscussionEntry(
-    kind: discussion.DiscussionSelectKind,
-    view_id: String,
-    line_number: Int,
-    column_number: Int,
-    node_id: option.Option(Int),
-    topic_id: String,
-    is_reference: Bool,
-  )
-  UserUnselectedDiscussionEntry(kind: discussion.DiscussionSelectKind)
-  UserStartedStickyOpenTimer(timer_id: global.TimerID)
-  UserStartedStickyCloseTimer(timer_id: global.TimerID)
-  UserHoveredInsideDiscussion(
-    view_id: String,
-    line_number: Int,
-    column_number: Int,
-  )
-  UserUnhoveredInsideDiscussion(
-    view_id: String,
-    line_number: Int,
-    column_number: Int,
-  )
-  ClientSetStickyDiscussion(
-    view_id: String,
-    line_number: Int,
-    column_number: Int,
-  )
-  ClientUnsetStickyDiscussion
-  UserClickedDiscussionEntry(
-    view_id: String,
-    line_number: Int,
-    column_number: Int,
-  )
-  UserCtrlClickedNode(uri: String)
-  UserClickedInsideDiscussion(
-    view_id: String,
-    line_number: Int,
-    column_number: Int,
-  )
-  UserClickedOutsideDiscussion
-  UserUpdatedDiscussion(
-    view_id: String,
-    line_number: Int,
-    column_number: Int,
-    update: #(
-      discussion.DiscussionOverlayModel,
-      discussion.DiscussionOverlayEffect,
-    ),
-  )
+  DiscussionControllerSentMsg(msg: discussion.DiscussionControllerMsg)
   UserSuccessfullySubmittedNote(
     updated_model: discussion.DiscussionOverlayModel,
   )
@@ -560,11 +498,11 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       // If we have a selected discussion, use that as the active line and
       // column numbers so we can activate it with keyboard shortcuts
       let #(active_line_number, active_column_number) = case
-        get_selected_discussion_key(model)
+        get_selected_discussion_id(model)
       {
-        option.Some(discussion_key) -> #(
-          discussion_key.line_number,
-          discussion_key.column_number,
+        option.Some(discussion_id) -> #(
+          discussion_id.line_number,
+          discussion_id.column_number,
         )
         option.None -> #(
           model.keyboard_model.cursor_line_number,
@@ -584,372 +522,345 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       #(Model(..model, keyboard_model:), effect)
     }
 
-    UserSelectedDiscussionEntry(
-      kind:,
-      view_id:,
-      line_number:,
-      column_number:,
-      node_id:,
-      topic_id:,
-      is_reference:,
-    ) -> {
-      use audit_name <- given.ok(
-        get_audit_name_from_model(model),
-        else_return: fn(_) { #(model, effect.none()) },
-      )
-      use declarations <- given.ok(
-        case dict.get(model.audit_declarations, audit_name) {
-          Ok(Ok(declarations)) -> Ok(declarations)
-          _ -> Error(Nil)
-        },
-        else_return: fn(_) { #(model, effect.none()) },
-      )
-
-      let selected_discussion_key =
-        DiscussionKey(view_id:, line_number:, column_number:)
-
-      let discussion_models = case
-        dict.get(model.discussion_models, selected_discussion_key)
-      {
-        Ok(..) -> model.discussion_models
-        Error(Nil) ->
-          dict.insert(
-            model.discussion_models,
-            selected_discussion_key,
-            discussion.init(
-              view_id: view_id <> topic_id,
-              line_number:,
-              column_number:,
-              topic_id:,
-              is_reference:,
-              declarations:,
-            ),
-          )
-      }
-
-      #(
-        case kind {
-          discussion.Hover ->
-            Model(
-              ..model,
-              selected_discussion: option.Some(selected_discussion_key),
-              discussion_models:,
-              selected_node_id: node_id,
-            )
-          discussion.Focus ->
-            Model(
-              ..model,
-              focused_discussion: option.Some(selected_discussion_key),
-              discussion_models:,
-              selected_node_id: node_id,
-              keyboard_model: page_navigation.Model(
-                ..model.keyboard_model,
-                cursor_line_number: line_number,
-                cursor_column_number: column_number,
-              ),
-              stickied_discussion: option.None,
-            )
-        },
-        case kind {
-          discussion.Hover ->
-            effect.from(fn(dispatch) {
-              let timer_id =
-                global.set_timeout(300, fn() {
-                  dispatch(ClientSetStickyDiscussion(
-                    view_id:,
-                    line_number:,
-                    column_number:,
-                  ))
-                })
-              dispatch(UserStartedStickyOpenTimer(timer_id))
-            })
-          discussion.Focus -> effect.none()
-        },
-      )
-    }
-
-    UserUnselectedDiscussionEntry(kind:) -> {
-      #(
-        case kind {
-          discussion.Hover ->
-            Model(
-              ..model,
-              selected_discussion: option.None,
-              selected_node_id: option.None,
-            )
-          discussion.Focus ->
-            Model(
-              ..model,
-              focused_discussion: option.None,
-              clicked_discussion: option.None,
-              selected_node_id: option.None,
-            )
-        },
-        effect.from(fn(_dispatch) {
-          case model.selected_discussion_set_sticky_timer {
-            option.Some(timer_id) -> {
-              global.clear_timeout(timer_id)
-            }
-            option.None -> Nil
-          }
-        }),
-      )
-    }
-
-    UserStartedStickyOpenTimer(timer_id) -> {
-      #(
-        Model(
-          ..model,
-          selected_discussion_set_sticky_timer: option.Some(timer_id),
-        ),
-        effect.none(),
-      )
-    }
-
-    ClientSetStickyDiscussion(view_id:, line_number:, column_number:) -> {
-      #(
-        Model(
-          ..model,
-          stickied_discussion: option.Some(DiscussionKey(
-            view_id:,
-            line_number:,
-            column_number:,
-          )),
-          selected_discussion_set_sticky_timer: option.None,
-        ),
-        effect.none(),
-      )
-    }
-
-    UserUnhoveredInsideDiscussion(view_id:, line_number:, column_number:) -> {
-      echo "User unhovered discussion entry " <> int.to_string(line_number)
-      #(model, case model.stickied_discussion {
-        option.Some(discussion_key) ->
-          case
-            line_number == discussion_key.line_number
-            && column_number == discussion_key.column_number
-            && view_id == discussion_key.view_id
+    DiscussionControllerSentMsg(msg) ->
+      case msg {
+        discussion.UserSelectedDiscussionEntry(
+          kind:,
+          discussion_id:,
+          node_id:,
+          topic_id:,
+          is_reference:,
+        ) -> {
+          let discussion_models = case
+            dict.get(model.discussion_models, discussion_id)
           {
-            True ->
-              effect.from(fn(dispatch) {
-                let timer_id =
-                  global.set_timeout(200, fn() {
-                    echo "Unsticking discussion"
-                    dispatch(ClientUnsetStickyDiscussion)
-                  })
-                dispatch(UserStartedStickyCloseTimer(timer_id))
-              })
-            False -> effect.none()
-          }
-        option.None -> effect.none()
-      })
-    }
-
-    UserHoveredInsideDiscussion(view_id:, line_number:, column_number:) -> {
-      echo "User hovered discussion entry " <> int.to_string(line_number)
-      // Do not clear the timer in the state generically without checking the
-      // hovered line and col number here, as hovering any element will clear 
-      // the timer if so
-      #(model, case model.stickied_discussion {
-        option.Some(discussion_key) ->
-          case
-            line_number == discussion_key.line_number
-            && column_number == discussion_key.column_number
-            && view_id == discussion_key.view_id
-          {
-            True ->
-              effect.from(fn(_dispatch) {
-                case model.stickied_discussion_unset_sticky_timer {
-                  option.Some(timer_id) -> {
-                    global.clear_timeout(timer_id)
-                  }
-                  option.None -> Nil
-                }
-              })
-            False -> effect.none()
-          }
-        option.None -> effect.none()
-      })
-    }
-
-    UserStartedStickyCloseTimer(timer_id) -> {
-      echo "User started sticky close timer"
-      #(
-        Model(
-          ..model,
-          stickied_discussion_unset_sticky_timer: option.Some(timer_id),
-        ),
-        effect.none(),
-      )
-    }
-
-    ClientUnsetStickyDiscussion -> {
-      #(
-        Model(
-          ..model,
-          stickied_discussion: option.None,
-          stickied_discussion_unset_sticky_timer: option.None,
-        ),
-        effect.none(),
-      )
-    }
-
-    UserClickedDiscussionEntry(view_id:, line_number:, column_number:) -> {
-      #(
-        Model(
-          ..model,
-          clicked_discussion: option.Some(DiscussionKey(
-            view_id:,
-            line_number:,
-            column_number:,
-          )),
-          stickied_discussion: option.None,
-        ),
-        effect.from(fn(_dispatch) {
-          let res =
-            selectors.discussion_input(view_id:, line_number:, column_number:)
-            |> result.map(browser_element.focus)
-
-          case res {
-            Ok(Nil) -> Nil
-            Error(Nil) -> io.println("Failed to focus discussion input")
-          }
-        }),
-      )
-    }
-
-    UserCtrlClickedNode(uri) -> {
-      let #(path, fragment) = case string.split_once(uri, "#") {
-        Ok(#(uri, fragment)) -> #(uri, option.Some(fragment))
-        Error(..) -> #(uri, option.None)
-      }
-      let path = "/" <> path
-
-      #(model, modem.push(path, option.None, fragment))
-    }
-
-    UserClickedInsideDiscussion(view_id:, line_number:, column_number:) -> {
-      echo "User clicked inside discussion"
-      let model = case
-        model.selected_discussion
-        != option.Some(DiscussionKey(view_id:, line_number:, column_number:))
-      {
-        True -> Model(..model, selected_discussion: option.None)
-        False -> model
-      }
-
-      let model = case
-        model.focused_discussion
-        != option.Some(DiscussionKey(view_id:, line_number:, column_number:))
-      {
-        True -> Model(..model, focused_discussion: option.None)
-        False -> model
-      }
-
-      let model = case
-        model.clicked_discussion
-        != option.Some(DiscussionKey(view_id:, line_number:, column_number:))
-      {
-        True -> Model(..model, clicked_discussion: option.None)
-        False -> model
-      }
-
-      #(model, effect.none())
-    }
-
-    UserClickedOutsideDiscussion -> {
-      echo "User clicked outside discussion"
-      #(
-        Model(
-          ..model,
-          selected_discussion: option.None,
-          focused_discussion: option.None,
-          clicked_discussion: option.None,
-        ),
-        effect.none(),
-      )
-    }
-
-    UserUpdatedDiscussion(view_id:, line_number:, column_number:, update:) -> {
-      let #(discussion_model, discussion_effect) = update
-
-      case discussion_effect {
-        discussion.SubmitNote(note_submission, topic_id) -> #(
-          model,
-          case model.route {
-            AuditPageRoute(audit_name:, ..)
-            | AuditDashboardRoute(audit_name:)
-            | AuditInterfaceRoute(audit_name:) -> {
-              submit_note(
-                audit_name,
-                topic_id,
-                note_submission,
-                discussion_model,
+            Ok(..) -> model.discussion_models
+            Error(Nil) ->
+              dict.insert(
+                model.discussion_models,
+                discussion_id,
+                discussion.init(
+                  view_id: [
+                    todo as "we can't just use the topic id here because multiple discussions can have the same topic id",
+                    ..discussion_id.view_id
+                  ],
+                  discussion_id:,
+                  topic_id:,
+                  is_reference:,
+                ),
               )
-            }
-            O11aHomeRoute -> effect.none()
-          },
-        )
+          }
 
-        discussion.FocusDiscussionInput(view_id:, line_number:, column_number:) -> {
-          echo "Focusing discussion input, user is typing"
-          storage.set_is_user_typing(True)
+          #(
+            case kind {
+              discussion.Hover ->
+                Model(
+                  ..model,
+                  selected_discussion: option.Some(discussion_id),
+                  discussion_models:,
+                  selected_node_id: node_id,
+                )
+              discussion.Focus ->
+                Model(
+                  ..model,
+                  focused_discussion: option.Some(discussion_id),
+                  discussion_models:,
+                  selected_node_id: node_id,
+                  keyboard_model: page_navigation.Model(
+                    ..model.keyboard_model,
+                    cursor_line_number: discussion_id.line_number,
+                    cursor_column_number: discussion_id.column_number,
+                  ),
+                  stickied_discussion: option.None,
+                )
+            },
+            case kind {
+              discussion.Hover ->
+                effect.from(fn(dispatch) {
+                  let timer_id =
+                    global.set_timeout(300, fn() {
+                      dispatch(
+                        DiscussionControllerSentMsg(
+                          discussion.ClientSetStickyDiscussion(discussion_id:),
+                        ),
+                      )
+                    })
+                  dispatch(
+                    DiscussionControllerSentMsg(
+                      discussion.UserStartedStickyOpenTimer(timer_id),
+                    ),
+                  )
+                })
+              discussion.Focus -> effect.none()
+            },
+          )
+        }
+
+        discussion.UserUnselectedDiscussionEntry(kind:) -> {
+          #(
+            case kind {
+              discussion.Hover ->
+                Model(
+                  ..model,
+                  selected_discussion: option.None,
+                  selected_node_id: option.None,
+                )
+              discussion.Focus ->
+                Model(
+                  ..model,
+                  focused_discussion: option.None,
+                  clicked_discussion: option.None,
+                  selected_node_id: option.None,
+                )
+            },
+            effect.from(fn(_dispatch) {
+              case model.set_sticky_discussion_timer {
+                option.Some(timer_id) -> {
+                  global.clear_timeout(timer_id)
+                }
+                option.None -> Nil
+              }
+            }),
+          )
+        }
+
+        discussion.UserStartedStickyOpenTimer(timer_id) -> {
+          #(
+            Model(..model, set_sticky_discussion_timer: option.Some(timer_id)),
+            effect.none(),
+          )
+        }
+
+        discussion.ClientSetStickyDiscussion(discussion_id:) -> {
           #(
             Model(
               ..model,
-              focused_discussion: option.Some(DiscussionKey(
-                view_id:,
-                line_number:,
-                column_number:,
-              )),
+              stickied_discussion: option.Some(discussion_id),
+              set_sticky_discussion_timer: option.None,
             ),
             effect.none(),
           )
         }
 
-        discussion.FocusExpandedDiscussionInput(
-          view_id:,
-          line_number:,
-          column_number:,
-        ) -> {
-          storage.set_is_user_typing(True)
+        discussion.UserUnhoveredInsideDiscussion(discussion_id:) -> {
+          echo "User unhovered discussion entry "
+            <> int.to_string(discussion_id.line_number)
+          #(model, case model.stickied_discussion {
+            option.Some(sticky_discussion_id) ->
+              case discussion_id == sticky_discussion_id {
+                True ->
+                  effect.from(fn(dispatch) {
+                    let timer_id =
+                      global.set_timeout(200, fn() {
+                        echo "Unsticking discussion"
+                        dispatch(DiscussionControllerSentMsg(
+                          discussion.ClientUnsetStickyDiscussion,
+                        ))
+                      })
+                    dispatch(
+                      DiscussionControllerSentMsg(
+                        discussion.UserStartedStickyCloseTimer(timer_id),
+                      ),
+                    )
+                  })
+                False -> effect.none()
+              }
+            option.None -> effect.none()
+          })
+        }
+
+        discussion.UserHoveredInsideDiscussion(discussion_id:) -> {
+          echo "User hovered discussion entry "
+            <> int.to_string(discussion_id.line_number)
+          // Do not clear the timer in the state generically without checking the
+          // hovered line and col number here, as hovering any element will clear 
+          // the timer if so
+          #(model, case model.stickied_discussion {
+            option.Some(sticky_discussion_id) ->
+              case sticky_discussion_id == discussion_id {
+                True ->
+                  effect.from(fn(_dispatch) {
+                    case model.unset_sticky_discussion_timer {
+                      option.Some(timer_id) -> {
+                        global.clear_timeout(timer_id)
+                      }
+                      option.None -> Nil
+                    }
+                  })
+                False -> effect.none()
+              }
+            option.None -> effect.none()
+          })
+        }
+
+        discussion.UserStartedStickyCloseTimer(timer_id) -> {
+          echo "User started sticky close timer"
+          #(
+            Model(..model, unset_sticky_discussion_timer: option.Some(timer_id)),
+            effect.none(),
+          )
+        }
+
+        discussion.ClientUnsetStickyDiscussion -> {
           #(
             Model(
               ..model,
-              focused_discussion: option.Some(DiscussionKey(
-                view_id:,
-                line_number:,
-                column_number:,
-              )),
+              stickied_discussion: option.None,
+              unset_sticky_discussion_timer: option.None,
             ),
             effect.none(),
           )
         }
 
-        discussion.UnfocusDiscussionInput(
-          _view_id,
-          _line_number,
-          _column_number,
-        ) -> {
-          echo "Unfocusing discussion input"
-          storage.set_is_user_typing(False)
+        discussion.UserClickedDiscussionEntry(discussion_id:) -> {
+          #(
+            Model(
+              ..model,
+              clicked_discussion: option.Some(discussion_id),
+              stickied_discussion: option.None,
+            ),
+            effect.from(fn(_dispatch) {
+              let res =
+                selectors.discussion_input(
+                  view_id: discussion.view_id_to_string(discussion_id.view_id),
+                  line_number: discussion_id.line_number,
+                  column_number: discussion_id.column_number,
+                )
+                |> result.map(browser_element.focus)
+
+              case res {
+                Ok(Nil) -> Nil
+                Error(Nil) -> io.println("Failed to focus discussion input")
+              }
+            }),
+          )
+        }
+
+        discussion.UserCtrlClickedNode(uri) -> {
+          let #(path, fragment) = case string.split_once(uri, "#") {
+            Ok(#(uri, fragment)) -> #(uri, option.Some(fragment))
+            Error(..) -> #(uri, option.None)
+          }
+          let path = "/" <> path
+
+          #(model, modem.push(path, option.None, fragment))
+        }
+
+        discussion.UserClickedInsideDiscussion(discussion_id:) -> {
+          todo as "hide child selected discussion"
+
+          echo "User clicked inside discussion"
+          // let model = case model.selected_discussion {
+          //   option.Some(discussion.DiscussionId(
+          //     view_id: vi,
+          //     line_number: ln,
+          //     column_number: cn,
+          //     ..,
+          //   ))
+          //     if vi != view_id && ln != line_number && cn != column_number
+          //   -> Model(..model, selected_discussion: option.None)
+          //   _ -> model
+          // }
+
+          // let model = case model.focused_discussion {
+          //   option.Some(discussion.DiscussionId(
+          //     view_id: vi,
+          //     line_number: ln,
+          //     column_number: cn,
+          //     ..,
+          //   ))
+          //     if vi != view_id && ln != line_number && cn != column_number
+          //   -> Model(..model, focused_discussion: option.None)
+          //   _ -> model
+          // }
+
+          // let model = case
+          //   model.clicked_discussion
+          //   != option.Some(discussion.DiscussionId(
+          //     view_id:,
+          //     line_number:,
+          //     column_number:,
+          //   ))
+          // {
+          //   True -> Model(..model, clicked_discussion: option.None)
+          //   False -> model
+          // }
+
           #(model, effect.none())
         }
 
-        discussion.MaximizeDiscussion(_view_id, _line_number, _column_number)
-        | discussion.None -> #(
-          Model(
-            ..model,
-            discussion_models: dict.insert(
-              model.discussion_models,
-              DiscussionKey(view_id:, line_number:, column_number:),
-              discussion_model,
+        discussion.UserClickedOutsideDiscussion(view_id:) -> {
+          todo as "hide child seledted discussion"
+          echo "User clicked outside discussion"
+          #(
+            Model(
+              ..model,
+              selected_discussion: option.None,
+              focused_discussion: option.None,
+              clicked_discussion: option.None,
             ),
-          ),
-          effect.none(),
-        )
+            effect.none(),
+          )
+        }
+
+        discussion.UserUpdatedDiscussion(discussion_id:, update:) -> {
+          let #(discussion_model, discussion_effect) = update
+
+          case discussion_effect {
+            discussion.SubmitNote(note_submission, topic_id) -> #(
+              model,
+              case model.route {
+                AuditPageRoute(audit_name:, ..)
+                | AuditDashboardRoute(audit_name:)
+                | AuditInterfaceRoute(audit_name:) -> {
+                  submit_note(
+                    audit_name,
+                    topic_id,
+                    note_submission,
+                    discussion_model,
+                  )
+                }
+                O11aHomeRoute -> effect.none()
+              },
+            )
+
+            discussion.FocusDiscussionInput(discussion_id:) -> {
+              echo "Focusing discussion input, user is typing"
+              storage.set_is_user_typing(True)
+              #(
+                Model(..model, focused_discussion: option.Some(discussion_id)),
+                effect.none(),
+              )
+            }
+
+            discussion.FocusExpandedDiscussionInput(discussion_id:) -> {
+              storage.set_is_user_typing(True)
+              #(
+                Model(..model, focused_discussion: option.Some(discussion_id)),
+                effect.none(),
+              )
+            }
+
+            discussion.UnfocusDiscussionInput(_discussion_id) -> {
+              echo "Unfocusing discussion input"
+              storage.set_is_user_typing(False)
+              #(model, effect.none())
+            }
+
+            discussion.MaximizeDiscussion(_discussion_id) | discussion.None -> #(
+              Model(
+                ..model,
+                discussion_models: dict.insert(
+                  model.discussion_models,
+                  discussion_id,
+                  discussion_model,
+                ),
+              ),
+              effect.none(),
+            )
+          }
+        }
       }
-    }
 
     UserSuccessfullySubmittedNote(updated_model) -> {
       #(
@@ -957,11 +868,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
           ..model,
           discussion_models: dict.insert(
             model.discussion_models,
-            DiscussionKey(
-              view_id: updated_model.view_id,
-              line_number: updated_model.line_number,
-              column_number: updated_model.column_number,
-            ),
+            updated_model.discussion_id,
             updated_model,
           ),
         ),
@@ -1130,7 +1037,8 @@ fn view(model: Model) {
             declarations,
             discussion,
             selected_discussion,
-          ),
+          )
+            |> element.map(DiscussionControllerSentMsg),
           option.None,
           model.file_tree,
           audit_name,
@@ -1156,7 +1064,7 @@ fn view(model: Model) {
         _ -> dict.new()
       }
 
-      html.div([event.on_click(UserClickedOutsideDiscussion)], [
+      html.div([], [
         selected_node_highlighter(model),
         server_component.element(
           [
@@ -1173,7 +1081,7 @@ fn view(model: Model) {
             declarations:,
             selected_discussion:,
           )
-            |> element.map(map_audit_page_msg),
+            |> element.map(DiscussionControllerSentMsg),
           audit_page_dashboard.view(discussion, page_path)
             |> option.Some,
           model.file_tree,
@@ -1199,7 +1107,7 @@ fn selected_node_highlighter(model: Model) {
   }
 }
 
-fn get_selected_discussion_key(model: Model) {
+fn get_selected_discussion_id(model: Model) {
   case
     model.focused_discussion,
     model.clicked_discussion,
@@ -1216,16 +1124,11 @@ fn get_selected_discussion_key(model: Model) {
 }
 
 fn get_selected_discussion(model: Model) {
-  case get_selected_discussion_key(model) {
+  case get_selected_discussion_id(model) {
     option.Some(discussion) ->
       dict.get(model.discussion_models, discussion)
       |> result.map(fn(model) {
-        option.Some(discussion.DiscussionReference(
-          view_id: discussion.view_id,
-          line_number: discussion.line_number,
-          column_number: discussion.column_number,
-          model:,
-        ))
+        option.Some(discussion.DiscussionReference(discussion, model:))
       })
       |> result.unwrap(option.None)
     option.None -> option.None
@@ -1244,56 +1147,4 @@ fn on_server_updated_topics(msg) {
     use audit_name <- decode.subfield(["detail", "audit_name"], decode.string)
     decode.success(msg(audit_name))
   })
-}
-
-fn map_audit_page_msg(msg) {
-  case msg {
-    discussion.UserSelectedDiscussionEntry(
-      view_id:,
-      kind:,
-      line_number:,
-      column_number:,
-      node_id:,
-      topic_id:,
-      is_reference:,
-    ) ->
-      UserSelectedDiscussionEntry(
-        kind:,
-        view_id:,
-        line_number:,
-        column_number:,
-        node_id:,
-        topic_id:,
-        is_reference:,
-      )
-    discussion.UserUnselectedDiscussionEntry(kind:) ->
-      UserUnselectedDiscussionEntry(kind:)
-    discussion.UserClickedDiscussionEntry(
-      view_id:,
-      line_number:,
-      column_number:,
-    ) -> UserClickedDiscussionEntry(view_id:, line_number:, column_number:)
-    discussion.UserUpdatedDiscussion(
-      view_id:,
-      line_number:,
-      column_number:,
-      update:,
-    ) -> UserUpdatedDiscussion(view_id:, line_number:, column_number:, update:)
-    discussion.UserClickedInsideDiscussion(
-      view_id:,
-      line_number:,
-      column_number:,
-    ) -> UserClickedInsideDiscussion(view_id:, line_number:, column_number:)
-    discussion.UserCtrlClickedNode(uri:) -> UserCtrlClickedNode(uri:)
-    discussion.UserHoveredInsideDiscussion(
-      view_id:,
-      line_number:,
-      column_number:,
-    ) -> UserHoveredInsideDiscussion(view_id:, line_number:, column_number:)
-    discussion.UserUnhoveredInsideDiscussion(
-      view_id:,
-      line_number:,
-      column_number:,
-    ) -> UserUnhoveredInsideDiscussion(view_id:, line_number:, column_number:)
-  }
 }
