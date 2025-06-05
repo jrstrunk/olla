@@ -19,7 +19,7 @@ import o11a/preprocessor
 import o11a/ui/discussion
 import o11a/ui/formatter
 
-pub const view_id = ["audit-page"]
+pub const view_id = "audit-page"
 
 pub type Model {
   Model(
@@ -33,13 +33,13 @@ pub fn view(
   preprocessed_source preprocessed_source: List(preprocessor.PreProcessedLine),
   discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
   declarations declarations: dict.Dict(String, preprocessor.Declaration),
-  selected_discussion selected_discussion: option.Option(
+  active_discussion active_discussion: option.Option(
     discussion.DiscussionReference,
   ),
 ) {
   html.div(
     [
-      attribute.id(discussion.view_id_to_string(view_id)),
+      attribute.id(view_id),
       attribute.class("code-snippet"),
       attribute.data("lc", preprocessed_source |> list.length |> int.to_string),
       event.on_click(discussion.UserClickedOutsideDiscussion(view_id:)),
@@ -48,7 +48,7 @@ pub fn view(
       _,
       discussion:,
       declarations:,
-      selected_discussion:,
+      active_discussion:,
     )),
   )
 }
@@ -57,7 +57,7 @@ fn loc_view(
   loc: preprocessor.PreProcessedLine,
   discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
   declarations declarations,
-  selected_discussion selected_discussion: option.Option(
+  active_discussion active_discussion: option.Option(
     discussion.DiscussionReference,
   ),
 ) {
@@ -69,7 +69,7 @@ fn loc_view(
         ]),
         ..preprocessed_nodes_view(
           loc,
-          selected_discussion:,
+          active_discussion:,
           discussion:,
           declarations:,
         )
@@ -82,7 +82,7 @@ fn loc_view(
         declarations:,
         loc:,
         line_topic_id: topic_id,
-        selected_discussion:,
+        active_discussion:,
       )
 
     preprocessor.NonEmptyLine(topic_id:) ->
@@ -91,7 +91,7 @@ fn loc_view(
         declarations:,
         loc:,
         line_topic_id: topic_id,
-        selected_discussion:,
+        active_discussion:,
       )
   }
 }
@@ -101,7 +101,7 @@ fn line_container_view(
   declarations declarations,
   loc loc: preprocessor.PreProcessedLine,
   line_topic_id line_topic_id: String,
-  selected_discussion selected_discussion: option.Option(
+  active_discussion active_discussion: option.Option(
     discussion.DiscussionReference,
   ),
 ) {
@@ -149,7 +149,7 @@ fn line_container_view(
         ]),
         element.fragment(preprocessed_nodes_view(
           loc,
-          selected_discussion:,
+          active_discussion:,
           discussion:,
           declarations:,
         )),
@@ -158,7 +158,7 @@ fn line_container_view(
           topic_id: line_topic_id,
           element_line_number: loc.line_number,
           element_column_number: column_count,
-          selected_discussion:,
+          active_discussion:,
           discussion:,
           declarations:,
         ),
@@ -172,7 +172,7 @@ fn inline_comment_preview_view(
   topic_id topic_id: String,
   element_line_number line_number,
   element_column_number column_number,
-  selected_discussion selected_discussion: option.Option(
+  active_discussion active_discussion: option.Option(
     discussion.DiscussionReference,
   ),
   discussion discussion,
@@ -200,7 +200,7 @@ fn inline_comment_preview_view(
           line_number:,
           column_number:,
         ),
-        selected_discussion:,
+        active_discussion:,
         node_view_kind: discussion.CommentPreview,
       )
 
@@ -215,7 +215,7 @@ fn inline_comment_preview_view(
           line_number:,
           column_number:,
         ),
-        selected_discussion:,
+        active_discussion:,
         node_view_kind: discussion.NewDiscussionPreview,
       )
   }
@@ -225,7 +225,7 @@ fn preprocessed_nodes_view(
   loc: preprocessor.PreProcessedLine,
   discussion discussion,
   declarations declarations,
-  selected_discussion selected_discussion: option.Option(
+  active_discussion active_discussion: option.Option(
     discussion.DiscussionReference,
   ),
 ) {
@@ -243,7 +243,7 @@ fn preprocessed_nodes_view(
               line_number: loc.line_number,
               column_number: new_column_index,
             ),
-            selected_discussion:,
+            active_discussion:,
             discussion:,
             declarations:,
             node_view_kind: discussion.DeclarationView,
@@ -263,7 +263,7 @@ fn preprocessed_nodes_view(
               line_number: loc.line_number,
               column_number: new_column_index,
             ),
-            selected_discussion:,
+            active_discussion:,
             discussion:,
             declarations:,
             node_view_kind: discussion.ReferenceView,

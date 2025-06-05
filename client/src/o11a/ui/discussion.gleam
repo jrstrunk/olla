@@ -25,7 +25,15 @@ import plinth/javascript/global
 // Discussion Controller -------------------------------------------------------
 
 pub type DiscussionId {
-  DiscussionId(view_id: List(String), line_number: Int, column_number: Int)
+  DiscussionId(view_id: String, line_number: Int, column_number: Int)
+}
+
+pub fn nested_view_id(from discussion_id: DiscussionId) {
+  discussion_id.view_id
+  <> "L"
+  <> int.to_string(discussion_id.line_number)
+  <> "C"
+  <> int.to_string(discussion_id.column_number)
 }
 
 pub type DiscussionReference {
@@ -33,6 +41,213 @@ pub type DiscussionReference {
     discussion_id: DiscussionId,
     model: DiscussionOverlayModel,
   )
+}
+
+pub type DiscussionControllerModel {
+  DiscussionControllerModel(
+    hovered_discussion: option.Option(DiscussionId),
+    focused_discussion: option.Option(DiscussionId),
+    clicked_discussion: option.Option(DiscussionId),
+    stickied_discussion: option.Option(DiscussionId),
+  )
+}
+
+pub fn set_hovered_discussion(model, discussion_id) {
+  case model {
+    option.Some(model) ->
+      DiscussionControllerModel(
+        ..model,
+        hovered_discussion: option.Some(discussion_id),
+      )
+    option.None ->
+      DiscussionControllerModel(
+        hovered_discussion: option.Some(discussion_id),
+        focused_discussion: option.None,
+        clicked_discussion: option.None,
+        stickied_discussion: option.None,
+      )
+  }
+}
+
+pub fn unset_hovered_discussion(model) {
+  case model {
+    option.Some(model) ->
+      DiscussionControllerModel(..model, hovered_discussion: option.None)
+    option.None ->
+      DiscussionControllerModel(
+        hovered_discussion: option.None,
+        focused_discussion: option.None,
+        clicked_discussion: option.None,
+        stickied_discussion: option.None,
+      )
+  }
+}
+
+pub fn set_focused_discussion(model, discussion_id) {
+  case model {
+    option.Some(model) ->
+      DiscussionControllerModel(
+        ..model,
+        focused_discussion: option.Some(discussion_id),
+        stickied_discussion: option.None,
+      )
+    option.None ->
+      DiscussionControllerModel(
+        hovered_discussion: option.None,
+        focused_discussion: option.Some(discussion_id),
+        clicked_discussion: option.None,
+        stickied_discussion: option.None,
+      )
+  }
+}
+
+pub fn unset_focused_discussion(model) {
+  case model {
+    option.Some(model) ->
+      DiscussionControllerModel(
+        ..model,
+        focused_discussion: option.None,
+        stickied_discussion: option.None,
+      )
+    option.None ->
+      DiscussionControllerModel(
+        hovered_discussion: option.None,
+        focused_discussion: option.None,
+        clicked_discussion: option.None,
+        stickied_discussion: option.None,
+      )
+  }
+}
+
+pub fn set_clicked_discussion(model, discussion_id) {
+  case model {
+    option.Some(model) ->
+      DiscussionControllerModel(
+        ..model,
+        clicked_discussion: option.Some(discussion_id),
+        stickied_discussion: option.None,
+      )
+    option.None ->
+      DiscussionControllerModel(
+        hovered_discussion: option.None,
+        focused_discussion: option.None,
+        clicked_discussion: option.Some(discussion_id),
+        stickied_discussion: option.None,
+      )
+  }
+}
+
+pub fn unset_clicked_discussion(model) {
+  case model {
+    option.Some(model) ->
+      DiscussionControllerModel(
+        ..model,
+        clicked_discussion: option.None,
+        stickied_discussion: option.None,
+      )
+    option.None ->
+      DiscussionControllerModel(
+        hovered_discussion: option.None,
+        focused_discussion: option.None,
+        clicked_discussion: option.None,
+        stickied_discussion: option.None,
+      )
+  }
+}
+
+pub fn set_stickied_discussion(model, discussion_id) {
+  case model {
+    option.Some(model) ->
+      DiscussionControllerModel(
+        ..model,
+        stickied_discussion: option.Some(discussion_id),
+      )
+    option.None ->
+      DiscussionControllerModel(
+        hovered_discussion: option.None,
+        focused_discussion: option.None,
+        clicked_discussion: option.None,
+        stickied_discussion: option.Some(discussion_id),
+      )
+  }
+}
+
+pub fn unset_stickied_discussion(model) {
+  case model {
+    option.Some(model) ->
+      DiscussionControllerModel(..model, stickied_discussion: option.None)
+    option.None ->
+      DiscussionControllerModel(
+        hovered_discussion: option.None,
+        focused_discussion: option.None,
+        clicked_discussion: option.None,
+        stickied_discussion: option.None,
+      )
+  }
+}
+
+pub fn get_active_discussion_id(model: DiscussionControllerModel) {
+  case
+    model.focused_discussion,
+    model.clicked_discussion,
+    model.stickied_discussion,
+    model.hovered_discussion
+  {
+    option.Some(discussion), _, _, _
+    | _, option.Some(discussion), _, _
+    | _, _, option.Some(discussion), _
+    | _, _, _, option.Some(discussion)
+    -> Ok(discussion)
+    option.None, option.None, option.None, option.None -> Error(Nil)
+  }
+}
+
+pub fn close_all_child_discussions(
+  active_discussions: dict.Dict(String, DiscussionControllerModel),
+  starting_from view_id,
+) {
+  case dict.get(active_discussions, view_id) {
+    Ok(model) -> {
+      let active_discussions = case model.focused_discussion {
+        option.Some(focused_discussion) ->
+          close_all_child_discussions(
+            active_discussions,
+            starting_from: nested_view_id(focused_discussion),
+          )
+        option.None -> active_discussions
+      }
+
+      let active_discussions = case model.clicked_discussion {
+        option.Some(clicked_discussion) ->
+          close_all_child_discussions(
+            active_discussions,
+            starting_from: nested_view_id(clicked_discussion),
+          )
+        option.None -> active_discussions
+      }
+
+      let active_discussions = case model.stickied_discussion {
+        option.Some(stickied_discussion) ->
+          close_all_child_discussions(
+            active_discussions,
+            starting_from: nested_view_id(stickied_discussion),
+          )
+        option.None -> active_discussions
+      }
+
+      let active_discussions = case model.hovered_discussion {
+        option.Some(hovered_discussion) ->
+          close_all_child_discussions(
+            active_discussions,
+            starting_from: nested_view_id(hovered_discussion),
+          )
+        option.None -> active_discussions
+      }
+
+      dict.delete(active_discussions, view_id)
+    }
+    Error(Nil) -> active_discussions
+  }
 }
 
 pub type DiscussionControllerMsg {
@@ -43,20 +258,23 @@ pub type DiscussionControllerMsg {
     topic_id: String,
     is_reference: Bool,
   )
-  UserUnselectedDiscussionEntry(kind: DiscussionSelectKind)
+  UserUnselectedDiscussionEntry(
+    kind: DiscussionSelectKind,
+    discussion_id: DiscussionId,
+  )
   UserStartedStickyOpenTimer(timer_id: global.TimerID)
   UserStartedStickyCloseTimer(timer_id: global.TimerID)
   UserHoveredInsideDiscussion(discussion_id: DiscussionId)
   UserUnhoveredInsideDiscussion(discussion_id: DiscussionId)
   ClientSetStickyDiscussion(discussion_id: DiscussionId)
-  ClientUnsetStickyDiscussion
+  ClientUnsetStickyDiscussion(discussion_id: DiscussionId)
   UserClickedDiscussionEntry(discussion_id: DiscussionId)
   UserClickedInsideDiscussion(discussion_id: DiscussionId)
-  UserClickedOutsideDiscussion(view_id: List(String))
+  UserClickedOutsideDiscussion(view_id: String)
   UserCtrlClickedNode(uri: String)
   UserUpdatedDiscussion(
-    discussion_id: DiscussionId,
-    update: #(DiscussionOverlayModel, DiscussionOverlayEffect),
+    model: DiscussionOverlayModel,
+    msg: DiscussionOverlayMsg,
   )
 }
 
@@ -65,330 +283,19 @@ pub type DiscussionSelectKind {
   Focus
 }
 
-// pub fn discussion_controller_update(model: DiscussionControllerModel, msg) {
-//   case msg {
-//     UserSelectedDiscussionEntry(
-//       kind:,
-//       view_id:,
-//       line_number:,
-//       column_number:,
-//       node_id:,
-//       topic_id:,
-//       is_reference:,
-//     ) -> {
-//       let selected_discussion_id =
-//         DiscussionId(view_id:, line_number:, column_number:)
-
-//       let discussion_models = case
-//         dict.get(model.discussion_models, selected_discussion_id)
-//       {
-//         Ok(..) -> model.discussion_models
-//         Error(Nil) ->
-//           dict.insert(
-//             model.discussion_models,
-//             selected_discussion_id,
-//             init(
-//               view_id: view_id <> topic_id,
-//               line_number:,
-//               column_number:,
-//               topic_id:,
-//               is_reference:,
-//             ),
-//           )
-//       }
-
-//       #(
-//         case kind {
-//           Hover -> {
-//             let updated_model =
-//               DiscussionControllerModel(
-//                 ..model,
-//                 selected_discussion_id: option.Some(selected_discussion_id),
-//                 discussion_models:,
-//               )
-//             UserActivatedEntry(updated_model, node_id)
-//           }
-//           Focus -> {
-//             let updated_model =
-//               DiscussionControllerModel(
-//                 ..model,
-//                 focused_discussion_id: option.Some(selected_discussion_id),
-//                 discussion_models:,
-//                 stickied_discussion_id: option.None,
-//               )
-
-//             UserFocusedEntry(
-//               updated_model,
-//               node_id,
-//               view_id,
-//               line_number,
-//               column_number,
-//             )
-//           }
-//         },
-//         case kind {
-//           Hover ->
-//             effect.from(fn(dispatch) {
-//               let timer_id =
-//                 global.set_timeout(300, fn() {
-//                   dispatch(ClientSetStickyDiscussion(
-//                     view_id:,
-//                     line_number:,
-//                     column_number:,
-//                   ))
-//                 })
-//               dispatch(UserStartedStickyOpenTimer(timer_id))
-//             })
-//           Focus -> effect.none()
-//         },
-//       )
-//     }
-
-//     UserUnselectedDiscussionEntry(kind:) -> {
-//       #(
-//         case kind {
-//           Hover -> {
-//             let updated_model =
-//               DiscussionControllerModel(
-//                 ..model,
-//                 selected_discussion_id: option.None,
-//               )
-//             UserActivatedEntry(updated_model, node_id: option.None)
-//           }
-//           Focus -> {
-//             let updated_model =
-//               DiscussionControllerModel(
-//                 ..model,
-//                 focused_discussion_id: option.None,
-//                 clicked_discussion_id: option.None,
-//               )
-//             UserActivatedEntry(updated_model, node_id: option.None)
-//           }
-//         },
-//         effect.from(fn(_dispatch) {
-//           case model.set_sticky_discussion_timer {
-//             option.Some(timer_id) -> {
-//               global.clear_timeout(timer_id)
-//             }
-//             option.None -> Nil
-//           }
-//         }),
-//       )
-//     }
-
-//     UserStartedStickyOpenTimer(timer_id) -> {
-//       #(
-//         NoOp(
-//           DiscussionControllerModel(
-//             ..model,
-//             set_sticky_discussion_timer: option.Some(timer_id),
-//           ),
-//         ),
-//         effect.none(),
-//       )
-//     }
-
-//     ClientSetStickyDiscussion(view_id:, line_number:, column_number:) -> {
-//       #(
-//         NoOp(
-//           DiscussionControllerModel(
-//             ..model,
-//             stickied_discussion_id: option.Some(DiscussionId(
-//               view_id:,
-//               line_number:,
-//               column_number:,
-//             )),
-//             set_sticky_discussion_timer: option.None,
-//           ),
-//         ),
-//         effect.none(),
-//       )
-//     }
-
-//     UserUnhoveredInsideDiscussion(view_id:, line_number:, column_number:) -> {
-//       echo "User unhovered discussion entry " <> int.to_string(line_number)
-//       #(NoOp(model), case model.stickied_discussion_id {
-//         option.Some(discussion_id) ->
-//           case
-//             line_number == discussion_id.line_number
-//             && column_number == discussion_id.column_number
-//             && view_id == discussion_id.view_id
-//           {
-//             True ->
-//               effect.from(fn(dispatch) {
-//                 let timer_id =
-//                   global.set_timeout(200, fn() {
-//                     echo "Unsticking discussion"
-//                     dispatch(ClientUnsetStickyDiscussion)
-//                   })
-//                 dispatch(UserStartedStickyCloseTimer(timer_id))
-//               })
-//             False -> effect.none()
-//           }
-//         option.None -> effect.none()
-//       })
-//     }
-
-//     UserHoveredInsideDiscussion(view_id:, line_number:, column_number:) -> {
-//       echo "User hovered discussion entry " <> int.to_string(line_number)
-//       // Do not clear the timer in the state generically without checking the
-//       // hovered line and col number here, as hovering any element will clear 
-//       // the timer if so
-//       #(NoOp(model), case model.stickied_discussion_id {
-//         option.Some(discussion_id) ->
-//           case
-//             line_number == discussion_id.line_number
-//             && column_number == discussion_id.column_number
-//             && view_id == discussion_id.view_id
-//           {
-//             True ->
-//               effect.from(fn(_dispatch) {
-//                 case model.unset_sticky_discussion_timer {
-//                   option.Some(timer_id) -> {
-//                     global.clear_timeout(timer_id)
-//                   }
-//                   option.None -> Nil
-//                 }
-//               })
-//             False -> effect.none()
-//           }
-//         option.None -> effect.none()
-//       })
-//     }
-
-//     UserStartedStickyCloseTimer(timer_id) -> {
-//       echo "User started sticky close timer"
-//       #(
-//         NoOp(
-//           DiscussionControllerModel(
-//             ..model,
-//             unset_sticky_discussion_timer: option.Some(timer_id),
-//           ),
-//         ),
-//         effect.none(),
-//       )
-//     }
-
-//     ClientUnsetStickyDiscussion -> {
-//       #(
-//         NoOp(
-//           DiscussionControllerModel(
-//             ..model,
-//             stickied_discussion_id: option.None,
-//             unset_sticky_discussion_timer: option.None,
-//           ),
-//         ),
-//         effect.none(),
-//       )
-//     }
-
-//     UserClickedDiscussionEntry(view_id:, line_number:, column_number:) -> {
-//       #(
-//         NoOp(
-//           DiscussionControllerModel(
-//             ..model,
-//             clicked_discussion_id: option.Some(DiscussionId(
-//               view_id:,
-//               line_number:,
-//               column_number:,
-//             )),
-//             stickied_discussion_id: option.None,
-//           ),
-//         ),
-//         effect.from(fn(_dispatch) {
-//           let res =
-//             selectors.discussion_input(view_id:, line_number:, column_number:)
-//             |> result.map(browser_element.focus)
-
-//           case res {
-//             Ok(Nil) -> Nil
-//             Error(Nil) -> io.println_error("Failed to focus discussion input")
-//           }
-//         }),
-//       )
-//     }
-//     UserClickedInsideDiscussion(view_id:, line_number:, column_number:) -> {
-//       echo "User clicked inside discussion"
-//       let model = case
-//         model.selected_discussion_id
-//         != option.Some(DiscussionId(view_id:, line_number:, column_number:))
-//       {
-//         True ->
-//           DiscussionControllerModel(
-//             ..model,
-//             selected_discussion_id: option.None,
-//           )
-//         False -> model
-//       }
-
-//       let model = case
-//         model.focused_discussion_id
-//         != option.Some(DiscussionId(view_id:, line_number:, column_number:))
-//       {
-//         True ->
-//           DiscussionControllerModel(
-//             ..model,
-//             focused_discussion_id: option.None,
-//           )
-//         False -> model
-//       }
-
-//       let model = case
-//         model.clicked_discussion_id
-//         != option.Some(DiscussionId(view_id:, line_number:, column_number:))
-//       {
-//         True ->
-//           DiscussionControllerModel(
-//             ..model,
-//             clicked_discussion_id: option.None,
-//           )
-//         False -> model
-//       }
-
-//       #(NoOp(model), effect.none())
-//     }
-
-//     UserClickedOutsideDiscussion -> {
-//       echo "User clicked outside discussion"
-//       #(
-//         NoOp(
-//           DiscussionControllerModel(
-//             ..model,
-//             selected_discussion_id: option.None,
-//             focused_discussion_id: option.None,
-//             clicked_discussion_id: option.None,
-//           ),
-//         ),
-//         effect.none(),
-//       )
-//     }
-
-//     UserCtrlClickedNode(uri) -> {
-//       let #(path, fragment) = case string.split_once(uri, "#") {
-//         Ok(#(uri, fragment)) -> #(uri, option.Some(fragment))
-//         Error(..) -> #(uri, option.None)
-//       }
-//       let path = "/" <> path
-
-//       #(NoOp(model), modem.push(path, option.None, fragment))
-//     }
-//   }
-// }
-
 pub fn discussion_view(
   attrs,
   discussion discussion,
   declarations declarations,
   discussion_id discussion_id,
-  selected_discussion selected_discussion: option.Option(DiscussionReference),
+  active_discussion active_discussion: option.Option(DiscussionReference),
 ) {
-  case selected_discussion {
-    option.Some(selected_discussion) ->
-      case discussion_id == selected_discussion.discussion_id {
+  case active_discussion {
+    option.Some(active_discussion) ->
+      case discussion_id == active_discussion.discussion_id {
         True ->
           html.div(attrs, [
-            overlay_view(selected_discussion.model, discussion, declarations)
-            |> element.map(map_discussion_msg(_, selected_discussion)),
+            overlay_view(active_discussion.model, discussion, declarations),
           ])
         False -> element.fragment([])
       }
@@ -396,11 +303,8 @@ pub fn discussion_view(
   }
 }
 
-fn map_discussion_msg(msg, selected_discussion: DiscussionReference) {
-  UserUpdatedDiscussion(
-    selected_discussion.discussion_id,
-    update: update(selected_discussion.model, msg),
-  )
+fn map_discussion_overlay_msg(msg, model: DiscussionOverlayModel) {
+  UserUpdatedDiscussion(model, msg)
 }
 
 // Discussion Node -------------------------------------------------------------
@@ -466,13 +370,13 @@ fn get_signature_line_topic_id(
 }
 
 pub fn topic_signature_view(
-  view_id view_id: List(String),
+  view_id view_id: String,
   signature signature: List(preprocessor.PreProcessedNode),
   declarations declarations: dict.Dict(String, preprocessor.Declaration),
   discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
   suppress_declaration suppress_declaration: Bool,
   line_number_offset line_number_offset: Int,
-  selected_discussion selected_discussion: option.Option(DiscussionReference),
+  active_discussion active_discussion: option.Option(DiscussionReference),
 ) -> List(element.Element(DiscussionControllerMsg)) {
   split_lines(signature, indent: False)
   |> list.fold(#(line_number_offset, []), fn(acc, rendered_line_nodes) {
@@ -505,7 +409,7 @@ pub fn topic_signature_view(
                   line_number: new_line_number,
                   column_number: new_column_number,
                 ),
-                selected_discussion:,
+                active_discussion:,
                 node_view_kind: DeclarationView,
               )
 
@@ -526,7 +430,7 @@ pub fn topic_signature_view(
                   line_number: new_line_number,
                   column_number: new_column_number,
                 ),
-                selected_discussion:,
+                active_discussion:,
                 node_view_kind: ReferenceView,
               )
 
@@ -594,7 +498,7 @@ pub fn node_view(
   discussion discussion,
   declarations declarations,
   discussion_id discussion_id,
-  selected_discussion selected_discussion: option.Option(DiscussionReference),
+  active_discussion active_discussion: option.Option(DiscussionReference),
   node_view_kind node_view_kind: NodeViewKind,
 ) {
   let attrs = case node_view_kind {
@@ -640,7 +544,7 @@ pub fn node_view(
         discussion:,
         declarations:,
         discussion_id:,
-        selected_discussion:,
+        active_discussion:,
       ),
     ],
   )
@@ -669,7 +573,7 @@ fn declaration_node_attributes(
       topic_id:,
       is_reference: False,
     )),
-    event.on_blur(UserUnselectedDiscussionEntry(kind: Focus)),
+    event.on_blur(UserUnselectedDiscussionEntry(kind: Focus, discussion_id:)),
     event.on_mouse_enter(UserSelectedDiscussionEntry(
       kind: Hover,
       discussion_id:,
@@ -677,7 +581,10 @@ fn declaration_node_attributes(
       topic_id:,
       is_reference: False,
     )),
-    event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: Hover)),
+    event.on_mouse_leave(UserUnselectedDiscussionEntry(
+      kind: Hover,
+      discussion_id:,
+    )),
     event.on_click(UserClickedDiscussionEntry(discussion_id:))
       |> event.stop_propagation,
   ]
@@ -703,7 +610,7 @@ fn reference_node_attributes(
       topic_id:,
       is_reference: True,
     )),
-    event.on_blur(UserUnselectedDiscussionEntry(kind: Focus)),
+    event.on_blur(UserUnselectedDiscussionEntry(kind: Focus, discussion_id:)),
     event.on_mouse_enter(UserSelectedDiscussionEntry(
       kind: Hover,
       discussion_id:,
@@ -711,7 +618,10 @@ fn reference_node_attributes(
       topic_id:,
       is_reference: True,
     )),
-    event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: Hover)),
+    event.on_mouse_leave(UserUnselectedDiscussionEntry(
+      kind: Hover,
+      discussion_id:,
+    )),
     eventx.on_ctrl_click(
       ctrl_click: UserCtrlClickedNode(uri: preprocessor.declaration_to_link(
         node_declaration,
@@ -739,7 +649,7 @@ fn new_discussion_preview_attributes(
       topic_id:,
       is_reference: False,
     )),
-    event.on_blur(UserUnselectedDiscussionEntry(kind: Focus)),
+    event.on_blur(UserUnselectedDiscussionEntry(kind: Focus, discussion_id:)),
     event.on_mouse_enter(UserSelectedDiscussionEntry(
       kind: Hover,
       discussion_id:,
@@ -747,7 +657,10 @@ fn new_discussion_preview_attributes(
       topic_id:,
       is_reference: False,
     )),
-    event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: Hover)),
+    event.on_mouse_leave(UserUnselectedDiscussionEntry(
+      kind: Hover,
+      discussion_id:,
+    )),
     eventx.on_non_ctrl_click(UserClickedDiscussionEntry(discussion_id:))
       |> event.stop_propagation,
   ]
@@ -770,7 +683,7 @@ fn comment_preview_attributes(
       topic_id:,
       is_reference: False,
     )),
-    event.on_blur(UserUnselectedDiscussionEntry(kind: Focus)),
+    event.on_blur(UserUnselectedDiscussionEntry(kind: Focus, discussion_id:)),
     event.on_mouse_enter(UserSelectedDiscussionEntry(
       kind: Hover,
       discussion_id:,
@@ -778,7 +691,10 @@ fn comment_preview_attributes(
       topic_id:,
       is_reference: False,
     )),
-    event.on_mouse_leave(UserUnselectedDiscussionEntry(kind: Hover)),
+    event.on_mouse_leave(UserUnselectedDiscussionEntry(
+      kind: Hover,
+      discussion_id:,
+    )),
     eventx.on_non_ctrl_click(UserClickedDiscussionEntry(discussion_id:))
       |> event.stop_propagation,
   ]
@@ -792,7 +708,7 @@ pub type DiscussionOverlayModel {
     show_reference_discussion: Bool,
     user_name: String,
     topic_id: String,
-    view_id: List(String),
+    view_id: String,
     discussion_id: DiscussionId,
     current_note_draft: String,
     current_thread_id: String,
@@ -801,8 +717,7 @@ pub type DiscussionOverlayModel {
     current_expanded_message_draft: option.Option(String),
     expanded_messages: set.Set(String),
     editing_note: option.Option(computed_note.ComputedNote),
-    declarations: dict.Dict(String, preprocessor.Declaration),
-    selected_discussion: option.Option(DiscussionId),
+    active_discussion: option.Option(DiscussionId),
   )
 }
 
@@ -816,7 +731,7 @@ pub type ActiveThread {
 }
 
 pub fn init(
-  view_id view_id: List(String),
+  view_id view_id: String,
   discussion_id discussion_id: DiscussionId,
   topic_id topic_id,
   is_reference is_reference,
@@ -835,8 +750,7 @@ pub fn init(
     current_expanded_message_draft: option.None,
     expanded_messages: set.new(),
     editing_note: option.None,
-    declarations: todo,
-    selected_discussion: option.None,
+    active_discussion: option.None,
   )
 }
 
@@ -897,17 +811,19 @@ pub fn update(model: DiscussionOverlayModel, msg: DiscussionOverlayMsg) {
         msg -> msg
       }
 
-      let referenced_topic_ids =
-        preprocessor.get_references(message, with: model.declarations)
-        |> list.append(case expanded_message {
-          option.Some(expanded_message) ->
-            preprocessor.get_references(
-              expanded_message,
-              with: model.declarations,
-            )
-          option.None -> []
-        })
-        |> list.unique
+      let referenced_topic_ids = []
+      // TODO: parse the references as the message is being typed, not just
+      // when the user submits the message
+      // preprocessor.get_references(message, with: model.declarations)
+      // |> list.append(case expanded_message {
+      //   option.Some(expanded_message) ->
+      //     preprocessor.get_references(
+      //       expanded_message,
+      //       with: model.declarations,
+      //     )
+      //   option.None -> []
+      // })
+      // |> list.unique
 
       let prior_referenced_topic_ids =
         option.map(model.editing_note, fn(note) { note.referenced_topic_ids })
@@ -1049,7 +965,7 @@ pub fn overlay_view(
   model: DiscussionOverlayModel,
   notes: dict.Dict(String, List(computed_note.ComputedNote)),
   declarations: dict.Dict(String, preprocessor.Declaration),
-) {
+) -> element.Element(DiscussionControllerMsg) {
   let current_thread_notes =
     dict.get(notes, model.current_thread_id)
     |> result.unwrap([])
@@ -1075,12 +991,17 @@ pub fn overlay_view(
       case model.is_reference && !model.show_reference_discussion {
         True ->
           html.div([attribute.class("overlay p-[.5rem]")], [
-            reference_header_view(model, current_thread_notes, notes),
+            reference_header_view(
+              model,
+              current_thread_notes:,
+              declarations:,
+              notes:,
+            ),
           ])
         False ->
           element.fragment([
             html.div([attribute.class("overlay p-[.5rem]")], [
-              thread_header_view(model, references, notes),
+              thread_header_view(model, references:, notes:, declarations:),
               case
                 option.is_some(model.active_thread)
                 || list.length(current_thread_notes) > 0
@@ -1097,17 +1018,28 @@ pub fn overlay_view(
   )
 }
 
-pub fn panel_view(model: DiscussionOverlayModel, notes, references) {
+pub fn panel_view(
+  model: DiscussionOverlayModel,
+  notes,
+  references,
+  declarations,
+) {
   let current_thread_notes =
     dict.get(notes, model.current_thread_id)
     |> result.unwrap([])
 
   html.div([attribute.style("padding", ".5rem")], [
     case model.is_reference {
-      True -> reference_header_view(model, current_thread_notes, notes)
+      True ->
+        reference_header_view(
+          model,
+          current_thread_notes:,
+          declarations:,
+          notes:,
+        )
       False -> element.fragment([])
     },
-    thread_header_view(model, references, notes),
+    thread_header_view(model, references:, notes:, declarations:),
     case
       option.is_some(model.active_thread)
       || list.length(current_thread_notes) > 0
@@ -1125,9 +1057,10 @@ pub fn panel_view(model: DiscussionOverlayModel, notes, references) {
 
 fn reference_header_view(
   model: DiscussionOverlayModel,
-  current_thread_notes,
-  notes,
-) {
+  current_thread_notes current_thread_notes,
+  declarations declarations: dict.Dict(String, preprocessor.Declaration),
+  notes notes,
+) -> element.Element(DiscussionControllerMsg) {
   element.fragment([
     html.div(
       [
@@ -1136,17 +1069,17 @@ fn reference_header_view(
         ),
       ],
       [
-        html.span(
-          [attribute.class("pt-[.1rem]")],
-          get_topic_title(model, notes),
-        ),
+        html.span([attribute.class("pt-[.1rem]")], [
+          get_topic_title(model, notes:, declarations:),
+        ]),
         html.button(
           [
             event.on_click(UserToggledReferenceDiscussion),
             attribute.class("icon-button p-[.3rem]"),
           ],
           [lucide.messages_square([])],
-        ),
+        )
+          |> element.map(map_discussion_overlay_msg(_, model)),
       ],
     ),
     html.div(
@@ -1175,9 +1108,14 @@ fn reference_header_view(
   ])
 }
 
-fn thread_header_view(model: DiscussionOverlayModel, references, notes) {
+fn thread_header_view(
+  model: DiscussionOverlayModel,
+  declarations declarations: dict.Dict(String, preprocessor.Declaration),
+  references references: List(preprocessor.Reference),
+  notes notes,
+) -> element.Element(DiscussionControllerMsg) {
   let declaration =
-    dict.get(model.declarations, model.topic_id)
+    dict.get(declarations, model.topic_id)
     |> result.unwrap(preprocessor.unknown_declaration)
 
   case model.active_thread {
@@ -1192,7 +1130,8 @@ fn thread_header_view(model: DiscussionOverlayModel, references, notes) {
               ),
             ],
             [html.text("Close Thread"), lucide.x([])],
-          ),
+          )
+          |> element.map(map_discussion_overlay_msg(_, model)),
         ]),
         html.text("Current Thread: "),
         html.text(active_thread.parent_note.message),
@@ -1214,10 +1153,9 @@ fn thread_header_view(model: DiscussionOverlayModel, references, notes) {
             ),
           ],
           [
-            html.span(
-              [attribute.class("pt-[.1rem]")],
-              get_topic_title(model, notes),
-            ),
+            html.span([attribute.class("pt-[.1rem]")], [
+              get_topic_title(model, notes:, declarations:),
+            ]),
             html.div([], [
               case model.is_reference {
                 True ->
@@ -1228,6 +1166,8 @@ fn thread_header_view(model: DiscussionOverlayModel, references, notes) {
                     ],
                     [lucide.x([])],
                   )
+                  |> element.map(map_discussion_overlay_msg(_, model))
+
                 False -> element.fragment([])
               },
               html.button(
@@ -1236,7 +1176,8 @@ fn thread_header_view(model: DiscussionOverlayModel, references, notes) {
                   attribute.class("icon-button p-[.3rem] "),
                 ],
                 [lucide.maximize_2([])],
-              ),
+              )
+                |> element.map(map_discussion_overlay_msg(_, model)),
             ]),
           ],
         ),
@@ -1316,6 +1257,7 @@ fn comments_view(
                   ],
                   [lucide.pencil([])],
                 )
+                |> element.map(map_discussion_overlay_msg(_, model))
             },
             case note.expanded_message {
               option.Some(_) ->
@@ -1327,6 +1269,8 @@ fn comments_view(
                   ],
                   [lucide.list_collapse([])],
                 )
+                |> element.map(map_discussion_overlay_msg(_, model))
+
               option.None -> element.fragment([])
             },
             case computed_note.is_significance_threadable(note.significance) {
@@ -1339,6 +1283,8 @@ fn comments_view(
                   ],
                   [lucide.messages_square([])],
                 )
+                |> element.map(map_discussion_overlay_msg(_, model))
+
               False -> element.fragment([])
             },
           ]),
@@ -1371,7 +1317,10 @@ fn significance_badge_view(sig: computed_note.ComputedNoteSignificance) {
   }
 }
 
-fn new_message_input_view(model: DiscussionOverlayModel, current_thread_notes) {
+fn new_message_input_view(
+  model: DiscussionOverlayModel,
+  current_thread_notes,
+) -> element.Element(DiscussionControllerMsg) {
   html.div([attribute.class("flex justify-between items-center gap-[.35rem]")], [
     html.button(
       [
@@ -1382,7 +1331,8 @@ fn new_message_input_view(model: DiscussionOverlayModel, current_thread_notes) {
         )),
       ],
       [lucide.pencil_ruler([])],
-    ),
+    )
+      |> element.map(map_discussion_overlay_msg(_, model)),
     case model.editing_note {
       option.Some(..) ->
         html.button(
@@ -1393,6 +1343,8 @@ fn new_message_input_view(model: DiscussionOverlayModel, current_thread_notes) {
           ],
           [lucide.x([])],
         )
+        |> element.map(map_discussion_overlay_msg(_, model))
+
       option.None -> element.fragment([])
     },
     html.input([
@@ -1409,7 +1361,8 @@ fn new_message_input_view(model: DiscussionOverlayModel, current_thread_notes) {
         UserEditedNote(list.first(current_thread_notes)),
       ),
       attribute.value(model.current_note_draft),
-    ]),
+    ])
+      |> element.map(map_discussion_overlay_msg(_, model)),
   ])
 }
 
@@ -1442,6 +1395,7 @@ fn expand_message_input_view(model: DiscussionOverlayModel) {
     ],
     model.current_expanded_message_draft |> option.unwrap(""),
   )
+  |> element.map(map_discussion_overlay_msg(_, model))
 }
 
 fn get_message_classification_prefix(
@@ -1481,23 +1435,23 @@ fn on_input_keydown(enter_msg, up_msg) {
   })
 }
 
-fn get_topic_title(model: DiscussionOverlayModel, notes) {
-  case dict.get(model.declarations, model.topic_id) {
+fn get_topic_title(
+  model: DiscussionOverlayModel,
+  // active_discussion active_discussion: option.Option(DiscussionReference),
+  declarations declarations: dict.Dict(String, preprocessor.Declaration),
+  notes notes,
+) -> element.Element(DiscussionControllerMsg) {
+  case dict.get(declarations, model.topic_id) {
     Ok(dec) ->
-      topic_signature_view(
+      element.fragment(topic_signature_view(
         view_id: model.discussion_id.view_id,
         signature: dec.signature,
-        declarations: model.declarations,
+        declarations:,
         discussion: notes,
         suppress_declaration: True,
         line_number_offset: 0,
-        selected_discussion: todo,
-      )
-    Error(Nil) -> [html.span([], [html.text("unknown")])]
+        active_discussion: todo,
+      ))
+    Error(Nil) -> html.span([], [html.text("unknown")])
   }
-  todo
-}
-
-pub fn view_id_to_string(view_id) {
-  string.join(view_id, "-")
 }

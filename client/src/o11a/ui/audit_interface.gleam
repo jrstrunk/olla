@@ -10,7 +10,7 @@ import o11a/computed_note
 import o11a/preprocessor
 import o11a/ui/discussion
 
-pub const view_id = ["interface"]
+pub const view_id = "interface"
 
 pub type InterfaceData {
   InterfaceData(
@@ -51,9 +51,9 @@ pub fn view(
   audit_name,
   declarations,
   discussion,
-  selected_discussion,
+  active_discussion,
 ) {
-  html.div([attribute.class("p-[1rem]")], [
+  html.div([attribute.id(view_id), attribute.class("p-[1rem]")], [
     // Page header
     html.h1([], [
       html.text(audit_name |> string.capitalise <> " Audit Interface"),
@@ -78,7 +78,7 @@ pub fn view(
               interface_data.contract_constants,
               declarations,
               discussion,
-              selected_discussion,
+              active_discussion,
             ),
             // List of variables in contract
             contract_members_view(
@@ -87,7 +87,7 @@ pub fn view(
               interface_data.contract_variables,
               declarations,
               discussion,
-              selected_discussion,
+              active_discussion,
             ),
             // List of structs in contract
             contract_members_view(
@@ -96,7 +96,7 @@ pub fn view(
               interface_data.contract_structs,
               declarations,
               discussion,
-              selected_discussion,
+              active_discussion,
             ),
             // List of enums in contract
             contract_members_view(
@@ -105,7 +105,7 @@ pub fn view(
               interface_data.contract_enums,
               declarations,
               discussion,
-              selected_discussion,
+              active_discussion,
             ),
             // List of events in contract
             contract_members_view(
@@ -114,7 +114,7 @@ pub fn view(
               interface_data.contract_events,
               declarations,
               discussion,
-              selected_discussion,
+              active_discussion,
             ),
             // List of errors in contract
             contract_members_view(
@@ -123,7 +123,7 @@ pub fn view(
               interface_data.contract_errors,
               declarations,
               discussion,
-              selected_discussion,
+              active_discussion,
             ),
             // List of functions in contract
             contract_members_view(
@@ -132,7 +132,7 @@ pub fn view(
               interface_data.contract_functions,
               declarations,
               discussion,
-              selected_discussion,
+              active_discussion,
             ),
             // List of modifiers in contract
             contract_members_view(
@@ -141,7 +141,7 @@ pub fn view(
               interface_data.contract_modifiers,
               declarations,
               discussion,
-              selected_discussion,
+              active_discussion,
             ),
           ])
         })
@@ -156,7 +156,7 @@ fn contract_members_view(
   declarations_of_type: List(preprocessor.Declaration),
   declarations: dict.Dict(String, preprocessor.Declaration),
   discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
-  selected_discussion selected_discussion,
+  active_discussion active_discussion,
 ) {
   let items =
     list.filter(declarations_of_type, fn(declaration) {
@@ -178,8 +178,9 @@ fn contract_members_view(
                 declarations:,
                 discussion:,
                 suppress_declaration: False,
-                line_number_offset: todo,
-                selected_discussion:,
+                // TODO: accumulate this value somehow for keyboard nav
+                line_number_offset: 0,
+                active_discussion:,
               ),
             ),
           ])
