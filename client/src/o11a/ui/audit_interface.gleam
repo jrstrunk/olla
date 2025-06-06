@@ -51,8 +51,11 @@ pub fn view(
   audit_name,
   declarations,
   discussion,
-  active_discussion,
+  discussion_context,
 ) {
+  let active_discussion: option.Option(discussion.DiscussionReference) =
+    discussion.get_active_discussion_reference(view_id, discussion_context)
+
   html.div([attribute.id(view_id), attribute.class("p-[1rem]")], [
     // Page header
     html.h1([], [
@@ -79,6 +82,7 @@ pub fn view(
               declarations,
               discussion,
               active_discussion,
+              discussion_context,
             ),
             // List of variables in contract
             contract_members_view(
@@ -88,6 +92,7 @@ pub fn view(
               declarations,
               discussion,
               active_discussion,
+              discussion_context,
             ),
             // List of structs in contract
             contract_members_view(
@@ -97,6 +102,7 @@ pub fn view(
               declarations,
               discussion,
               active_discussion,
+              discussion_context,
             ),
             // List of enums in contract
             contract_members_view(
@@ -106,6 +112,7 @@ pub fn view(
               declarations,
               discussion,
               active_discussion,
+              discussion_context,
             ),
             // List of events in contract
             contract_members_view(
@@ -115,6 +122,7 @@ pub fn view(
               declarations,
               discussion,
               active_discussion,
+              discussion_context,
             ),
             // List of errors in contract
             contract_members_view(
@@ -124,6 +132,7 @@ pub fn view(
               declarations,
               discussion,
               active_discussion,
+              discussion_context,
             ),
             // List of functions in contract
             contract_members_view(
@@ -133,6 +142,7 @@ pub fn view(
               declarations,
               discussion,
               active_discussion,
+              discussion_context,
             ),
             // List of modifiers in contract
             contract_members_view(
@@ -142,6 +152,7 @@ pub fn view(
               declarations,
               discussion,
               active_discussion,
+              discussion_context,
             ),
           ])
         })
@@ -157,6 +168,7 @@ fn contract_members_view(
   declarations: dict.Dict(String, preprocessor.Declaration),
   discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
   active_discussion active_discussion,
+  discussion_context discussion_context,
 ) {
   let items =
     list.filter(declarations_of_type, fn(declaration) {
@@ -181,6 +193,7 @@ fn contract_members_view(
                 // TODO: accumulate this value somehow for keyboard nav
                 line_number_offset: 0,
                 active_discussion:,
+                discussion_context:,
               ),
             ),
           ])

@@ -43,6 +43,29 @@ pub type DiscussionReference {
   )
 }
 
+pub type DiscussionContext {
+  DiscussionContext(
+    active_discussions: dict.Dict(String, DiscussionControllerModel),
+    dicsussion_models: dict.Dict(DiscussionId, DiscussionOverlayModel),
+  )
+}
+
+pub fn get_active_discussion_reference(
+  view_id,
+  discussion_context: DiscussionContext,
+) -> option.Option(DiscussionReference) {
+  case
+    dict.get(discussion_context.active_discussions, view_id)
+    |> result.try(get_active_discussion_id)
+  {
+    Ok(discussion_id) ->
+      dict.get(discussion_context.dicsussion_models, discussion_id)
+      |> result.map(DiscussionReference(discussion_id, _))
+    _ -> Error(Nil)
+  }
+  |> option.from_result
+}
+
 pub type DiscussionControllerModel {
   DiscussionControllerModel(
     hovered_discussion: option.Option(DiscussionId),
@@ -289,13 +312,19 @@ pub fn discussion_view(
   declarations declarations,
   discussion_id discussion_id,
   active_discussion active_discussion: option.Option(DiscussionReference),
+  discussion_context discussion_context,
 ) {
   case active_discussion {
     option.Some(active_discussion) ->
       case discussion_id == active_discussion.discussion_id {
         True ->
           html.div(attrs, [
-            overlay_view(active_discussion.model, discussion, declarations),
+            overlay_view(
+              active_discussion.model,
+              discussion,
+              declarations:,
+              discussion_context:,
+            ),
           ])
         False -> element.fragment([])
       }
@@ -377,6 +406,7 @@ pub fn topic_signature_view(
   suppress_declaration suppress_declaration: Bool,
   line_number_offset line_number_offset: Int,
   active_discussion active_discussion: option.Option(DiscussionReference),
+  discussion_context discussion_context,
 ) -> List(element.Element(DiscussionControllerMsg)) {
   split_lines(signature, indent: False)
   |> list.fold(#(line_number_offset, []), fn(acc, rendered_line_nodes) {
@@ -393,34 +423,39 @@ pub fn topic_signature_view(
       |> list.map_fold(0, fn(column_number, node) {
         case node {
           preprocessor.PreProcessedDeclaration(topic_id:, tokens:) -> {
-            let new_column_number = case suppress_declaration {
-              True -> column_number
-              False -> column_number + 1
+            case suppress_declaration {
+              True -> {
+                #(column_number, node_view(topic_id:, tokens:, declarations:))
+              }
+              False -> {
+                let new_column_number = column_number + 1
+
+                let rendered_node =
+                  node_with_discussion_view(
+                    topic_id:,
+                    tokens:,
+                    discussion:,
+                    declarations:,
+                    discussion_id: DiscussionId(
+                      view_id:,
+                      line_number: new_line_number,
+                      column_number: new_column_number,
+                    ),
+                    active_discussion:,
+                    discussion_context:,
+                    node_view_kind: DeclarationView,
+                  )
+
+                #(new_column_number, rendered_node)
+              }
             }
-
-            let rendered_node =
-              node_view(
-                topic_id:,
-                tokens:,
-                discussion:,
-                declarations:,
-                discussion_id: DiscussionId(
-                  view_id:,
-                  line_number: new_line_number,
-                  column_number: new_column_number,
-                ),
-                active_discussion:,
-                node_view_kind: DeclarationView,
-              )
-
-            #(new_column_number, rendered_node)
           }
 
           preprocessor.PreProcessedReference(topic_id:, tokens:) -> {
             let new_column_number = column_number + 1
 
             let rendered_node =
-              node_view(
+              node_with_discussion_view(
                 topic_id:,
                 tokens:,
                 discussion:,
@@ -431,6 +466,7 @@ pub fn topic_signature_view(
                   column_number: new_column_number,
                 ),
                 active_discussion:,
+                discussion_context:,
                 node_view_kind: ReferenceView,
               )
 
@@ -485,21 +521,41 @@ pub fn topic_signature_view(
   |> list.flatten
 }
 
-pub type NodeViewKind {
+pub fn node_view(
+  topic_id topic_id: String,
+  tokens tokens: String,
+  declarations declarations,
+) {
+  let node_declaration =
+    dict.get(declarations, topic_id)
+    |> result.unwrap(preprocessor.unknown_declaration)
+
+  html.span(
+    [
+      attribute.class(preprocessor.declaration_kind_to_string(
+        node_declaration.kind,
+      )),
+    ],
+    [html.text(tokens)],
+  )
+}
+
+pub type NodeWithDiscussionViewKind {
   ReferenceView
   DeclarationView
   NewDiscussionPreview
   CommentPreview
 }
 
-pub fn node_view(
+pub fn node_with_discussion_view(
   topic_id topic_id: String,
   tokens tokens: String,
   discussion discussion,
   declarations declarations,
   discussion_id discussion_id,
   active_discussion active_discussion: option.Option(DiscussionReference),
-  node_view_kind node_view_kind: NodeViewKind,
+  discussion_context discussion_context,
+  node_view_kind node_view_kind: NodeWithDiscussionViewKind,
 ) {
   let attrs = case node_view_kind {
     ReferenceView -> {
@@ -545,6 +601,7 @@ pub fn node_view(
         declarations:,
         discussion_id:,
         active_discussion:,
+        discussion_context:,
       ),
     ],
   )
@@ -556,7 +613,7 @@ fn declaration_node_attributes(
   topic_id topic_id: String,
 ) {
   [
-    attribute.id(preprocessor.declaration_kind_to_string(node_declaration.kind)),
+    attribute.id(preprocessor.declaration_to_id(node_declaration)),
     attribute.class(preprocessor.declaration_kind_to_string(
       node_declaration.kind,
     )),
@@ -717,7 +774,6 @@ pub type DiscussionOverlayModel {
     current_expanded_message_draft: option.Option(String),
     expanded_messages: set.Set(String),
     editing_note: option.Option(computed_note.ComputedNote),
-    active_discussion: option.Option(DiscussionId),
   )
 }
 
@@ -750,7 +806,6 @@ pub fn init(
     current_expanded_message_draft: option.None,
     expanded_messages: set.new(),
     editing_note: option.None,
-    active_discussion: option.None,
   )
 }
 
@@ -963,9 +1018,13 @@ pub fn update(model: DiscussionOverlayModel, msg: DiscussionOverlayMsg) {
 
 pub fn overlay_view(
   model: DiscussionOverlayModel,
-  notes: dict.Dict(String, List(computed_note.ComputedNote)),
-  declarations: dict.Dict(String, preprocessor.Declaration),
+  notes notes: dict.Dict(String, List(computed_note.ComputedNote)),
+  declarations declarations: dict.Dict(String, preprocessor.Declaration),
+  discussion_context discussion_context,
 ) -> element.Element(DiscussionControllerMsg) {
+  let active_discussion: option.Option(DiscussionReference) =
+    get_active_discussion_reference(model.view_id, discussion_context)
+
   let current_thread_notes =
     dict.get(notes, model.current_thread_id)
     |> result.unwrap([])
@@ -996,12 +1055,21 @@ pub fn overlay_view(
               current_thread_notes:,
               declarations:,
               notes:,
+              active_discussion:,
+              discussion_context:,
             ),
           ])
         False ->
           element.fragment([
             html.div([attribute.class("overlay p-[.5rem]")], [
-              thread_header_view(model, references:, notes:, declarations:),
+              thread_header_view(
+                model,
+                references:,
+                notes:,
+                declarations:,
+                active_discussion:,
+                discussion_context:,
+              ),
               case
                 option.is_some(model.active_thread)
                 || list.length(current_thread_notes) > 0
@@ -1023,6 +1091,8 @@ pub fn panel_view(
   notes,
   references,
   declarations,
+  active_discussion active_discussion: option.Option(DiscussionReference),
+  discussion_context discussion_context,
 ) {
   let current_thread_notes =
     dict.get(notes, model.current_thread_id)
@@ -1036,10 +1106,19 @@ pub fn panel_view(
           current_thread_notes:,
           declarations:,
           notes:,
+          active_discussion:,
+          discussion_context:,
         )
       False -> element.fragment([])
     },
-    thread_header_view(model, references:, notes:, declarations:),
+    thread_header_view(
+      model,
+      references:,
+      notes:,
+      declarations:,
+      active_discussion:,
+      discussion_context:,
+    ),
     case
       option.is_some(model.active_thread)
       || list.length(current_thread_notes) > 0
@@ -1059,6 +1138,8 @@ fn reference_header_view(
   model: DiscussionOverlayModel,
   current_thread_notes current_thread_notes,
   declarations declarations: dict.Dict(String, preprocessor.Declaration),
+  active_discussion active_discussion: option.Option(DiscussionReference),
+  discussion_context discussion_context,
   notes notes,
 ) -> element.Element(DiscussionControllerMsg) {
   element.fragment([
@@ -1070,7 +1151,13 @@ fn reference_header_view(
       ],
       [
         html.span([attribute.class("pt-[.1rem]")], [
-          get_topic_title(model, notes:, declarations:),
+          get_topic_title(
+            model,
+            notes:,
+            declarations:,
+            active_discussion:,
+            discussion_context:,
+          ),
         ]),
         html.button(
           [
@@ -1112,6 +1199,8 @@ fn thread_header_view(
   model: DiscussionOverlayModel,
   declarations declarations: dict.Dict(String, preprocessor.Declaration),
   references references: List(preprocessor.Reference),
+  active_discussion active_discussion: option.Option(DiscussionReference),
+  discussion_context discussion_context,
   notes notes,
 ) -> element.Element(DiscussionControllerMsg) {
   let declaration =
@@ -1154,7 +1243,13 @@ fn thread_header_view(
           ],
           [
             html.span([attribute.class("pt-[.1rem]")], [
-              get_topic_title(model, notes:, declarations:),
+              get_topic_title(
+                model,
+                notes:,
+                declarations:,
+                active_discussion:,
+                discussion_context:,
+              ),
             ]),
             html.div([], [
               case model.is_reference {
@@ -1437,20 +1532,22 @@ fn on_input_keydown(enter_msg, up_msg) {
 
 fn get_topic_title(
   model: DiscussionOverlayModel,
-  // active_discussion active_discussion: option.Option(DiscussionReference),
+  active_discussion active_discussion: option.Option(DiscussionReference),
+  discussion_context discussion_context,
   declarations declarations: dict.Dict(String, preprocessor.Declaration),
   notes notes,
 ) -> element.Element(DiscussionControllerMsg) {
   case dict.get(declarations, model.topic_id) {
     Ok(dec) ->
       element.fragment(topic_signature_view(
-        view_id: model.discussion_id.view_id,
+        view_id: model.view_id,
         signature: dec.signature,
         declarations:,
         discussion: notes,
         suppress_declaration: True,
         line_number_offset: 0,
-        active_discussion: todo,
+        active_discussion:,
+        discussion_context:,
       ))
     Error(Nil) -> html.span([], [html.text("unknown")])
   }

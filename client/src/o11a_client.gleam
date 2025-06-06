@@ -682,6 +682,10 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         discussion.UserHoveredInsideDiscussion(discussion_id:) -> {
           echo "User hovered discussion entry "
             <> int.to_string(discussion_id.line_number)
+            <> " "
+            <> int.to_string(discussion_id.column_number)
+            <> " "
+            <> discussion_id.view_id
           // Do not clear the timer in the state generically without checking the
           // hovered line and col number here, as hovering any element will clear 
           // the timer if so
@@ -1024,6 +1028,12 @@ fn submit_note(audit_name, topic_id, note_submission, discussion_model) {
 }
 
 fn view(model: Model) {
+  let discussion_context =
+    discussion.DiscussionContext(
+      active_discussions: model.active_discussions,
+      dicsussion_models: model.discussion_models,
+    )
+
   case model.route {
     AuditDashboardRoute(audit_name:) -> {
       let discussion =
@@ -1046,12 +1056,6 @@ fn view(model: Model) {
     }
 
     AuditInterfaceRoute(audit_name:) -> {
-      let active_discussion =
-        dict.get(model.active_discussions, audit_interface.view_id)
-        |> result.try(discussion.get_active_discussion_id)
-        |> result.try(get_active_discussion(model, _))
-        |> option.from_result
-
       let interface_data = case dict.get(model.audit_interface, audit_name) {
         Ok(Ok(data)) -> data
         _ -> audit_interface.empty_interface_data
@@ -1077,7 +1081,7 @@ fn view(model: Model) {
             audit_name,
             declarations,
             discussion,
-            active_discussion,
+            discussion_context,
           )
             |> element.map(DiscussionControllerSentMsg),
           option.None,
@@ -1089,12 +1093,6 @@ fn view(model: Model) {
     }
 
     AuditPageRoute(audit_name:, page_path:) -> {
-      let active_discussion =
-        dict.get(model.active_discussions, audit_interface.view_id)
-        |> result.try(discussion.get_active_discussion_id)
-        |> result.try(get_active_discussion(model, _))
-        |> option.from_result
-
       let discussion =
         dict.get(model.discussions, audit_name)
         |> result.unwrap(dict.new())
@@ -1124,7 +1122,7 @@ fn view(model: Model) {
             preprocessed_source:,
             discussion:,
             declarations:,
-            active_discussion:,
+            discussion_context:,
           )
             |> element.map(DiscussionControllerSentMsg),
           audit_page_dashboard.view(discussion, page_path)
@@ -1150,13 +1148,6 @@ fn selected_node_highlighter(model: Model) {
       )
     option.None -> element.fragment([])
   }
-}
-
-fn get_active_discussion(model: Model, discussion_id) {
-  dict.get(model.discussion_models, discussion_id)
-  |> result.map(fn(model) {
-    discussion.DiscussionReference(discussion_id, model:)
-  })
 }
 
 fn on_server_updated_discussion(msg) {

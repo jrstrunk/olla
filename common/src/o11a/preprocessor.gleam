@@ -456,6 +456,16 @@ pub type AST(solidity_ast, text_ast) {
   TextAST(text_ast)
 }
 
+pub type PreProcessedSnippetLine {
+  PreProcessedSnippetLine(
+    significance: PreProcessedLineSignificance,
+    leading_spaces: Int,
+    elements: List(PreProcessedNode),
+    columns: Int,
+    kind: PreProcessedLineKind,
+  )
+}
+
 pub type PreProcessedLine {
   PreProcessedLine(
     significance: PreProcessedLineSignificance,

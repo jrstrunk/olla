@@ -33,10 +33,11 @@ pub fn view(
   preprocessed_source preprocessed_source: List(preprocessor.PreProcessedLine),
   discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
   declarations declarations: dict.Dict(String, preprocessor.Declaration),
-  active_discussion active_discussion: option.Option(
-    discussion.DiscussionReference,
-  ),
+  discussion_context discussion_context,
 ) {
+  let active_discussion =
+    discussion.get_active_discussion_reference(view_id, discussion_context)
+
   html.div(
     [
       attribute.id(view_id),
@@ -49,6 +50,7 @@ pub fn view(
       discussion:,
       declarations:,
       active_discussion:,
+      discussion_context:,
     )),
   )
 }
@@ -60,6 +62,7 @@ fn loc_view(
   active_discussion active_discussion: option.Option(
     discussion.DiscussionReference,
   ),
+  discussion_context discussion_context,
 ) {
   case loc.significance {
     preprocessor.EmptyLine -> {
@@ -72,6 +75,7 @@ fn loc_view(
           active_discussion:,
           discussion:,
           declarations:,
+          discussion_context:,
         )
       ])
     }
@@ -83,6 +87,7 @@ fn loc_view(
         loc:,
         line_topic_id: topic_id,
         active_discussion:,
+        discussion_context:,
       )
 
     preprocessor.NonEmptyLine(topic_id:) ->
@@ -92,6 +97,7 @@ fn loc_view(
         loc:,
         line_topic_id: topic_id,
         active_discussion:,
+        discussion_context:,
       )
   }
 }
@@ -104,6 +110,7 @@ fn line_container_view(
   active_discussion active_discussion: option.Option(
     discussion.DiscussionReference,
   ),
+  discussion_context discussion_context,
 ) {
   let #(parent_notes, info_notes) =
     formatter.get_notes(discussion, loc.leading_spaces, line_topic_id)
@@ -152,6 +159,7 @@ fn line_container_view(
           active_discussion:,
           discussion:,
           declarations:,
+          discussion_context:,
         )),
         inline_comment_preview_view(
           parent_notes:,
@@ -159,6 +167,7 @@ fn line_container_view(
           element_line_number: loc.line_number,
           element_column_number: column_count,
           active_discussion:,
+          discussion_context:,
           discussion:,
           declarations:,
         ),
@@ -175,6 +184,7 @@ fn inline_comment_preview_view(
   active_discussion active_discussion: option.Option(
     discussion.DiscussionReference,
   ),
+  discussion_context discussion_context,
   discussion discussion,
   declarations declarations,
 ) {
@@ -187,7 +197,7 @@ fn inline_comment_preview_view(
 
   case note_result {
     Ok(note) ->
-      discussion.node_view(
+      discussion.node_with_discussion_view(
         topic_id:,
         tokens: case string.length(note.message) > 40 {
           True -> note.message |> string.slice(0, length: 37) <> "⋯"
@@ -201,11 +211,12 @@ fn inline_comment_preview_view(
           column_number:,
         ),
         active_discussion:,
+        discussion_context:,
         node_view_kind: discussion.CommentPreview,
       )
 
     Error(Nil) ->
-      discussion.node_view(
+      discussion.node_with_discussion_view(
         topic_id:,
         tokens: "Start new thread",
         discussion:,
@@ -216,6 +227,7 @@ fn inline_comment_preview_view(
           column_number:,
         ),
         active_discussion:,
+        discussion_context:,
         node_view_kind: discussion.NewDiscussionPreview,
       )
   }
@@ -228,6 +240,7 @@ fn preprocessed_nodes_view(
   active_discussion active_discussion: option.Option(
     discussion.DiscussionReference,
   ),
+  discussion_context discussion_context,
 ) {
   list.map_fold(loc.elements, 0, fn(index, element) {
     case element {
@@ -235,7 +248,7 @@ fn preprocessed_nodes_view(
         let new_column_index = index + 1
         #(
           new_column_index,
-          discussion.node_view(
+          discussion.node_with_discussion_view(
             topic_id:,
             tokens:,
             discussion_id: discussion.DiscussionId(
@@ -244,6 +257,7 @@ fn preprocessed_nodes_view(
               column_number: new_column_index,
             ),
             active_discussion:,
+            discussion_context:,
             discussion:,
             declarations:,
             node_view_kind: discussion.DeclarationView,
@@ -255,7 +269,7 @@ fn preprocessed_nodes_view(
         let new_column_index = index + 1
         #(
           new_column_index,
-          discussion.node_view(
+          discussion.node_with_discussion_view(
             topic_id:,
             tokens:,
             discussion_id: discussion.DiscussionId(
@@ -264,6 +278,7 @@ fn preprocessed_nodes_view(
               column_number: new_column_index,
             ),
             active_discussion:,
+            discussion_context:,
             discussion:,
             declarations:,
             node_view_kind: discussion.ReferenceView,
