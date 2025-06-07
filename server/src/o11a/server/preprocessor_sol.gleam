@@ -111,8 +111,15 @@ pub fn preprocess_source(
                 member: option.None,
               ),
               signature: [
-                preprocessor.PreProcessedNode(
-                  element: "line " <> line_number_text,
+                preprocessor.PreProcessedSnippetLine(
+                  significance: preprocessor.EmptyLine,
+                  leading_spaces: 0,
+                  elements: [
+                    preprocessor.PreProcessedNode(
+                      element: "line " <> line_number_text,
+                    ),
+                  ],
+                  kind: preprocessor.SoliditySourceLine,
                 ),
               ],
               kind: preprocessor.LineDeclaration,
@@ -148,8 +155,15 @@ pub fn preprocess_source(
                 member: option.None,
               ),
               signature: [
-                preprocessor.PreProcessedNode(
-                  element: "line " <> line_number_text,
+                preprocessor.PreProcessedSnippetLine(
+                  significance: preprocessor.EmptyLine,
+                  leading_spaces: 0,
+                  elements: [
+                    preprocessor.PreProcessedNode(
+                      element: "line " <> line_number_text,
+                    ),
+                  ],
+                  kind: preprocessor.SoliditySourceLine,
                 ),
               ],
               kind: preprocessor.LineDeclaration,
@@ -167,11 +181,11 @@ pub fn preprocess_source(
         case node {
           preprocessor.PreProcessedDeclaration(..)
           | preprocessor.PreProcessedReference(..) -> acc + 1
+
           preprocessor.PreProcessedNode(..)
           | preprocessor.PreProcessedGapNode(..)
           | preprocessor.FormatterNewline
-          | preprocessor.FormatterBlock(..)
-          | preprocessor.FormatterIndent -> acc
+          | preprocessor.FormatterBlock(..) -> acc + 1
         }
       })
 
@@ -829,7 +843,7 @@ fn do_enumerate_node_declarations(
             name:,
             // The parent of a contract is the file it is defined in
             scope: parent_scope,
-            signature: get_signature_nodes(node),
+            signature: get_signature_lines(node),
             kind: preprocessor.ContractDeclaration(contract_kind),
             source_map:,
             references: [],
@@ -873,7 +887,7 @@ fn do_enumerate_node_declarations(
             topic_id:,
             name:,
             scope: parent_scope,
-            signature: get_signature_nodes(node),
+            signature: get_signature_lines(node),
             kind: preprocessor.FunctionDeclaration(function_kind),
             source_map:,
             references: [],
@@ -919,7 +933,7 @@ fn do_enumerate_node_declarations(
             topic_id:,
             name:,
             scope: parent_scope,
-            signature: get_signature_nodes(node),
+            signature: get_signature_lines(node),
             kind: preprocessor.ModifierDeclaration,
             source_map:,
             references: [],
@@ -961,7 +975,7 @@ fn do_enumerate_node_declarations(
             topic_id:,
             name:,
             scope: parent_scope,
-            signature: get_signature_nodes(node),
+            signature: get_signature_lines(node),
             kind: preprocessor.ErrorDeclaration,
             source_map:,
             references: [],
@@ -991,7 +1005,7 @@ fn do_enumerate_node_declarations(
             topic_id:,
             name:,
             scope: parent_scope,
-            signature: get_signature_nodes(node),
+            signature: get_signature_lines(node),
             kind: preprocessor.EventDeclaration,
             source_map:,
             references: [],
@@ -1018,7 +1032,7 @@ fn do_enumerate_node_declarations(
             topic_id:,
             name:,
             scope: parent_scope,
-            signature: get_signature_nodes(node),
+            signature: get_signature_lines(node),
             kind: case constant {
               True -> preprocessor.ConstantDeclaration
               False -> preprocessor.VariableDeclaration
@@ -1085,7 +1099,7 @@ fn do_enumerate_node_declarations(
             topic_id:,
             name:,
             scope: parent_scope,
-            signature: get_signature_nodes(node),
+            signature: get_signature_lines(node),
             kind: preprocessor.EnumDeclaration,
             source_map:,
             references: [],
@@ -1113,7 +1127,7 @@ fn do_enumerate_node_declarations(
             topic_id:,
             name:,
             scope: parent_scope,
-            signature: get_signature_nodes(node),
+            signature: get_signature_lines(node),
             kind: preprocessor.EnumValueDeclaration,
             source_map:,
             references: [],
@@ -1138,7 +1152,7 @@ fn do_enumerate_node_declarations(
             topic_id:,
             name:,
             scope: parent_scope,
-            signature: get_signature_nodes(node),
+            signature: get_signature_lines(node),
             kind: preprocessor.StructDeclaration,
             source_map:,
             references: [],
@@ -1801,8 +1815,9 @@ type BlockLevel {
   Nested
 }
 
-fn get_signature_nodes(node) {
+fn get_signature_lines(node) {
   do_node_to_signature_nodes(node, top_level: TopLevel)
+  |> split_lines(indent_num: 0)
 }
 
 fn do_node_to_signature_nodes(node, top_level top_level: BlockLevel) {
@@ -2223,6 +2238,76 @@ fn do_node_to_signature_nodes(node, top_level top_level: BlockLevel) {
       })
 
     _ -> [preprocessor.PreProcessedNode(element: "...")]
+  }
+}
+
+fn split_lines(nodes, indent_num indent_num) {
+  let #(current_line, block_lines) =
+    list.fold(nodes, #([], []), fn(acc, node) {
+      let #(current_line, block_lines) = acc
+
+      case node {
+        preprocessor.FormatterNewline -> {
+          let new_line =
+            preprocessor.PreProcessedSnippetLine(
+              significance: get_signature_line_significance(current_line),
+              leading_spaces: indent_num,
+              elements: list.reverse(current_line),
+              kind: preprocessor.SoliditySourceLine,
+            )
+          #([], [new_line, ..block_lines])
+        }
+        preprocessor.FormatterBlock(nodes) -> #(
+          [],
+          list.append(
+            split_lines(nodes, indent_num: indent_num + 2),
+            block_lines,
+          ),
+        )
+
+        _ -> #([node, ..current_line], block_lines)
+      }
+    })
+
+  let new_line =
+    preprocessor.PreProcessedSnippetLine(
+      significance: get_signature_line_significance(current_line),
+      leading_spaces: indent_num,
+      elements: list.reverse(current_line),
+      kind: preprocessor.SoliditySourceLine,
+    )
+
+  [new_line, ..block_lines]
+  |> list.reverse
+}
+
+fn get_signature_line_significance(
+  line_nodes: List(preprocessor.PreProcessedNode),
+) {
+  let topic_count =
+    list.count(line_nodes, fn(node) {
+      case node {
+        preprocessor.PreProcessedDeclaration(..)
+        | preprocessor.PreProcessedReference(..) -> True
+        _ -> False
+      }
+    })
+
+  case topic_count == 1 {
+    True -> {
+      let assert Ok(topic_id) =
+        list.find_map(line_nodes, fn(node) {
+          case node {
+            preprocessor.PreProcessedDeclaration(topic_id, ..) ->
+              Ok(preprocessor.SingleDeclarationLine(topic_id))
+            preprocessor.PreProcessedReference(topic_id, ..) ->
+              Ok(preprocessor.NonEmptyLine(topic_id))
+            _ -> Error(Nil)
+          }
+        })
+      topic_id
+    }
+    False -> preprocessor.EmptyLine
   }
 }
 

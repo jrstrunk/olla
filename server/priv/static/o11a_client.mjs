@@ -808,13 +808,13 @@ var Descending = class extends CustomType {
 function length_loop(loop$list, loop$count) {
   while (true) {
     let list4 = loop$list;
-    let count2 = loop$count;
+    let count = loop$count;
     if (list4 instanceof Empty) {
-      return count2;
+      return count;
     } else {
       let list$1 = list4.tail;
       loop$list = list$1;
-      loop$count = count2 + 1;
+      loop$count = count + 1;
     }
   }
 }
@@ -1052,20 +1052,6 @@ function fold2(loop$list, loop$initial, loop$fun) {
     }
   }
 }
-function count(list4, predicate) {
-  return fold2(
-    list4,
-    0,
-    (acc, value3) => {
-      let $ = predicate(value3);
-      if ($) {
-        return acc + 1;
-      } else {
-        return acc;
-      }
-    }
-  );
-}
 function group(list4, key2) {
   return fold2(list4, new_map(), update_group(key2));
 }
@@ -1121,56 +1107,6 @@ function find(loop$list, loop$is_desired) {
         loop$list = rest$1;
         loop$is_desired = is_desired;
       }
-    }
-  }
-}
-function find_map(loop$list, loop$fun) {
-  while (true) {
-    let list4 = loop$list;
-    let fun = loop$fun;
-    if (list4 instanceof Empty) {
-      return new Error(void 0);
-    } else {
-      let first$1 = list4.head;
-      let rest$1 = list4.tail;
-      let $ = fun(first$1);
-      if ($ instanceof Ok) {
-        let first$2 = $[0];
-        return new Ok(first$2);
-      } else {
-        loop$list = rest$1;
-        loop$fun = fun;
-      }
-    }
-  }
-}
-function intersperse_loop(loop$list, loop$separator, loop$acc) {
-  while (true) {
-    let list4 = loop$list;
-    let separator = loop$separator;
-    let acc = loop$acc;
-    if (list4 instanceof Empty) {
-      return reverse(acc);
-    } else {
-      let first$1 = list4.head;
-      let rest$1 = list4.tail;
-      loop$list = rest$1;
-      loop$separator = separator;
-      loop$acc = prepend(first$1, prepend(separator, acc));
-    }
-  }
-}
-function intersperse(list4, elem) {
-  if (list4 instanceof Empty) {
-    return list4;
-  } else {
-    let $ = list4.tail;
-    if ($ instanceof Empty) {
-      return list4;
-    } else {
-      let first$1 = list4.head;
-      let rest$1 = $;
-      return intersperse_loop(rest$1, elem, toList([first$1]));
     }
   }
 }
@@ -5185,28 +5121,28 @@ var Update = class extends CustomType {
   }
 };
 var Move = class extends CustomType {
-  constructor(kind, key2, before, count2) {
+  constructor(kind, key2, before, count) {
     super();
     this.kind = kind;
     this.key = key2;
     this.before = before;
-    this.count = count2;
+    this.count = count;
   }
 };
 var RemoveKey = class extends CustomType {
-  constructor(kind, key2, count2) {
+  constructor(kind, key2, count) {
     super();
     this.kind = kind;
     this.key = key2;
-    this.count = count2;
+    this.count = count;
   }
 };
 var Replace = class extends CustomType {
-  constructor(kind, from2, count2, with$) {
+  constructor(kind, from2, count, with$) {
     super();
     this.kind = kind;
     this.from = from2;
-    this.count = count2;
+    this.count = count;
     this.with = with$;
   }
 };
@@ -5219,11 +5155,11 @@ var Insert = class extends CustomType {
   }
 };
 var Remove = class extends CustomType {
-  constructor(kind, from2, count2) {
+  constructor(kind, from2, count) {
     super();
     this.kind = kind;
     this.from = from2;
-    this.count = count2;
+    this.count = count;
   }
 };
 function new$4(index5, removed, changes, children) {
@@ -5242,24 +5178,24 @@ function update(added, removed) {
   return new Update(update_kind, added, removed);
 }
 var move_kind = 3;
-function move(key2, before, count2) {
-  return new Move(move_kind, key2, before, count2);
+function move(key2, before, count) {
+  return new Move(move_kind, key2, before, count);
 }
 var remove_key_kind = 4;
-function remove_key(key2, count2) {
-  return new RemoveKey(remove_key_kind, key2, count2);
+function remove_key(key2, count) {
+  return new RemoveKey(remove_key_kind, key2, count);
 }
 var replace_kind = 5;
-function replace2(from2, count2, with$) {
-  return new Replace(replace_kind, from2, count2, with$);
+function replace2(from2, count, with$) {
+  return new Replace(replace_kind, from2, count, with$);
 }
 var insert_kind = 6;
 function insert4(children, before) {
   return new Insert(insert_kind, children, before);
 }
 var remove_kind = 7;
-function remove2(from2, count2) {
-  return new Remove(remove_kind, from2, count2);
+function remove2(from2, count) {
+  return new Remove(remove_kind, from2, count);
 }
 
 // build/dev/javascript/lustre/lustre/vdom/diff.mjs
@@ -5673,12 +5609,12 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
               loop$events = events;
             } else {
               let match = next_did_exist[0];
-              let count2 = advance(next);
+              let count = advance(next);
               let before = node_index - moved_offset;
-              let move2 = move(next.key, before, count2);
+              let move2 = move(next.key, before, count);
               let changes$1 = prepend(move2, changes);
               let moved$1 = insert2(moved, next.key);
-              let moved_offset$1 = moved_offset + count2;
+              let moved_offset$1 = moved_offset + count;
               loop$old = prepend(match, old);
               loop$old_keyed = old_keyed;
               loop$new = new$10;
@@ -5695,10 +5631,10 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
               loop$events = events;
             }
           } else {
-            let count2 = advance(prev);
-            let moved_offset$1 = moved_offset - count2;
+            let count = advance(prev);
+            let moved_offset$1 = moved_offset - count;
             let events$1 = remove_child(events, path2, node_index, prev);
-            let remove5 = remove_key(prev.key, count2);
+            let remove5 = remove_key(prev.key, count);
             let changes$1 = prepend(remove5, changes);
             loop$old = old_remaining;
             loop$old_keyed = old_keyed;
@@ -5717,7 +5653,7 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
           }
         } else if (prev_does_exist instanceof Ok) {
           let before = node_index - moved_offset;
-          let count2 = advance(next);
+          let count = advance(next);
           let events$1 = add_child(
             events,
             mapper,
@@ -5732,9 +5668,9 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
           loop$new = new_remaining;
           loop$new_keyed = new_keyed;
           loop$moved = moved;
-          loop$moved_offset = moved_offset + count2;
+          loop$moved_offset = moved_offset + count;
           loop$removed = removed;
-          loop$node_index = node_index + count2;
+          loop$node_index = node_index + count;
           loop$patch_index = patch_index;
           loop$path = path2;
           loop$changes = changes$1;
@@ -6344,10 +6280,10 @@ var Reconciler = class {
     });
     insertBefore(node, fragment3, childAt(node, before));
   }
-  #move(node, key2, before, count2) {
+  #move(node, key2, before, count) {
     let el = getKeyedChild(node, key2);
     const beforeEl = childAt(node, before);
-    for (let i = 0; i < count2 && el !== null; ++i) {
+    for (let i = 0; i < count && el !== null; ++i) {
       const next = el.nextSibling;
       if (SUPPORTS_MOVE_BEFORE) {
         node.moveBefore(el, beforeEl);
@@ -6357,14 +6293,14 @@ var Reconciler = class {
       el = next;
     }
   }
-  #removeKey(node, key2, count2) {
-    this.#removeFromChild(node, getKeyedChild(node, key2), count2);
+  #removeKey(node, key2, count) {
+    this.#removeFromChild(node, getKeyedChild(node, key2), count);
   }
-  #remove(node, from2, count2) {
-    this.#removeFromChild(node, childAt(node, from2), count2);
+  #remove(node, from2, count) {
+    this.#removeFromChild(node, childAt(node, from2), count);
   }
-  #removeFromChild(parent, child, count2) {
-    while (count2-- > 0 && child !== null) {
+  #removeFromChild(parent, child, count) {
+    while (count-- > 0 && child !== null) {
       const next = child.nextSibling;
       const key2 = child[meta].key;
       if (key2) {
@@ -6377,8 +6313,8 @@ var Reconciler = class {
       child = next;
     }
   }
-  #replace(parent, from2, count2, child) {
-    this.#remove(parent, from2, count2);
+  #replace(parent, from2, count, child) {
+    this.#remove(parent, from2, count);
     const el = this.#createElement(child);
     addKeyedChild(parent, el);
     insertBefore(parent, el, childAt(parent, from2));
@@ -7160,20 +7096,20 @@ function none2() {
 function count_fragment_children(loop$children, loop$count) {
   while (true) {
     let children = loop$children;
-    let count2 = loop$count;
+    let count = loop$count;
     if (children instanceof Empty) {
-      return count2;
+      return count;
     } else {
       let $ = children.head;
       if ($ instanceof Fragment) {
         let rest = children.tail;
         let children_count = $.children_count;
         loop$children = rest;
-        loop$count = count2 + children_count;
+        loop$count = count + children_count;
       } else {
         let rest = children.tail;
         loop$children = rest;
-        loop$count = count2 + 1;
+        loop$count = count + 1;
       }
     }
   }
@@ -7278,9 +7214,6 @@ function ul(attrs, children) {
 }
 function a(attrs, children) {
   return element2("a", attrs, children);
-}
-function br(attrs) {
-  return element2("br", attrs, empty_list);
 }
 function span(attrs, children) {
   return element2("span", attrs, children);
@@ -8945,6 +8878,15 @@ var Solidity = class extends CustomType {
 };
 var Text2 = class extends CustomType {
 };
+var PreProcessedSnippetLine = class extends CustomType {
+  constructor(significance, leading_spaces, elements, kind) {
+    super();
+    this.significance = significance;
+    this.leading_spaces = leading_spaces;
+    this.elements = elements;
+    this.kind = kind;
+  }
+};
 var PreProcessedLine = class extends CustomType {
   constructor(significance, line_number, line_number_text, line_tag, leading_spaces, elements, columns, kind) {
     super();
@@ -9010,8 +8952,6 @@ var FormatterBlock = class extends CustomType {
     super();
     this.nodes = nodes;
   }
-};
-var FormatterIndent = class extends CustomType {
 };
 function scope_decoder() {
   return field(
@@ -9088,11 +9028,11 @@ function reference_to_link(reference) {
 }
 function source_map_decoder() {
   return field(
-    "start",
+    "s",
     int2,
     (start4) => {
       return field(
-        "length",
+        "l",
         int2,
         (length4) => {
           return success(new SourceMap(start4, length4));
@@ -9392,6 +9332,40 @@ function pre_processed_node_decoder() {
     }
   );
 }
+function pre_processed_snippet_line_decoder() {
+  return field(
+    "s",
+    pre_processed_line_significance_decoder(),
+    (significance) => {
+      return field(
+        "l",
+        int2,
+        (leading_spaces) => {
+          return field(
+            "e",
+            list2(pre_processed_node_decoder()),
+            (elements) => {
+              return field(
+                "k",
+                pre_processed_line_kind_decoder(),
+                (kind) => {
+                  return success(
+                    new PreProcessedSnippetLine(
+                      significance,
+                      leading_spaces,
+                      elements,
+                      kind
+                    )
+                  );
+                }
+              );
+            }
+          );
+        }
+      );
+    }
+  );
+}
 function declaration_decoder() {
   return field(
     "i",
@@ -9411,7 +9385,7 @@ function declaration_decoder() {
                 (scope) => {
                   return field(
                     "g",
-                    list2(pre_processed_node_decoder()),
+                    list2(pre_processed_snippet_line_decoder()),
                     (signature) => {
                       return field(
                         "k",
@@ -11086,7 +11060,6 @@ function get_notes(discussion, leading_spaces, topic_id) {
 }
 
 // build/dev/javascript/o11a_client/o11a/ui/discussion.mjs
-var FILEPATH2 = "src/o11a/ui/discussion.gleam";
 var DiscussionId = class extends CustomType {
   constructor(view_id3, line_number, column_number) {
     super();
@@ -11566,109 +11539,6 @@ function close_all_child_discussions(active_discussions, view_id3) {
 }
 function map_discussion_overlay_msg(msg, model) {
   return new UserUpdatedDiscussion(model, msg);
-}
-function split_lines(nodes, indent) {
-  let $ = fold2(
-    nodes,
-    [toList([]), toList([])],
-    (acc, node) => {
-      let current_line2 = acc[0];
-      let block_lines2 = acc[1];
-      if (node instanceof FormatterNewline) {
-        return [
-          toList([]),
-          prepend(
-            (() => {
-              if (indent) {
-                return prepend(
-                  new FormatterIndent(),
-                  reverse(current_line2)
-                );
-              } else {
-                return reverse(current_line2);
-              }
-            })(),
-            block_lines2
-          )
-        ];
-      } else if (node instanceof FormatterBlock) {
-        let nodes$1 = node.nodes;
-        return [
-          toList([]),
-          append(split_lines(nodes$1, true), block_lines2)
-        ];
-      } else {
-        return [prepend(node, current_line2), block_lines2];
-      }
-    }
-  );
-  let current_line = $[0];
-  let block_lines = $[1];
-  return prepend(
-    (() => {
-      if (indent) {
-        return prepend(
-          new FormatterIndent(),
-          reverse(current_line)
-        );
-      } else {
-        return reverse(current_line);
-      }
-    })(),
-    block_lines
-  );
-}
-function get_signature_line_topic_id(line_nodes, suppress_declaration) {
-  let topic_count = count(
-    line_nodes,
-    (node) => {
-      if (node instanceof PreProcessedDeclaration) {
-        return !suppress_declaration;
-      } else if (node instanceof PreProcessedReference) {
-        return true;
-      } else {
-        return false;
-      }
-    }
-  );
-  let $ = topic_count === 1;
-  if ($) {
-    let $1 = find_map(
-      line_nodes,
-      (node) => {
-        if (node instanceof PreProcessedDeclaration) {
-          let topic_id2 = node.topic_id;
-          return new Ok(topic_id2);
-        } else if (node instanceof PreProcessedReference) {
-          let topic_id2 = node.topic_id;
-          return new Ok(topic_id2);
-        } else {
-          return new Error(void 0);
-        }
-      }
-    );
-    if (!($1 instanceof Ok)) {
-      throw makeError(
-        "let_assert",
-        FILEPATH2,
-        "o11a/ui/discussion",
-        387,
-        "get_signature_line_topic_id",
-        "Pattern match failed, no pattern matched the value.",
-        {
-          value: $1,
-          start: 10594,
-          end: 10879,
-          pattern_start: 10605,
-          pattern_end: 10617
-        }
-      );
-    }
-    let topic_id = $1[0];
-    return new Some(topic_id);
-  } else {
-    return new None();
-  }
 }
 function node_view(topic_id, tokens, declarations) {
   let _block;
@@ -12923,30 +12793,15 @@ function get_topic_title(model, active_discussion, discussion_context, declarati
   }
 }
 function topic_signature_view(view_id3, signature, declarations, discussion, suppress_declaration, line_number_offset, active_discussion, discussion_context) {
-  let _pipe = split_lines(signature, false);
-  let _pipe$1 = fold2(
-    _pipe,
-    [line_number_offset, toList([])],
-    (acc, rendered_line_nodes) => {
-      let line_number_offset$1 = acc[0];
-      let rendered_lines = acc[1];
-      let new_line_number = line_number_offset$1 + 1;
+  let _pipe = map_fold(
+    signature,
+    line_number_offset,
+    (line_number_offset2, preprocessed_snippet_line) => {
+      let new_line_number = line_number_offset2 + 1;
       let _block;
-      if (rendered_line_nodes instanceof Empty) {
-        _block = 0;
-      } else {
-        let $2 = rendered_line_nodes.head;
-        if ($2 instanceof FormatterIndent) {
-          _block = 2;
-        } else {
-          _block = 0;
-        }
-      }
-      let indent_num = _block;
-      let _block$1;
-      let _pipe$12 = rendered_line_nodes;
-      _block$1 = map_fold(
-        _pipe$12,
+      let _pipe2 = preprocessed_snippet_line.elements;
+      _block = map_fold(
+        _pipe2,
         0,
         (column_number, node) => {
           if (node instanceof PreProcessedDeclaration) {
@@ -13015,56 +12870,81 @@ function topic_signature_view(view_id3, signature, declarations, discussion, sup
             ];
           } else if (node instanceof FormatterNewline) {
             return [column_number, fragment2(toList([]))];
-          } else if (node instanceof FormatterBlock) {
-            return [column_number, fragment2(toList([]))];
           } else {
-            return [
-              column_number,
-              span(toList([]), toList([text3("\xA0\xA0")]))
-            ];
+            return [column_number, fragment2(toList([]))];
           }
         }
       );
-      let $ = _block$1;
+      let $ = _block;
       let new_line = $[1];
-      let line_topic_id = get_signature_line_topic_id(
-        rendered_line_nodes,
-        suppress_declaration
-      );
+      let _block$1;
+      let $1 = preprocessed_snippet_line.leading_spaces;
+      if ($1 === 0) {
+        _block$1 = new_line;
+      } else {
+        let leading_spaces = $1;
+        _block$1 = prepend(
+          span(
+            toList([]),
+            toList([text3(repeat2("\xA0", leading_spaces))])
+          ),
+          new_line
+        );
+      }
+      let new_line$1 = _block$1;
       let _block$2;
-      if (line_topic_id instanceof Some) {
-        let line_topic_id$1 = line_topic_id[0];
-        _block$2 = get_notes(discussion, indent_num, line_topic_id$1);
+      let $3 = preprocessed_snippet_line.significance;
+      if ($3 instanceof SingleDeclarationLine) {
+        if (!suppress_declaration) {
+          let line_topic_id = $3.topic_id;
+          _block$2 = get_notes(
+            discussion,
+            preprocessed_snippet_line.leading_spaces,
+            line_topic_id
+          );
+        } else {
+          _block$2 = [toList([]), toList([])];
+        }
+      } else if ($3 instanceof NonEmptyLine) {
+        let line_topic_id = $3.topic_id;
+        _block$2 = get_notes(
+          discussion,
+          preprocessed_snippet_line.leading_spaces,
+          line_topic_id
+        );
       } else {
         _block$2 = [toList([]), toList([])];
       }
-      let $1 = _block$2;
-      let info_notes = $1[1];
-      let new_line$1 = prepend(
-        fragment2(
-          map2(
-            info_notes,
-            (note) => {
-              let note_message = note[1];
-              return p(
-                toList([class$("comment italic")]),
-                toList([
-                  text3(
-                    repeat2("\xA0", indent_num) + note_message
-                  )
-                ])
-              );
-            }
-          )
-        ),
-        new_line
+      let $2 = _block$2;
+      let info_notes = $2[1];
+      let new_line$2 = fragment2(
+        toList([
+          fragment2(
+            map2(
+              info_notes,
+              (note) => {
+                let note_message = note[1];
+                return p(
+                  toList([class$("comment italic")]),
+                  toList([
+                    text3(
+                      repeat2(
+                        "\xA0",
+                        preprocessed_snippet_line.leading_spaces
+                      ) + note_message
+                    )
+                  ])
+                );
+              }
+            )
+          ),
+          p(toList([class$("loc flex")]), new_line$1)
+        ])
       );
-      return [new_line_number, prepend(new_line$1, rendered_lines)];
+      return [new_line_number, new_line$2];
     }
   );
-  let _pipe$2 = second(_pipe$1);
-  let _pipe$3 = intersperse(_pipe$2, toList([br(toList([]))]));
-  return flatten2(_pipe$3);
+  return second(_pipe);
 }
 function thread_header_view(model, declarations, references, active_discussion, discussion_context, notes) {
   let _block;
@@ -13775,8 +13655,6 @@ function preprocessed_nodes_view(loc, discussion, declarations, active_discussio
         ];
       } else if (element4 instanceof FormatterNewline) {
         return [index5, fragment2(toList([]))];
-      } else if (element4 instanceof FormatterBlock) {
-        return [index5, fragment2(toList([]))];
       } else {
         return [index5, fragment2(toList([]))];
       }
@@ -14290,7 +14168,7 @@ function group_files_by_parent(in_scope_files, current_file_path, audit_name) {
 }
 
 // build/dev/javascript/o11a_client/o11a_client.mjs
-var FILEPATH3 = "src/o11a_client.gleam";
+var FILEPATH2 = "src/o11a_client.gleam";
 var Model2 = class extends CustomType {
   constructor(route2, file_tree, audit_metadata, source_files, audit_declarations, audit_declaration_lists, audit_interface, merged_topics, discussions, discussion_models, keyboard_model, selected_node_id, active_discussions, set_sticky_discussion_timer, unset_sticky_discussion_timer) {
     super();
@@ -14930,7 +14808,7 @@ function update3(model, msg) {
           if (value3 instanceof Empty) {
             throw makeError(
               "panic",
-              FILEPATH3,
+              FILEPATH2,
               "o11a_client",
               350,
               "update",

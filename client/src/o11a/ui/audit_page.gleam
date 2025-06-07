@@ -292,9 +292,10 @@ fn preprocessed_nodes_view(
         element.unsafe_raw_html("preprocessed-node", "span", [], element),
       )
 
-      preprocessor.FormatterNewline
-      | preprocessor.FormatterBlock(..)
-      | preprocessor.FormatterIndent -> #(index, element.fragment([]))
+      preprocessor.FormatterNewline | preprocessor.FormatterBlock(..) -> #(
+        index,
+        element.fragment([]),
+      )
     }
   })
   |> pair.second

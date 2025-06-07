@@ -13,7 +13,7 @@ pub type Declaration {
     id: Int,
     topic_id: String,
     name: String,
-    signature: List(PreProcessedNode),
+    signature: List(PreProcessedSnippetLine),
     scope: Scope,
     kind: DeclarationKind,
     source_map: SourceMap,
@@ -38,7 +38,7 @@ pub fn encode_declaration(declaration: Declaration) -> json.Json {
         #("t", json.string(topic_id)),
         #("n", json.string(name)),
         #("s", encode_scope(scope)),
-        #("g", json.array(signature, encode_pre_processed_node)),
+        #("g", json.array(signature, pre_processed_snippet_line_to_json)),
         #("k", encode_declaration_kind(kind)),
         #("c", encode_source_map(source_map)),
         #("r", json.array(references, encode_reference)),
@@ -51,7 +51,10 @@ pub fn declaration_decoder() -> decode.Decoder(Declaration) {
   use topic_id <- decode.field("t", decode.string)
   use name <- decode.field("n", decode.string)
   use scope <- decode.field("s", scope_decoder())
-  use signature <- decode.field("g", decode.list(pre_processed_node_decoder()))
+  use signature <- decode.field(
+    "g",
+    decode.list(pre_processed_snippet_line_decoder()),
+  )
   use kind <- decode.field("k", decode_declaration_kind())
   use source_map <- decode.field("c", source_map_decoder())
   use references <- decode.field("r", decode.list(reference_decoder()))
@@ -163,12 +166,12 @@ pub type SourceMap {
 
 fn encode_source_map(source_map: SourceMap) -> json.Json {
   let SourceMap(start:, length:) = source_map
-  json.object([#("start", json.int(start)), #("length", json.int(length))])
+  json.object([#("s", json.int(start)), #("l", json.int(length))])
 }
 
 fn source_map_decoder() -> decode.Decoder(SourceMap) {
-  use start <- decode.field("start", decode.int)
-  use length <- decode.field("length", decode.int)
+  use start <- decode.field("s", decode.int)
+  use length <- decode.field("l", decode.int)
   decode.success(SourceMap(start:, length:))
 }
 
@@ -461,9 +464,39 @@ pub type PreProcessedSnippetLine {
     significance: PreProcessedLineSignificance,
     leading_spaces: Int,
     elements: List(PreProcessedNode),
-    columns: Int,
     kind: PreProcessedLineKind,
   )
+}
+
+fn pre_processed_snippet_line_to_json(
+  pre_processed_snippet_line: PreProcessedSnippetLine,
+) -> json.Json {
+  let PreProcessedSnippetLine(significance:, leading_spaces:, elements:, kind:) =
+    pre_processed_snippet_line
+  json.object([
+    #("s", encode_pre_processed_line_significance(significance)),
+    #("l", json.int(leading_spaces)),
+    #("e", json.array(elements, encode_pre_processed_node)),
+    #("k", encode_pre_processed_line_kind(kind)),
+  ])
+}
+
+pub fn pre_processed_snippet_line_decoder() -> decode.Decoder(
+  PreProcessedSnippetLine,
+) {
+  use significance <- decode.field(
+    "s",
+    pre_processed_line_significance_decoder(),
+  )
+  use leading_spaces <- decode.field("l", decode.int)
+  use elements <- decode.field("e", decode.list(pre_processed_node_decoder()))
+  use kind <- decode.field("k", pre_processed_line_kind_decoder())
+  decode.success(PreProcessedSnippetLine(
+    significance:,
+    leading_spaces:,
+    elements:,
+    kind:,
+  ))
 }
 
 pub type PreProcessedLine {
@@ -584,7 +617,6 @@ pub type PreProcessedNode {
   PreProcessedGapNode(element: String, leading_spaces: Int)
   FormatterNewline
   FormatterBlock(nodes: List(PreProcessedNode))
-  FormatterIndent
 }
 
 fn encode_pre_processed_node(pre_processed_node: PreProcessedNode) -> json.Json {
@@ -618,7 +650,6 @@ fn encode_pre_processed_node(pre_processed_node: PreProcessedNode) -> json.Json 
         #("v", json.string("fb")),
         #("n", json.array(nodes, encode_pre_processed_node)),
       ])
-    FormatterIndent -> json.object([#("v", json.string("fi"))])
   }
 }
 

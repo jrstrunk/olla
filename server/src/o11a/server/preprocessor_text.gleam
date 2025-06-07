@@ -84,10 +84,17 @@ pub fn enumerate_declarations(declarations, in ast: AST) {
                 member: option.None,
               ),
               signature: [
-                preprocessor.PreProcessedNode(
-                  element: filepath.base_name(page_path)
-                  <> "#L"
-                  <> line_number_text,
+                preprocessor.PreProcessedSnippetLine(
+                  significance: preprocessor.EmptyLine,
+                  leading_spaces: 0,
+                  elements: [
+                    preprocessor.PreProcessedNode(
+                      element: filepath.base_name(page_path)
+                      <> "#L"
+                      <> line_number_text,
+                    ),
+                  ],
+                  kind: preprocessor.TextLine,
                 ),
               ],
               kind: preprocessor.LineDeclaration,

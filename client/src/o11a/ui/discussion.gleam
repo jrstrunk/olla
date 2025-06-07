@@ -338,69 +338,9 @@ fn map_discussion_overlay_msg(msg, model: DiscussionOverlayModel) {
 
 // Discussion Node -------------------------------------------------------------
 
-fn split_lines(nodes, indent indent) {
-  let #(current_line, block_lines) =
-    list.fold(nodes, #([], []), fn(acc, node) {
-      let #(current_line, block_lines) = acc
-
-      case node {
-        preprocessor.FormatterNewline -> #([], [
-          case indent {
-            True -> [preprocessor.FormatterIndent, ..list.reverse(current_line)]
-            False -> list.reverse(current_line)
-          },
-          ..block_lines
-        ])
-        preprocessor.FormatterBlock(nodes) -> #(
-          [],
-          list.append(split_lines(nodes, indent: True), block_lines),
-        )
-
-        _ -> #([node, ..current_line], block_lines)
-      }
-    })
-
-  [
-    case indent {
-      True -> [preprocessor.FormatterIndent, ..list.reverse(current_line)]
-      False -> list.reverse(current_line)
-    },
-    ..block_lines
-  ]
-}
-
-fn get_signature_line_topic_id(
-  line_nodes: List(preprocessor.PreProcessedNode),
-  suppress_declaration,
-) {
-  let topic_count =
-    list.count(line_nodes, fn(node) {
-      case node {
-        preprocessor.PreProcessedDeclaration(..) -> !suppress_declaration
-        preprocessor.PreProcessedReference(..) -> True
-        _ -> False
-      }
-    })
-
-  case topic_count == 1 {
-    True -> {
-      let assert Ok(topic_id) =
-        list.find_map(line_nodes, fn(node) {
-          case node {
-            preprocessor.PreProcessedDeclaration(topic_id, ..)
-            | preprocessor.PreProcessedReference(topic_id, ..) -> Ok(topic_id)
-            _ -> Error(Nil)
-          }
-        })
-      option.Some(topic_id)
-    }
-    False -> option.None
-  }
-}
-
 pub fn topic_signature_view(
   view_id view_id: String,
-  signature signature: List(preprocessor.PreProcessedNode),
+  signature signature: List(preprocessor.PreProcessedSnippetLine),
   declarations declarations: dict.Dict(String, preprocessor.Declaration),
   discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
   suppress_declaration suppress_declaration: Bool,
@@ -408,117 +348,139 @@ pub fn topic_signature_view(
   active_discussion active_discussion: option.Option(DiscussionReference),
   discussion_context discussion_context,
 ) -> List(element.Element(DiscussionControllerMsg)) {
-  split_lines(signature, indent: False)
-  |> list.fold(#(line_number_offset, []), fn(acc, rendered_line_nodes) {
-    let #(line_number_offset, rendered_lines) = acc
-    let new_line_number = line_number_offset + 1
+  list.map_fold(
+    signature,
+    line_number_offset,
+    fn(line_number_offset, preprocessed_snippet_line) {
+      let new_line_number = line_number_offset + 1
 
-    let indent_num = case rendered_line_nodes {
-      [preprocessor.FormatterIndent, ..] -> 2
-      _ -> 0
-    }
+      let #(_col_index, new_line) =
+        preprocessed_snippet_line.elements
+        |> list.map_fold(0, fn(column_number, node) {
+          case node {
+            preprocessor.PreProcessedDeclaration(topic_id:, tokens:) -> {
+              case suppress_declaration {
+                True -> {
+                  #(column_number, node_view(topic_id:, tokens:, declarations:))
+                }
+                False -> {
+                  let new_column_number = column_number + 1
 
-    let #(_col_index, new_line) =
-      rendered_line_nodes
-      |> list.map_fold(0, fn(column_number, node) {
-        case node {
-          preprocessor.PreProcessedDeclaration(topic_id:, tokens:) -> {
-            case suppress_declaration {
-              True -> {
-                #(column_number, node_view(topic_id:, tokens:, declarations:))
-              }
-              False -> {
-                let new_column_number = column_number + 1
+                  let rendered_node =
+                    node_with_discussion_view(
+                      topic_id:,
+                      tokens:,
+                      discussion:,
+                      declarations:,
+                      discussion_id: DiscussionId(
+                        view_id:,
+                        line_number: new_line_number,
+                        column_number: new_column_number,
+                      ),
+                      active_discussion:,
+                      discussion_context:,
+                      node_view_kind: DeclarationView,
+                    )
 
-                let rendered_node =
-                  node_with_discussion_view(
-                    topic_id:,
-                    tokens:,
-                    discussion:,
-                    declarations:,
-                    discussion_id: DiscussionId(
-                      view_id:,
-                      line_number: new_line_number,
-                      column_number: new_column_number,
-                    ),
-                    active_discussion:,
-                    discussion_context:,
-                    node_view_kind: DeclarationView,
-                  )
-
-                #(new_column_number, rendered_node)
+                  #(new_column_number, rendered_node)
+                }
               }
             }
-          }
 
-          preprocessor.PreProcessedReference(topic_id:, tokens:) -> {
-            let new_column_number = column_number + 1
+            preprocessor.PreProcessedReference(topic_id:, tokens:) -> {
+              let new_column_number = column_number + 1
 
-            let rendered_node =
-              node_with_discussion_view(
-                topic_id:,
-                tokens:,
-                discussion:,
-                declarations:,
-                discussion_id: DiscussionId(
-                  view_id:,
-                  line_number: new_line_number,
-                  column_number: new_column_number,
+              let rendered_node =
+                node_with_discussion_view(
+                  topic_id:,
+                  tokens:,
+                  discussion:,
+                  declarations:,
+                  discussion_id: DiscussionId(
+                    view_id:,
+                    line_number: new_line_number,
+                    column_number: new_column_number,
+                  ),
+                  active_discussion:,
+                  discussion_context:,
+                  node_view_kind: ReferenceView,
+                )
+
+              #(new_column_number, rendered_node)
+            }
+
+            preprocessor.PreProcessedNode(element:)
+            | preprocessor.PreProcessedGapNode(element:, ..) -> #(
+              column_number,
+              element.fragment([
+                element.unsafe_raw_html(
+                  "preprocessed-node",
+                  "span",
+                  [],
+                  element,
                 ),
-                active_discussion:,
-                discussion_context:,
-                node_view_kind: ReferenceView,
-              )
+              ]),
+            )
 
-            #(new_column_number, rendered_node)
+            preprocessor.FormatterNewline | preprocessor.FormatterBlock(..) -> #(
+              column_number,
+              element.fragment([]),
+            )
           }
+        })
 
-          preprocessor.PreProcessedNode(element:)
-          | preprocessor.PreProcessedGapNode(element:, ..) -> #(
-            column_number,
-            element.fragment([
-              element.unsafe_raw_html("preprocessed-node", "span", [], element),
-            ]),
+      let new_line = case preprocessed_snippet_line.leading_spaces {
+        0 -> new_line
+        leading_spaces -> [
+          html.span([], [html.text(string.repeat("\u{a0}", leading_spaces))]),
+          ..new_line
+        ]
+      }
+
+      let #(_, info_notes) = case preprocessed_snippet_line.significance {
+        preprocessor.SingleDeclarationLine(line_topic_id)
+          if !suppress_declaration
+        ->
+          formatter.get_notes(
+            discussion,
+            preprocessed_snippet_line.leading_spaces,
+            line_topic_id,
           )
-
-          preprocessor.FormatterIndent -> #(
-            column_number,
-            html.span([], [html.text("\u{a0}\u{a0}")]),
+        preprocessor.NonEmptyLine(line_topic_id) ->
+          formatter.get_notes(
+            discussion,
+            preprocessed_snippet_line.leading_spaces,
+            line_topic_id,
           )
+        preprocessor.EmptyLine | preprocessor.SingleDeclarationLine(..) -> #(
+          [],
+          [],
+        )
+      }
 
-          preprocessor.FormatterNewline | preprocessor.FormatterBlock(..) -> #(
-            column_number,
-            element.fragment([]),
-          )
-        }
-      })
+      let new_line =
+        element.fragment([
+          element.fragment(
+            list.map(info_notes, fn(note) {
+              let #(_note_index_id, note_message) = note
+              html.p([attribute.class("comment italic")], [
+                html.text(
+                  string.repeat(
+                    "\u{a0}",
+                    preprocessed_snippet_line.leading_spaces,
+                  )
+                  <> note_message,
+                ),
+              ])
+            }),
+          ),
+          html.p([attribute.class("loc flex")], new_line),
+        ])
 
-    let line_topic_id =
-      get_signature_line_topic_id(rendered_line_nodes, suppress_declaration)
-
-    let #(_, info_notes) = case line_topic_id {
-      option.Some(line_topic_id) ->
-        formatter.get_notes(discussion, indent_num, line_topic_id)
-      option.None -> #([], [])
-    }
-
-    let new_line = [
-      element.fragment(
-        list.map(info_notes, fn(note) {
-          let #(_note_index_id, note_message) = note
-          html.p([attribute.class("comment italic")], [
-            html.text(string.repeat("\u{a0}", indent_num) <> note_message),
-          ])
-        }),
-      ),
-      ..new_line
-    ]
-
-    #(new_line_number, [new_line, ..rendered_lines])
-  })
+      #(new_line_number, new_line)
+    },
+  )
   |> pair.second
-  |> list.intersperse([html.br([])])
-  |> list.flatten
 }
 
 pub fn node_view(
