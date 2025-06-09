@@ -2260,7 +2260,7 @@ fn split_lines(nodes, indent_num indent_num) {
         preprocessor.FormatterBlock(nodes) -> #(
           [],
           list.append(
-            split_lines(nodes, indent_num: indent_num + 2),
+            split_lines(nodes, indent_num: indent_num + 2) |> list.reverse,
             block_lines,
           ),
         )
