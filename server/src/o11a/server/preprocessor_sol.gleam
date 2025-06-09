@@ -3234,11 +3234,20 @@ fn node_decoder() -> decode.Decoder(Node) {
     "TupleExpression" -> {
       use id <- decode.field("id", decode.int)
       use src <- decode.field("src", decode.string)
-      use nodes <- decode.field("components", decode.list(node_decoder()))
+      use components <- decode.field(
+        "components",
+        decode.list(decode.optional(node_decoder())),
+      )
       decode.success(TupleExpression(
         id:,
         source_map: source_map_from_string(src),
-        nodes:,
+        nodes: components
+          |> list.filter_map(fn(node) {
+            case node {
+              option.Some(node) -> Ok(node)
+              option.None -> Error(Nil)
+            }
+          }),
       ))
     }
     "ElementaryTypeNameExpression" -> {
