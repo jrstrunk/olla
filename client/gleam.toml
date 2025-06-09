@@ -16,16 +16,16 @@ target = "javascript"
 [dependencies]
 o11a_common = { path = "../common" }
 plinth = { path = "../../plinth" }
-gleam_stdlib = ">= 0.59.0 and < 1.0.0"
-gleam_json = ">= 2.3.0 and < 3.0.0"
+gleam_json = ">= 3.0.1 and < 4.0.0"
+gleam_stdlib = ">= 0.60.0 and < 1.0.0"
 given = ">= 5.0.4 and < 6.0.0"
-gtempo = ">= 7.1.0 and < 8.0.0"
-lustre = ">= 5.0.2 and < 6.0.0"
-modem = ">= 2.0.2 and < 3.0.0"
+gtempo = ">= 7.2.1 and < 8.0.0"
+lustre = ">= 5.1.1 and < 6.0.0"
+modem = ">= 2.1.0 and < 3.0.0"
 snag = ">= 1.1.0 and < 2.0.0"
 filepath = ">= 1.1.2 and < 2.0.0"
-lustre_http = { path = "../../lustre_http" }
+rsvp = ">= 1.1.0 and < 2.0.0"
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"
-lustre_dev_tools = ">= 1.6.5 and < 2.0.0"
+lustre_dev_tools = ">= 1.8.2 and < 2.0.0"

@@ -17,13 +17,13 @@ target = "erlang"
 persistent_concurrent_dict = { git = "https://github.com/jrstrunk/persistent-concurrent-dict.git", ref = "main" }
 concurrent_dict = { git = "https://github.com/jrstrunk/concurrent-dict.git", ref = "main" }
 o11a_common = { path = "../common" }
-gleam_stdlib = ">= 0.59.0 and < 1.0.0"
-gleam_json = ">= 2.3.0 and < 3.0.0"
+gleam_stdlib = ">= 0.60.0 and < 1.0.0"
+gleam_json = ">= 3.0.1 and < 4.0.0"
 given = ">= 5.0.4 and < 6.0.0"
-gtempo = ">= 7.1.0 and < 8.0.0"
+gtempo = ">= 7.2.1 and < 8.0.0"
 filepath = ">= 1.1.2 and < 2.0.0"
-lustre = ">= 5.0.2 and < 6.0.0"
-wisp = ">= 1.6.0 and < 2.0.0"
+lustre = ">= 5.1.1 and < 6.0.0"
+wisp = ">= 1.7.0 and < 2.0.0"
 gleam_erlang = ">= 0.34.0 and < 1.0.0"
 mist = ">= 4.0.7 and < 5.0.0"
 gleam_http = ">= 4.0.0 and < 5.0.0"

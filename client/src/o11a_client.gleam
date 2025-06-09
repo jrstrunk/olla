@@ -14,7 +14,6 @@ import lustre/element
 import lustre/element/html
 import lustre/event
 import lustre/server_component
-import lustre_http
 import modem
 import o11a/audit_metadata
 import o11a/client/page_navigation
@@ -35,6 +34,7 @@ import plinth/browser/element as browser_element
 import plinth/browser/event as browser_event
 import plinth/browser/window
 import plinth/javascript/global
+import rsvp
 
 pub fn main() {
   io.println("Starting client controller")
@@ -48,27 +48,27 @@ pub type Model {
     file_tree: dict.Dict(String, #(List(String), List(String))),
     audit_metadata: dict.Dict(
       String,
-      Result(audit_metadata.AuditMetaData, lustre_http.HttpError),
+      Result(audit_metadata.AuditMetaData, rsvp.Error),
     ),
     source_files: dict.Dict(
       String,
-      Result(List(preprocessor.PreProcessedLine), lustre_http.HttpError),
+      Result(List(preprocessor.PreProcessedLine), rsvp.Error),
     ),
     audit_declarations: dict.Dict(
       String,
-      Result(dict.Dict(String, preprocessor.Declaration), lustre_http.HttpError),
+      Result(dict.Dict(String, preprocessor.Declaration), rsvp.Error),
     ),
     audit_declaration_lists: dict.Dict(
       String,
-      Result(List(preprocessor.Declaration), lustre_http.HttpError),
+      Result(List(preprocessor.Declaration), rsvp.Error),
     ),
     audit_interface: dict.Dict(
       String,
-      Result(audit_interface.InterfaceData, lustre_http.HttpError),
+      Result(audit_interface.InterfaceData, rsvp.Error),
     ),
     merged_topics: dict.Dict(
       String,
-      Result(dict.Dict(String, String), lustre_http.HttpError),
+      Result(dict.Dict(String, String), rsvp.Error),
     ),
     discussions: dict.Dict(
       String,
@@ -160,7 +160,7 @@ fn file_tree_from_route(
   route: Route,
   audit_metadata: dict.Dict(
     String,
-    Result(audit_metadata.AuditMetaData, lustre_http.HttpError),
+    Result(audit_metadata.AuditMetaData, rsvp.Error),
   ),
 ) {
   case route {
@@ -225,26 +225,23 @@ pub type Msg {
   OnRouteChange(route: Route)
   ClientFetchedAuditMetadata(
     audit_name: String,
-    metadata: Result(audit_metadata.AuditMetaData, lustre_http.HttpError),
+    metadata: Result(audit_metadata.AuditMetaData, rsvp.Error),
   )
   ClientFetchedSourceFile(
     page_path: String,
-    source_file: Result(
-      List(preprocessor.PreProcessedLine),
-      lustre_http.HttpError,
-    ),
+    source_file: Result(List(preprocessor.PreProcessedLine), rsvp.Error),
   )
   ClientFetchedDeclarations(
     audit_name: String,
-    declarations: Result(List(preprocessor.Declaration), lustre_http.HttpError),
+    declarations: Result(List(preprocessor.Declaration), rsvp.Error),
   )
   ClientFetchedMergedTopics(
     audit_name: String,
-    merged_topics: Result(List(#(String, String)), lustre_http.HttpError),
+    merged_topics: Result(List(#(String, String)), rsvp.Error),
   )
   ClientFetchedDiscussion(
     audit_name: String,
-    discussion: Result(List(computed_note.ComputedNote), lustre_http.HttpError),
+    discussion: Result(List(computed_note.ComputedNote), rsvp.Error),
   )
   ServerUpdatedMergedTopics(audit_name: String)
   ServerUpdatedDiscussion(audit_name: String)
@@ -257,7 +254,7 @@ pub type Msg {
   UserSuccessfullySubmittedNote(
     updated_model: discussion.DiscussionOverlayModel,
   )
-  UserFailedToSubmitNote(error: lustre_http.HttpError)
+  UserFailedToSubmitNote(error: rsvp.Error)
 }
 
 fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
@@ -949,9 +946,9 @@ fn fetch_metadata(model: Model, audit_name: String) {
   case dict.get(model.audit_metadata, audit_name) {
     Ok(Ok(..)) -> effect.none()
     _ ->
-      lustre_http.get(
+      rsvp.get(
         "/audit-metadata/" <> audit_name,
-        lustre_http.expect_json(
+        rsvp.expect_json(
           audit_metadata.audit_metadata_decoder(),
           ClientFetchedAuditMetadata(audit_name, _),
         ),
@@ -963,9 +960,9 @@ fn fetch_source_file(model: Model, page_path: String) {
   case dict.get(model.source_files, page_path) {
     Ok(Ok(..)) -> effect.none()
     _ ->
-      lustre_http.get(
+      rsvp.get(
         "/source-file/" <> page_path,
-        lustre_http.expect_json(
+        rsvp.expect_json(
           decode.list(preprocessor.pre_processed_line_decoder()),
           ClientFetchedSourceFile(page_path, _),
         ),
@@ -974,9 +971,9 @@ fn fetch_source_file(model: Model, page_path: String) {
 }
 
 fn fetch_declarations(audit_name) {
-  lustre_http.get(
+  rsvp.get(
     "/audit-declarations/" <> audit_name,
-    lustre_http.expect_json(
+    rsvp.expect_json(
       decode.list(preprocessor.declaration_decoder()),
       ClientFetchedDeclarations(audit_name, _),
     ),
@@ -984,9 +981,9 @@ fn fetch_declarations(audit_name) {
 }
 
 fn fetch_merged_topics(audit_name) {
-  lustre_http.get(
+  rsvp.get(
     "/audit-merged-topics/" <> audit_name,
-    lustre_http.expect_json(
+    rsvp.expect_json(
       decode.list(discussion_topic.topic_merge_decoder()),
       ClientFetchedMergedTopics(audit_name, _),
     ),
@@ -994,9 +991,9 @@ fn fetch_merged_topics(audit_name) {
 }
 
 fn fetch_discussion(audit_name) {
-  lustre_http.get(
+  rsvp.get(
     "/audit-discussion/" <> audit_name,
-    lustre_http.expect_json(
+    rsvp.expect_json(
       decode.list(computed_note.computed_note_decoder()),
       ClientFetchedDiscussion(audit_name, _),
     ),
@@ -1004,13 +1001,13 @@ fn fetch_discussion(audit_name) {
 }
 
 fn submit_note(audit_name, topic_id, note_submission, discussion_model) {
-  lustre_http.post(
+  rsvp.post(
     "/submit-note/" <> audit_name,
     json.object([
       #("topic_id", json.string(topic_id)),
       #("note_submission", note.encode_note_submission(note_submission)),
     ]),
-    lustre_http.expect_json(
+    rsvp.expect_json(
       decode.field("msg", decode.string, fn(msg) {
         case msg {
           "success" -> decode.success(Nil)
