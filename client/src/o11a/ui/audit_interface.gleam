@@ -44,23 +44,16 @@ pub fn view(
   let active_discussion: option.Option(discussion.DiscussionReference) =
     discussion.get_active_discussion_reference(view_id, discussion_context)
 
-  html.div([attribute.id(view_id), attribute.class("p-[1rem]")], [
-    // Page header
-    html.h1([], [
-      html.text(audit_name |> string.capitalise <> " Audit Interface"),
-    ]),
-    // List of files in scope
-    ..list.map(interface_data.file_contracts, fn(contract_file) {
-      html.div([attribute.class("mt-[1rem]")], [
-        html.p([], [html.text(contract_file.file_name)]),
-        // List of contracts in file
-        ..list.map(contract_file.contracts, fn(contract) {
-          html.div([attribute.class("ml-[1rem]")], [
-            html.p([], [html.text(contract.name)]),
-            {
-              let line_number_offset = 0
-
-              // List of variables in contract
+  let #(_line_number_offset, elements) =
+    list.map_fold(
+      interface_data.file_contracts,
+      0,
+      fn(line_number_offset, contract_file) {
+        let #(line_number_offset, contracts) =
+          list.map_fold(
+            contract_file.contracts,
+            line_number_offset,
+            fn(line_number_offset, contract) {
               let #(line_number_offset, state_elements) =
                 contract_members_view(
                   contract.name,
@@ -72,8 +65,7 @@ pub fn view(
                   line_number_offset:,
                 )
 
-              // List of functions in contract
-              let #(_line_number_offset, function_elements) =
+              let #(line_number_offset, function_elements) =
                 contract_members_view(
                   contract.name,
                   interface_data.contract_functions,
@@ -84,12 +76,33 @@ pub fn view(
                   line_number_offset:,
                 )
 
-              element.fragment([state_elements, function_elements])
+              let elements =
+                html.div([attribute.class("ml-[1rem]")], [
+                  html.p([], [html.text(contract.name)]),
+                  element.fragment([state_elements, function_elements]),
+                ])
+
+              #(line_number_offset, elements)
             },
-          ])
-        })
-      ])
-    })
+          )
+
+        let elements = html.div([attribute.class("mt-[1rem]")], [
+          html.p([], [html.text(contract_file.file_name)]),
+          // List of contracts in file
+          ..contracts
+        ])
+
+        #(line_number_offset, elements)
+      },
+    )
+
+  html.div([attribute.id(view_id), attribute.class("p-[1rem]")], [
+    // Page header
+    html.h1([], [
+      html.text(audit_name |> string.capitalise <> " Audit Interface"),
+    ]),
+    // List of files in scope
+    ..elements
   ])
 }
 
