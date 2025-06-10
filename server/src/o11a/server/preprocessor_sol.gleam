@@ -25,7 +25,7 @@ pub fn preprocess_source(
   source source: String,
   nodes nodes: List(Node),
   max_topic_id max_topic_id,
-  topic_merges topic_merges: dict.Dict(String, String),
+  merged_topics merged_topics: dict.Dict(String, String),
   page_path page_path: String,
   audit_name audit_name: String,
 ) {
@@ -35,14 +35,14 @@ pub fn preprocess_source(
       max_topic_id,
       [],
       [],
-      topic_merges,
+      merged_topics,
     ))
     let #(
       index,
       max_topic_id,
       preprocessed_lines,
       addressable_lines,
-      topic_merges,
+      merged_topics,
     ) = acc
 
     let new_index = index + 1
@@ -72,7 +72,7 @@ pub fn preprocess_source(
         }
       })
 
-    let #(new_max_topic_id, significance, new_addressable_lines, topic_merges) = case
+    let #(new_max_topic_id, significance, new_addressable_lines, merged_topics) = case
       declaration_count,
       reference_count
     {
@@ -95,7 +95,7 @@ pub fn preprocess_source(
 
         // Merge this line with the declaration's topic so that we see the
         // declaration's topic when interacting with the line
-        let topic_merges = dict.insert(topic_merges, line_topic_id, topic_id)
+        let merged_topics = dict.insert(merged_topics, line_topic_id, topic_id)
 
         #(
           new_max_topic_id,
@@ -129,11 +129,11 @@ pub fn preprocess_source(
               errors: [],
             ),
           ],
-          topic_merges,
+          merged_topics,
         )
       }
 
-      0, 0 -> #(max_topic_id, preprocessor.EmptyLine, [], topic_merges)
+      0, 0 -> #(max_topic_id, preprocessor.EmptyLine, [], merged_topics)
 
       _, _ -> {
         let new_max_topic_id = max_topic_id + 1
@@ -175,7 +175,7 @@ pub fn preprocess_source(
               errors: [],
             ),
           ],
-          topic_merges,
+          merged_topics,
         )
       }
     }
@@ -210,12 +210,12 @@ pub fn preprocess_source(
         ..preprocessed_lines
       ],
       list.append(new_addressable_lines, addressable_lines),
-      topic_merges,
+      merged_topics,
     )
   }
 
-  let #(_index, max_topic_id, lines, addressable_lines, topic_merges) = data
-  #(max_topic_id, lines |> list.reverse, addressable_lines, topic_merges)
+  let #(_index, max_topic_id, lines, addressable_lines, merged_topics) = data
+  #(max_topic_id, lines |> list.reverse, addressable_lines, merged_topics)
 }
 
 pub fn consume_source(
@@ -816,7 +816,11 @@ pub fn enumerate_declarations(declarations, in ast: AST) {
 }
 
 fn do_enumerate_node_declarations(
-  declarations,
+  declarations: #(
+    Int,
+    dict.Dict(String, preprocessor.Declaration),
+    dict.Dict(String, String),
+  ),
   node: Node,
   parent_scope parent_scope: preprocessor.Scope,
 ) {
@@ -836,7 +840,7 @@ fn do_enumerate_node_declarations(
 
       let #(signature, calls, errors) = analyze_node_body(node)
 
-      let #(id_acc, declarations) = declarations
+      let #(id_acc, declarations, merged_topics) = declarations
       let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
       let declarations = #(
         int.max(id_acc, id + 1),
@@ -857,6 +861,7 @@ fn do_enumerate_node_declarations(
             errors:,
           ),
         ),
+        merged_topics,
       )
 
       list.fold(nodes, declarations, fn(declarations, node) {
@@ -885,7 +890,7 @@ fn do_enumerate_node_declarations(
 
       let #(signature, calls, errors) = analyze_node_body(node)
 
-      let #(id_acc, declarations) = declarations
+      let #(id_acc, declarations, merged_topics) = declarations
       let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
       let declarations = #(
         int.max(id_acc, id + 1),
@@ -905,6 +910,7 @@ fn do_enumerate_node_declarations(
             errors:,
           ),
         ),
+        merged_topics,
       )
 
       let declarations =
@@ -936,7 +942,7 @@ fn do_enumerate_node_declarations(
 
       let #(signature, calls, errors) = analyze_node_body(node)
 
-      let #(id_acc, declarations) = declarations
+      let #(id_acc, declarations, merged_topics) = declarations
       let declarations = #(
         int.max(id_acc, id + 1),
         dict.insert(
@@ -955,6 +961,7 @@ fn do_enumerate_node_declarations(
             errors:,
           ),
         ),
+        merged_topics,
       )
 
       let declarations =
@@ -982,7 +989,7 @@ fn do_enumerate_node_declarations(
 
       let #(signature, calls, errors) = analyze_node_body(node)
 
-      let #(id_acc, declarations) = declarations
+      let #(id_acc, declarations, merged_topics) = declarations
       let declarations = #(
         int.max(id_acc, id + 1),
         dict.insert(
@@ -1001,6 +1008,7 @@ fn do_enumerate_node_declarations(
             errors:,
           ),
         ),
+        merged_topics,
       )
 
       list.fold(nodes, declarations, fn(declarations, node) {
@@ -1016,7 +1024,7 @@ fn do_enumerate_node_declarations(
 
       let #(signature, calls, errors) = analyze_node_body(node)
 
-      let #(id_acc, declarations) = declarations
+      let #(id_acc, declarations, merged_topics) = declarations
       let declarations = #(
         int.max(id_acc, id + 1),
         dict.insert(
@@ -1035,6 +1043,7 @@ fn do_enumerate_node_declarations(
             errors:,
           ),
         ),
+        merged_topics,
       )
 
       list.fold(nodes, declarations, fn(declarations, node) {
@@ -1047,7 +1056,7 @@ fn do_enumerate_node_declarations(
 
       let #(signature, calls, errors) = analyze_node_body(node)
 
-      let #(id_acc, declarations) = declarations
+      let #(id_acc, declarations, merged_topics) = declarations
       #(
         int.max(id_acc, id + 1),
         dict.insert(
@@ -1069,6 +1078,7 @@ fn do_enumerate_node_declarations(
             errors:,
           ),
         ),
+        merged_topics,
       )
     }
     BlockNode(nodes:, statements:, ..) -> {
@@ -1118,7 +1128,7 @@ fn do_enumerate_node_declarations(
 
       let #(signature, calls, errors) = analyze_node_body(node)
 
-      let #(id_acc, declarations) = declarations
+      let #(id_acc, declarations, merged_topics) = declarations
       let declarations = #(
         int.max(id_acc, id + 1),
         dict.insert(
@@ -1137,6 +1147,7 @@ fn do_enumerate_node_declarations(
             errors:,
           ),
         ),
+        merged_topics,
       )
 
       list.fold(nodes, declarations, fn(declarations, statement) {
@@ -1149,7 +1160,7 @@ fn do_enumerate_node_declarations(
     EnumValue(id:, name:, source_map:) -> {
       let #(signature, calls, errors) = analyze_node_body(node)
 
-      let #(id_acc, declarations) = declarations
+      let #(id_acc, declarations, merged_topics) = declarations
       let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
       #(
         int.max(id_acc, id + 1),
@@ -1169,6 +1180,7 @@ fn do_enumerate_node_declarations(
             errors:,
           ),
         ),
+        merged_topics,
       )
     }
     StructDefinition(id:, name:, members:, nodes:, source_map:) -> {
@@ -1179,7 +1191,7 @@ fn do_enumerate_node_declarations(
 
       let #(signature, calls, errors) = analyze_node_body(node)
 
-      let #(id_acc, declarations) = declarations
+      let #(id_acc, declarations, merged_topics) = declarations
       let declarations = #(
         int.max(id_acc, id + 1),
         dict.insert(
@@ -1198,6 +1210,7 @@ fn do_enumerate_node_declarations(
             errors:,
           ),
         ),
+        merged_topics,
       )
 
       list.fold(nodes, declarations, fn(declarations, statement) {
@@ -2673,6 +2686,7 @@ pub type Node {
     parameters: Node,
     modifiers: List(Node),
     return_parameters: Node,
+    base_functions: List(Int),
     nodes: List(Node),
     body: option.Option(Node),
     documentation: option.Option(Node),
@@ -3065,6 +3079,10 @@ fn node_decoder() -> decode.Decoder(Node) {
       use parameters <- decode.field("parameters", node_decoder())
       use modifiers <- decode.field("modifiers", decode.list(node_decoder()))
       use return_parameters <- decode.field("returnParameters", node_decoder())
+      use base_functions <- decode.field(
+        "baseFunctions",
+        decode.list(decode.int),
+      )
       use visibility <- decode.field("visibility", decode.string)
       use state_mutability <- decode.field("stateMutability", decode.string)
       use nodes <- decode.optional_field(
@@ -3111,6 +3129,7 @@ fn node_decoder() -> decode.Decoder(Node) {
         parameters:,
         modifiers:,
         return_parameters:,
+        base_functions:,
         nodes:,
         body:,
         documentation:,

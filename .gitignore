@@ -7,4 +7,4 @@ erl_crash.dump
 server/priv/audits
 server/priv/persist
 client/node_modules
-server/priv/o11a_client.mjs
+server/priv/static/o11a_client.mjs

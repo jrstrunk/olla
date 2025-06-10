@@ -136,7 +136,7 @@ fn handle_wisp_request(req, context: Context) {
 
     ["audit-merged-topics", audit_name] -> {
       use <- wisp.require_method(req, http.Get)
-      audit_data.get_topic_merges(context.audit_data, for: audit_name)
+      audit_data.get_merged_topics(context.audit_data, for: audit_name)
       |> result.map(discussion_topic.encode_topic_merges)
       |> result.map(json.to_string_tree)
       |> result.unwrap(string_tree.from_string(
