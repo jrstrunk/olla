@@ -125,6 +125,8 @@ pub fn preprocess_source(
               kind: preprocessor.LineDeclaration,
               source_map: preprocessor.SourceMap(-1, -1),
               references: [],
+              calls: [],
+              errors: [],
             ),
           ],
           topic_merges,
@@ -169,6 +171,8 @@ pub fn preprocess_source(
               kind: preprocessor.LineDeclaration,
               source_map: preprocessor.SourceMap(-1, -1),
               references: [],
+              calls: [],
+              errors: [],
             ),
           ],
           topic_merges,
@@ -830,6 +834,8 @@ fn do_enumerate_node_declarations(
       let children_scope =
         preprocessor.Scope(..parent_scope, contract: option.Some(name))
 
+      let #(signature, calls, errors) = analyze_node_body(node)
+
       let #(id_acc, declarations) = declarations
       let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
       let declarations = #(
@@ -843,10 +849,12 @@ fn do_enumerate_node_declarations(
             name:,
             // The parent of a contract is the file it is defined in
             scope: parent_scope,
-            signature: get_signature_lines(node),
+            signature:,
             kind: preprocessor.ContractDeclaration(contract_kind),
             source_map:,
             references: [],
+            calls:,
+            errors:,
           ),
         ),
       )
@@ -875,6 +883,8 @@ fn do_enumerate_node_declarations(
       let children_scope =
         preprocessor.Scope(..parent_scope, member: option.Some(name))
 
+      let #(signature, calls, errors) = analyze_node_body(node)
+
       let #(id_acc, declarations) = declarations
       let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
       let declarations = #(
@@ -887,10 +897,12 @@ fn do_enumerate_node_declarations(
             topic_id:,
             name:,
             scope: parent_scope,
-            signature: get_signature_lines(node),
+            signature:,
             kind: preprocessor.FunctionDeclaration(function_kind),
             source_map:,
             references: [],
+            calls:,
+            errors:,
           ),
         ),
       )
@@ -922,6 +934,8 @@ fn do_enumerate_node_declarations(
 
       let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
+      let #(signature, calls, errors) = analyze_node_body(node)
+
       let #(id_acc, declarations) = declarations
       let declarations = #(
         int.max(id_acc, id + 1),
@@ -933,10 +947,12 @@ fn do_enumerate_node_declarations(
             topic_id:,
             name:,
             scope: parent_scope,
-            signature: get_signature_lines(node),
+            signature:,
             kind: preprocessor.ModifierDeclaration,
             source_map:,
             references: [],
+            calls:,
+            errors:,
           ),
         ),
       )
@@ -964,6 +980,8 @@ fn do_enumerate_node_declarations(
 
       let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
+      let #(signature, calls, errors) = analyze_node_body(node)
+
       let #(id_acc, declarations) = declarations
       let declarations = #(
         int.max(id_acc, id + 1),
@@ -975,10 +993,12 @@ fn do_enumerate_node_declarations(
             topic_id:,
             name:,
             scope: parent_scope,
-            signature: get_signature_lines(node),
+            signature:,
             kind: preprocessor.ErrorDeclaration,
             source_map:,
             references: [],
+            calls:,
+            errors:,
           ),
         ),
       )
@@ -994,6 +1014,8 @@ fn do_enumerate_node_declarations(
 
       let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
+      let #(signature, calls, errors) = analyze_node_body(node)
+
       let #(id_acc, declarations) = declarations
       let declarations = #(
         int.max(id_acc, id + 1),
@@ -1005,10 +1027,12 @@ fn do_enumerate_node_declarations(
             topic_id:,
             name:,
             scope: parent_scope,
-            signature: get_signature_lines(node),
+            signature:,
             kind: preprocessor.EventDeclaration,
             source_map:,
             references: [],
+            calls:,
+            errors:,
           ),
         ),
       )
@@ -1021,6 +1045,8 @@ fn do_enumerate_node_declarations(
     VariableDeclarationNode(id:, name:, constant:, source_map:, ..) -> {
       let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
+      let #(signature, calls, errors) = analyze_node_body(node)
+
       let #(id_acc, declarations) = declarations
       #(
         int.max(id_acc, id + 1),
@@ -1032,13 +1058,15 @@ fn do_enumerate_node_declarations(
             topic_id:,
             name:,
             scope: parent_scope,
-            signature: get_signature_lines(node),
+            signature:,
             kind: case constant {
               True -> preprocessor.ConstantDeclaration
               False -> preprocessor.VariableDeclaration
             },
             source_map:,
             references: [],
+            calls:,
+            errors:,
           ),
         ),
       )
@@ -1088,6 +1116,8 @@ fn do_enumerate_node_declarations(
 
       let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
+      let #(signature, calls, errors) = analyze_node_body(node)
+
       let #(id_acc, declarations) = declarations
       let declarations = #(
         int.max(id_acc, id + 1),
@@ -1099,10 +1129,12 @@ fn do_enumerate_node_declarations(
             topic_id:,
             name:,
             scope: parent_scope,
-            signature: get_signature_lines(node),
+            signature:,
             kind: preprocessor.EnumDeclaration,
             source_map:,
             references: [],
+            calls:,
+            errors:,
           ),
         ),
       )
@@ -1115,6 +1147,8 @@ fn do_enumerate_node_declarations(
       })
     }
     EnumValue(id:, name:, source_map:) -> {
+      let #(signature, calls, errors) = analyze_node_body(node)
+
       let #(id_acc, declarations) = declarations
       let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
       #(
@@ -1127,10 +1161,12 @@ fn do_enumerate_node_declarations(
             topic_id:,
             name:,
             scope: parent_scope,
-            signature: get_signature_lines(node),
+            signature:,
             kind: preprocessor.EnumValueDeclaration,
             source_map:,
             references: [],
+            calls:,
+            errors:,
           ),
         ),
       )
@@ -1140,6 +1176,8 @@ fn do_enumerate_node_declarations(
         preprocessor.Scope(..parent_scope, member: option.Some(name))
 
       let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
+
+      let #(signature, calls, errors) = analyze_node_body(node)
 
       let #(id_acc, declarations) = declarations
       let declarations = #(
@@ -1152,10 +1190,12 @@ fn do_enumerate_node_declarations(
             topic_id:,
             name:,
             scope: parent_scope,
-            signature: get_signature_lines(node),
+            signature:,
             kind: preprocessor.StructDeclaration,
             source_map:,
             references: [],
+            calls:,
+            errors:,
           ),
         ),
       )
@@ -1172,9 +1212,9 @@ fn do_enumerate_node_declarations(
   }
 }
 
-pub fn count_references(declarations, in ast: AST) {
+pub fn enumerate_references(declarations, in ast: AST) {
   list.fold(ast.nodes, declarations, fn(declarations, node) {
-    do_count_node_references(
+    do_enumerate_node_references(
       declarations,
       node,
       preprocessor.Scope(
@@ -1188,7 +1228,7 @@ pub fn count_references(declarations, in ast: AST) {
   })
 }
 
-fn do_count_node_references(
+fn do_enumerate_node_references(
   declarations,
   node: Node,
   parent_scope: preprocessor.Scope,
@@ -1266,7 +1306,7 @@ fn do_count_node_references(
 
       let declarations =
         list.fold(nodes, declarations, fn(declarations, node) {
-          do_count_node_references(
+          do_enumerate_node_references(
             declarations,
             node,
             children_scope,
@@ -1274,13 +1314,13 @@ fn do_count_node_references(
             parent_reference_kind,
           )
         })
-        |> do_count_node_references(
+        |> do_enumerate_node_references(
           parameters,
           children_scope,
           topic_id,
           parent_reference_kind,
         )
-        |> do_count_node_references(
+        |> do_enumerate_node_references(
           return_parameters,
           children_scope,
           topic_id,
@@ -1295,7 +1335,7 @@ fn do_count_node_references(
 
       case body {
         Some(body) ->
-          do_count_node_references(
+          do_enumerate_node_references(
             declarations,
             body,
             children_scope,
@@ -1319,7 +1359,7 @@ fn do_count_node_references(
           topic_id,
           parent_reference_kind,
         )
-        |> do_count_node_references(
+        |> do_enumerate_node_references(
           parameters,
           children_scope,
           topic_id,
@@ -1328,7 +1368,7 @@ fn do_count_node_references(
 
       case body {
         Some(body) ->
-          do_count_node_references(
+          do_enumerate_node_references(
             declarations,
             body,
             children_scope,
@@ -1356,7 +1396,7 @@ fn do_count_node_references(
     ExpressionStatementNode(expression:, ..) ->
       case expression {
         Some(expression) ->
-          do_count_node_references(
+          do_enumerate_node_references(
             declarations,
             expression,
             parent_scope,
@@ -1366,7 +1406,7 @@ fn do_count_node_references(
         option.None -> declarations
       }
     EmitStatementNode(event_call:, ..) ->
-      do_count_node_references(
+      do_enumerate_node_references(
         declarations,
         event_call,
         parent_scope,
@@ -1377,7 +1417,7 @@ fn do_count_node_references(
     VariableDeclarationStatementNode(initial_value:, ..) ->
       case initial_value {
         option.Some(initial_value) ->
-          do_count_node_references(
+          do_enumerate_node_references(
             declarations,
             initial_value,
             parent_scope,
@@ -1388,14 +1428,14 @@ fn do_count_node_references(
       }
     IfStatementNode(condition:, true_body:, false_body:, ..) -> {
       let declarations =
-        do_count_node_references(
+        do_enumerate_node_references(
           declarations,
           condition,
           parent_scope,
           parent_topic_id,
           parent_reference_kind,
         )
-        |> do_count_node_references(
+        |> do_enumerate_node_references(
           true_body,
           parent_scope,
           parent_topic_id,
@@ -1404,7 +1444,7 @@ fn do_count_node_references(
 
       case false_body {
         Some(false_body) ->
-          do_count_node_references(
+          do_enumerate_node_references(
             declarations,
             false_body,
             parent_scope,
@@ -1423,7 +1463,7 @@ fn do_count_node_references(
     ) ->
       case initialization_expression {
         option.Some(init) ->
-          do_count_node_references(
+          do_enumerate_node_references(
             declarations,
             init,
             parent_scope,
@@ -1435,7 +1475,7 @@ fn do_count_node_references(
       |> fn(declarations) {
         case condition {
           option.Some(condition) ->
-            do_count_node_references(
+            do_enumerate_node_references(
               declarations,
               condition,
               parent_scope,
@@ -1448,7 +1488,7 @@ fn do_count_node_references(
       |> fn(declarations) {
         case loop_expression {
           option.Some(loop) ->
-            do_count_node_references(
+            do_enumerate_node_references(
               declarations,
               loop,
               parent_scope,
@@ -1458,7 +1498,7 @@ fn do_count_node_references(
           option.None -> declarations
         }
       }
-      |> do_count_node_references(
+      |> do_enumerate_node_references(
         body,
         parent_scope,
         parent_topic_id,
@@ -1467,7 +1507,7 @@ fn do_count_node_references(
     RevertStatementNode(expression:, ..) ->
       case expression {
         Some(expression) ->
-          do_count_node_references(
+          do_enumerate_node_references(
             declarations,
             expression,
             parent_scope,
@@ -1480,7 +1520,7 @@ fn do_count_node_references(
     Expression(expression:, ..) ->
       case expression {
         Some(expression) ->
-          do_count_node_references(
+          do_enumerate_node_references(
             declarations,
             expression,
             parent_scope,
@@ -1493,7 +1533,7 @@ fn do_count_node_references(
     Identifier(reference_id:, expression:, ..) ->
       case expression {
         Some(expression) ->
-          do_count_node_references(
+          do_enumerate_node_references(
             declarations,
             expression,
             parent_scope,
@@ -1530,7 +1570,7 @@ fn do_count_node_references(
       |> fn(declarations) {
         case expression {
           Some(expression) ->
-            do_count_node_references(
+            do_enumerate_node_references(
               declarations,
               expression,
               parent_scope,
@@ -1544,7 +1584,7 @@ fn do_count_node_references(
     FunctionCall(arguments:, expression:, ..) ->
       case expression {
         Some(expression) ->
-          do_count_node_references(
+          do_enumerate_node_references(
             declarations,
             expression,
             parent_scope,
@@ -1560,14 +1600,14 @@ fn do_count_node_references(
         parent_reference_kind,
       )
     Assignment(left_hand_side:, right_hand_side:, ..) ->
-      do_count_node_references(
+      do_enumerate_node_references(
         declarations,
         left_hand_side,
         parent_scope,
         parent_topic_id,
         preprocessor.MutationReference,
       )
-      |> do_count_node_references(
+      |> do_enumerate_node_references(
         right_hand_side,
         parent_scope,
         parent_topic_id,
@@ -1575,14 +1615,14 @@ fn do_count_node_references(
       )
 
     BinaryOperation(left_expression:, right_expression:, ..) ->
-      do_count_node_references(
+      do_enumerate_node_references(
         declarations,
         left_expression,
         parent_scope,
         parent_topic_id,
         parent_reference_kind,
       )
-      |> do_count_node_references(
+      |> do_enumerate_node_references(
         right_expression,
         parent_scope,
         parent_topic_id,
@@ -1590,7 +1630,7 @@ fn do_count_node_references(
       )
 
     UnaryOperation(expression:, ..) ->
-      do_count_node_references(
+      do_enumerate_node_references(
         declarations,
         expression,
         parent_scope,
@@ -1601,7 +1641,7 @@ fn do_count_node_references(
     IndexAccess(base:, index:, ..) ->
       case index {
         option.Some(index) ->
-          do_count_node_references(
+          do_enumerate_node_references(
             declarations,
             index,
             parent_scope,
@@ -1610,7 +1650,7 @@ fn do_count_node_references(
           )
         option.None -> declarations
       }
-      |> do_count_node_references(
+      |> do_enumerate_node_references(
         base,
         parent_scope,
         parent_topic_id,
@@ -1664,27 +1704,27 @@ fn do_count_node_references(
         ),
       )
     Conditional(condition:, true_expression:, false_expression:, ..) ->
-      do_count_node_references(
+      do_enumerate_node_references(
         declarations,
         condition,
         parent_scope,
         parent_topic_id,
         parent_reference_kind,
       )
-      |> do_count_node_references(
+      |> do_enumerate_node_references(
         true_expression,
         parent_scope,
         parent_topic_id,
         parent_reference_kind,
       )
-      |> do_count_node_references(
+      |> do_enumerate_node_references(
         false_expression,
         parent_scope,
         parent_topic_id,
         parent_reference_kind,
       )
     UserDefinedTypeName(path_node:, ..) ->
-      do_count_node_references(
+      do_enumerate_node_references(
         declarations,
         path_node,
         parent_scope,
@@ -1692,7 +1732,7 @@ fn do_count_node_references(
         preprocessor.TypeReference,
       )
     NewExpression(type_name:, arguments:, ..) ->
-      do_count_node_references(
+      do_enumerate_node_references(
         declarations,
         type_name,
         parent_scope,
@@ -1713,7 +1753,7 @@ fn do_count_node_references(
         }
       }
     ArrayTypeName(base_type:, ..) ->
-      do_count_node_references(
+      do_enumerate_node_references(
         declarations,
         base_type,
         parent_scope,
@@ -1723,7 +1763,7 @@ fn do_count_node_references(
     FunctionCallOptions(options:, expression:, ..) ->
       case expression {
         option.Some(expression) ->
-          do_count_node_references(
+          do_enumerate_node_references(
             declarations,
             expression,
             parent_scope,
@@ -1739,21 +1779,21 @@ fn do_count_node_references(
         parent_reference_kind,
       )
     Mapping(key_type:, value_type:, ..) ->
-      do_count_node_references(
+      do_enumerate_node_references(
         declarations,
         key_type,
         parent_scope,
         parent_topic_id,
         preprocessor.TypeReference,
       )
-      |> do_count_node_references(
+      |> do_enumerate_node_references(
         value_type,
         parent_scope,
         parent_topic_id,
         preprocessor.TypeReference,
       )
     UsingForDirective(library_name:, ..) ->
-      do_count_node_references(
+      do_enumerate_node_references(
         declarations,
         library_name,
         parent_scope,
@@ -1800,7 +1840,7 @@ fn do_count_node_references_multi(
   parent_reference_kind: preprocessor.NodeReferenceKind,
 ) {
   list.fold(nodes, declarations, fn(declarations, node) {
-    do_count_node_references(
+    do_enumerate_node_references(
       declarations,
       node,
       parent_scope,
@@ -1810,14 +1850,106 @@ fn do_count_node_references_multi(
   })
 }
 
+pub fn enumerate_errors(
+  declarations: dict.Dict(String, preprocessor.Declaration),
+) {
+  list.fold(dict.values(declarations), declarations, fn(declarations, dec) {
+    let all_errors = case dec.calls {
+      [] -> dec.errors
+      calls -> {
+        list.fold(calls, dec.errors, fn(errors, call) {
+          case dict.get(declarations, call) {
+            Ok(dec) -> list.append(dec.errors, errors)
+            Error(Nil) -> errors
+          }
+        })
+      }
+    }
+
+    case all_errors {
+      [] -> declarations
+      _ -> {
+        let error_signature =
+          [
+            preprocessor.PreProcessedNode(
+              element: html.span([attribute.class("keyword")], [
+                html.text("reverts"),
+              ])
+              |> element.to_string,
+            ),
+            preprocessor.PreProcessedNode(" ("),
+            preprocessor.FormatterNewline,
+            preprocessor.FormatterBlock(
+              list.map(all_errors, fn(topic_id) {
+                let dec =
+                  dict.get(declarations, topic_id)
+                  |> result.unwrap(preprocessor.unknown_declaration)
+
+                preprocessor.PreProcessedReference(topic_id, tokens: dec.name)
+              })
+              |> list.intersperse(preprocessor.FormatterNewline),
+            ),
+            preprocessor.PreProcessedNode(")"),
+          ]
+          |> split_lines(indent_num: 0)
+
+        dict.insert(
+          declarations,
+          dec.topic_id,
+          preprocessor.Declaration(
+            ..dec,
+            errors: all_errors,
+            signature: dec.signature |> list.append(error_signature),
+          ),
+        )
+      }
+    }
+  })
+}
+
 type BlockLevel {
   TopLevel
   Nested
 }
 
-fn get_signature_lines(node) {
-  do_node_to_signature_nodes(node, top_level: TopLevel)
-  |> split_lines(indent_num: 0)
+pub type CalledFunctionKind {
+  CalledError
+  CalledEvent
+  CalledFunction
+  CalledConstructor
+}
+
+fn analyze_node_body(node) {
+  let signature_lines =
+    do_node_to_signature_nodes(node, top_level: TopLevel)
+    |> split_lines(indent_num: 0)
+
+  case node {
+    FunctionDefinitionNode(body: option.Some(body), ..)
+    | ModifierDefinitionNode(body: option.Some(body), ..) -> {
+      let calls = enumerate_function_calls(body)
+
+      let errors =
+        list.filter_map(calls, fn(call) {
+          case call {
+            #(reference_id, CalledError) -> Ok(reference_id)
+            _ -> Error(Nil)
+          }
+        })
+
+      let other =
+        list.filter_map(calls, fn(call) {
+          case call {
+            #(reference_id, CalledFunction) -> Ok(reference_id)
+            #(reference_id, CalledConstructor) -> Ok(reference_id)
+            _ -> Error(Nil)
+          }
+        })
+
+      #(signature_lines, other, errors)
+    }
+    _ -> #(signature_lines, [], [])
+  }
 }
 
 fn do_node_to_signature_nodes(node, top_level top_level: BlockLevel) {
@@ -1973,26 +2105,16 @@ fn do_node_to_signature_nodes(node, top_level top_level: BlockLevel) {
       |> list.append(case list.length(modifiers) > 0 {
         True ->
           [preprocessor.FormatterNewline]
-          |> list.append([
-            preprocessor.FormatterBlock(
-              list.map(modifiers, do_node_to_signature_nodes(
-                _,
-                top_level: Nested,
-              ))
-              |> list.intersperse([preprocessor.PreProcessedNode(element: " ")])
-              |> list.flatten,
-            ),
-          ])
+          |> list.append(
+            list.map(modifiers, do_node_to_signature_nodes(_, top_level: Nested))
+            |> list.intersperse([preprocessor.FormatterNewline])
+            |> list.flatten,
+          )
         False -> []
       })
       |> list.append(case return_parameters {
         ParameterListNode(parameters: [_, ..], ..) ->
-          // case list.length(modifiers) > 0 {
-          //   True -> [preprocessor.FormatterNewline]
-          //   False -> []
-          // }|ff
-          []
-          |> list.append([
+          [
             preprocessor.PreProcessedNode(
               element: element.fragment([
                 html.span([attribute.class("keyword")], [html.text(" returns ")]),
@@ -2000,7 +2122,7 @@ fn do_node_to_signature_nodes(node, top_level top_level: BlockLevel) {
               ])
               |> element.to_string,
             ),
-          ])
+          ]
           |> list.append(do_node_to_signature_nodes(return_parameters, Nested))
           |> list.append([preprocessor.PreProcessedNode(element: ")")])
         _ -> []
@@ -2216,12 +2338,15 @@ fn do_node_to_signature_nodes(node, top_level top_level: BlockLevel) {
 
     Modifier(reference_id:, name:, arguments:, ..) ->
       [
-        preprocessor.PreProcessedDeclaration(
+        preprocessor.PreProcessedReference(
           topic_id: preprocessor.node_id_to_topic_id(
             reference_id,
             preprocessor.Solidity,
           ),
-          tokens: name,
+          tokens: case top_level {
+            Nested -> "  " <> name
+            TopLevel -> name
+          },
         ),
       ]
       |> list.append(case arguments {
@@ -2308,6 +2433,72 @@ fn get_signature_line_significance(
       topic_id
     }
     False -> preprocessor.EmptyLine
+  }
+}
+
+fn enumerate_function_calls(node) {
+  do_enumerate_function_calls([], node, CalledFunction)
+}
+
+fn do_enumerate_function_calls(acc, node, kind) {
+  case node {
+    BlockNode(nodes:, statements:, expression:, ..) ->
+      case expression {
+        option.Some(expression) ->
+          do_enumerate_function_calls(acc, expression, kind)
+        option.None -> acc
+      }
+      |> list.fold(nodes, _, fn(acc, node) {
+        do_enumerate_function_calls(acc, node, kind)
+      })
+      |> list.reverse
+      |> list.fold(statements, _, fn(acc, statement) {
+        do_enumerate_function_calls(acc, statement, kind)
+      })
+      |> list.reverse
+
+    IfStatementNode(true_body:, false_body:, ..) -> {
+      case false_body {
+        option.Some(false_body) ->
+          do_enumerate_function_calls(acc, true_body, kind)
+          |> do_enumerate_function_calls(false_body, kind)
+        option.None -> do_enumerate_function_calls(acc, true_body, kind)
+      }
+    }
+
+    ForStatementNode(loop_expression: option.Some(loop_expression), ..) ->
+      do_enumerate_function_calls(acc, loop_expression, kind)
+
+    RevertStatementNode(expression: option.Some(expression), ..) ->
+      do_enumerate_function_calls(acc, expression, CalledError)
+
+    EmitStatementNode(event_call:, ..) ->
+      do_enumerate_function_calls(acc, event_call, CalledEvent)
+
+    NewExpression(type_name:, ..) ->
+      do_enumerate_function_calls(acc, type_name, CalledConstructor)
+
+    FunctionCall(expression: option.Some(expression), ..) ->
+      do_enumerate_function_calls(acc, expression, kind)
+
+    ExpressionStatementNode(expression: option.Some(expression), ..) ->
+      do_enumerate_function_calls(acc, expression, kind)
+
+    Expression(expression: option.Some(expression), ..) ->
+      do_enumerate_function_calls(acc, expression, kind)
+
+    MemberAccess(expression: option.Some(expression), ..) ->
+      do_enumerate_function_calls(acc, expression, kind)
+
+    Identifier(reference_id:, ..) | IdentifierPath(reference_id:, ..) -> [
+      #(
+        preprocessor.node_id_to_topic_id(reference_id, preprocessor.Solidity),
+        kind,
+      ),
+      ..acc
+    ]
+
+    _ -> acc
   }
 }
 

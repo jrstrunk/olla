@@ -100,6 +100,8 @@ pub fn enumerate_declarations(declarations, in ast: AST) {
               kind: preprocessor.LineDeclaration,
               source_map: preprocessor.SourceMap(-1, -1),
               references: [],
+              calls: [],
+              errors: [],
             ),
           ),
         )

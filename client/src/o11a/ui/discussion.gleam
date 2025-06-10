@@ -393,7 +393,7 @@ pub fn topic_signature_view(
               let rendered_node =
                 node_with_discussion_view(
                   topic_id:,
-                  tokens:, 
+                  tokens:,
                   discussion:,
                   declarations:,
                   discussion_id: DiscussionId(
@@ -575,7 +575,7 @@ fn declaration_node_attributes(
   topic_id topic_id: String,
 ) {
   [
-    attribute.id(preprocessor.declaration_to_id(node_declaration)),
+    attribute.id(preprocessor.declaration_to_qualified_name(node_declaration)),
     attribute.class(preprocessor.declaration_kind_to_string(
       node_declaration.kind,
     )),

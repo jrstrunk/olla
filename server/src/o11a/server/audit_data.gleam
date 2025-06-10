@@ -213,8 +213,9 @@ fn preprocess_audit_source(for audit_name) {
   let sol_declarations =
     sol_declarations
     |> list.fold(sol_asts, _, fn(declarations, ast) {
-      preprocessor_sol.count_references(declarations, ast)
+      preprocessor_sol.enumerate_references(declarations, ast)
     })
+    |> preprocessor_sol.enumerate_errors
 
   let #(max_topic_id, _text_declarations) =
     #(max_topic_id, dict.new())

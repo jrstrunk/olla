@@ -8334,7 +8334,7 @@ function base_name(path2) {
 
 // build/dev/javascript/o11a_common/o11a/preprocessor.mjs
 var Declaration = class extends CustomType {
-  constructor(id2, topic_id, name2, signature, scope, kind, source_map, references) {
+  constructor(id2, topic_id, name2, signature, scope, kind, source_map, references, calls, errors) {
     super();
     this.id = id2;
     this.topic_id = topic_id;
@@ -8344,6 +8344,8 @@ var Declaration = class extends CustomType {
     this.kind = kind;
     this.source_map = source_map;
     this.references = references;
+    this.calls = calls;
+    this.errors = errors;
   }
 };
 var Scope = class extends CustomType {
@@ -8543,7 +8545,7 @@ function contract_scope_to_string(scope) {
     return unwrap(_pipe, "");
   })();
 }
-function declaration_to_id(decaration) {
+function declaration_to_qualified_name(decaration) {
   let $ = decaration.scope.contract;
   if ($ instanceof Some) {
     let contract = $[0];
@@ -8561,7 +8563,9 @@ function declaration_to_id(decaration) {
   }
 }
 function declaration_to_link(decaration) {
-  return "/" + decaration.scope.file + "#" + declaration_to_id(decaration);
+  return "/" + decaration.scope.file + "#" + declaration_to_qualified_name(
+    decaration
+  );
 }
 function reference_to_link(reference) {
   return "/" + reference.scope.file + "#" + (() => {
@@ -8948,24 +8952,38 @@ function declaration_decoder() {
                         decode_declaration_kind(),
                         (kind) => {
                           return field(
-                            "c",
+                            "m",
                             source_map_decoder(),
                             (source_map) => {
                               return field(
                                 "r",
                                 list2(reference_decoder()),
                                 (references) => {
-                                  return success(
-                                    new Declaration(
-                                      id2,
-                                      topic_id,
-                                      name2,
-                                      signature,
-                                      scope,
-                                      kind,
-                                      source_map,
-                                      references
-                                    )
+                                  return field(
+                                    "c",
+                                    list2(string3),
+                                    (calls) => {
+                                      return field(
+                                        "e",
+                                        list2(string3),
+                                        (errors) => {
+                                          return success(
+                                            new Declaration(
+                                              id2,
+                                              topic_id,
+                                              name2,
+                                              signature,
+                                              scope,
+                                              kind,
+                                              source_map,
+                                              references,
+                                              calls,
+                                              errors
+                                            )
+                                          );
+                                        }
+                                      );
+                                    }
                                   );
                                 }
                               );
@@ -9050,6 +9068,8 @@ var unknown_declaration = /* @__PURE__ */ new Declaration(
   ),
   /* @__PURE__ */ new UnknownDeclaration(),
   /* @__PURE__ */ new SourceMap(-1, -1),
+  /* @__PURE__ */ toList([]),
+  /* @__PURE__ */ toList([]),
   /* @__PURE__ */ toList([])
 );
 
@@ -9199,7 +9219,9 @@ function get_combined_declaration(parent_topic_id, declarations, topic_merges) {
               append(
                 next_declaration.references,
                 existing_decl.references
-              )
+              ),
+              _record.calls,
+              _record.errors
             );
           })(),
           prepend(next_topic_id, updated_topic_ids)
@@ -11640,7 +11662,7 @@ function node_view(topic_id, tokens, declarations) {
 }
 function declaration_node_attributes(discussion_id, node_declaration, topic_id) {
   return toList([
-    id(declaration_to_id(node_declaration)),
+    id(declaration_to_qualified_name(node_declaration)),
     class$(
       declaration_kind_to_string(node_declaration.kind)
     ),
@@ -12913,7 +12935,7 @@ function topic_signature_view(view_id3, signature, declarations, discussion, sup
             let new_column_number = column_number + 1;
             let rendered_node = node_with_discussion_view(
               topic_id,
-              tokens + "referenceview",
+              tokens,
               discussion,
               declarations,
               new DiscussionId(view_id3, new_line_number, new_column_number),
@@ -13346,55 +13368,39 @@ function contract_members_view(contract, title2, declarations_of_type, declarati
       return unwrap(declaration.scope.contract, "") === contract;
     }
   );
-  let lines = fold2(
+  let $ = map_fold(
     items,
-    0,
-    (acc, declaration) => {
-      return acc + length(declaration.signature);
+    line_number_offset,
+    (line_number_offset2, declaration) => {
+      let el = p(
+        toList([class$("ml-[1rem] mb-[1rem] leading-[1.1875rem]")]),
+        topic_signature_view(
+          view_id,
+          declaration.signature,
+          declarations,
+          discussion,
+          false,
+          line_number_offset2,
+          active_discussion,
+          discussion_context
+        )
+      );
+      return [line_number_offset2 + length(declaration.signature), el];
     }
   );
+  let lines = $[0];
+  let elements = $[1];
   let _block;
   if (items instanceof Empty) {
     _block = fragment2(toList([]));
   } else {
-    let items$1 = items;
     _block = div(
       toList([class$("ml-[1rem] mb-[1.5rem]")]),
-      prepend(
-        p(toList([]), toList([text3(title2)])),
-        (() => {
-          let _pipe = map_fold(
-            items$1,
-            line_number_offset,
-            (line_number_offset2, declaration) => {
-              let el = p(
-                toList([
-                  class$("ml-[1rem] mb-[1rem] leading-[1.1875rem]")
-                ]),
-                topic_signature_view(
-                  view_id,
-                  declaration.signature,
-                  declarations,
-                  discussion,
-                  false,
-                  line_number_offset2,
-                  active_discussion,
-                  discussion_context
-                )
-              );
-              return [
-                line_number_offset2 + length(declaration.signature),
-                el
-              ];
-            }
-          );
-          return second(_pipe);
-        })()
-      )
+      prepend(p(toList([]), toList([text3(title2)])), elements)
     );
   }
-  let elements = _block;
-  return [line_number_offset + lines, elements];
+  let elements$1 = _block;
+  return [line_number_offset + lines, elements$1];
 }
 function view3(interface_data, audit_name, declarations, discussion, discussion_context) {
   let active_discussion = get_active_discussion_reference(

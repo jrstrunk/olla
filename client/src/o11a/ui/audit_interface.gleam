@@ -2,7 +2,6 @@ import gleam/dict
 import gleam/int
 import gleam/list
 import gleam/option
-import gleam/pair
 import gleam/string
 import lustre/attribute
 import lustre/element
@@ -174,38 +173,35 @@ fn contract_members_view(
       option.unwrap(declaration.scope.contract, "") == contract
     })
 
-  let lines =
-    list.fold(items, 0, fn(acc, declaration) {
-      acc + list.length(declaration.signature)
-    })
+  let #(lines, elements) =
+    list.map_fold(
+      items,
+      line_number_offset,
+      fn(line_number_offset, declaration) {
+        let el =
+          html.p(
+            [attribute.class("ml-[1rem] mb-[1rem] leading-[1.1875rem]")],
+            discussion.topic_signature_view(
+              view_id:,
+              signature: declaration.signature,
+              declarations:,
+              discussion:,
+              suppress_declaration: False,
+              line_number_offset:,
+              active_discussion:,
+              discussion_context:,
+            ),
+          )
+        #(line_number_offset + list.length(declaration.signature), el)
+      },
+    )
 
   let elements = case items {
     [] -> element.fragment([])
-    items ->
+    _ ->
       html.div([attribute.class("ml-[1rem] mb-[1.5rem]")], [
         html.p([], [html.text(title)]),
-        ..list.map_fold(
-          items,
-          line_number_offset,
-          fn(line_number_offset, declaration) {
-            let el =
-              html.p(
-                [attribute.class("ml-[1rem] mb-[1rem] leading-[1.1875rem]")],
-                discussion.topic_signature_view(
-                  view_id:,
-                  signature: declaration.signature,
-                  declarations:,
-                  discussion:,
-                  suppress_declaration: False,
-                  line_number_offset:,
-                  active_discussion:,
-                  discussion_context:,
-                ),
-              )
-            #(line_number_offset + list.length(declaration.signature), el)
-          },
-        )
-        |> pair.second
+        ..elements
       ])
   }
 

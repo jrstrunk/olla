@@ -18,6 +18,8 @@ pub type Declaration {
     kind: DeclarationKind,
     source_map: SourceMap,
     references: List(Reference),
+    calls: List(String),
+    errors: List(String),
   )
 }
 
@@ -32,6 +34,8 @@ pub fn encode_declaration(declaration: Declaration) -> json.Json {
       kind:,
       source_map:,
       references:,
+      calls:,
+      errors:,
     ) ->
       json.object([
         #("i", json.int(id)),
@@ -40,8 +44,10 @@ pub fn encode_declaration(declaration: Declaration) -> json.Json {
         #("s", encode_scope(scope)),
         #("g", json.array(signature, pre_processed_snippet_line_to_json)),
         #("k", encode_declaration_kind(kind)),
-        #("c", encode_source_map(source_map)),
+        #("m", encode_source_map(source_map)),
         #("r", json.array(references, encode_reference)),
+        #("c", json.array(calls, json.string)),
+        #("e", json.array(errors, json.string)),
       ])
   }
 }
@@ -56,8 +62,10 @@ pub fn declaration_decoder() -> decode.Decoder(Declaration) {
     decode.list(pre_processed_snippet_line_decoder()),
   )
   use kind <- decode.field("k", decode_declaration_kind())
-  use source_map <- decode.field("c", source_map_decoder())
+  use source_map <- decode.field("m", source_map_decoder())
   use references <- decode.field("r", decode.list(reference_decoder()))
+  use calls <- decode.field("c", decode.list(decode.string))
+  use errors <- decode.field("e", decode.list(decode.string))
   decode.success(Declaration(
     id:,
     topic_id:,
@@ -67,6 +75,8 @@ pub fn declaration_decoder() -> decode.Decoder(Declaration) {
     kind:,
     source_map:,
     references:,
+    calls:,
+    errors:,
   ))
 }
 
@@ -78,6 +88,8 @@ pub const unknown_declaration = Declaration(
   Scope("", option.None, option.None),
   UnknownDeclaration,
   SourceMap(-1, -1),
+  [],
+  [],
   [],
 )
 
@@ -130,10 +142,13 @@ pub fn contract_scope_to_string(scope: Scope) {
 }
 
 pub fn declaration_to_link(decaration: Declaration) {
-  "/" <> decaration.scope.file <> "#" <> declaration_to_id(decaration)
+  "/"
+  <> decaration.scope.file
+  <> "#"
+  <> declaration_to_qualified_name(decaration)
 }
 
-pub fn declaration_to_id(decaration: Declaration) {
+pub fn declaration_to_qualified_name(decaration: Declaration) {
   case decaration.scope.contract {
     option.Some(contract) ->
       contract
