@@ -15,23 +15,15 @@ pub const view_id = "interface"
 pub type InterfaceData {
   InterfaceData(
     file_contracts: List(FileContract),
-    contract_constants: List(preprocessor.Declaration),
     contract_variables: List(preprocessor.Declaration),
-    contract_structs: List(preprocessor.Declaration),
-    contract_enums: List(preprocessor.Declaration),
     contract_functions: List(preprocessor.Declaration),
-    contract_modifiers: List(preprocessor.Declaration),
   )
 }
 
 pub const empty_interface_data = InterfaceData(
   file_contracts: [],
-  contract_constants: [],
   contract_variables: [],
-  contract_structs: [],
-  contract_enums: [],
   contract_functions: [],
-  contract_modifiers: [],
 )
 
 pub type FileContract {
@@ -68,23 +60,10 @@ pub fn view(
             {
               let line_number_offset = 0
 
-              // List of constants in contract
-              let #(line_number_offset, constant_elements) =
-                contract_members_view(
-                  contract.name,
-                  "Constants",
-                  interface_data.contract_constants,
-                  declarations,
-                  discussion,
-                  active_discussion,
-                  discussion_context,
-                  line_number_offset:,
-                )
               // List of variables in contract
               let #(line_number_offset, state_elements) =
                 contract_members_view(
                   contract.name,
-                  "State Variables",
                   interface_data.contract_variables,
                   declarations,
                   discussion,
@@ -92,36 +71,11 @@ pub fn view(
                   discussion_context,
                   line_number_offset:,
                 )
-              // List of structs in contract
-              let #(line_number_offset, struct_elements) =
-                contract_members_view(
-                  contract.name,
-                  "Structs",
-                  interface_data.contract_structs,
-                  declarations,
-                  discussion,
-                  active_discussion,
-                  discussion_context,
-                  line_number_offset:,
-                )
 
-              // List of enums in contract
-              let #(line_number_offset, enum_elements) =
-                contract_members_view(
-                  contract.name,
-                  "Enums",
-                  interface_data.contract_enums,
-                  declarations,
-                  discussion,
-                  active_discussion,
-                  discussion_context,
-                  line_number_offset:,
-                )
               // List of functions in contract
-              let #(line_number_offset, function_elements) =
+              let #(_line_number_offset, function_elements) =
                 contract_members_view(
                   contract.name,
-                  "Functions",
                   interface_data.contract_functions,
                   declarations,
                   discussion,
@@ -129,27 +83,8 @@ pub fn view(
                   discussion_context,
                   line_number_offset:,
                 )
-              // List of modifiers in contract
-              let #(_line_number_offset, modifier_elements) =
-                contract_members_view(
-                  contract.name,
-                  "Modifiers",
-                  interface_data.contract_modifiers,
-                  declarations,
-                  discussion,
-                  active_discussion,
-                  discussion_context,
-                  line_number_offset:,
-                )
 
-              element.fragment([
-                constant_elements,
-                state_elements,
-                struct_elements,
-                enum_elements,
-                function_elements,
-                modifier_elements,
-              ])
+              element.fragment([state_elements, function_elements])
             },
           ])
         })
@@ -160,7 +95,6 @@ pub fn view(
 
 fn contract_members_view(
   contract: String,
-  title,
   declarations_of_type: List(preprocessor.Declaration),
   declarations: dict.Dict(String, preprocessor.Declaration),
   discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
@@ -196,16 +130,7 @@ fn contract_members_view(
       },
     )
 
-  let elements = case items {
-    [] -> element.fragment([])
-    _ ->
-      html.div([attribute.class("ml-[1rem] mb-[1.5rem]")], [
-        html.p([], [html.text(title)]),
-        ..elements
-      ])
-  }
-
-  #(line_number_offset + lines, elements)
+  #(line_number_offset + lines, element.fragment(elements))
 }
 
 pub fn gather_interface_data(
@@ -253,34 +178,10 @@ pub fn gather_interface_data(
     |> dict.to_list
     |> list.map(fn(contracts) { FileContract(contracts.0, contracts.1) })
 
-  let contract_constants =
-    list.filter_map(contract_member_declarations_in_scope, fn(declaration) {
-      case declaration.dec.kind {
-        preprocessor.ConstantDeclaration -> Ok(declaration.dec)
-        _ -> Error(Nil)
-      }
-    })
-
   let contract_variables =
     list.filter_map(contract_member_declarations_in_scope, fn(declaration) {
       case declaration.dec.kind {
         preprocessor.VariableDeclaration -> Ok(declaration.dec)
-        _ -> Error(Nil)
-      }
-    })
-
-  let contract_structs =
-    list.filter_map(contract_member_declarations_in_scope, fn(declaration) {
-      case declaration.dec.kind {
-        preprocessor.StructDeclaration -> Ok(declaration.dec)
-        _ -> Error(Nil)
-      }
-    })
-
-  let contract_enums =
-    list.filter_map(contract_member_declarations_in_scope, fn(declaration) {
-      case declaration.dec.kind {
-        preprocessor.EnumDeclaration -> Ok(declaration.dec)
         _ -> Error(Nil)
       }
     })
@@ -293,21 +194,5 @@ pub fn gather_interface_data(
       }
     })
 
-  let contract_modifiers =
-    list.filter_map(contract_member_declarations_in_scope, fn(declaration) {
-      case declaration.dec.kind {
-        preprocessor.ModifierDeclaration -> Ok(declaration.dec)
-        _ -> Error(Nil)
-      }
-    })
-
-  InterfaceData(
-    file_contracts:,
-    contract_constants:,
-    contract_variables:,
-    contract_structs:,
-    contract_enums:,
-    contract_functions:,
-    contract_modifiers:,
-  )
+  InterfaceData(file_contracts:, contract_variables:, contract_functions:)
 }

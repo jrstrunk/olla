@@ -13187,15 +13187,11 @@ function thread_header_view(model, declarations, references, active_discussion, 
 
 // build/dev/javascript/o11a_client/o11a/ui/audit_interface.mjs
 var InterfaceData = class extends CustomType {
-  constructor(file_contracts, contract_constants, contract_variables, contract_structs, contract_enums, contract_functions, contract_modifiers) {
+  constructor(file_contracts, contract_variables, contract_functions) {
     super();
     this.file_contracts = file_contracts;
-    this.contract_constants = contract_constants;
     this.contract_variables = contract_variables;
-    this.contract_structs = contract_structs;
-    this.contract_enums = contract_enums;
     this.contract_functions = contract_functions;
-    this.contract_modifiers = contract_modifiers;
   }
 };
 var FileContract = class extends CustomType {
@@ -13284,44 +13280,11 @@ function gather_interface_data(declaration_list, in_scope_files) {
     }
   );
   let file_contracts = _block$2;
-  let contract_constants = filter_map(
-    contract_member_declarations_in_scope,
-    (declaration) => {
-      let $ = declaration.dec.kind;
-      if ($ instanceof ConstantDeclaration) {
-        return new Ok(declaration.dec);
-      } else {
-        return new Error(void 0);
-      }
-    }
-  );
   let contract_variables = filter_map(
     contract_member_declarations_in_scope,
     (declaration) => {
       let $ = declaration.dec.kind;
       if ($ instanceof VariableDeclaration) {
-        return new Ok(declaration.dec);
-      } else {
-        return new Error(void 0);
-      }
-    }
-  );
-  let contract_structs = filter_map(
-    contract_member_declarations_in_scope,
-    (declaration) => {
-      let $ = declaration.dec.kind;
-      if ($ instanceof StructDeclaration) {
-        return new Ok(declaration.dec);
-      } else {
-        return new Error(void 0);
-      }
-    }
-  );
-  let contract_enums = filter_map(
-    contract_member_declarations_in_scope,
-    (declaration) => {
-      let $ = declaration.dec.kind;
-      if ($ instanceof EnumDeclaration) {
         return new Ok(declaration.dec);
       } else {
         return new Error(void 0);
@@ -13339,29 +13302,14 @@ function gather_interface_data(declaration_list, in_scope_files) {
       }
     }
   );
-  let contract_modifiers = filter_map(
-    contract_member_declarations_in_scope,
-    (declaration) => {
-      let $ = declaration.dec.kind;
-      if ($ instanceof ModifierDeclaration) {
-        return new Ok(declaration.dec);
-      } else {
-        return new Error(void 0);
-      }
-    }
-  );
   return new InterfaceData(
     file_contracts,
-    contract_constants,
     contract_variables,
-    contract_structs,
-    contract_enums,
-    contract_functions,
-    contract_modifiers
+    contract_functions
   );
 }
 var view_id = "interface";
-function contract_members_view(contract, title2, declarations_of_type, declarations, discussion, active_discussion, discussion_context, line_number_offset) {
+function contract_members_view(contract, declarations_of_type, declarations, discussion, active_discussion, discussion_context, line_number_offset) {
   let items = filter(
     declarations_of_type,
     (declaration) => {
@@ -13390,17 +13338,7 @@ function contract_members_view(contract, title2, declarations_of_type, declarati
   );
   let lines = $[0];
   let elements = $[1];
-  let _block;
-  if (items instanceof Empty) {
-    _block = fragment2(toList([]));
-  } else {
-    _block = div(
-      toList([class$("ml-[1rem] mb-[1.5rem]")]),
-      prepend(p(toList([]), toList([text3(title2)])), elements)
-    );
-  }
-  let elements$1 = _block;
-  return [line_number_offset + lines, elements$1];
+  return [line_number_offset + lines, fragment2(elements)];
 }
 function view3(interface_data, audit_name, declarations, discussion, discussion_context) {
   let active_discussion = get_active_discussion_reference(
@@ -13439,8 +13377,7 @@ function view3(interface_data, audit_name, declarations, discussion, discussion_
                         let line_number_offset = 0;
                         let $ = contract_members_view(
                           contract.name,
-                          "Constants",
-                          interface_data.contract_constants,
+                          interface_data.contract_variables,
                           declarations,
                           discussion,
                           active_discussion,
@@ -13448,75 +13385,19 @@ function view3(interface_data, audit_name, declarations, discussion, discussion_
                           line_number_offset
                         );
                         let line_number_offset$1 = $[0];
-                        let constant_elements = $[1];
+                        let state_elements = $[1];
                         let $1 = contract_members_view(
                           contract.name,
-                          "State Variables",
-                          interface_data.contract_variables,
+                          interface_data.contract_functions,
                           declarations,
                           discussion,
                           active_discussion,
                           discussion_context,
                           line_number_offset$1
                         );
-                        let line_number_offset$2 = $1[0];
-                        let state_elements = $1[1];
-                        let $2 = contract_members_view(
-                          contract.name,
-                          "Structs",
-                          interface_data.contract_structs,
-                          declarations,
-                          discussion,
-                          active_discussion,
-                          discussion_context,
-                          line_number_offset$2
-                        );
-                        let line_number_offset$3 = $2[0];
-                        let struct_elements = $2[1];
-                        let $3 = contract_members_view(
-                          contract.name,
-                          "Enums",
-                          interface_data.contract_enums,
-                          declarations,
-                          discussion,
-                          active_discussion,
-                          discussion_context,
-                          line_number_offset$3
-                        );
-                        let line_number_offset$4 = $3[0];
-                        let enum_elements = $3[1];
-                        let $4 = contract_members_view(
-                          contract.name,
-                          "Functions",
-                          interface_data.contract_functions,
-                          declarations,
-                          discussion,
-                          active_discussion,
-                          discussion_context,
-                          line_number_offset$4
-                        );
-                        let line_number_offset$5 = $4[0];
-                        let function_elements = $4[1];
-                        let $5 = contract_members_view(
-                          contract.name,
-                          "Modifiers",
-                          interface_data.contract_modifiers,
-                          declarations,
-                          discussion,
-                          active_discussion,
-                          discussion_context,
-                          line_number_offset$5
-                        );
-                        let modifier_elements = $5[1];
+                        let function_elements = $1[1];
                         return fragment2(
-                          toList([
-                            constant_elements,
-                            state_elements,
-                            struct_elements,
-                            enum_elements,
-                            function_elements,
-                            modifier_elements
-                          ])
+                          toList([state_elements, function_elements])
                         );
                       })()
                     ])
@@ -13531,10 +13412,6 @@ function view3(interface_data, audit_name, declarations, discussion, discussion_
   );
 }
 var empty_interface_data = /* @__PURE__ */ new InterfaceData(
-  /* @__PURE__ */ toList([]),
-  /* @__PURE__ */ toList([]),
-  /* @__PURE__ */ toList([]),
-  /* @__PURE__ */ toList([]),
   /* @__PURE__ */ toList([]),
   /* @__PURE__ */ toList([]),
   /* @__PURE__ */ toList([])
