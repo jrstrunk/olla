@@ -2,6 +2,7 @@ import gleam/dict
 import gleam/int
 import gleam/list
 import gleam/option
+import gleam/pair
 import gleam/string
 import lustre/attribute
 import lustre/element
@@ -19,8 +20,6 @@ pub type InterfaceData {
     contract_variables: List(preprocessor.Declaration),
     contract_structs: List(preprocessor.Declaration),
     contract_enums: List(preprocessor.Declaration),
-    contract_events: List(preprocessor.Declaration),
-    contract_errors: List(preprocessor.Declaration),
     contract_functions: List(preprocessor.Declaration),
     contract_modifiers: List(preprocessor.Declaration),
   )
@@ -32,8 +31,6 @@ pub const empty_interface_data = InterfaceData(
   contract_variables: [],
   contract_structs: [],
   contract_enums: [],
-  contract_events: [],
-  contract_errors: [],
   contract_functions: [],
   contract_modifiers: [],
 )
@@ -68,92 +65,93 @@ pub fn view(
         // List of contracts in file
         ..list.map(contract_file.contracts, fn(contract) {
           html.div([attribute.class("ml-[1rem]")], [
-            html.p([], [
-              html.a(
-                [attribute.href(preprocessor.declaration_to_link(contract))],
-                [html.text(contract.name)],
-              ),
-            ]),
-            // List of constants in contract
-            contract_members_view(
-              contract.name,
-              "Constants",
-              interface_data.contract_constants,
-              declarations,
-              discussion,
-              active_discussion,
-              discussion_context,
-            ),
-            // List of variables in contract
-            contract_members_view(
-              contract.name,
-              "State Variables",
-              interface_data.contract_variables,
-              declarations,
-              discussion,
-              active_discussion,
-              discussion_context,
-            ),
-            // List of structs in contract
-            contract_members_view(
-              contract.name,
-              "Structs",
-              interface_data.contract_structs,
-              declarations,
-              discussion,
-              active_discussion,
-              discussion_context,
-            ),
-            // List of enums in contract
-            contract_members_view(
-              contract.name,
-              "Enums",
-              interface_data.contract_enums,
-              declarations,
-              discussion,
-              active_discussion,
-              discussion_context,
-            ),
-            // List of events in contract
-            contract_members_view(
-              contract.name,
-              "Events",
-              interface_data.contract_events,
-              declarations,
-              discussion,
-              active_discussion,
-              discussion_context,
-            ),
-            // List of errors in contract
-            contract_members_view(
-              contract.name,
-              "Errors",
-              interface_data.contract_errors,
-              declarations,
-              discussion,
-              active_discussion,
-              discussion_context,
-            ),
-            // List of functions in contract
-            contract_members_view(
-              contract.name,
-              "Functions",
-              interface_data.contract_functions,
-              declarations,
-              discussion,
-              active_discussion,
-              discussion_context,
-            ),
-            // List of modifiers in contract
-            contract_members_view(
-              contract.name,
-              "Modifiers",
-              interface_data.contract_modifiers,
-              declarations,
-              discussion,
-              active_discussion,
-              discussion_context,
-            ),
+            html.p([], [html.text(contract.name)]),
+            {
+              let line_number_offset = 0
+
+              // List of constants in contract
+              let #(line_number_offset, constant_elements) =
+                contract_members_view(
+                  contract.name,
+                  "Constants",
+                  interface_data.contract_constants,
+                  declarations,
+                  discussion,
+                  active_discussion,
+                  discussion_context,
+                  line_number_offset:,
+                )
+              // List of variables in contract
+              let #(line_number_offset, state_elements) =
+                contract_members_view(
+                  contract.name,
+                  "State Variables",
+                  interface_data.contract_variables,
+                  declarations,
+                  discussion,
+                  active_discussion,
+                  discussion_context,
+                  line_number_offset:,
+                )
+              // List of structs in contract
+              let #(line_number_offset, struct_elements) =
+                contract_members_view(
+                  contract.name,
+                  "Structs",
+                  interface_data.contract_structs,
+                  declarations,
+                  discussion,
+                  active_discussion,
+                  discussion_context,
+                  line_number_offset:,
+                )
+
+              // List of enums in contract
+              let #(line_number_offset, enum_elements) =
+                contract_members_view(
+                  contract.name,
+                  "Enums",
+                  interface_data.contract_enums,
+                  declarations,
+                  discussion,
+                  active_discussion,
+                  discussion_context,
+                  line_number_offset:,
+                )
+              // List of functions in contract
+              let #(line_number_offset, function_elements) =
+                contract_members_view(
+                  contract.name,
+                  "Functions",
+                  interface_data.contract_functions,
+                  declarations,
+                  discussion,
+                  active_discussion,
+                  discussion_context,
+                  line_number_offset:,
+                )
+              // List of modifiers in contract
+              let #(_line_number_offset, modifier_elements) =
+                contract_members_view(
+                  contract.name,
+                  "Modifiers",
+                  interface_data.contract_modifiers,
+                  declarations,
+                  discussion,
+                  active_discussion,
+                  discussion_context,
+                  line_number_offset:,
+                )
+
+              element.fragment([
+                constant_elements,
+                state_elements,
+                struct_elements,
+                enum_elements,
+                function_elements,
+                modifier_elements,
+              ])
+            },
           ])
         })
       ])
@@ -169,37 +167,49 @@ fn contract_members_view(
   discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
   active_discussion active_discussion,
   discussion_context discussion_context,
+  line_number_offset line_number_offset,
 ) {
   let items =
     list.filter(declarations_of_type, fn(declaration) {
       option.unwrap(declaration.scope.contract, "") == contract
     })
 
-  case items {
+  let lines =
+    list.fold(items, 0, fn(acc, declaration) {
+      acc + list.length(declaration.signature)
+    })
+
+  let elements = case items {
     [] -> element.fragment([])
     items ->
       html.div([attribute.class("ml-[1rem] mb-[1.5rem]")], [
         html.p([], [html.text(title)]),
-        ..list.map(items, fn(declaration) {
-          html.p([attribute.class("ml-[1rem] mb-[1rem] leading-[1.1875rem]")], [
-            html.a(
-              [attribute.href(preprocessor.declaration_to_link(declaration))],
-              discussion.topic_signature_view(
-                view_id:,
-                signature: declaration.signature,
-                declarations:,
-                discussion:,
-                suppress_declaration: False,
-                // TODO: accumulate this value somehow for keyboard nav
-                line_number_offset: 0,
-                active_discussion:,
-                discussion_context:,
-              ),
-            ),
-          ])
-        })
+        ..list.map_fold(
+          items,
+          line_number_offset,
+          fn(line_number_offset, declaration) {
+            let el =
+              html.p(
+                [attribute.class("ml-[1rem] mb-[1rem] leading-[1.1875rem]")],
+                discussion.topic_signature_view(
+                  view_id:,
+                  signature: declaration.signature,
+                  declarations:,
+                  discussion:,
+                  suppress_declaration: False,
+                  line_number_offset:,
+                  active_discussion:,
+                  discussion_context:,
+                ),
+              )
+            #(line_number_offset + list.length(declaration.signature), el)
+          },
+        )
+        |> pair.second
       ])
   }
+
+  #(line_number_offset + lines, elements)
 }
 
 pub fn gather_interface_data(
@@ -279,22 +289,6 @@ pub fn gather_interface_data(
       }
     })
 
-  let contract_events =
-    list.filter_map(contract_member_declarations_in_scope, fn(declaration) {
-      case declaration.dec.kind {
-        preprocessor.EventDeclaration -> Ok(declaration.dec)
-        _ -> Error(Nil)
-      }
-    })
-
-  let contract_errors =
-    list.filter_map(contract_member_declarations_in_scope, fn(declaration) {
-      case declaration.dec.kind {
-        preprocessor.ErrorDeclaration -> Ok(declaration.dec)
-        _ -> Error(Nil)
-      }
-    })
-
   let contract_functions =
     list.filter_map(contract_member_declarations_in_scope, fn(declaration) {
       case declaration.dec.kind {
@@ -317,8 +311,6 @@ pub fn gather_interface_data(
     contract_variables:,
     contract_structs:,
     contract_enums:,
-    contract_events:,
-    contract_errors:,
     contract_functions:,
     contract_modifiers:,
   )

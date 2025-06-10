@@ -393,7 +393,7 @@ pub fn topic_signature_view(
               let rendered_node =
                 node_with_discussion_view(
                   topic_id:,
-                  tokens:,
+                  tokens:, 
                   discussion:,
                   declarations:,
                   discussion_id: DiscussionId(
