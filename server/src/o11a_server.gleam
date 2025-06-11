@@ -146,7 +146,6 @@ fn handle_wisp_request(req, context: Context) {
     }
 
     ["merge-topics", audit_name, current_topic_id, new_topic_id] -> {
-      use <- wisp.require_method(req, http.Post)
       case
         audit_data.add_topic_merge(
           context.audit_data,

@@ -1013,6 +1013,7 @@ pub fn overlay_view(
         True -> attribute.class("top-[1.75rem]")
         False -> attribute.class("bottom-[1.75rem]")
       },
+      attribute.attribute("data-topic_id", model.topic_id),
     ],
     [
       case model.is_reference && !model.show_reference_discussion {
