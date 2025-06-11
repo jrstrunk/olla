@@ -18,7 +18,7 @@ pub fn get_prod_config() {
 }
 
 pub fn get_dev_config() {
-  Config(port: 8401, env: Dev)
+  Config(port: 8400, env: Dev)
 }
 
 // Gets the full path to the priv, plus the provided local path

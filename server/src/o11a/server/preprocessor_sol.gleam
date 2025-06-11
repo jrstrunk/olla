@@ -3079,8 +3079,9 @@ fn node_decoder() -> decode.Decoder(Node) {
       use parameters <- decode.field("parameters", node_decoder())
       use modifiers <- decode.field("modifiers", decode.list(node_decoder()))
       use return_parameters <- decode.field("returnParameters", node_decoder())
-      use base_functions <- decode.field(
+      use base_functions <- decode.optional_field(
         "baseFunctions",
+        [],
         decode.list(decode.int),
       )
       use visibility <- decode.field("visibility", decode.string)

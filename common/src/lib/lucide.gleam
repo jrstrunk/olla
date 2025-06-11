@@ -224,3 +224,31 @@ pub fn square_arrow_out_up_right(attributes: List(Attribute(a))) {
     ],
   )
 }
+
+pub fn copy(attributes) {
+  svg.svg(
+    [
+      attribute("width", "24"),
+      attribute("height", "24"),
+      attribute("viewBox", "0 0 24 24"),
+      attribute("fill", "none"),
+      attribute("stroke", "currentColor"),
+      attribute("stroke-width", "2"),
+      attribute("stroke-linecap", "round"),
+      attribute("stroke-linejoin", "round"),
+      attribute("class", "lucide lucide-copy-icon lucide-copy"),
+      ..attributes
+    ],
+    [
+      svg.rect([
+        attribute("width", "14"),
+        attribute("height", "14"),
+        attribute("x", "8"),
+        attribute("y", "8"),
+        attribute("rx", "2"),
+        attribute("ry", "2"),
+      ]),
+      svg.path([attribute("d", "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2")]),
+    ]
+  )
+}

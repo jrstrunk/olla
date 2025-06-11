@@ -323,10 +323,10 @@ fn serve_css(style_sheet_name, config: config.Config) {
     case config.env {
       config.Prod ->
         resp
-        |> response.set_header(
-          "cache-control",
-          "max-age=604800, must-revalidate",
-        )
+        // |> response.set_header(
+          // "cache-control",
+          // "max-age=604800, must-revalidate",
+        // )
       config.Dev -> resp
     }
   }
@@ -343,10 +343,10 @@ fn serve_js(js_file_name, config: config.Config) {
     case config.env {
       config.Prod ->
         resp
-        |> response.set_header(
-          "cache-control",
-          "max-age=604800, must-revalidate",
-        )
+        // |> response.set_header(
+          // "cache-control",
+          // "max-age=604800, must-revalidate",
+        // )
       config.Dev -> resp
     }
   }
@@ -363,10 +363,10 @@ fn serve_favicon(config: config.Config) {
     case config.env {
       config.Prod ->
         resp
-        |> response.set_header(
-          "cache-control",
-          "max-age=604800, must-revalidate",
-        )
+        // |> response.set_header(
+        //   "cache-control",
+        //   "max-age=604800, must-revalidate",
+        // )
       config.Dev -> resp
     }
   }
@@ -384,10 +384,10 @@ pub fn serve_lustre_server_component(config: config.Config) {
     case config.env {
       config.Prod ->
         resp
-        |> response.set_header(
-          "cache-control",
-          "max-age=604800, must-revalidate",
-        )
+        // |> response.set_header(
+        //   "cache-control",
+        //   "max-age=604800, must-revalidate",
+        // )
       config.Dev -> resp
     }
   }

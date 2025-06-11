@@ -789,6 +789,7 @@ pub type DiscussionOverlayMsg {
   UserEditedNote(Result(computed_note.ComputedNote, Nil))
   UserCancelledEdit
   UserToggledReferenceDiscussion
+  UserCopiedDeclarationId(String)
 }
 
 pub type DiscussionOverlayEffect {
@@ -797,6 +798,7 @@ pub type DiscussionOverlayEffect {
   FocusExpandedDiscussionInput(discussion_id: DiscussionId)
   UnfocusDiscussionInput(discussion_id: DiscussionId)
   MaximizeDiscussion(discussion_id: DiscussionId)
+  CopyDeclarationId(declaration_id: String)
   None
 }
 
@@ -975,6 +977,10 @@ pub fn update(model: DiscussionOverlayModel, msg: DiscussionOverlayMsg) {
       ),
       None,
     )
+    UserCopiedDeclarationId(declaration_id) -> #(
+      model,
+      CopyDeclarationId(declaration_id),
+    )
   }
 }
 
@@ -1104,6 +1110,9 @@ fn reference_header_view(
   discussion_context discussion_context,
   notes notes,
 ) -> element.Element(DiscussionControllerMsg) {
+  let declaration =
+    dict.get(declarations, model.topic_id)
+    |> result.unwrap(preprocessor.unknown_declaration)
   element.fragment([
     html.div(
       [
@@ -1121,14 +1130,28 @@ fn reference_header_view(
             discussion_context:,
           ),
         ]),
-        html.button(
-          [
-            event.on_click(UserToggledReferenceDiscussion),
-            attribute.class("icon-button p-[.3rem]"),
-          ],
-          [lucide.messages_square([])],
-        )
-          |> element.map(map_discussion_overlay_msg(_, model)),
+        html.div([], [
+          html.button(
+            [
+              event.on_click(
+                UserCopiedDeclarationId(
+                  preprocessor.declaration_to_qualified_name(declaration),
+                ),
+              ),
+              attribute.class("icon-button p-[.3rem]"),
+            ],
+            [lucide.copy([])],
+          )
+            |> element.map(map_discussion_overlay_msg(_, model)),
+          html.button(
+            [
+              event.on_click(UserToggledReferenceDiscussion),
+              attribute.class("icon-button p-[.3rem]"),
+            ],
+            [lucide.messages_square([])],
+          )
+            |> element.map(map_discussion_overlay_msg(_, model)),
+        ]),
       ],
     ),
     html.div(
@@ -1227,6 +1250,18 @@ fn thread_header_view(
 
                 False -> element.fragment([])
               },
+              html.button(
+                [
+                  event.on_click(
+                    UserCopiedDeclarationId(
+                      preprocessor.declaration_to_qualified_name(declaration),
+                    ),
+                  ),
+                  attribute.class("icon-button p-[.3rem]"),
+                ],
+                [lucide.copy([])],
+              )
+                |> element.map(map_discussion_overlay_msg(_, model)),
               html.button(
                 [
                   event.on_click(UserMaximizeThread),

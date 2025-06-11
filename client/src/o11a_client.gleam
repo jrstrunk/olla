@@ -1,4 +1,5 @@
 import gleam/dict
+import plinth/browser/clipboard
 import gleam/dynamic/decode
 import gleam/int
 import gleam/io
@@ -884,6 +885,14 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
                 effect.none(),
               )
             }
+
+            discussion.CopyDeclarationId(declaration_id) -> #(
+              model,
+              effect.from(fn(_dispatch) {
+                clipboard.write_text(declaration_id)
+                Nil
+              }),
+            )
 
             discussion.None -> #(
               Model(
