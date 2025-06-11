@@ -320,12 +320,11 @@ fn serve_css(style_sheet_name, config: config.Config) {
   |> response.set_body(css)
   |> fn(resp) {
     case config.env {
-      config.Prod ->
-        resp
-        // |> response.set_header(
-          // "cache-control",
-          // "max-age=604800, must-revalidate",
-        // )
+      config.Prod -> resp
+      // |> response.set_header(
+      // "cache-control",
+      // "max-age=604800, must-revalidate",
+      // )
       config.Dev -> resp
     }
   }
@@ -340,12 +339,11 @@ fn serve_js(js_file_name, config: config.Config) {
   |> response.set_body(js)
   |> fn(resp) {
     case config.env {
-      config.Prod ->
-        resp
-        // |> response.set_header(
-          // "cache-control",
-          // "max-age=604800, must-revalidate",
-        // )
+      config.Prod -> resp
+      // |> response.set_header(
+      // "cache-control",
+      // "max-age=604800, must-revalidate",
+      // )
       config.Dev -> resp
     }
   }
@@ -360,12 +358,11 @@ fn serve_favicon(config: config.Config) {
   |> response.set_body(favicon)
   |> fn(resp) {
     case config.env {
-      config.Prod ->
-        resp
-        // |> response.set_header(
-        //   "cache-control",
-        //   "max-age=604800, must-revalidate",
-        // )
+      config.Prod -> resp
+      // |> response.set_header(
+      //   "cache-control",
+      //   "max-age=604800, must-revalidate",
+      // )
       config.Dev -> resp
     }
   }
@@ -381,12 +378,11 @@ pub fn serve_lustre_server_component(config: config.Config) {
   |> response.set_body(file)
   |> fn(resp) {
     case config.env {
-      config.Prod ->
-        resp
-        // |> response.set_header(
-        //   "cache-control",
-        //   "max-age=604800, must-revalidate",
-        // )
+      config.Prod -> resp
+      // |> response.set_header(
+      //   "cache-control",
+      //   "max-age=604800, must-revalidate",
+      // )
       config.Dev -> resp
     }
   }

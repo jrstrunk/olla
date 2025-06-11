@@ -1,5 +1,4 @@
 import gleam/dict
-import plinth/browser/clipboard
 import gleam/dynamic/decode
 import gleam/int
 import gleam/io
@@ -31,6 +30,7 @@ import o11a/ui/audit_page
 import o11a/ui/audit_page_dashboard
 import o11a/ui/audit_tree
 import o11a/ui/discussion
+import plinth/browser/clipboard
 import plinth/browser/element as browser_element
 import plinth/browser/event as browser_event
 import plinth/browser/window
@@ -892,6 +892,11 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
                 clipboard.write_text(declaration_id)
                 Nil
               }),
+            )
+
+            discussion.NavigateToDeclaration(path:, fragment:) -> #(
+              model,
+              modem.push("/" <> path, option.None, option.Some(fragment)),
             )
 
             discussion.None -> #(

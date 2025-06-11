@@ -790,6 +790,7 @@ pub type DiscussionOverlayMsg {
   UserCancelledEdit
   UserToggledReferenceDiscussion
   UserCopiedDeclarationId(String)
+  UserNavigatedToDeclaration(path: String, fragment: String)
 }
 
 pub type DiscussionOverlayEffect {
@@ -799,6 +800,7 @@ pub type DiscussionOverlayEffect {
   UnfocusDiscussionInput(discussion_id: DiscussionId)
   MaximizeDiscussion(discussion_id: DiscussionId)
   CopyDeclarationId(declaration_id: String)
+  NavigateToDeclaration(path: String, fragment: String)
   None
 }
 
@@ -981,6 +983,10 @@ pub fn update(model: DiscussionOverlayModel, msg: DiscussionOverlayMsg) {
       model,
       CopyDeclarationId(declaration_id),
     )
+    UserNavigatedToDeclaration(path, fragment) -> #(
+      model,
+      NavigateToDeclaration(path, fragment),
+    )
   }
 }
 
@@ -1146,6 +1152,19 @@ fn reference_header_view(
             |> element.map(map_discussion_overlay_msg(_, model)),
           html.button(
             [
+              event.on_click(UserNavigatedToDeclaration(
+                path: declaration.scope.file,
+                fragment: preprocessor.declaration_to_qualified_name(
+                  declaration,
+                ),
+              )),
+              attribute.class("icon-button p-[.3rem]"),
+            ],
+            [lucide.square_arrow_right([])],
+          )
+            |> element.map(map_discussion_overlay_msg(_, model)),
+          html.button(
+            [
               event.on_click(UserToggledReferenceDiscussion),
               attribute.class("icon-button p-[.3rem]"),
             ],
@@ -1261,6 +1280,19 @@ fn thread_header_view(
                   attribute.class("icon-button p-[.3rem]"),
                 ],
                 [lucide.copy([])],
+              )
+                |> element.map(map_discussion_overlay_msg(_, model)),
+              html.button(
+                [
+                  event.on_click(UserNavigatedToDeclaration(
+                    path: declaration.scope.file,
+                    fragment: preprocessor.declaration_to_qualified_name(
+                      declaration,
+                    ),
+                  )),
+                  attribute.class("icon-button p-[.3rem]"),
+                ],
+                [lucide.square_arrow_right([])],
               )
                 |> element.map(map_discussion_overlay_msg(_, model)),
               html.button(

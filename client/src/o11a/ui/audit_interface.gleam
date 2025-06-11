@@ -86,11 +86,12 @@ pub fn view(
             },
           )
 
-        let elements = html.div([attribute.class("mt-[1rem]")], [
-          html.p([], [html.text(contract_file.file_name)]),
-          // List of contracts in file
-          ..contracts
-        ])
+        let elements =
+          html.div([attribute.class("mt-[1rem]")], [
+            html.p([], [html.text(contract_file.file_name)]),
+            // List of contracts in file
+            ..contracts
+          ])
 
         #(line_number_offset, elements)
       },

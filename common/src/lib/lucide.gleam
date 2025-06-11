@@ -248,7 +248,43 @@ pub fn copy(attributes) {
         attribute("rx", "2"),
         attribute("ry", "2"),
       ]),
-      svg.path([attribute("d", "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2")]),
-    ]
+      svg.path([
+        attribute(
+          "d",
+          "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2",
+        ),
+      ]),
+    ],
+  )
+}
+
+pub fn square_arrow_right(attributes) {
+  svg.svg(
+    [
+      attribute("width", "24"),
+      attribute("height", "24"),
+      attribute("viewBox", "0 0 24 24"),
+      attribute("fill", "none"),
+      attribute("stroke", "currentColor"),
+      attribute("stroke-width", "2"),
+      attribute("stroke-linecap", "round"),
+      attribute("stroke-linejoin", "round"),
+      attribute(
+        "class",
+        "lucide lucide-square-arrow-right-icon lucide-square-arrow-right",
+      ),
+      ..attributes
+    ],
+    [
+      svg.rect([
+        attribute("width", "18"),
+        attribute("height", "18"),
+        attribute("x", "3"),
+        attribute("y", "3"),
+        attribute("rx", "2"),
+      ]),
+      svg.path([attribute("d", "M8 8h8v8")]),
+      svg.path([attribute("d", "m8 16 8-8")]),
+    ],
   )
 }
