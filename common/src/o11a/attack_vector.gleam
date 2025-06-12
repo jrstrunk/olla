@@ -25,7 +25,7 @@ pub fn attack_vector_to_declaration(attack_vector: AttackVector, audit_name) {
   preprocessor.TextDeclaration(
     topic_id: attack_vector.topic_id,
     name: attack_vector.topic_id,
-    signature: attack_vector.title,
+    signature: "Attack Vector: " <> attack_vector.title,
     scope: preprocessor.Scope(
       file: audit_name <> "/dashboard",
       contract: option.None,

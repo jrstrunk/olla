@@ -9,6 +9,7 @@ import lustre/element
 import lustre/element/html
 import o11a/attack_vector
 import o11a/computed_note
+import o11a/ui/discussion
 
 const style = "
 .dashboard-link {
@@ -21,13 +22,24 @@ const style = "
 }
 "
 
-pub fn view(attack_vectors: List(attack_vector.AttackVector), notes, audit_name) {
+const view_id = "audit-dashboard"
+
+pub fn view(
+  audit_name audit_name,
+  attack_vectors attack_vectors: List(attack_vector.AttackVector),
+  discussion discussion,
+  declarations declarations,
+  discussion_context discussion_context,
+) {
+  let active_discussion =
+    discussion.get_active_discussion_reference(view_id, discussion_context)
+
   let #(
     incomplete_todos,
     unanswered_questions,
     unconfirmed_findings,
     confirmed_findings,
-  ) = find_open_notes(notes, for: None)
+  ) = find_open_notes(discussion, for: None)
 
   html.div([attribute.style("margin-left", "2rem")], [
     html.style([], style),
@@ -37,8 +49,24 @@ pub fn view(attack_vectors: List(attack_vector.AttackVector), notes, audit_name)
       ]),
       html.h2([], [html.text("Attack Vectors")]),
       element.fragment(
-        list.map(attack_vectors, fn(attack_vector) {
-          html.p([], [html.text(attack_vector.title)])
+        list.index_map(attack_vectors, fn(attack_vector, index) {
+          html.p([attribute.class("loc flex")], [
+            discussion.node_with_discussion_view(
+              topic_id: attack_vector.topic_id,
+              tokens: attack_vector.topic_id,
+              discussion:,
+              declarations:,
+              discussion_id: discussion.DiscussionId(
+                view_id:,
+                line_number: index,
+                column_number: 0,
+              ),
+              active_discussion:,
+              discussion_context:,
+              node_view_kind: discussion.DeclarationView,
+            ),
+            html.text(" - " <> attack_vector.title),
+          ])
         }),
       ),
       html.h2([], [html.text("Incomplete todos")]),

@@ -13,6 +13,7 @@ import gleam/list
 import gleam/option.{None}
 import gleam/result
 import gleam/string_tree
+import gleam/uri
 import lib/server_componentx
 import lustre/attribute
 import lustre/element
@@ -173,14 +174,26 @@ fn handle_wisp_request(req, context: Context) {
     }
 
     ["add-attack-vector", audit_name, title] -> {
-      case audit_data.add_attack_vector(context.audit_data, audit_name, title) {
-        Ok(..) -> wisp.response(201)
-        Error(e) ->
+      case uri.percent_decode(title) {
+        Ok(title) ->
+          case
+            audit_data.add_attack_vector(context.audit_data, audit_name, title)
+          {
+            Ok(..) -> wisp.response(201)
+            Error(e) ->
+              wisp.json_response(
+                json.object([#("error", json.string(snag.line_print(e)))])
+                  |> json.to_string_tree,
+                500,
+              )
+          }
+        Error(Nil) -> {
           wisp.json_response(
-            json.object([#("error", json.string(snag.line_print(e)))])
+            json.object([#("error", json.string("Unable to decode title"))])
               |> json.to_string_tree,
             500,
           )
+        }
       }
     }
 
