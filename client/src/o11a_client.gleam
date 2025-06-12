@@ -484,6 +484,42 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
             audit_name,
             attack_vectors,
           ),
+          audit_declarations: dict.upsert(
+            model.audit_declarations,
+            audit_name,
+            fn(declarations) {
+              case declarations, attack_vectors {
+                option.Some(Ok(declarations)), Ok(attack_vectors) ->
+                  list.fold(
+                    attack_vectors,
+                    declarations,
+                    fn(declarations, attack_vector) {
+                      dict.insert(
+                        declarations,
+                        attack_vector.topic_id,
+                        attack_vector.attack_vector_to_declaration(
+                          attack_vector,
+                          audit_name,
+                        ),
+                      )
+                    },
+                  )
+                option.None, Ok(attack_vectors) ->
+                  list.map(attack_vectors, fn(attack_vector) {
+                    #(
+                      attack_vector.topic_id,
+                      attack_vector.attack_vector_to_declaration(
+                        attack_vector,
+                        audit_name,
+                      ),
+                    )
+                  })
+                  |> dict.from_list
+                _, _ -> dict.new()
+              }
+              |> Ok
+            },
+          ),
         ),
         effect.none(),
       )

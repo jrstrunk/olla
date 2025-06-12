@@ -511,7 +511,7 @@ fn build_attack_vectors_provider() {
       build_val: fn(title, record_count) {
         attack_vector.AttackVector(
           title:,
-          topic_id: "V" <> int.to_string(record_count),
+          topic_id: "AV" <> int.to_string(record_count),
         )
       },
       example: attack_vector.AttackVector(title: "Hi", topic_id: "Ex"),
