@@ -26,6 +26,7 @@ pub fn app() -> lustre.App(
 pub type Msg {
   ServerUpdatedDiscussion
   ServerUpdatedTopics
+  ServerUpdatedAttackVectors
 }
 
 pub type Model {
@@ -56,11 +57,22 @@ pub fn init(
       Nil
     })
 
+  let subscribe_to_attack_vectors_updates_effect =
+    effect.from(fn(dispatch) {
+      let Nil =
+        audit_data.subscribe_to_attack_vectors_updates(audit_data, fn() {
+          dispatch(ServerUpdatedAttackVectors)
+        })
+
+      Nil
+    })
+
   #(
     Model(discussion:),
     effect.batch([
       subscribe_to_note_updates_effect,
       subscribe_to_topic_updates_effect,
+      subscribe_to_attack_vectors_updates_effect,
     ]),
   )
 }
@@ -85,6 +97,18 @@ pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         model,
         server_component.emit(
           events.server_updated_topics,
+          json.object([
+            #("audit_name", json.string(model.discussion.audit_name)),
+          ]),
+        ),
+      )
+    }
+    ServerUpdatedAttackVectors -> {
+      echo "Emitting server updated attack vectors"
+      #(
+        model,
+        server_component.emit(
+          events.server_updated_attack_vectors,
           json.object([
             #("audit_name", json.string(model.discussion.audit_name)),
           ]),

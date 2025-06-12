@@ -103,16 +103,21 @@ pub fn get_combined_declaration(
           let #(existing_decl, updated_topic_ids) = decl_acc
           let #(next_topic_id, next_declaration) = next_decl
 
-          #(
-            preprocessor.Declaration(
-              ..next_declaration,
-              references: list.append(
-                next_declaration.references,
-                existing_decl.references,
+          case existing_decl, next_declaration {
+            preprocessor.SourceDeclaration(..),
+              preprocessor.SourceDeclaration(..)
+            -> #(
+              preprocessor.SourceDeclaration(
+                ..next_declaration,
+                references: list.append(
+                  next_declaration.references,
+                  existing_decl.references,
+                ),
               ),
-            ),
-            [next_topic_id, ..updated_topic_ids],
-          )
+              [next_topic_id, ..updated_topic_ids],
+            )
+            _, _ -> decl_acc
+          }
         },
       )
       |> Ok

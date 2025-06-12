@@ -74,8 +74,7 @@ pub fn enumerate_declarations(declarations, in ast: AST) {
           dict.insert(
             declarations,
             id,
-            preprocessor.Declaration(
-              id:,
+            preprocessor.TextDeclaration(
               topic_id: preprocessor.node_id_to_topic_id(id, preprocessor.Text),
               name: "L" <> line_number_text,
               scope: preprocessor.Scope(
@@ -83,25 +82,9 @@ pub fn enumerate_declarations(declarations, in ast: AST) {
                 contract: option.None,
                 member: option.None,
               ),
-              signature: [
-                preprocessor.PreProcessedSnippetLine(
-                  significance: preprocessor.EmptyLine,
-                  leading_spaces: 0,
-                  elements: [
-                    preprocessor.PreProcessedNode(
-                      element: filepath.base_name(page_path)
-                      <> "#L"
-                      <> line_number_text,
-                    ),
-                  ],
-                  kind: preprocessor.TextLine,
-                ),
-              ],
-              kind: preprocessor.LineDeclaration,
-              source_map: preprocessor.SourceMap(-1, -1),
-              references: [],
-              calls: [],
-              errors: [],
+              signature: filepath.base_name(page_path)
+                <> "#L"
+                <> line_number_text,
             ),
           ),
         )

@@ -101,7 +101,7 @@ pub fn preprocess_source(
           new_max_topic_id,
           preprocessor.SingleDeclarationLine(topic_id: line_topic_id),
           [
-            preprocessor.Declaration(
+            preprocessor.SourceDeclaration(
               id: new_max_topic_id,
               topic_id: line_topic_id,
               name: "L" <> line_number_text,
@@ -144,7 +144,7 @@ pub fn preprocess_source(
             preprocessor.Solidity,
           )),
           [
-            preprocessor.Declaration(
+            preprocessor.SourceDeclaration(
               id: new_max_topic_id,
               topic_id: preprocessor.node_id_to_topic_id(
                 new_max_topic_id,
@@ -847,7 +847,7 @@ fn do_enumerate_node_declarations(
         dict.insert(
           declarations,
           topic_id,
-          preprocessor.Declaration(
+          preprocessor.SourceDeclaration(
             id:,
             topic_id:,
             name:,
@@ -897,7 +897,7 @@ fn do_enumerate_node_declarations(
         dict.insert(
           declarations,
           topic_id,
-          preprocessor.Declaration(
+          preprocessor.SourceDeclaration(
             id:,
             topic_id:,
             name:,
@@ -948,7 +948,7 @@ fn do_enumerate_node_declarations(
         dict.insert(
           declarations,
           topic_id,
-          preprocessor.Declaration(
+          preprocessor.SourceDeclaration(
             id:,
             topic_id:,
             name:,
@@ -995,7 +995,7 @@ fn do_enumerate_node_declarations(
         dict.insert(
           declarations,
           topic_id,
-          preprocessor.Declaration(
+          preprocessor.SourceDeclaration(
             id:,
             topic_id:,
             name:,
@@ -1030,7 +1030,7 @@ fn do_enumerate_node_declarations(
         dict.insert(
           declarations,
           topic_id,
-          preprocessor.Declaration(
+          preprocessor.SourceDeclaration(
             id:,
             topic_id:,
             name:,
@@ -1062,7 +1062,7 @@ fn do_enumerate_node_declarations(
         dict.insert(
           declarations,
           topic_id,
-          preprocessor.Declaration(
+          preprocessor.SourceDeclaration(
             id:,
             topic_id:,
             name:,
@@ -1134,7 +1134,7 @@ fn do_enumerate_node_declarations(
         dict.insert(
           declarations,
           topic_id,
-          preprocessor.Declaration(
+          preprocessor.SourceDeclaration(
             id:,
             topic_id:,
             name:,
@@ -1167,7 +1167,7 @@ fn do_enumerate_node_declarations(
         dict.insert(
           declarations,
           topic_id,
-          preprocessor.Declaration(
+          preprocessor.SourceDeclaration(
             id:,
             topic_id:,
             name:,
@@ -1197,7 +1197,7 @@ fn do_enumerate_node_declarations(
         dict.insert(
           declarations,
           topic_id,
-          preprocessor.Declaration(
+          preprocessor.SourceDeclaration(
             id:,
             topic_id:,
             name:,
@@ -1826,13 +1826,13 @@ fn add_reference(
     preprocessor.node_id_to_topic_id(declaration_id, preprocessor.Solidity),
     with: fn(dec) {
       case dec {
-        Some(node_declaration) ->
-          preprocessor.Declaration(..node_declaration, references: [
+        Some(preprocessor.SourceDeclaration(..) as node_declaration) ->
+          preprocessor.SourceDeclaration(..node_declaration, references: [
             reference,
             ..node_declaration.references
           ])
 
-        option.None -> {
+        _ -> {
           io.println(
             "No declaration for "
             <> int.to_string(declaration_id)
@@ -1867,16 +1867,18 @@ pub fn enumerate_errors(
   declarations: dict.Dict(String, preprocessor.Declaration),
 ) {
   list.fold(dict.values(declarations), declarations, fn(declarations, dec) {
-    let all_errors = case dec.calls {
-      [] -> dec.errors
-      calls -> {
-        list.fold(calls, dec.errors, fn(errors, call) {
+    let all_errors = case dec {
+      preprocessor.SourceDeclaration(calls: [_, ..] as calls, errors:, ..) -> {
+        list.fold(calls, errors, fn(errors, call) {
           case dict.get(declarations, call) {
-            Ok(dec) -> list.append(dec.errors, errors)
-            Error(Nil) -> errors
+            Ok(preprocessor.SourceDeclaration(errors: new_errors, ..)) ->
+              list.append(new_errors, errors)
+            _ -> errors
           }
         })
       }
+      preprocessor.SourceDeclaration(calls: [], errors:, ..) -> errors
+      _ -> []
     }
 
     case all_errors {
@@ -1906,15 +1908,15 @@ pub fn enumerate_errors(
           ]
           |> split_lines(indent_num: 0)
 
-        dict.insert(
-          declarations,
-          dec.topic_id,
-          preprocessor.Declaration(
-            ..dec,
-            errors: all_errors,
-            signature: dec.signature |> list.append(error_signature),
-          ),
-        )
+        dict.insert(declarations, dec.topic_id, case dec {
+          preprocessor.SourceDeclaration(..) ->
+            preprocessor.SourceDeclaration(
+              ..dec,
+              errors: all_errors,
+              signature: dec.signature |> list.append(error_signature),
+            )
+          _ -> dec
+        })
       }
     }
   })

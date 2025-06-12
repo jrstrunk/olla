@@ -18,6 +18,7 @@ import lustre/attribute
 import lustre/element
 import lustre/element/html
 import mist
+import o11a/attack_vector
 import o11a/config
 import o11a/discussion_topic
 import o11a/note
@@ -155,6 +156,25 @@ fn handle_wisp_request(req, context: Context) {
         )
       {
         Ok(Nil) -> wisp.response(201)
+        Error(e) ->
+          wisp.json_response(
+            json.object([#("error", json.string(snag.line_print(e)))])
+              |> json.to_string_tree,
+            500,
+          )
+      }
+    }
+
+    ["audit-attack-vectors", audit_name] -> {
+      audit_data.get_attack_vectors(context.audit_data, for: audit_name)
+      |> json.array(attack_vector.attack_vector_to_json)
+      |> json.to_string_tree
+      |> wisp.json_response(200)
+    }
+
+    ["add-attack-vector", audit_name, title] -> {
+      case audit_data.add_attack_vector(context.audit_data, audit_name, title) {
+        Ok(..) -> wisp.response(201)
         Error(e) ->
           wisp.json_response(
             json.object([#("error", json.string(snag.line_print(e)))])

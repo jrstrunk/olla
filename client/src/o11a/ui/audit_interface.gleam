@@ -2,6 +2,7 @@ import gleam/dict
 import gleam/int
 import gleam/list
 import gleam/option
+import gleam/order
 import gleam/string
 import lustre/attribute
 import lustre/element
@@ -126,12 +127,12 @@ fn contract_members_view(
       items,
       line_number_offset,
       fn(line_number_offset, declaration) {
-        let el =
-          html.p(
-            [attribute.class("ml-[1rem] mb-[1rem] leading-[1.1875rem]")],
+        let #(lines, signature) = case declaration {
+          preprocessor.SourceDeclaration(signature:, ..) -> #(
+            list.length(signature),
             discussion.topic_signature_view(
               view_id:,
-              signature: declaration.signature,
+              signature:,
               declarations:,
               discussion:,
               suppress_declaration: False,
@@ -140,7 +141,18 @@ fn contract_members_view(
               discussion_context:,
             ),
           )
-        #(line_number_offset + list.length(declaration.signature), el)
+          preprocessor.TextDeclaration(signature:, ..) -> #(0, [
+            html.span([], [html.text(signature)]),
+          ])
+        }
+
+        #(
+          line_number_offset + lines,
+          html.p(
+            [attribute.class("ml-[1rem] mb-[1rem] leading-[1.1875rem]")],
+            signature,
+          ),
+        )
       },
     )
 
@@ -173,14 +185,32 @@ pub fn gather_interface_data(
       }
     })
     |> list.sort(by: fn(a, b) {
-      int.compare(a.dec.source_map.start, b.dec.source_map.start)
+      case a.dec, b.dec {
+        preprocessor.SourceDeclaration(
+          source_map: a_source_map,
+          ..,
+        ),
+          preprocessor.SourceDeclaration(
+            source_map: b_source_map,
+            ..,
+          )
+        -> int.compare(a_source_map.start, b_source_map.start)
+
+        preprocessor.SourceDeclaration(..), preprocessor.TextDeclaration(..) ->
+          order.Lt
+
+        _, _ -> order.Gt
+      }
     })
 
   let file_contracts =
     declarations_in_scope
     |> list.filter(fn(declaration) {
-      case declaration.kind {
-        preprocessor.ContractDeclaration(..) -> True
+      case declaration {
+        preprocessor.SourceDeclaration(
+          kind: preprocessor.ContractDeclaration(..),
+          ..,
+        ) -> True
         _ -> False
       }
     })
@@ -194,16 +224,22 @@ pub fn gather_interface_data(
 
   let contract_variables =
     list.filter_map(contract_member_declarations_in_scope, fn(declaration) {
-      case declaration.dec.kind {
-        preprocessor.VariableDeclaration -> Ok(declaration.dec)
+      case declaration.dec {
+        preprocessor.SourceDeclaration(
+          kind: preprocessor.VariableDeclaration,
+          ..,
+        ) -> Ok(declaration.dec)
         _ -> Error(Nil)
       }
     })
 
   let contract_functions =
     list.filter_map(contract_member_declarations_in_scope, fn(declaration) {
-      case declaration.dec.kind {
-        preprocessor.FunctionDeclaration(..) -> Ok(declaration.dec)
+      case declaration.dec {
+        preprocessor.SourceDeclaration(
+          kind: preprocessor.FunctionDeclaration(..),
+          ..,
+        ) -> Ok(declaration.dec)
         _ -> Error(Nil)
       }
     })

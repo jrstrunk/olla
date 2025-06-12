@@ -15,6 +15,7 @@ import lustre/element/html
 import lustre/event
 import lustre/server_component
 import modem
+import o11a/attack_vector
 import o11a/audit_metadata
 import o11a/client/page_navigation
 import o11a/client/selectors
@@ -71,6 +72,10 @@ pub type Model {
       String,
       Result(dict.Dict(String, String), rsvp.Error),
     ),
+    attack_vectors: dict.Dict(
+      String,
+      Result(List(attack_vector.AttackVector), rsvp.Error),
+    ),
     discussions: dict.Dict(
       String,
       dict.Dict(String, List(computed_note.ComputedNote)),
@@ -109,6 +114,7 @@ fn init(_) -> #(Model, effect.Effect(Msg)) {
       audit_declarations: dict.new(),
       audit_declaration_lists: dict.new(),
       merged_topics: dict.new(),
+      attack_vectors: dict.new(),
       discussions: dict.new(),
       discussion_models: dict.new(),
       audit_interface: dict.new(),
@@ -240,12 +246,17 @@ pub type Msg {
     audit_name: String,
     merged_topics: Result(List(#(String, String)), rsvp.Error),
   )
+  ClientFetchedAttackVectors(
+    audit_name: String,
+    attack_vectors: Result(List(attack_vector.AttackVector), rsvp.Error),
+  )
   ClientFetchedDiscussion(
     audit_name: String,
     discussion: Result(List(computed_note.ComputedNote), rsvp.Error),
   )
   ServerUpdatedMergedTopics(audit_name: String)
   ServerUpdatedDiscussion(audit_name: String)
+  ServerUpdatedAttackVectors(audit_name: String)
   UserEnteredKey(
     browser_event: browser_event.Event(
       browser_event.UIEvent(browser_event.KeyboardEvent),
@@ -454,6 +465,33 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     ServerUpdatedMergedTopics(audit_name) -> #(
       model,
       fetch_merged_topics(audit_name),
+    )
+
+    ClientFetchedAttackVectors(audit_name:, attack_vectors:) -> {
+      case attack_vectors {
+        Ok(..) -> io.println("Successfully fetched attack vectors")
+        Error(e) ->
+          io.println_error(
+            "Failed to fetch attack vectors: " <> string.inspect(e),
+          )
+      }
+
+      #(
+        Model(
+          ..model,
+          attack_vectors: dict.insert(
+            model.attack_vectors,
+            audit_name,
+            attack_vectors,
+          ),
+        ),
+        effect.none(),
+      )
+    }
+
+    ServerUpdatedAttackVectors(audit_name) -> #(
+      model,
+      fetch_attack_vectors(audit_name),
     )
 
     ClientFetchedDiscussion(audit_name:, discussion:) ->
@@ -1014,6 +1052,16 @@ fn fetch_discussion(audit_name) {
   )
 }
 
+pub fn fetch_attack_vectors(audit_name) {
+  rsvp.get(
+    "/audit-attack-vectors/" <> audit_name,
+    rsvp.expect_json(
+      decode.list(attack_vector.attack_vector_decoder()),
+      ClientFetchedAttackVectors(audit_name, _),
+    ),
+  )
+}
+
 fn submit_note(audit_name, topic_id, note_submission, discussion_model) {
   rsvp.post(
     "/submit-note/" <> audit_name,
@@ -1051,13 +1099,23 @@ fn view(model: Model) {
         dict.get(model.discussions, audit_name)
         |> result.unwrap(dict.new())
 
+      let attack_vectors = case dict.get(model.attack_vectors, audit_name) {
+        Ok(Ok(attack_vectors)) -> attack_vectors
+        _ -> []
+      }
+
       html.div([], [
         server_component.element(
-          [server_component.route("/component-discussion/" <> audit_name)],
+          [
+            server_component.route("/component-discussion/" <> audit_name),
+            on_server_updated_discussion(ServerUpdatedDiscussion),
+            on_server_updated_merge_topics(ServerUpdatedMergedTopics),
+            on_server_updated_attack_vectors(ServerUpdatedAttackVectors),
+          ],
           [],
         ),
         audit_tree.view(
-          audit_dashboard.view(discussion, audit_name),
+          audit_dashboard.view(attack_vectors, discussion, audit_name),
           option.None,
           model.file_tree,
           audit_name,
@@ -1083,7 +1141,12 @@ fn view(model: Model) {
 
       html.div([], [
         server_component.element(
-          [server_component.route("/component-discussion/" <> audit_name)],
+          [
+            server_component.route("/component-discussion/" <> audit_name),
+            on_server_updated_discussion(ServerUpdatedDiscussion),
+            on_server_updated_merge_topics(ServerUpdatedMergedTopics),
+            on_server_updated_attack_vectors(ServerUpdatedAttackVectors),
+          ],
           [],
         ),
         audit_tree.view(
@@ -1124,7 +1187,8 @@ fn view(model: Model) {
           [
             server_component.route("/component-discussion/" <> audit_name),
             on_server_updated_discussion(ServerUpdatedDiscussion),
-            on_server_updated_topics(ServerUpdatedMergedTopics),
+            on_server_updated_merge_topics(ServerUpdatedMergedTopics),
+            on_server_updated_attack_vectors(ServerUpdatedAttackVectors),
           ],
           [],
         ),
@@ -1168,8 +1232,15 @@ fn on_server_updated_discussion(msg) {
   })
 }
 
-fn on_server_updated_topics(msg) {
+fn on_server_updated_merge_topics(msg) {
   event.on(events.server_updated_topics, {
+    use audit_name <- decode.subfield(["detail", "audit_name"], decode.string)
+    decode.success(msg(audit_name))
+  })
+}
+
+fn on_server_updated_attack_vectors(msg) {
+  event.on(events.server_updated_attack_vectors, {
     use audit_name <- decode.subfield(["detail", "audit_name"], decode.string)
     decode.success(msg(audit_name))
   })

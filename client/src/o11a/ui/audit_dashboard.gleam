@@ -5,7 +5,9 @@ import gleam/option.{None, Some}
 import gleam/pair
 import gleam/string
 import lustre/attribute
+import lustre/element
 import lustre/element/html
+import o11a/attack_vector
 import o11a/computed_note
 
 const style = "
@@ -19,7 +21,7 @@ const style = "
 }
 "
 
-pub fn view(notes, audit_name) {
+pub fn view(attack_vectors: List(attack_vector.AttackVector), notes, audit_name) {
   let #(
     incomplete_todos,
     unanswered_questions,
@@ -33,6 +35,12 @@ pub fn view(notes, audit_name) {
       html.h1([], [
         html.text(audit_name |> string.capitalise <> " Audit Dashboard"),
       ]),
+      html.h2([], [html.text("Attack Vectors")]),
+      element.fragment(
+        list.map(attack_vectors, fn(attack_vector) {
+          html.p([], [html.text(attack_vector.title)])
+        }),
+      ),
       html.h2([], [html.text("Incomplete todos")]),
       notes_view(incomplete_todos),
       html.h2([], [html.text("Unanswered questions")]),

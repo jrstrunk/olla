@@ -2,6 +2,7 @@ import filepath
 import gleam/dict
 import gleam/dynamic/decode
 import gleam/function
+import gleam/int
 import gleam/io
 import gleam/json
 import gleam/list
@@ -9,6 +10,8 @@ import gleam/option
 import gleam/result
 import gleam/string
 import gleam/string_tree
+import lib/persistent_concurrent_duplicate_dict
+import o11a/attack_vector
 import o11a/audit_metadata
 import o11a/config
 import o11a/discussion_topic
@@ -27,6 +30,7 @@ pub opaque type AuditData {
     metadata_provider: AuditMetadataProvider,
     declarations_provider: AuditDeclarationsProvider,
     merged_topics_provider: AuditTopicMergesProvider,
+    attack_vectors_provider: AttackVectorsProvider,
   )
 }
 
@@ -35,12 +39,14 @@ pub fn build() {
   use metadata_provider <- result.try(build_audit_metadata_provider())
   use declarations_provider <- result.try(build_declarations_provider())
   use merged_topics_provider <- result.try(build_merged_topics_provider())
+  use attack_vectors_provider <- result.try(build_attack_vectors_provider())
 
   Ok(AuditData(
     source_file_provider:,
     metadata_provider:,
     declarations_provider:,
     merged_topics_provider:,
+    attack_vectors_provider:,
   ))
 }
 
@@ -480,6 +486,74 @@ pub fn subscribe_to_topic_merge_updates(
   pcd.subscribe_to_key(
     audit_data.merged_topics_provider.pcd,
     audit_name,
+    effect,
+  )
+}
+
+// AttackVectorsProvider -------------------------------------------------------
+
+type AttackVectorsProvider {
+  AttackVectorsProvider(
+    dict: persistent_concurrent_duplicate_dict.PersistentConcurrentDuplicateDict(
+      String,
+      String,
+      attack_vector.AttackVector,
+    ),
+  )
+}
+
+fn build_attack_vectors_provider() {
+  use dict <- result.map(
+    persistent_concurrent_duplicate_dict.build(
+      config.get_persist_path(for: "audit_attack_vectors"),
+      key_encoder: fn(key) { key },
+      key_decoder: fn(key) { key },
+      build_val: fn(title, record_count) {
+        attack_vector.AttackVector(
+          title:,
+          topic_id: "V" <> int.to_string(record_count),
+        )
+      },
+      example: attack_vector.AttackVector(title: "Hi", topic_id: "Ex"),
+      val_encoder: fn(attack_vector) {
+        [
+          persistent_concurrent_duplicate_dict.text(attack_vector.title),
+          persistent_concurrent_duplicate_dict.text(attack_vector.topic_id),
+        ]
+      },
+      val_decoder: {
+        use title <- decode.field(0, decode.string)
+        use topic_id <- decode.field(1, decode.string)
+        decode.success(attack_vector.AttackVector(title:, topic_id:))
+      },
+    ),
+  )
+
+  AttackVectorsProvider(dict:)
+}
+
+pub fn get_attack_vectors(audit_data: AuditData, for audit_name) {
+  persistent_concurrent_duplicate_dict.get(
+    audit_data.attack_vectors_provider.dict,
+    audit_name,
+  )
+}
+
+pub fn add_attack_vector(
+  audit_data: AuditData,
+  audit_name audit_name,
+  title title: String,
+) {
+  persistent_concurrent_duplicate_dict.insert(
+    audit_data.attack_vectors_provider.dict,
+    audit_name,
+    title,
+  )
+}
+
+pub fn subscribe_to_attack_vectors_updates(audit_data: AuditData, effect effect) {
+  persistent_concurrent_duplicate_dict.subscribe(
+    audit_data.attack_vectors_provider.dict,
     effect,
   )
 }

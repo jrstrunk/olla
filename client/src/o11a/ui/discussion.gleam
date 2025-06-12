@@ -494,9 +494,11 @@ pub fn node_view(
 
   html.span(
     [
-      attribute.class(preprocessor.declaration_kind_to_string(
-        node_declaration.kind,
-      )),
+      case node_declaration {
+        preprocessor.SourceDeclaration(kind:, ..) ->
+          attribute.class(preprocessor.declaration_kind_to_string(kind))
+        _ -> attribute.class("")
+      },
     ],
     [html.text(tokens)],
   )
@@ -512,11 +514,11 @@ pub type NodeWithDiscussionViewKind {
 pub fn node_with_discussion_view(
   topic_id topic_id: String,
   tokens tokens: String,
-  discussion discussion,
-  declarations declarations,
-  discussion_id discussion_id,
+  discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
+  declarations declarations: dict.Dict(String, preprocessor.Declaration),
+  discussion_id discussion_id: DiscussionId,
   active_discussion active_discussion: option.Option(DiscussionReference),
-  discussion_context discussion_context,
+  discussion_context discussion_context: DiscussionContext,
   node_view_kind node_view_kind: NodeWithDiscussionViewKind,
 ) {
   let attrs = case node_view_kind {
@@ -576,11 +578,17 @@ fn declaration_node_attributes(
 ) {
   [
     attribute.id(preprocessor.declaration_to_qualified_name(node_declaration)),
-    attribute.class(preprocessor.declaration_kind_to_string(
-      node_declaration.kind,
-    )),
+    case node_declaration {
+      preprocessor.SourceDeclaration(kind:, ..) ->
+        attribute.class(preprocessor.declaration_kind_to_string(kind))
+      _ -> attribute.class("")
+    },
     attribute.class(
-      "declaration-preview N" <> int.to_string(node_declaration.id),
+      "declaration-preview"
+      <> case node_declaration {
+        preprocessor.SourceDeclaration(id:, ..) -> " N" <> int.to_string(id)
+        _ -> ""
+      },
     ),
     attribute.class(classes.discussion_entry),
     attribute.class(classes.discussion_entry_hover),
@@ -588,7 +596,10 @@ fn declaration_node_attributes(
     event.on_focus(UserSelectedDiscussionEntry(
       kind: Focus,
       discussion_id:,
-      node_id: option.Some(node_declaration.id),
+      node_id: case node_declaration {
+        preprocessor.SourceDeclaration(id:, ..) -> option.Some(id)
+        _ -> option.None
+      },
       topic_id:,
       is_reference: False,
     )),
@@ -596,7 +607,10 @@ fn declaration_node_attributes(
     event.on_mouse_enter(UserSelectedDiscussionEntry(
       kind: Hover,
       discussion_id:,
-      node_id: option.Some(node_declaration.id),
+      node_id: case node_declaration {
+        preprocessor.SourceDeclaration(id:, ..) -> option.Some(id)
+        _ -> option.None
+      },
       topic_id:,
       is_reference: False,
     )),
@@ -615,17 +629,28 @@ fn reference_node_attributes(
   topic_id topic_id: String,
 ) {
   [
-    attribute.class(preprocessor.declaration_kind_to_string(
-      node_declaration.kind,
-    )),
-    attribute.class("reference-preview N" <> int.to_string(node_declaration.id)),
+    case node_declaration {
+      preprocessor.SourceDeclaration(kind:, ..) ->
+        attribute.class(preprocessor.declaration_kind_to_string(kind))
+      _ -> attribute.class("")
+    },
+    attribute.class(
+      "reference-preview"
+      <> case node_declaration {
+        preprocessor.SourceDeclaration(id:, ..) -> " N" <> int.to_string(id)
+        _ -> ""
+      },
+    ),
     attribute.class(classes.discussion_entry),
     attribute.class(classes.discussion_entry_hover),
     attribute.attribute("tabindex", "0"),
     event.on_focus(UserSelectedDiscussionEntry(
       kind: Focus,
       discussion_id:,
-      node_id: option.Some(node_declaration.id),
+      node_id: case node_declaration {
+        preprocessor.SourceDeclaration(id:, ..) -> option.Some(id)
+        _ -> option.None
+      },
       topic_id:,
       is_reference: True,
     )),
@@ -633,7 +658,10 @@ fn reference_node_attributes(
     event.on_mouse_enter(UserSelectedDiscussionEntry(
       kind: Hover,
       discussion_id:,
-      node_id: option.Some(node_declaration.id),
+      node_id: case node_declaration {
+        preprocessor.SourceDeclaration(id:, ..) -> option.Some(id)
+        _ -> option.None
+      },
       topic_id:,
       is_reference: True,
     )),
@@ -1005,7 +1033,12 @@ pub fn overlay_view(
 
   let references =
     dict.get(declarations, model.topic_id)
-    |> result.map(fn(declaration) { declaration.references })
+    |> result.map(fn(declaration) {
+      case declaration {
+        preprocessor.SourceDeclaration(references:, ..) -> references
+        _ -> []
+      }
+    })
     |> result.unwrap([])
 
   html.div(
@@ -1568,10 +1601,10 @@ fn get_topic_title(
   notes notes,
 ) -> element.Element(DiscussionControllerMsg) {
   case dict.get(declarations, model.topic_id) {
-    Ok(dec) ->
+    Ok(preprocessor.SourceDeclaration(signature:, ..)) ->
       element.fragment(topic_signature_view(
         view_id: model.view_id,
-        signature: dec.signature,
+        signature: signature,
         declarations:,
         discussion: notes,
         suppress_declaration: True,
@@ -1579,6 +1612,10 @@ fn get_topic_title(
         active_discussion:,
         discussion_context:,
       ))
-    Error(Nil) -> html.span([], [html.text("unknown")])
+
+    Ok(preprocessor.TextDeclaration(signature:, ..)) ->
+      html.span([], [html.text(signature)])
+
+    _ -> html.span([], [html.text("unknown")])
   }
 }

@@ -9,23 +9,29 @@ import gleam/result
 import gleam/string
 
 pub type Declaration {
-  Declaration(
-    id: Int,
+  SourceDeclaration(
     topic_id: String,
     name: String,
     signature: List(PreProcessedSnippetLine),
     scope: Scope,
+    id: Int,
     kind: DeclarationKind,
     source_map: SourceMap,
     references: List(Reference),
     calls: List(String),
     errors: List(String),
   )
+  TextDeclaration(
+    topic_id: String,
+    name: String,
+    signature: String,
+    scope: Scope,
+  )
 }
 
 pub fn encode_declaration(declaration: Declaration) -> json.Json {
   case declaration {
-    Declaration(
+    SourceDeclaration(
       id:,
       topic_id:,
       name:,
@@ -38,6 +44,7 @@ pub fn encode_declaration(declaration: Declaration) -> json.Json {
       errors:,
     ) ->
       json.object([
+        #("v", json.string("sdl")),
         #("i", json.int(id)),
         #("t", json.string(topic_id)),
         #("n", json.string(name)),
@@ -48,6 +55,14 @@ pub fn encode_declaration(declaration: Declaration) -> json.Json {
         #("r", json.array(references, encode_reference)),
         #("c", json.array(calls, json.string)),
         #("e", json.array(errors, json.string)),
+      ])
+    TextDeclaration(topic_id:, name:, signature:, scope:) ->
+      json.object([
+        #("v", json.string("udl")),
+        #("t", json.string(topic_id)),
+        #("n", json.string(name)),
+        #("s", json.string(signature)),
+        #("s", encode_scope(scope)),
       ])
   }
 }
@@ -66,7 +81,7 @@ pub fn declaration_decoder() -> decode.Decoder(Declaration) {
   use references <- decode.field("r", decode.list(reference_decoder()))
   use calls <- decode.field("c", decode.list(decode.string))
   use errors <- decode.field("e", decode.list(decode.string))
-  decode.success(Declaration(
+  decode.success(SourceDeclaration(
     id:,
     topic_id:,
     name:,
@@ -80,12 +95,12 @@ pub fn declaration_decoder() -> decode.Decoder(Declaration) {
   ))
 }
 
-pub const unknown_declaration = Declaration(
-  0,
+pub const unknown_declaration = SourceDeclaration(
   "",
   "",
   [],
   Scope("", option.None, option.None),
+  0,
   UnknownDeclaration,
   SourceMap(-1, -1),
   [],
