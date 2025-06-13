@@ -14,6 +14,7 @@ packages = [
   { name = "gtempo", version = "7.2.1", build_tools = ["gleam"], requirements = ["gleam_regexp", "gleam_stdlib", "gleam_time"], otp_app = "gtempo", source = "hex", outer_checksum = "E9CA4C4FAFCDF5AF34FD8307A0B45FF9593B9AD28953E0445D8FFF923001EF45" },
   { name = "houdini", version = "1.1.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "houdini", source = "hex", outer_checksum = "5BA517E5179F132F0471CB314F27FE210A10407387DA1EA4F6FD084F74469FC2" },
   { name = "lustre", version = "5.1.1", build_tools = ["gleam"], requirements = ["gleam_erlang", "gleam_json", "gleam_otp", "gleam_stdlib", "houdini"], otp_app = "lustre", source = "hex", outer_checksum = "A22AD57AD6CF1619EDA3186B358393D1C65652FA9C45719059EB6E8AC8328ABC" },
+  { name = "splitter", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "splitter", source = "hex", outer_checksum = "128FC521EE33B0012E3E64D5B55168586BC1B9C8D7B0D0CA223B68B0D770A547" },
 ]
 
 [requirements]
@@ -23,4 +24,6 @@ gleam_json = { version = ">= 3.0.1 and < 4.0.0" }
 gleam_stdlib = { version = ">= 0.60.0 and < 1.0.0" }
 gleeunit = { version = ">= 1.0.0 and < 2.0.0" }
 gtempo = { version = ">= 7.2.1 and < 8.0.0" }
+houdini = { version = ">= 1.1.0 and < 2.0.0" }
 lustre = { version = ">= 5.1.1 and < 6.0.0" }
+splitter = { version = ">= 1.0.0 and < 2.0.0" }
