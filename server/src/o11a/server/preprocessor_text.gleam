@@ -42,14 +42,14 @@ pub fn preprocess_source(nodes nodes: List(Node)) {
 fn consume_source(nodes nodes: List(Node)) {
   list.fold(nodes, [], fn(acc, node) {
     case node {
-      NewLineNode(..) -> [
+      EmptyLineNode(..) -> [
         preprocessor.PreProcessedGapNode(element: "", leading_spaces: 0),
         ..acc
       ]
-      LineNode(id:, line:, ..) -> {
+      LineNode(local_id:, line:, ..) -> {
         [
           preprocessor.PreProcessedDeclaration(
-            topic_id: preprocessor.node_id_to_topic_id(id, preprocessor.Text),
+            topic_id: preprocessor.node_id_to_topic_id(local_id, preprocessor.Text),
             tokens: line,
           ),
           ..acc
@@ -63,19 +63,19 @@ fn consume_source(nodes nodes: List(Node)) {
 pub fn enumerate_declarations(declarations, in ast: AST) {
   list.fold(ast.nodes, declarations, fn(declarations, node) {
     case node {
-      NewLineNode(..) -> declarations
-      LineNode(id:, line_number:, ..) -> {
+      EmptyLineNode(..) -> declarations
+      LineNode(local_id:, line_number:, ..) -> {
         let line_number_text = line_number |> int.to_string
         let page_path = ast.absolute_path
 
         let #(id_acc, declarations) = declarations
         #(
-          int.max(id_acc, id + 1),
+          int.max(id_acc, local_id + 1),
           dict.insert(
             declarations,
-            id,
+            local_id,
             preprocessor.TextDeclaration(
-              topic_id: preprocessor.node_id_to_topic_id(id, preprocessor.Text),
+              topic_id: preprocessor.node_id_to_topic_id(local_id, preprocessor.Text),
               name: "L" <> line_number_text,
               scope: preprocessor.Scope(
                 file: filepath.base_name(page_path),
@@ -128,11 +128,11 @@ pub fn read_asts(for audit_name) -> Result(List(AST), snag.Snag) {
 
     let nodes =
       list.index_map(lines, fn(line, index) {
-        let id = id_acc + index + 1
+        let local_id = id_acc + index + 1
         let line_number = index + 1
         case line {
-          "" -> NewLineNode(id:, line_number:)
-          _ -> LineNode(id:, line_number:, line:)
+          "" -> EmptyLineNode(local_id:, line_number:)
+          _ -> LineNode(local_id:, line_number:, line:)
         }
       })
 
@@ -150,6 +150,6 @@ pub type AST {
 }
 
 pub type Node {
-  LineNode(id: Int, line_number: Int, line: String)
-  NewLineNode(id: Int, line_number: Int)
+  LineNode(local_id: Int, line_number: Int, line: String)
+  EmptyLineNode(local_id: Int, line_number: Int)
 }
