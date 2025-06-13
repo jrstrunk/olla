@@ -318,7 +318,7 @@ pub fn discussion_view(
     option.Some(active_discussion) ->
       case discussion_id == active_discussion.discussion_id {
         True ->
-          html.div(attrs, [
+          html.span(attrs, [
             overlay_view(
               active_discussion.model,
               discussion,
@@ -474,7 +474,7 @@ pub fn topic_signature_view(
               ])
             }),
           ),
-          html.p([attribute.class("loc flex")], new_line),
+          html.p([], new_line),
         ])
 
       #(new_line_number, new_line)

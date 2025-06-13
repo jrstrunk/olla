@@ -50,7 +50,7 @@ pub fn view(
       html.h2([], [html.text("Attack Vectors")]),
       element.fragment(
         list.index_map(attack_vectors, fn(attack_vector, index) {
-          html.p([attribute.class("loc flex")], [
+          html.p([], [
             discussion.node_with_discussion_view(
               topic_id: attack_vector.topic_id,
               tokens: attack_vector.topic_id,
