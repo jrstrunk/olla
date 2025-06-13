@@ -429,53 +429,63 @@ pub fn topic_signature_view(
           }
         })
 
-      let new_line = case preprocessed_snippet_line.leading_spaces {
-        0 -> new_line
-        leading_spaces -> [
-          html.span([], [html.text(string.repeat("\u{a0}", leading_spaces))]),
-          ..new_line
-        ]
-      }
+      // Add indent and info notes inline above the line
+      let new_line = case preprocessed_snippet_line {
+        // Text snippets to not have indents or inline info notes, so do 
+        // nothing extra
+        preprocessor.TextSnippetLine(..) -> html.p([], new_line)
 
-      let #(_, info_notes) = case preprocessed_snippet_line.significance {
-        preprocessor.SingleDeclarationLine(line_topic_id)
-          if !suppress_declaration
-        ->
-          formatter.get_notes(
-            discussion,
-            preprocessed_snippet_line.leading_spaces,
-            line_topic_id,
-          )
-        preprocessor.NonEmptyLine(line_topic_id) ->
-          formatter.get_notes(
-            discussion,
-            preprocessed_snippet_line.leading_spaces,
-            line_topic_id,
-          )
-        preprocessor.EmptyLine | preprocessor.SingleDeclarationLine(..) -> #(
-          [],
-          [],
-        )
-      }
+        preprocessor.SourceSnippetLine(significance:, ..) -> {
+          // Add indent to the line
+          let new_line = case preprocessed_snippet_line.leading_spaces {
+            0 -> new_line
+            leading_spaces -> [
+              html.span([], [html.text(string.repeat("\u{a0}", leading_spaces))]),
+              ..new_line
+            ]
+          }
 
-      let new_line =
-        element.fragment([
-          element.fragment(
-            list.map(info_notes, fn(note) {
-              let #(_note_index_id, note_message) = note
-              html.p([attribute.class("comment italic")], [
-                html.text(
-                  string.repeat(
-                    "\u{a0}",
-                    preprocessed_snippet_line.leading_spaces,
-                  )
-                  <> note_message,
-                ),
-              ])
-            }),
-          ),
-          html.p([], new_line),
-        ])
+          // Add info notes above the line
+          let #(_, info_notes) = case significance {
+            preprocessor.SingleDeclarationLine(line_topic_id)
+              if !suppress_declaration
+            ->
+              formatter.get_notes(
+                discussion,
+                preprocessed_snippet_line.leading_spaces,
+                line_topic_id,
+              )
+            preprocessor.NonEmptyLine(line_topic_id) ->
+              formatter.get_notes(
+                discussion,
+                preprocessed_snippet_line.leading_spaces,
+                line_topic_id,
+              )
+            preprocessor.EmptyLine | preprocessor.SingleDeclarationLine(..) -> #(
+              [],
+              [],
+            )
+          }
+
+          element.fragment([
+            element.fragment(
+              list.map(info_notes, fn(note) {
+                let #(_note_index_id, note_message) = note
+                html.p([attribute.class("comment italic")], [
+                  html.text(
+                    string.repeat(
+                      "\u{a0}",
+                      preprocessed_snippet_line.leading_spaces,
+                    )
+                    <> note_message,
+                  ),
+                ])
+              }),
+            ),
+            html.p([], new_line),
+          ])
+        }
+      }
 
       #(new_line_number, new_line)
     },

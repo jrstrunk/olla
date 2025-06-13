@@ -490,43 +490,64 @@ pub type AST(solidity_ast, text_ast) {
 }
 
 pub type PreProcessedSnippetLine {
-  PreProcessedSnippetLine(
+  SourceSnippetLine(
+    elements: List(PreProcessedNode),
     significance: PreProcessedLineSignificance,
     leading_spaces: Int,
-    elements: List(PreProcessedNode),
-    kind: PreProcessedLineKind,
   )
+  TextSnippetLine(elements: List(PreProcessedNode))
 }
 
 fn pre_processed_snippet_line_to_json(
   pre_processed_snippet_line: PreProcessedSnippetLine,
 ) -> json.Json {
-  let PreProcessedSnippetLine(significance:, leading_spaces:, elements:, kind:) =
-    pre_processed_snippet_line
-  json.object([
-    #("s", encode_pre_processed_line_significance(significance)),
-    #("l", json.int(leading_spaces)),
-    #("e", json.array(elements, encode_pre_processed_node)),
-    #("k", encode_pre_processed_line_kind(kind)),
-  ])
+  case pre_processed_snippet_line {
+    SourceSnippetLine(elements:, significance:, leading_spaces:) ->
+      json.object([
+        #("v", json.string("s")),
+        #("e", json.array(elements, encode_pre_processed_node)),
+        #("s", encode_pre_processed_line_significance(significance)),
+        #("l", json.int(leading_spaces)),
+      ])
+    TextSnippetLine(elements:) ->
+      json.object([
+        #("v", json.string("t")),
+        #("e", json.array(elements, encode_pre_processed_node)),
+      ])
+  }
 }
 
-pub fn pre_processed_snippet_line_decoder() -> decode.Decoder(
+fn pre_processed_snippet_line_decoder() -> decode.Decoder(
   PreProcessedSnippetLine,
 ) {
-  use significance <- decode.field(
-    "s",
-    pre_processed_line_significance_decoder(),
-  )
-  use leading_spaces <- decode.field("l", decode.int)
-  use elements <- decode.field("e", decode.list(pre_processed_node_decoder()))
-  use kind <- decode.field("k", pre_processed_line_kind_decoder())
-  decode.success(PreProcessedSnippetLine(
-    significance:,
-    leading_spaces:,
-    elements:,
-    kind:,
-  ))
+  use variant <- decode.field("v", decode.string)
+  case variant {
+    "s" -> {
+      use elements <- decode.field(
+        "e",
+        decode.list(pre_processed_node_decoder()),
+      )
+      use significance <- decode.field(
+        "s",
+        pre_processed_line_significance_decoder(),
+      )
+      use leading_spaces <- decode.field("l", decode.int)
+      decode.success(SourceSnippetLine(
+        elements:,
+        significance:,
+        leading_spaces:,
+      ))
+    }
+    "t" -> {
+      use elements <- decode.field(
+        "e",
+        decode.list(pre_processed_node_decoder()),
+      )
+      decode.success(TextSnippetLine(elements:))
+    }
+    _ ->
+      decode.failure(TextSnippetLine(elements: []), "PreProcessedSnippetLine")
+  }
 }
 
 pub type PreProcessedLine {

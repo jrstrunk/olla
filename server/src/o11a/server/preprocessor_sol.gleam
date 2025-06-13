@@ -111,16 +111,11 @@ pub fn preprocess_source(
                 member: option.None,
               ),
               signature: [
-                preprocessor.PreProcessedSnippetLine(
-                  significance: preprocessor.EmptyLine,
-                  leading_spaces: 0,
-                  elements: [
-                    preprocessor.PreProcessedNode(
-                      element: "line " <> line_number_text,
-                    ),
-                  ],
-                  kind: preprocessor.SoliditySourceLine,
-                ),
+                preprocessor.TextSnippetLine(elements: [
+                  preprocessor.PreProcessedNode(
+                    element: "Line " <> line_number_text,
+                  ),
+                ]),
               ],
               kind: preprocessor.LineDeclaration,
               source_map: preprocessor.SourceMap(-1, -1),
@@ -157,16 +152,11 @@ pub fn preprocess_source(
                 member: option.None,
               ),
               signature: [
-                preprocessor.PreProcessedSnippetLine(
-                  significance: preprocessor.EmptyLine,
-                  leading_spaces: 0,
-                  elements: [
-                    preprocessor.PreProcessedNode(
-                      element: "line " <> line_number_text,
-                    ),
-                  ],
-                  kind: preprocessor.SoliditySourceLine,
-                ),
+                preprocessor.TextSnippetLine(elements: [
+                  preprocessor.PreProcessedNode(
+                    element: "Line " <> line_number_text,
+                  ),
+                ]),
               ],
               kind: preprocessor.LineDeclaration,
               source_map: preprocessor.SourceMap(-1, -1),
@@ -2389,11 +2379,10 @@ fn split_lines(nodes, indent_num indent_num) {
       case node {
         preprocessor.FormatterNewline -> {
           let new_line =
-            preprocessor.PreProcessedSnippetLine(
+            preprocessor.SourceSnippetLine(
               significance: get_signature_line_significance(current_line),
               leading_spaces: indent_num,
               elements: list.reverse(current_line),
-              kind: preprocessor.SoliditySourceLine,
             )
           #([], [new_line, ..block_lines])
         }
@@ -2410,11 +2399,10 @@ fn split_lines(nodes, indent_num indent_num) {
     })
 
   let new_line =
-    preprocessor.PreProcessedSnippetLine(
+    preprocessor.SourceSnippetLine(
       significance: get_signature_line_significance(current_line),
       leading_spaces: indent_num,
       elements: list.reverse(current_line),
-      kind: preprocessor.SoliditySourceLine,
     )
 
   [new_line, ..block_lines]
