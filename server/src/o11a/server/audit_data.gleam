@@ -16,8 +16,9 @@ import o11a/audit_metadata
 import o11a/config
 import o11a/discussion_topic
 import o11a/preprocessor
+import o11a/preprocessor_text
 import o11a/server/preprocessor_sol
-import o11a/server/preprocessor_text
+import o11a/server/preprocessor_text as preprocessor_text_server
 import persistent_concurrent_dict as pcd
 import simplifile
 import snag
@@ -195,10 +196,17 @@ fn preprocess_audit_source(for audit_name) {
     preprocessor_sol.read_asts(audit_name)
     |> snag.context("Unable to read sol asts for " <> audit_name),
   )
-  use text_asts <- result.try(
-    preprocessor_text.read_asts(audit_name)
+  use text_data <- result.try(
+    preprocessor_text_server.read_asts(audit_name)
     |> snag.context("Unable to read text asts for " <> audit_name),
   )
+
+  let #(text_asts, text_declarations) =
+    list.fold(text_data, #([], dict.new()), fn(acc, ast) {
+      let #(text_asts, text_declarations) = acc
+      let #(ast, _max_topic_id, declarations) = ast
+      #([ast, ..text_asts], dict.merge(text_declarations, declarations))
+    })
 
   let page_paths = config.get_all_audit_page_paths()
 
@@ -207,7 +215,7 @@ fn preprocess_audit_source(for audit_name) {
     |> dict.from_list
 
   let file_to_text_ast =
-    list.map(text_asts, fn(ast) { #(ast.absolute_path, ast) })
+    list.map(text_asts, fn(ast) { #(ast.document_parent, ast) })
     |> dict.from_list
 
   let max_topic_id = 1
@@ -226,11 +234,7 @@ fn preprocess_audit_source(for audit_name) {
     })
     |> preprocessor_sol.enumerate_errors
 
-  let #(max_topic_id, _text_declarations) =
-    #(max_topic_id, dict.new())
-    |> list.fold(text_asts, _, fn(declarations, ast) {
-      preprocessor_text.enumerate_declarations(declarations, ast)
-    })
+  let all_declarations = dict.merge(text_declarations, sol_declarations)
 
   use #(_max_topic_id, source_files, addressable_lines, merged_topics) <- result.map(
     dict.get(page_paths, audit_name)
@@ -294,11 +298,12 @@ fn preprocess_audit_source(for audit_name) {
           Ok(preprocessor.Text) ->
             case dict.get(file_to_text_ast, page_path) {
               Ok(ast) -> {
-                let nodes = preprocessor_text.linearize_nodes(ast)
-
                 // A text file will never increase the max topic id at this stage
                 let preprocessed_source =
-                  preprocessor_text.preprocess_source(nodes:)
+                  preprocessor_text.preprocess_source(
+                    nodes: ast.nodes,
+                    declarations: all_declarations,
+                  )
 
                 Ok(#(
                   max_topic_id,
@@ -342,7 +347,7 @@ fn preprocess_audit_source(for audit_name) {
       }
     })
 
-  let declarations = dict.values(sol_declarations)
+  let declarations = dict.values(all_declarations)
 
   #(source_files, declarations, addressable_lines, merged_topics)
 }

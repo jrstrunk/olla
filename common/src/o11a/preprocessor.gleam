@@ -43,7 +43,7 @@ pub fn encode_declaration(declaration: Declaration) -> json.Json {
       errors:,
     ) ->
       json.object([
-        #("v", json.string("sdl")),
+        #("v", json.string("s")),
         #("i", json.int(id)),
         #("t", json.string(topic_id)),
         #("n", json.string(name)),
@@ -57,41 +57,63 @@ pub fn encode_declaration(declaration: Declaration) -> json.Json {
       ])
     TextDeclaration(topic_id:, name:, signature:, scope:) ->
       json.object([
-        #("v", json.string("udl")),
+        #("v", json.string("t")),
         #("t", json.string(topic_id)),
         #("n", json.string(name)),
-        #("s", json.string(signature)),
+        #("g", json.string(signature)),
         #("s", encode_scope(scope)),
       ])
   }
 }
 
 pub fn declaration_decoder() -> decode.Decoder(Declaration) {
-  use id <- decode.field("i", decode.int)
-  use topic_id <- decode.field("t", decode.string)
-  use name <- decode.field("n", decode.string)
-  use scope <- decode.field("s", scope_decoder())
-  use signature <- decode.field(
-    "g",
-    decode.list(pre_processed_snippet_line_decoder()),
-  )
-  use kind <- decode.field("k", decode_declaration_kind())
-  use source_map <- decode.field("m", source_map_decoder())
-  use references <- decode.field("r", decode.list(reference_decoder()))
-  use calls <- decode.field("c", decode.list(decode.string))
-  use errors <- decode.field("e", decode.list(decode.string))
-  decode.success(SourceDeclaration(
-    id:,
-    topic_id:,
-    name:,
-    scope:,
-    signature:,
-    kind:,
-    source_map:,
-    references:,
-    calls:,
-    errors:,
-  ))
+  use variant <- decode.field("v", decode.string)
+  case variant {
+    "s" -> {
+      use topic_id <- decode.field("t", decode.string)
+      use name <- decode.field("n", decode.string)
+      use signature <- decode.field(
+        "g",
+        decode.list(pre_processed_snippet_line_decoder()),
+      )
+      use scope <- decode.field("s", scope_decoder())
+      use id <- decode.field("i", decode.int)
+      use kind <- decode.field("k", declaration_kind_decoder())
+      use source_map <- decode.field("m", source_map_decoder())
+      use references <- decode.field("r", decode.list(reference_decoder()))
+      use calls <- decode.field("c", decode.list(decode.string))
+      use errors <- decode.field("e", decode.list(decode.string))
+      decode.success(SourceDeclaration(
+        topic_id:,
+        name:,
+        signature:,
+        scope:,
+        id:,
+        kind:,
+        source_map:,
+        references:,
+        calls:,
+        errors:,
+      ))
+    }
+    "t" -> {
+      use topic_id <- decode.field("t", decode.string)
+      use name <- decode.field("n", decode.string)
+      use signature <- decode.field("g", decode.string)
+      use scope <- decode.field("s", scope_decoder())
+      decode.success(TextDeclaration(topic_id:, name:, signature:, scope:))
+    }
+    _ ->
+      decode.failure(
+        TextDeclaration(
+          topic_id: "",
+          name: "",
+          signature: "",
+          scope: Scope("", option.None, option.None),
+        ),
+        "Declaration",
+      )
+  }
 }
 
 pub const unknown_declaration = SourceDeclaration(
@@ -146,6 +168,13 @@ fn scope_decoder() -> decode.Decoder(Scope) {
     decode.optional(decode.string),
   )
   decode.success(Scope(file:, contract:, member:))
+}
+
+pub fn contract_scope_to_string(scope: Scope) {
+  scope.contract
+  |> option.unwrap("")
+  <> option.map(scope.member, fn(member) { "." <> member })
+  |> option.unwrap("")
 }
 
 pub fn declaration_to_link(decaration: Declaration) {
@@ -253,7 +282,7 @@ pub fn encode_declaration_kind(kind) {
   }
 }
 
-pub fn decode_declaration_kind() {
+pub fn declaration_kind_decoder() {
   use variant <- decode.map(decode.string)
   case variant {
     "c" -> ContractDeclaration(Contract)

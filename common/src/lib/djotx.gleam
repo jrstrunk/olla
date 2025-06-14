@@ -26,9 +26,10 @@ import splitter.{type Splitter}
 
 pub type Document {
   Document(
-    content: List(Container),
+    nodes: List(Container),
     references: Dict(String, String),
     footnotes: Dict(String, List(Container)),
+    document_parent: String,
   )
 }
 
@@ -142,7 +143,7 @@ pub fn parse(djot: String, document_id: String, document_parent: String) {
     |> string.replace("\r\n", "\n")
     |> parse_document_content(refs, splitters, [], dict.new())
 
-  #(Document(ast, urls, footnotes), max_topic_id, declarations)
+  #(Document(ast, urls, footnotes, document_parent), max_topic_id, declarations)
 }
 
 fn drop_lines(in: String) -> String {
@@ -1284,7 +1285,7 @@ fn take_paragraph_chars(in: String) -> #(String, String) {
 /// See `to_html` for further documentation.
 ///
 pub fn djot_document_to_elements(document: Document) {
-  containers_to_elements(document.content, Nil)
+  containers_to_elements(document.nodes, Nil)
 }
 
 fn containers_to_elements(
