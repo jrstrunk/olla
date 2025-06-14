@@ -1,25 +1,25 @@
 import gleam/int
 import gleam/list
+import gleam/option
 import lib/djotx
 import lustre/element
 import o11a/preprocessor
 
-pub fn preprocess_source(
-  nodes nodes: List(djotx.Container),
-  declarations declarations,
-) {
-  use line, index <- list.index_map(consume_source(nodes:, declarations:))
+pub fn preprocess_source(ast ast: djotx.Document, declarations declarations) {
+  use line, index <- list.index_map(consume_source(
+    nodes: ast.nodes,
+    declarations:,
+  ))
 
   let line_number = index + 1
   let line_number_text = int.to_string(line_number)
   let line_tag = "L" <> line_number_text
-  let leading_spaces = 0
 
   // TODO: One day we could give a line its own topic id if it has more than
   // one statement in it, that way users could reference an entire paragraph,
   // table, list, or code block all at once. For now all line are "empty" so 
   // so they don't have their own topic id
-  let significance = preprocessor.EmptyLine
+  let topic_id = option.None
 
   let columns =
     list.count(line, fn(node) {
@@ -30,15 +30,20 @@ pub fn preprocess_source(
       }
     })
 
+  let level = case line {
+    [preprocessor.FormatterHeader(level), ..] -> level
+    _ -> 0
+  }
+
   preprocessor.PreProcessedLine(
-    significance:,
+    topic_id:,
+    elements: line,
     line_number:,
+    columns:,
     line_number_text:,
     line_tag:,
-    leading_spaces:,
-    elements: line,
-    columns:,
-    kind: preprocessor.TextLine,
+    level:,
+    kind: preprocessor.Text,
   )
 }
 
@@ -68,8 +73,11 @@ fn consume_source(nodes nodes: List(djotx.Container), declarations declarations)
         ]
       }
 
-      djotx.Heading(level: _, inlines:, ..) -> {
-        list.map(inlines, inline_to_node(_, declarations))
+      djotx.Heading(level:, inlines:, ..) -> {
+        [
+          preprocessor.FormatterHeader(level),
+          ..list.map(inlines, inline_to_node(_, declarations))
+        ]
       }
 
       djotx.RawBlock(..) -> [preprocessor.PreProcessedNode(element: "")]

@@ -96,7 +96,11 @@ pub type Route {
   O11aHomeRoute
   AuditDashboardRoute(audit_name: String)
   AuditInterfaceRoute(audit_name: String)
-  AuditPageRoute(audit_name: String, page_path: String)
+  AuditPageRoute(
+    audit_name: String,
+    page_path: String,
+    source_kind: preprocessor.SourceKind,
+  )
 }
 
 fn init(_) -> #(Model, effect.Effect(Msg)) {
@@ -159,6 +163,8 @@ fn parse_route(uri: uri.Uri) -> Route {
         audit_name:,
         // Drop the leading slash
         page_path: uri.path |> string.drop_start(1),
+        source_kind: preprocessor.classify_source_kind(uri.path)
+          |> result.unwrap(preprocessor.Text),
       )
   }
 }
@@ -199,7 +205,7 @@ fn file_tree_from_route(
       )
     }
 
-    AuditPageRoute(audit_name:, page_path: current_file_path) -> {
+    AuditPageRoute(audit_name:, page_path: current_file_path,..) -> {
       let in_scope_files =
         dict.get(audit_metadata, audit_name)
         |> result.map(fn(audit_metadata) {
@@ -1076,7 +1082,7 @@ fn route_change_effect(model, new_route route: Route) {
         fetch_merged_topics(audit_name),
         fetch_attack_vectors(audit_name),
       ])
-    AuditPageRoute(audit_name:, page_path:) ->
+    AuditPageRoute(audit_name:, page_path:, ..) ->
       effect.batch([
         fetch_metadata(model, audit_name),
         fetch_source_file(model, page_path),
@@ -1273,7 +1279,7 @@ fn view(model: Model) {
       ])
     }
 
-    AuditPageRoute(audit_name:, page_path:) -> {
+    AuditPageRoute(audit_name:, page_path:, source_kind:) -> {
       let discussion =
         dict.get(model.discussions, audit_name)
         |> result.unwrap(dict.new())
@@ -1305,6 +1311,7 @@ fn view(model: Model) {
             discussion:,
             declarations:,
             discussion_context:,
+            source_kind:,
           )
             |> element.map(DiscussionControllerSentMsg),
           audit_page_dashboard.view(discussion, page_path)

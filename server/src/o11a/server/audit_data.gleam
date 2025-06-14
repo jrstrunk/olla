@@ -301,7 +301,7 @@ fn preprocess_audit_source(for audit_name) {
                 // A text file will never increase the max topic id at this stage
                 let preprocessed_source =
                   preprocessor_text.preprocess_source(
-                    nodes: ast.nodes,
+                    ast:,
                     declarations: all_declarations,
                   )
 

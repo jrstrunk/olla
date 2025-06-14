@@ -72,7 +72,7 @@ pub fn preprocess_source(
         }
       })
 
-    let #(new_max_topic_id, significance, new_addressable_lines, merged_topics) = case
+    let #(new_max_topic_id, topic_id, new_addressable_lines, merged_topics) = case
       declaration_count,
       reference_count
     {
@@ -99,7 +99,7 @@ pub fn preprocess_source(
 
         #(
           new_max_topic_id,
-          preprocessor.SingleDeclarationLine(topic_id: line_topic_id),
+          option.Some(line_topic_id),
           [
             preprocessor.SourceDeclaration(
               id: new_max_topic_id,
@@ -128,13 +128,13 @@ pub fn preprocess_source(
         )
       }
 
-      0, 0 -> #(max_topic_id, preprocessor.EmptyLine, [], merged_topics)
+      0, 0 -> #(max_topic_id, option.None, [], merged_topics)
 
       _, _ -> {
         let new_max_topic_id = max_topic_id + 1
         #(
           new_max_topic_id,
-          preprocessor.NonEmptyLine(preprocessor.node_id_to_topic_id(
+          option.Some(preprocessor.node_id_to_topic_id(
             new_max_topic_id,
             preprocessor.Solidity,
           )),
@@ -179,7 +179,8 @@ pub fn preprocess_source(
           preprocessor.PreProcessedNode(..)
           | preprocessor.PreProcessedGapNode(..)
           | preprocessor.FormatterNewline
-          | preprocessor.FormatterBlock(..) -> acc + 1
+          | preprocessor.FormatterHeader(..)
+          | preprocessor.FormatterBlock(..) -> acc
         }
       })
 
@@ -188,14 +189,14 @@ pub fn preprocess_source(
       new_max_topic_id,
       [
         preprocessor.PreProcessedLine(
-          significance:,
+          topic_id:,
           line_number:,
           line_number_text:,
           line_tag:,
-          leading_spaces:,
+          level: leading_spaces,
           elements: line,
           columns:,
-          kind: preprocessor.SoliditySourceLine,
+          kind: preprocessor.Solidity,
         ),
         ..preprocessed_lines
       ],
@@ -2380,7 +2381,7 @@ fn split_lines(nodes, indent_num indent_num) {
         preprocessor.FormatterNewline -> {
           let new_line =
             preprocessor.SourceSnippetLine(
-              significance: get_signature_line_significance(current_line),
+              topic_id: get_signature_line_significance(current_line),
               leading_spaces: indent_num,
               elements: list.reverse(current_line),
             )
@@ -2400,7 +2401,7 @@ fn split_lines(nodes, indent_num indent_num) {
 
   let new_line =
     preprocessor.SourceSnippetLine(
-      significance: get_signature_line_significance(current_line),
+      topic_id: get_signature_line_significance(current_line),
       leading_spaces: indent_num,
       elements: list.reverse(current_line),
     )
@@ -2426,16 +2427,15 @@ fn get_signature_line_significance(
       let assert Ok(topic_id) =
         list.find_map(line_nodes, fn(node) {
           case node {
-            preprocessor.PreProcessedDeclaration(topic_id, ..) ->
-              Ok(preprocessor.SingleDeclarationLine(topic_id))
+            preprocessor.PreProcessedDeclaration(topic_id, ..) |
             preprocessor.PreProcessedReference(topic_id, ..) ->
-              Ok(preprocessor.NonEmptyLine(topic_id))
+              Ok(option.Some(topic_id))
             _ -> Error(Nil)
           }
         })
       topic_id
     }
-    False -> preprocessor.EmptyLine
+    False -> option.None
   }
 }
 

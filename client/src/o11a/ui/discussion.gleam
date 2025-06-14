@@ -351,7 +351,7 @@ pub fn topic_signature_view(
   list.map_fold(
     signature,
     line_number_offset,
-    fn(line_number_offset, preprocessed_snippet_line) {
+    fn(line_number_offset, preprocessed_snippet_line: preprocessor.PreProcessedSnippetLine) {
       let new_line_number = line_number_offset + 1
 
       let #(_col_index, new_line) =
@@ -422,7 +422,9 @@ pub fn topic_signature_view(
               ]),
             )
 
-            preprocessor.FormatterNewline | preprocessor.FormatterBlock(..) -> #(
+            preprocessor.FormatterNewline
+            | preprocessor.FormatterBlock(..)
+            | preprocessor.FormatterHeader(..) -> #(
               column_number,
               element.fragment([]),
             )
@@ -435,7 +437,7 @@ pub fn topic_signature_view(
         // nothing extra
         preprocessor.TextSnippetLine(..) -> html.p([], new_line)
 
-        preprocessor.SourceSnippetLine(significance:, ..) -> {
+        preprocessor.SourceSnippetLine(topic_id:, ..) -> {
           // Add indent to the line
           let new_line = case preprocessed_snippet_line.leading_spaces {
             0 -> new_line
@@ -446,22 +448,14 @@ pub fn topic_signature_view(
           }
 
           // Add info notes above the line
-          let #(_, info_notes) = case significance {
-            preprocessor.SingleDeclarationLine(line_topic_id)
-              if !suppress_declaration
-            ->
+          let #(_, info_notes) = case topic_id {
+            option.Some(line_topic_id) ->
               formatter.get_notes(
                 discussion,
                 preprocessed_snippet_line.leading_spaces,
                 line_topic_id,
               )
-            preprocessor.NonEmptyLine(line_topic_id) ->
-              formatter.get_notes(
-                discussion,
-                preprocessed_snippet_line.leading_spaces,
-                line_topic_id,
-              )
-            preprocessor.EmptyLine | preprocessor.SingleDeclarationLine(..) -> #(
+            option.None -> #(
               [],
               [],
             )

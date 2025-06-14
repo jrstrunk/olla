@@ -505,7 +505,7 @@ pub type AST(solidity_ast, text_ast) {
 pub type PreProcessedSnippetLine {
   SourceSnippetLine(
     elements: List(PreProcessedNode),
-    significance: PreProcessedLineSignificance,
+    topic_id: option.Option(String),
     leading_spaces: Int,
   )
   TextSnippetLine(elements: List(PreProcessedNode))
@@ -515,11 +515,11 @@ fn pre_processed_snippet_line_to_json(
   pre_processed_snippet_line: PreProcessedSnippetLine,
 ) -> json.Json {
   case pre_processed_snippet_line {
-    SourceSnippetLine(elements:, significance:, leading_spaces:) ->
+    SourceSnippetLine(topic_id:, elements:, leading_spaces:) ->
       json.object([
         #("v", json.string("s")),
+        #("t", json.nullable(topic_id, json.string)),
         #("e", json.array(elements, encode_pre_processed_node)),
-        #("s", encode_pre_processed_line_significance(significance)),
         #("l", json.int(leading_spaces)),
       ])
     TextSnippetLine(elements:) ->
@@ -536,20 +536,13 @@ fn pre_processed_snippet_line_decoder() -> decode.Decoder(
   use variant <- decode.field("v", decode.string)
   case variant {
     "s" -> {
+      use topic_id <- decode.field("t", decode.optional(decode.string))
       use elements <- decode.field(
         "e",
         decode.list(pre_processed_node_decoder()),
       )
-      use significance <- decode.field(
-        "s",
-        pre_processed_line_significance_decoder(),
-      )
       use leading_spaces <- decode.field("l", decode.int)
-      decode.success(SourceSnippetLine(
-        elements:,
-        significance:,
-        leading_spaces:,
-      ))
+      decode.success(SourceSnippetLine(topic_id:, elements:, leading_spaces:))
     }
     "t" -> {
       use elements <- decode.field(
@@ -565,113 +558,60 @@ fn pre_processed_snippet_line_decoder() -> decode.Decoder(
 
 pub type PreProcessedLine {
   PreProcessedLine(
-    significance: PreProcessedLineSignificance,
+    topic_id: option.Option(String),
+    elements: List(PreProcessedNode),
     line_number: Int,
+    columns: Int,
     line_number_text: String,
     line_tag: String,
-    leading_spaces: Int,
-    elements: List(PreProcessedNode),
-    columns: Int,
-    kind: PreProcessedLineKind,
+    level: Int,
+    kind: SourceKind,
   )
 }
 
 pub fn encode_pre_processed_line(
   pre_processed_line: PreProcessedLine,
 ) -> json.Json {
+  let PreProcessedLine(
+    topic_id:,
+    elements:,
+    line_number:,
+    columns:,
+    line_number_text: _,
+    line_tag: _,
+    level:,
+    kind:,
+  ) = pre_processed_line
+
   json.object([
-    #(
-      "s",
-      encode_pre_processed_line_significance(pre_processed_line.significance),
-    ),
-    #("n", json.int(pre_processed_line.line_number)),
-    #("l", json.int(pre_processed_line.leading_spaces)),
-    #("e", json.array(pre_processed_line.elements, encode_pre_processed_node)),
-    #("c", json.int(pre_processed_line.columns)),
-    #("k", encode_pre_processed_line_kind(pre_processed_line.kind)),
+    #("v", json.string("s")),
+    #("t", json.nullable(topic_id, json.string)),
+    #("e", json.array(elements, encode_pre_processed_node)),
+    #("n", json.int(line_number)),
+    #("c", json.int(columns)),
+    #("l", json.int(level)),
+    #("k", encode_source_kind(kind)),
   ])
 }
 
 pub fn pre_processed_line_decoder() -> decode.Decoder(PreProcessedLine) {
-  use significance <- decode.field(
-    "s",
-    pre_processed_line_significance_decoder(),
-  )
-  use line_number <- decode.field("n", decode.int)
-  use leading_spaces <- decode.field("l", decode.int)
+  use topic_id <- decode.field("t", decode.optional(decode.string))
   use elements <- decode.field("e", decode.list(pre_processed_node_decoder()))
+  use line_number <- decode.field("n", decode.int)
   use columns <- decode.field("c", decode.int)
   let line_number_text = line_number |> int.to_string
-  use kind <- decode.field("k", pre_processed_line_kind_decoder())
+  use level <- decode.field("l", decode.int)
+  use kind <- decode.field("k", source_kind_decoder())
   decode.success(PreProcessedLine(
-    significance:,
+    topic_id:,
+    elements:,
     line_number:,
+    columns:,
     line_number_text:,
     line_tag: "L" <> line_number_text,
-    leading_spaces:,
-    elements:,
-    columns:,
+    level:,
     kind:,
   ))
-}
-
-pub type PreProcessedLineSignificance {
-  SingleDeclarationLine(topic_id: String)
-  NonEmptyLine(topic_id: String)
-  EmptyLine
-}
-
-fn encode_pre_processed_line_significance(
-  pre_processed_line_significance: PreProcessedLineSignificance,
-) -> json.Json {
-  case pre_processed_line_significance {
-    SingleDeclarationLine(topic_id:) ->
-      json.object([#("v", json.string("sdl")), #("t", json.string(topic_id))])
-    NonEmptyLine(topic_id:) ->
-      json.object([#("v", json.string("nel")), #("t", json.string(topic_id))])
-    EmptyLine -> json.object([#("v", json.string("el"))])
-  }
-}
-
-fn pre_processed_line_significance_decoder() -> decode.Decoder(
-  PreProcessedLineSignificance,
-) {
-  use variant <- decode.field("v", decode.string)
-  case variant {
-    "sdl" -> {
-      use topic_id <- decode.field("t", decode.string)
-      decode.success(SingleDeclarationLine(topic_id:))
-    }
-    "nel" -> {
-      use topic_id <- decode.field("t", decode.string)
-      decode.success(NonEmptyLine(topic_id:))
-    }
-    "el" -> decode.success(EmptyLine)
-    _ -> decode.failure(EmptyLine, "PreProcessedLineSignificance")
-  }
-}
-
-pub type PreProcessedLineKind {
-  SoliditySourceLine
-  TextLine
-}
-
-fn encode_pre_processed_line_kind(
-  pre_processed_line_kind: PreProcessedLineKind,
-) -> json.Json {
-  case pre_processed_line_kind {
-    SoliditySourceLine -> json.string("s")
-    TextLine -> json.string("t")
-  }
-}
-
-fn pre_processed_line_kind_decoder() -> decode.Decoder(PreProcessedLineKind) {
-  use variant <- decode.then(decode.string)
-  case variant {
-    "s" -> decode.success(SoliditySourceLine)
-    "t" -> decode.success(TextLine)
-    _ -> decode.failure(TextLine, "PreProcessedLineKind")
-  }
 }
 
 pub type PreProcessedNode {
@@ -681,68 +621,75 @@ pub type PreProcessedNode {
   PreProcessedGapNode(element: String, leading_spaces: Int)
   FormatterNewline
   FormatterBlock(nodes: List(PreProcessedNode))
+  FormatterHeader(level: Int)
 }
 
 fn encode_pre_processed_node(pre_processed_node: PreProcessedNode) -> json.Json {
   case pre_processed_node {
     PreProcessedDeclaration(..) ->
       json.object([
-        #("v", json.string("ppd")),
+        #("v", json.string("d")),
         #("t", json.string(pre_processed_node.topic_id)),
         #("n", json.string(pre_processed_node.tokens)),
       ])
     PreProcessedReference(..) ->
       json.object([
-        #("v", json.string("ppr")),
+        #("v", json.string("r")),
         #("t", json.string(pre_processed_node.topic_id)),
         #("n", json.string(pre_processed_node.tokens)),
       ])
     PreProcessedNode(..) ->
       json.object([
-        #("v", json.string("ppn")),
+        #("v", json.string("n")),
         #("e", json.string(pre_processed_node.element)),
       ])
     PreProcessedGapNode(..) ->
       json.object([
-        #("v", json.string("ppgn")),
+        #("v", json.string("g")),
         #("e", json.string(pre_processed_node.element)),
         #("s", json.int(pre_processed_node.leading_spaces)),
       ])
-    FormatterNewline -> json.object([#("v", json.string("fl"))])
+    FormatterNewline -> json.object([#("v", json.string("l"))])
     FormatterBlock(nodes) ->
       json.object([
-        #("v", json.string("fb")),
+        #("v", json.string("b")),
         #("n", json.array(nodes, encode_pre_processed_node)),
       ])
+    FormatterHeader(level) ->
+      json.object([#("v", json.string("h")), #("l", json.int(level))])
   }
 }
 
 fn pre_processed_node_decoder() -> decode.Decoder(PreProcessedNode) {
   use variant <- decode.field("v", decode.string)
   case variant {
-    "ppd" -> {
+    "d" -> {
       use topic_id <- decode.field("t", decode.string)
       use tokens <- decode.field("n", decode.string)
       decode.success(PreProcessedDeclaration(topic_id:, tokens:))
     }
-    "ppr" -> {
+    "r" -> {
       use topic_id <- decode.field("t", decode.string)
       use tokens <- decode.field("n", decode.string)
       decode.success(PreProcessedReference(topic_id:, tokens:))
     }
-    "ppn" -> {
+    "n" -> {
       use element <- decode.field("e", decode.string)
       decode.success(PreProcessedNode(element:))
     }
-    "ppgn" -> {
+    "g" -> {
       use element <- decode.field("e", decode.string)
       use leading_spaces <- decode.field("s", decode.int)
       decode.success(PreProcessedGapNode(element:, leading_spaces:))
     }
-    "fl" -> decode.success(FormatterNewline)
-    "fb" -> {
+    "l" -> decode.success(FormatterNewline)
+    "b" -> {
       use nodes <- decode.field("n", decode.list(pre_processed_node_decoder()))
       decode.success(FormatterBlock(nodes:))
+    }
+    "h" -> {
+      use level <- decode.field("l", decode.int)
+      decode.success(FormatterHeader(level:))
     }
     _ -> decode.failure(PreProcessedNode(""), "PreProcessedNode")
   }
