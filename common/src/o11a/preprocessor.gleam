@@ -6,7 +6,6 @@ import gleam/json
 import gleam/list
 import gleam/option
 import gleam/result
-import gleam/string
 
 pub type Declaration {
   SourceDeclaration(
@@ -147,13 +146,6 @@ fn scope_decoder() -> decode.Decoder(Scope) {
     decode.optional(decode.string),
   )
   decode.success(Scope(file:, contract:, member:))
-}
-
-pub fn contract_scope_to_string(scope: Scope) {
-  scope.contract
-  |> option.unwrap("")
-  <> option.map(scope.member, fn(member) { "." <> member })
-  |> option.unwrap("")
 }
 
 pub fn declaration_to_link(decaration: Declaration) {
@@ -412,29 +404,21 @@ pub fn node_reference_kind_to_annotation(kind) {
   }
 }
 
-pub fn get_references(
-  in message: String,
+pub fn find_reference(
+  for name: String,
   with declarations: dict.Dict(String, Declaration),
 ) {
-  string.split(message, on: " ")
-  |> list.filter_map(fn(word) {
-    use ref <- result.try({
-      case word {
-        "#" <> ref -> Ok(ref)
-        _ -> Error(Nil)
-      }
-    })
+  let declarations = dict.values(declarations)
 
-    let declarations = dict.values(declarations)
-
-    list.find(declarations, fn(dec) {
-      contract_scope_to_string(dec.scope) <> "." <> dec.name == ref
-    })
-    |> result.try_recover(fn(_) {
-      list.find(declarations, fn(dec) { dec.name == ref })
-    })
-    |> result.map(fn(dec) { dec.topic_id })
+  list.find(declarations, fn(dec) { declaration_to_qualified_name(dec) == name })
+  |> result.try_recover(fn(_) {
+    // If exactly one declaration matches the unqualified name, use it
+    case list.filter(declarations, fn(dec) { dec.name == name }) {
+      [unique_decl] -> Ok(unique_decl)
+      _ -> Error(Nil)
+    }
   })
+  |> result.map(fn(dec) { dec.topic_id })
 }
 
 pub fn encode_declaration_links(declaration_links: dict.Dict(Int, String)) {

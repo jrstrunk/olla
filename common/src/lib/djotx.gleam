@@ -1,9 +1,28 @@
 import gleam/dict.{type Dict}
+import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import houdini
+import lustre/attribute
+import lustre/element
+import lustre/element/html
+import o11a/preprocessor
+
+pub fn main() {
+  "Hello friend! This is `cool`.a
+
+This is what I have to say.
+"
+  |> parse("main", "main")
+  |> fn(doc) { doc.0 }
+  |> djot_document_to_elements
+  |> element.fragment
+  |> element.to_string
+  |> echo
+}
+
 import gleam/string
 import splitter.{type Splitter}
-
 
 pub type Document {
   Document(
@@ -32,8 +51,8 @@ pub fn add_attribute(
 
 pub type Container {
   ThematicBreak
-  Paragraph(attributes: Dict(String, String), content: List(Statement))
-  Heading(attributes: Dict(String, String), level: Int, content: List(Inline))
+  Paragraph(attributes: Dict(String, String), statements: List(Statement))
+  Heading(attributes: Dict(String, String), level: Int, inlines: List(Inline))
   Codeblock(
     attributes: Dict(String, String),
     language: Option(String),
@@ -44,7 +63,7 @@ pub type Container {
 }
 
 pub type Statement {
-  Statement(inlines: List(Inline))
+  Statement(inlines: List(Inline), topic_id: String)
 }
 
 pub type Inline {
@@ -72,7 +91,14 @@ pub type Destination {
 }
 
 type Refs {
-  Refs(urls: Dict(String, String), footnotes: Dict(String, List(Container)))
+  Refs(
+    urls: Dict(String, String),
+    footnotes: Dict(String, List(Container)),
+    document_id: String,
+    document_parent: String,
+    max_topic_id: Int,
+    declarations: Dict(String, preprocessor.Declaration),
+  )
 }
 
 type Splitters {
@@ -90,7 +116,7 @@ type Splitters {
 /// This may be useful when you want more control over the HTML to be converted
 /// to, or you wish to convert Djot to some other format.
 ///
-pub fn parse(djot: String) -> Document {
+pub fn parse(djot: String, document_id: String, document_parent: String) {
   let splitters =
     Splitters(
       verbatim_line_end: splitter.new([" ", "\n"]),
@@ -101,14 +127,22 @@ pub fn parse(djot: String) -> Document {
       link_destination: splitter.new([")", "]", "\n"]),
       math_end: splitter.new(["`"]),
     )
-  let refs = Refs(dict.new(), dict.new())
+  let refs =
+    Refs(
+      dict.new(),
+      dict.new(),
+      document_id:,
+      document_parent:,
+      max_topic_id: 0,
+      declarations: dict.new(),
+    )
 
-  let #(ast, Refs(urls, footnotes), _) =
+  let #(ast, Refs(urls, footnotes, max_topic_id:, declarations:, ..), _) =
     djot
     |> string.replace("\r\n", "\n")
     |> parse_document_content(refs, splitters, [], dict.new())
 
-  Document(ast, urls, footnotes)
+  #(Document(ast, urls, footnotes), max_topic_id, declarations)
 }
 
 fn drop_lines(in: String) -> String {
@@ -233,7 +267,8 @@ fn parse_container(
     "{" <> in2 ->
       case parse_attributes(in2, attrs) {
         None -> {
-          let #(paragraph, in) = parse_paragraph(in, attrs, splitters)
+          let #(paragraph, refs, in) =
+            parse_paragraph(in, refs, attrs, splitters)
           #(in, refs, Some(paragraph), dict.new())
         }
         Some(#(attrs, in)) -> #(in, refs, None, attrs)
@@ -247,7 +282,8 @@ fn parse_container(
     "~" as delim <> in2 | "`" as delim <> in2 -> {
       case parse_codeblock(in2, attrs, delim, indentation, splitters) {
         None -> {
-          let #(paragraph, in) = parse_paragraph(in, attrs, splitters)
+          let #(paragraph, refs, in) =
+            parse_paragraph(in, refs, attrs, splitters)
           #(in, refs, Some(paragraph), dict.new())
         }
         Some(#(codeblock, in)) -> #(in, refs, Some(codeblock), dict.new())
@@ -262,7 +298,8 @@ fn parse_container(
           #(in, refs, Some(list), dict.new())
         }
         None, _ -> {
-          let #(paragraph, in) = parse_paragraph(in, attrs, splitters)
+          let #(paragraph, refs, in) =
+            parse_paragraph(in, refs, attrs, splitters)
           #(in, refs, Some(paragraph), dict.new())
         }
         Some(#(thematic_break, in)), _ -> {
@@ -274,7 +311,8 @@ fn parse_container(
     "[^" <> in2 -> {
       case parse_footnote_def(in2, refs, splitters, "^") {
         None -> {
-          let #(paragraph, in) = parse_paragraph(in, attrs, splitters)
+          let #(paragraph, refs, in) =
+            parse_paragraph(in, refs, attrs, splitters)
           #(in, refs, Some(paragraph), dict.new())
         }
         Some(#(id, footnote, refs, in)) -> {
@@ -288,7 +326,8 @@ fn parse_container(
     "[" <> in2 -> {
       case parse_ref_def(in2, "") {
         None -> {
-          let #(paragraph, in) = parse_paragraph(in, attrs, splitters)
+          let #(paragraph, refs, in) =
+            parse_paragraph(in, refs, attrs, splitters)
           #(in, refs, Some(paragraph), dict.new())
         }
         Some(#(id, url, in)) -> {
@@ -299,7 +338,7 @@ fn parse_container(
     }
 
     _ -> {
-      let #(paragraph, in) = parse_paragraph(in, attrs, splitters)
+      let #(paragraph, refs, in) = parse_paragraph(in, refs, attrs, splitters)
       #(in, refs, Some(paragraph), dict.new())
     }
   }
@@ -625,7 +664,7 @@ fn parse_heading(
     }
 
     None -> {
-      let #(p, in) = parse_paragraph("#" <> in, attrs, splitters)
+      let #(p, refs, in) = parse_paragraph("#" <> in, refs, attrs, splitters)
       #(p, refs, in)
     }
   }
@@ -1077,25 +1116,28 @@ pub fn take_inline_text(inlines: List(Inline), acc: String) -> String {
 
 fn parse_paragraph(
   in: String,
+  refs: Refs,
   attrs: Dict(String, String),
   splitters: Splitters,
-) -> #(Container, String) {
+) -> #(Container, Refs, String) {
   let #(inline_in, in) = take_paragraph_chars(in)
 
-  let #(statements, inline_in_remaining) =
-    do_parse_paragraph_statements(inline_in, attrs, splitters, [])
+  let #(statements, refs, inline_in_remaining) =
+    do_parse_paragraph_statements(inline_in, refs, attrs, splitters, [])
   #(
     Paragraph(
       attrs,
       statements
         |> list.reverse,
     ),
+    refs,
     inline_in_remaining <> in,
   )
 }
 
 fn do_parse_paragraph_statements(
   inline_in: String,
+  refs: Refs,
   attrs: Dict(String, String),
   splitters,
   statements: List(Statement),
@@ -1103,13 +1145,69 @@ fn do_parse_paragraph_statements(
   let #(inline, inline_in_remaining) =
     parse_inline(inline_in, splitters, "", [])
   case inline, inline_in_remaining {
-    _, "" | _, "\n" -> #([Statement(inline), ..statements], inline_in_remaining)
-    [], _ -> #(statements, inline_in_remaining)
-    _, _ ->
-      do_parse_paragraph_statements(inline_in_remaining, attrs, splitters, [
-        Statement(inline),
-        ..statements
-      ])
+    _, "" | _, "\n" -> {
+      let max_topic_id = refs.max_topic_id + 1
+
+      let topic_id = refs.document_id <> "-" <> int.to_string(max_topic_id)
+
+      let declaration =
+        preprocessor.TextDeclaration(
+          topic_id:,
+          name: topic_id,
+          signature: list.map(inline, inline_to_element(_, Nil))
+            |> element.fragment
+            |> element.to_string,
+          scope: preprocessor.Scope(
+            file: refs.document_parent,
+            contract: option.Some(refs.document_id),
+            member: option.None,
+          ),
+        )
+
+      let refs =
+        Refs(
+          ..refs,
+          max_topic_id:,
+          declarations: dict.insert(refs.declarations, topic_id, declaration),
+        )
+
+      #([Statement(inline, topic_id:), ..statements], refs, inline_in_remaining)
+    }
+    [], _ -> #(statements, refs, inline_in_remaining)
+    _, _ -> {
+      let max_topic_id = refs.max_topic_id + 1
+
+      let topic_id = refs.document_id <> "-" <> int.to_string(max_topic_id)
+
+      let declaration =
+        preprocessor.TextDeclaration(
+          topic_id:,
+          name: topic_id,
+          signature: list.map(inline, inline_to_element(_, Nil))
+            |> element.fragment
+            |> element.to_string,
+          scope: preprocessor.Scope(
+            file: refs.document_parent,
+            contract: option.Some(refs.document_id),
+            member: option.None,
+          ),
+        )
+
+      let refs =
+        Refs(
+          ..refs,
+          max_topic_id:,
+          declarations: dict.insert(refs.declarations, topic_id, declaration),
+        )
+
+      do_parse_paragraph_statements(
+        inline_in_remaining,
+        refs,
+        attrs,
+        splitters,
+        [Statement(inline, topic_id:), ..statements],
+      )
+    }
   }
 }
 
@@ -1178,5 +1276,159 @@ fn take_paragraph_chars(in: String) -> #(String, String) {
         True -> #(string.drop_end(in, 1), "")
         False -> #(in, "")
       }
+  }
+}
+
+/// Convert a document tree into a string of HTML.
+///
+/// See `to_html` for further documentation.
+///
+pub fn djot_document_to_elements(document: Document) {
+  containers_to_elements(document.content, Nil)
+}
+
+fn containers_to_elements(
+  containers: List(Container),
+  refs,
+) -> List(element.Element(msg)) {
+  list.map(containers, fn(container) { container_to_elements(container, refs) })
+}
+
+pub fn container_to_elements(container: Container, refs) -> element.Element(msg) {
+  case container {
+    ThematicBreak -> html.hr([])
+
+    Paragraph(attrs, statements) -> {
+      html.p(
+        attrs |> dict_to_attributes,
+        statements_to_elements(statements, refs),
+      )
+    }
+
+    Codeblock(attrs, language, content) -> {
+      let code_attrs = case language {
+        Some(lang) -> add_attribute(attrs, "class", "language-" <> lang)
+        None -> attrs
+      }
+
+      html.pre([attribute.class("codeblock")], [
+        html.code(code_attrs |> dict_to_attributes, [
+          html.text(houdini.escape(content)),
+        ]),
+      ])
+    }
+
+    Heading(attrs, level, inlines) -> {
+      let tag = "h" <> int.to_string(level)
+      element.element(
+        tag,
+        attrs |> dict_to_attributes,
+        inlines_to_elements(inlines, refs),
+      )
+    }
+
+    RawBlock(_content) -> element.fragment([])
+
+    BulletList(layout:, style: _, items:) -> {
+      html.ul([], list_items_to_html([], layout, items, refs) |> list.reverse)
+    }
+  }
+}
+
+fn dict_to_attributes(dict: Dict(String, String)) {
+  dict
+  |> dict.to_list
+  |> list.map(fn(pair) { attribute.attribute(pair.0, pair.1) })
+}
+
+fn list_items_to_html(
+  elements: List(element.Element(msg)),
+  layout: ListLayout,
+  items: List(List(Container)),
+  refs,
+) -> List(element.Element(msg)) {
+  case items {
+    [] -> elements
+
+    [[Paragraph(_, statements)], ..rest] if layout == Tight -> {
+      [html.li([], statements_to_elements(statements, refs)), ..elements]
+      |> list_items_to_html(layout, rest, refs)
+    }
+
+    [item, ..rest] -> {
+      [html.li([], containers_to_elements(item, refs)), ..elements]
+      |> list_items_to_html(layout, rest, refs)
+    }
+  }
+}
+
+fn statements_to_elements(statements: List(Statement), refs) {
+  list.map(statements, fn(s: Statement) {
+    html.span(
+      [attribute.class("statement")],
+      inlines_to_elements(s.inlines, refs),
+    )
+  })
+}
+
+fn inlines_to_elements(
+  inlines: List(Inline),
+  refs,
+) -> List(element.Element(msg)) {
+  list.map(inlines, fn(inline) { inline_to_element(inline, refs) })
+}
+
+pub fn inline_to_element(inline: Inline, refs) -> element.Element(msg) {
+  case inline {
+    MathInline(latex) -> {
+      let latex = "\\(" <> houdini.escape(latex) <> "\\)"
+
+      html.span([attribute.class("math inline")], [html.text(latex)])
+    }
+    MathDisplay(latex) -> {
+      let latex = "\\[" <> houdini.escape(latex) <> "\\]"
+
+      html.span([attribute.class("math display")], [html.text(latex)])
+    }
+    NonBreakingSpace -> {
+      html.text("\u{a0}")
+    }
+    Linebreak -> {
+      html.br([])
+    }
+    Text(text) -> {
+      let text = houdini.escape(text)
+      html.text(text)
+    }
+    Strong(inlines) -> {
+      html.strong([], inlines_to_elements(inlines, refs))
+    }
+    Emphasis(inlines) -> {
+      html.em([], inlines_to_elements(inlines, refs))
+    }
+    Link(text, destination) -> {
+      html.a(
+        [destination_attribute("href", destination)],
+        inlines_to_elements(text, refs),
+      )
+    }
+    Image(text, destination) -> {
+      html.img([
+        destination_attribute("src", destination),
+        attribute.alt(houdini.escape(take_inline_text(text, ""))),
+      ])
+    }
+    Code(content) -> {
+      let content = houdini.escape(content)
+      html.code([], [html.text(content)])
+    }
+    Footnote(reference) -> html.text(reference)
+  }
+}
+
+fn destination_attribute(key: String, destination: Destination) {
+  case destination {
+    Url(url) -> attribute.attribute(key, houdini.escape(url))
+    Reference(id) -> attribute.attribute(key, houdini.escape(id))
   }
 }

@@ -49,7 +49,10 @@ fn consume_source(nodes nodes: List(Node)) {
       LineNode(local_id:, line:, ..) -> {
         [
           preprocessor.PreProcessedDeclaration(
-            topic_id: preprocessor.node_id_to_topic_id(local_id, preprocessor.Text),
+            topic_id: preprocessor.node_id_to_topic_id(
+              local_id,
+              preprocessor.Text,
+            ),
             tokens: line,
           ),
           ..acc
@@ -75,7 +78,10 @@ pub fn enumerate_declarations(declarations, in ast: AST) {
             declarations,
             local_id,
             preprocessor.TextDeclaration(
-              topic_id: preprocessor.node_id_to_topic_id(local_id, preprocessor.Text),
+              topic_id: preprocessor.node_id_to_topic_id(
+                local_id,
+                preprocessor.Text,
+              ),
               name: "L" <> line_number_text,
               scope: preprocessor.Scope(
                 file: filepath.base_name(page_path),
