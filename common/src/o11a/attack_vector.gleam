@@ -1,7 +1,6 @@
 import gleam/dynamic/decode
 import gleam/json
-import gleam/option
-import o11a/preprocessor
+import o11a/topic
 
 pub type AttackVector {
   AttackVector(topic_id: String, title: String)
@@ -21,15 +20,9 @@ pub fn attack_vector_decoder() -> decode.Decoder(AttackVector) {
   decode.success(AttackVector(topic_id:, title:))
 }
 
-pub fn attack_vector_to_declaration(attack_vector: AttackVector, audit_name) {
-  preprocessor.TextDeclaration(
+pub fn attack_vector_to_declaration(attack_vector: AttackVector, _audit_name) {
+  topic.AttackVector(
     topic_id: attack_vector.topic_id,
     name: attack_vector.topic_id,
-    signature: "Attack Vector: " <> attack_vector.title,
-    scope: preprocessor.Scope(
-      file: audit_name <> "/dashboard",
-      contract: option.None,
-      member: option.None,
-    ),
   )
 }

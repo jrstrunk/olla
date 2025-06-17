@@ -12,11 +12,15 @@ import lustre/element
 import lustre/element/html
 import lustre/server_component
 import o11a/events
-import o11a/server/audit_data
 import o11a/server/discussion
+import o11a/topic
+import persistent_concurrent_dict
 
 pub fn app() -> lustre.App(
-  #(discussion.Discussion, audit_data.AuditData),
+  #(
+    discussion.Discussion,
+    persistent_concurrent_dict.PersistentConcurrentDict(String, topic.Topic),
+  ),
   Model,
   Msg,
 ) {
@@ -34,9 +38,12 @@ pub type Model {
 }
 
 pub fn init(
-  init_flags: #(discussion.Discussion, audit_data.AuditData),
+  init_flags: #(
+    discussion.Discussion,
+    persistent_concurrent_dict.PersistentConcurrentDict(String, topic.Topic),
+  ),
 ) -> #(Model, effect.Effect(Msg)) {
-  let #(discussion, audit_data) = init_flags
+  let #(discussion, topics) = init_flags
 
   let subscribe_to_note_updates_effect =
     effect.from(fn(dispatch) {
@@ -48,22 +55,9 @@ pub fn init(
   let subscribe_to_topic_updates_effect =
     effect.from(fn(dispatch) {
       let assert Ok(Nil) =
-        audit_data.subscribe_to_topic_merge_updates(
-          audit_data,
-          discussion.audit_name,
-          fn() { dispatch(ServerUpdatedDiscussion) },
-        )
-
-      Nil
-    })
-
-  let subscribe_to_attack_vectors_updates_effect =
-    effect.from(fn(dispatch) {
-      let Nil =
-        audit_data.subscribe_to_attack_vectors_updates(audit_data, fn() {
-          dispatch(ServerUpdatedAttackVectors)
+        persistent_concurrent_dict.subscribe(topics, fn() {
+          dispatch(ServerUpdatedTopics)
         })
-
       Nil
     })
 
@@ -72,7 +66,6 @@ pub fn init(
     effect.batch([
       subscribe_to_note_updates_effect,
       subscribe_to_topic_updates_effect,
-      subscribe_to_attack_vectors_updates_effect,
     ]),
   )
 }

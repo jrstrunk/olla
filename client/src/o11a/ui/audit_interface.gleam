@@ -9,6 +9,7 @@ import lustre/element
 import lustre/element/html
 import o11a/computed_note
 import o11a/preprocessor
+import o11a/topic
 import o11a/ui/discussion
 
 pub const view_id = "interface"
@@ -16,8 +17,8 @@ pub const view_id = "interface"
 pub type InterfaceData {
   InterfaceData(
     file_contracts: List(FileContract),
-    contract_variables: List(preprocessor.Declaration),
-    contract_functions: List(preprocessor.Declaration),
+    contract_variables: List(topic.Topic),
+    contract_functions: List(topic.Topic),
   )
 }
 
@@ -28,11 +29,11 @@ pub const empty_interface_data = InterfaceData(
 )
 
 pub type FileContract {
-  FileContract(file_name: String, contracts: List(preprocessor.Declaration))
+  FileContract(file_name: String, contracts: List(topic.Topic))
 }
 
 pub type ContractDeclaration {
-  ContractDeclaration(contract: String, dec: preprocessor.Declaration)
+  ContractDeclaration(contract: String, dec: topic.Topic)
 }
 
 pub fn view(
@@ -57,7 +58,7 @@ pub fn view(
             fn(line_number_offset, contract) {
               let #(line_number_offset, state_elements) =
                 contract_members_view(
-                  contract.name,
+                  topic.topic_name(contract),
                   interface_data.contract_variables,
                   declarations,
                   discussion,
@@ -68,7 +69,7 @@ pub fn view(
 
               let #(line_number_offset, function_elements) =
                 contract_members_view(
-                  contract.name,
+                  topic.topic_name(contract),
                   interface_data.contract_functions,
                   declarations,
                   discussion,
@@ -79,7 +80,7 @@ pub fn view(
 
               let elements =
                 html.div([attribute.class("ml-[1rem]")], [
-                  html.p([], [html.text(contract.name)]),
+                  html.p([], [html.text(topic.topic_name(contract))]),
                   element.fragment([state_elements, function_elements]),
                 ])
 
@@ -110,16 +111,25 @@ pub fn view(
 
 fn contract_members_view(
   contract: String,
-  declarations_of_type: List(preprocessor.Declaration),
-  declarations: dict.Dict(String, preprocessor.Declaration),
+  declarations_of_type: List(topic.Topic),
+  declarations: dict.Dict(String, topic.Topic),
   discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
   active_discussion active_discussion,
   discussion_context discussion_context,
   line_number_offset line_number_offset,
 ) {
   let items =
-    list.filter(declarations_of_type, fn(declaration) {
-      option.unwrap(declaration.scope.contract, "") == contract
+    list.filter(declarations_of_type, fn(topic) {
+      case topic {
+        topic.SourceDeclaration(
+          scope: preprocessor.Scope(
+            contract: option.Some(topic_contract),
+            ..,
+          ),
+          ..,
+        ) -> topic_contract == contract
+        _ -> False
+      }
     })
 
   let #(lines, elements) =
@@ -128,7 +138,7 @@ fn contract_members_view(
       line_number_offset,
       fn(line_number_offset, declaration) {
         let #(lines, signature) = case declaration {
-          preprocessor.SourceDeclaration(signature:, ..) -> #(
+          topic.SourceDeclaration(signature:, ..) -> #(
             list.length(signature),
             discussion.topic_signature_view(
               view_id:,
@@ -141,9 +151,7 @@ fn contract_members_view(
               discussion_context:,
             ),
           )
-          preprocessor.TextDeclaration(signature:, ..) -> #(0, [
-            html.span([], [html.text(signature)]),
-          ])
+          _ -> #(0, [html.text("")])
         }
 
         #(
@@ -160,44 +168,48 @@ fn contract_members_view(
 }
 
 pub fn gather_interface_data(
-  declaration_list: List(preprocessor.Declaration),
+  declaration_list: List(topic.Topic),
   in_scope_files,
 ) {
   let declarations_in_scope =
     declaration_list
-    |> list.filter(fn(declaration) {
-      list.contains(in_scope_files, declaration.scope.file)
+    |> list.filter(fn(topic) {
+      case topic {
+        topic.SourceDeclaration(scope: preprocessor.Scope(file:, ..), ..) ->
+          list.contains(in_scope_files, file)
+        _ -> False
+      }
     })
 
   let contract_member_declarations_in_scope =
     declarations_in_scope
-    |> list.filter_map(fn(declaration) {
-      case
-        // Only show declarations that are in scope to the audit
-        declaration.scope.contract,
-        declaration.scope.member
-      {
+    |> list.filter_map(fn(topic) {
+      // Only show declarations that are in scope to the audit
+      case topic {
         // Only show declarations that are defined in a contract (not line or 
         // unknown declarations), but not in a contract's functions
-        option.Some(contract), option.None ->
-          Ok(ContractDeclaration(contract, declaration))
-        _, _ -> Error(Nil)
+        topic.SourceDeclaration(
+          scope: preprocessor.Scope(
+            contract: option.Some(contract),
+            member: option.None,
+            ..,
+          ),
+          ..,
+        ) -> Ok(ContractDeclaration(contract, topic))
+        _ -> Error(Nil)
       }
     })
     |> list.sort(by: fn(a, b) {
       case a.dec, b.dec {
-        preprocessor.SourceDeclaration(
+        topic.SourceDeclaration(
           source_map: a_source_map,
           ..,
         ),
-          preprocessor.SourceDeclaration(
+          topic.SourceDeclaration(
             source_map: b_source_map,
             ..,
           )
         -> int.compare(a_source_map.start, b_source_map.start)
-
-        preprocessor.SourceDeclaration(..), preprocessor.TextDeclaration(..) ->
-          order.Lt
 
         _, _ -> order.Gt
       }
@@ -207,14 +219,18 @@ pub fn gather_interface_data(
     declarations_in_scope
     |> list.filter(fn(declaration) {
       case declaration {
-        preprocessor.SourceDeclaration(
-          kind: preprocessor.ContractDeclaration(..),
-          ..,
-        ) -> True
+        topic.SourceDeclaration(kind: preprocessor.ContractDeclaration(..), ..) ->
+          True
         _ -> False
       }
     })
-    |> list.group(by: fn(declaration) { declaration.scope.file })
+    |> list.group(by: fn(topic) {
+      case topic {
+        topic.SourceDeclaration(scope: preprocessor.Scope(file:, ..), ..) ->
+          file
+        _ -> ""
+      }
+    })
     |> dict.map_values(fn(_k, value) {
       list.map(value, fn(declaration) { declaration })
       |> list.unique
@@ -225,10 +241,8 @@ pub fn gather_interface_data(
   let contract_variables =
     list.filter_map(contract_member_declarations_in_scope, fn(declaration) {
       case declaration.dec {
-        preprocessor.SourceDeclaration(
-          kind: preprocessor.VariableDeclaration,
-          ..,
-        ) -> Ok(declaration.dec)
+        topic.SourceDeclaration(kind: preprocessor.VariableDeclaration, ..) ->
+          Ok(declaration.dec)
         _ -> Error(Nil)
       }
     })
@@ -236,10 +250,8 @@ pub fn gather_interface_data(
   let contract_functions =
     list.filter_map(contract_member_declarations_in_scope, fn(declaration) {
       case declaration.dec {
-        preprocessor.SourceDeclaration(
-          kind: preprocessor.FunctionDeclaration(..),
-          ..,
-        ) -> Ok(declaration.dec)
+        topic.SourceDeclaration(kind: preprocessor.FunctionDeclaration(..), ..) ->
+          Ok(declaration.dec)
         _ -> Error(Nil)
       }
     })

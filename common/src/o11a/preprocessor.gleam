@@ -5,129 +5,6 @@ import gleam/int
 import gleam/json
 import gleam/list
 import gleam/option
-import gleam/result
-
-pub type Declaration {
-  SourceDeclaration(
-    topic_id: String,
-    name: String,
-    signature: List(PreProcessedSnippetLine),
-    scope: Scope,
-    id: Int,
-    kind: DeclarationKind,
-    source_map: SourceMap,
-    references: List(Reference),
-    calls: List(String),
-    errors: List(String),
-  )
-  TextDeclaration(
-    topic_id: String,
-    name: String,
-    signature: String,
-    scope: Scope,
-  )
-}
-
-pub fn encode_declaration(declaration: Declaration) -> json.Json {
-  case declaration {
-    SourceDeclaration(
-      id:,
-      topic_id:,
-      name:,
-      scope:,
-      signature:,
-      kind:,
-      source_map:,
-      references:,
-      calls:,
-      errors:,
-    ) ->
-      json.object([
-        #("v", json.string("s")),
-        #("i", json.int(id)),
-        #("t", json.string(topic_id)),
-        #("n", json.string(name)),
-        #("s", encode_scope(scope)),
-        #("g", json.array(signature, pre_processed_snippet_line_to_json)),
-        #("k", encode_declaration_kind(kind)),
-        #("m", encode_source_map(source_map)),
-        #("r", json.array(references, encode_reference)),
-        #("c", json.array(calls, json.string)),
-        #("e", json.array(errors, json.string)),
-      ])
-    TextDeclaration(topic_id:, name:, signature:, scope:) ->
-      json.object([
-        #("v", json.string("t")),
-        #("t", json.string(topic_id)),
-        #("n", json.string(name)),
-        #("g", json.string(signature)),
-        #("s", encode_scope(scope)),
-      ])
-  }
-}
-
-pub fn declaration_decoder() -> decode.Decoder(Declaration) {
-  use variant <- decode.field("v", decode.string)
-  case variant {
-    "s" -> {
-      use topic_id <- decode.field("t", decode.string)
-      use name <- decode.field("n", decode.string)
-      use signature <- decode.field(
-        "g",
-        decode.list(pre_processed_snippet_line_decoder()),
-      )
-      use scope <- decode.field("s", scope_decoder())
-      use id <- decode.field("i", decode.int)
-      use kind <- decode.field("k", declaration_kind_decoder())
-      use source_map <- decode.field("m", source_map_decoder())
-      use references <- decode.field("r", decode.list(reference_decoder()))
-      use calls <- decode.field("c", decode.list(decode.string))
-      use errors <- decode.field("e", decode.list(decode.string))
-      decode.success(SourceDeclaration(
-        topic_id:,
-        name:,
-        signature:,
-        scope:,
-        id:,
-        kind:,
-        source_map:,
-        references:,
-        calls:,
-        errors:,
-      ))
-    }
-    "t" -> {
-      use topic_id <- decode.field("t", decode.string)
-      use name <- decode.field("n", decode.string)
-      use signature <- decode.field("g", decode.string)
-      use scope <- decode.field("s", scope_decoder())
-      decode.success(TextDeclaration(topic_id:, name:, signature:, scope:))
-    }
-    _ ->
-      decode.failure(
-        TextDeclaration(
-          topic_id: "",
-          name: "",
-          signature: "",
-          scope: Scope("", option.None, option.None),
-        ),
-        "Declaration",
-      )
-  }
-}
-
-pub const unknown_declaration = SourceDeclaration(
-  "",
-  "",
-  [],
-  Scope("", option.None, option.None),
-  0,
-  UnknownDeclaration,
-  SourceMap(-1, -1),
-  [],
-  [],
-  [],
-)
 
 pub type Scope {
   Scope(
@@ -137,7 +14,7 @@ pub type Scope {
   )
 }
 
-fn encode_scope(scope: Scope) -> json.Json {
+pub fn encode_scope(scope: Scope) -> json.Json {
   let Scope(file:, contract:, member:) = scope
   json.object(
     [
@@ -155,7 +32,7 @@ fn encode_scope(scope: Scope) -> json.Json {
   )
 }
 
-fn scope_decoder() -> decode.Decoder(Scope) {
+pub fn scope_decoder() -> decode.Decoder(Scope) {
   use file <- decode.field("f", decode.string)
   use contract <- decode.optional_field(
     "c",
@@ -177,22 +54,19 @@ pub fn contract_scope_to_string(scope: Scope) {
   |> option.unwrap("")
 }
 
-pub fn declaration_to_link(decaration: Declaration) {
-  "/"
-  <> decaration.scope.file
-  <> "#"
-  <> declaration_to_qualified_name(decaration)
+pub fn declaration_to_link(scope: Scope, name: String) {
+  "/" <> scope.file <> "#" <> declaration_to_qualified_name(scope, name)
 }
 
-pub fn declaration_to_qualified_name(decaration: Declaration) {
-  case decaration.scope.contract {
+pub fn declaration_to_qualified_name(scope: Scope, name: String) {
+  case scope.contract {
     option.Some(contract) ->
       contract
-      <> case decaration.scope.member {
-        option.Some(member) -> "." <> member <> ":" <> decaration.name
-        option.None -> "." <> decaration.name
+      <> case scope.member {
+        option.Some(member) -> "." <> member <> ":" <> name
+        option.None -> "." <> name
       }
-    option.None -> decaration.name
+    option.None -> name
   }
 }
 
@@ -307,7 +181,7 @@ pub fn declaration_kind_decoder() {
   }
 }
 
-pub fn declaration_kind_to_string(kind) {
+pub fn declaration_kind_to_string(kind kind) {
   case kind {
     ContractDeclaration(Contract) -> "contract"
     ContractDeclaration(Interface) -> "interface"
@@ -433,23 +307,6 @@ pub fn node_reference_kind_to_annotation(kind) {
   }
 }
 
-pub fn find_reference(
-  for name: String,
-  with declarations: dict.Dict(String, Declaration),
-) {
-  let declarations = dict.values(declarations)
-
-  list.find(declarations, fn(dec) { declaration_to_qualified_name(dec) == name })
-  |> result.try_recover(fn(_) {
-    // If exactly one declaration matches the unqualified name, use it
-    case list.filter(declarations, fn(dec) { dec.name == name }) {
-      [unique_decl] -> Ok(unique_decl)
-      _ -> Error(Nil)
-    }
-  })
-  |> result.map(fn(dec) { dec.topic_id })
-}
-
 pub fn encode_declaration_links(declaration_links: dict.Dict(Int, String)) {
   json.array(declaration_links |> dict.to_list, fn(declaration_link) {
     json.object([
@@ -511,7 +368,7 @@ pub type PreProcessedSnippetLine {
   TextSnippetLine(elements: List(PreProcessedNode))
 }
 
-fn pre_processed_snippet_line_to_json(
+pub fn pre_processed_snippet_line_to_json(
   pre_processed_snippet_line: PreProcessedSnippetLine,
 ) -> json.Json {
   case pre_processed_snippet_line {
@@ -530,7 +387,7 @@ fn pre_processed_snippet_line_to_json(
   }
 }
 
-fn pre_processed_snippet_line_decoder() -> decode.Decoder(
+pub fn pre_processed_snippet_line_decoder() -> decode.Decoder(
   PreProcessedSnippetLine,
 ) {
   use variant <- decode.field("v", decode.string)

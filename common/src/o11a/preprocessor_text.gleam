@@ -4,6 +4,7 @@ import gleam/option
 import lib/djotx
 import lustre/element
 import o11a/preprocessor
+import o11a/topic
 
 pub fn preprocess_source(ast ast: djotx.Document, declarations declarations) {
   use line, index <- list.index_map(consume_source(
@@ -96,7 +97,7 @@ fn inline_to_node(inline, declarations) {
     djotx.Linebreak -> preprocessor.PreProcessedNode(element: "<br>")
     djotx.NonBreakingSpace -> preprocessor.PreProcessedNode(element: "\u{a0}")
     djotx.Code(content) ->
-      case preprocessor.find_reference(for: content, with: declarations) {
+      case topic.find_reference_topic(for: content, with: declarations) {
         Ok(topic_id) ->
           preprocessor.PreProcessedReference(topic_id:, tokens: content)
         Error(Nil) ->

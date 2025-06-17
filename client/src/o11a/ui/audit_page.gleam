@@ -16,6 +16,7 @@ import o11a/computed_note
 import o11a/events
 import o11a/note
 import o11a/preprocessor
+import o11a/topic
 import o11a/ui/discussion
 import o11a/ui/formatter
 
@@ -32,7 +33,7 @@ pub type Model {
 pub fn view(
   preprocessed_source preprocessed_source: List(preprocessor.PreProcessedLine),
   discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
-  declarations declarations: dict.Dict(String, preprocessor.Declaration),
+  declarations declarations: dict.Dict(String, topic.Topic),
   discussion_context discussion_context,
   source_kind source_kind,
 ) {
@@ -271,7 +272,7 @@ fn inline_comment_preview_view(
 fn preprocessed_nodes_view(
   loc: preprocessor.PreProcessedLine,
   discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
-  declarations declarations: dict.Dict(String, preprocessor.Declaration),
+  declarations declarations: dict.Dict(String, topic.Topic),
   active_discussion active_discussion: option.Option(
     discussion.DiscussionReference,
   ),

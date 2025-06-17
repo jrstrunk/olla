@@ -9,7 +9,7 @@
 //     dict.from_list([
 //       #(
 //         "1",
-//         preprocessor.Declaration(
+//         topic.Topic(
 //           id: 1,
 //           topic_id: "1",
 //           name: "1",
@@ -34,7 +34,7 @@
 //       ),
 //       #(
 //         "2",
-//         preprocessor.Declaration(
+//         topic.Topic(
 //           id: 2,
 //           topic_id: "2",
 //           name: "2",
@@ -53,7 +53,7 @@
 //       ),
 //       #(
 //         "3",
-//         preprocessor.Declaration(
+//         topic.Topic(
 //           id: 3,
 //           topic_id: "3",
 //           name: "3",
@@ -72,7 +72,7 @@
 //       ),
 //       #(
 //         "4",
-//         preprocessor.Declaration(
+//         topic.Topic(
 //           id: 4,
 //           topic_id: "4",
 //           name: "4",
@@ -98,7 +98,7 @@
 //     dict.from_list([
 //       #(
 //         "1",
-//         preprocessor.Declaration(
+//         topic.Topic(
 //           id: 4,
 //           topic_id: "4",
 //           name: "4",
@@ -135,7 +135,7 @@
 //       ),
 //       #(
 //         "2",
-//         preprocessor.Declaration(
+//         topic.Topic(
 //           id: 4,
 //           topic_id: "4",
 //           name: "4",
@@ -172,7 +172,7 @@
 //       ),
 //       #(
 //         "3",
-//         preprocessor.Declaration(
+//         topic.Topic(
 //           id: 3,
 //           topic_id: "3",
 //           name: "3",
@@ -191,7 +191,7 @@
 //       ),
 //       #(
 //         "4",
-//         preprocessor.Declaration(
+//         topic.Topic(
 //           id: 4,
 //           topic_id: "4",
 //           name: "4",

@@ -21,10 +21,10 @@ import o11a/client/page_navigation
 import o11a/client/selectors
 import o11a/client/storage
 import o11a/computed_note
-import o11a/discussion_topic
 import o11a/events
 import o11a/note
 import o11a/preprocessor
+import o11a/topic
 import o11a/ui/audit_dashboard
 import o11a/ui/audit_interface
 import o11a/ui/audit_page
@@ -58,11 +58,11 @@ pub type Model {
     ),
     audit_declarations: dict.Dict(
       String,
-      Result(dict.Dict(String, preprocessor.Declaration), rsvp.Error),
+      Result(dict.Dict(String, topic.Topic), rsvp.Error),
     ),
     audit_declaration_lists: dict.Dict(
       String,
-      Result(List(preprocessor.Declaration), rsvp.Error),
+      Result(List(topic.Topic), rsvp.Error),
     ),
     audit_interface: dict.Dict(
       String,
@@ -246,7 +246,7 @@ pub type Msg {
   )
   ClientFetchedDeclarations(
     audit_name: String,
-    declarations: Result(List(preprocessor.Declaration), rsvp.Error),
+    declarations: Result(List(topic.Topic), rsvp.Error),
   )
   ClientFetchedMergedTopics(
     audit_name: String,
@@ -380,12 +380,12 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
               _ -> panic
             }
           })
-          |> discussion_topic.build_merged_topics(
+          |> topic.build_merged_topics(
             case dict.get(model.merged_topics, audit_name) {
               Ok(Ok(merged_topics)) -> merged_topics
               _ -> dict.new()
             },
-            get_combined_topics: discussion_topic.get_combined_declaration,
+            get_combined_topics: topic.get_combined_declaration,
           )
           |> Ok
           |> option.Some
@@ -452,10 +452,10 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
               let discussions = option.unwrap(discussions, dict.new())
               case merged_topics {
                 Ok(merged_topics) ->
-                  discussion_topic.build_merged_topics(
+                  topic.build_merged_topics(
                     discussions,
                     merged_topics,
-                    get_combined_topics: discussion_topic.get_combined_discussion,
+                    get_combined_topics: topic.get_combined_discussion,
                   )
                 Error(..) -> discussions
               }
@@ -470,10 +470,10 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
               |> result.map(fn(audit_declarations) {
                 case merged_topics {
                   Ok(merged_topics) ->
-                    discussion_topic.build_merged_topics(
+                    topic.build_merged_topics(
                       audit_declarations,
                       merged_topics,
-                      get_combined_topics: discussion_topic.get_combined_declaration,
+                      get_combined_topics: topic.get_combined_declaration,
                     )
                   Error(..) -> audit_declarations
                 }
@@ -555,12 +555,12 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
               audit_name,
               discussion
                 |> list.group(by: fn(note) { note.parent_id })
-                |> discussion_topic.build_merged_topics(
+                |> topic.build_merged_topics(
                   case dict.get(model.merged_topics, audit_name) {
                     Ok(Ok(merged_topics)) -> merged_topics
                     _ -> dict.new()
                   },
-                  get_combined_topics: discussion_topic.get_combined_discussion,
+                  get_combined_topics: topic.get_combined_discussion,
                 ),
             ),
           ),
@@ -1127,7 +1127,7 @@ fn fetch_declarations(audit_name) {
   rsvp.get(
     "/audit-declarations/" <> audit_name,
     rsvp.expect_json(
-      decode.list(preprocessor.declaration_decoder()),
+      decode.list(topic.topic_decoder()),
       ClientFetchedDeclarations(audit_name, _),
     ),
   )
@@ -1137,7 +1137,7 @@ fn fetch_merged_topics(audit_name) {
   rsvp.get(
     "/audit-merged-topics/" <> audit_name,
     rsvp.expect_json(
-      decode.list(discussion_topic.merged_topic_decoder()),
+      decode.list(topic.merged_topic_decoder()),
       ClientFetchedMergedTopics(audit_name, _),
     ),
   )

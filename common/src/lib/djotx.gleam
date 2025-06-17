@@ -7,6 +7,7 @@ import lustre/attribute
 import lustre/element
 import lustre/element/html
 import o11a/preprocessor
+import o11a/topic
 
 pub fn main() {
   "Hello friend! This is `cool`.a
@@ -98,7 +99,7 @@ type Refs {
     document_id: String,
     document_parent: String,
     max_topic_id: Int,
-    declarations: Dict(String, preprocessor.Declaration),
+    declarations: Dict(String, topic.Topic),
   )
 }
 
@@ -1156,12 +1157,13 @@ fn do_parse_paragraph_statements(
       let topic_id = refs.document_id <> "-" <> int.to_string(max_topic_id)
 
       let declaration =
-        preprocessor.TextDeclaration(
+        topic.TextDeclaration(
           topic_id:,
           name: topic_id,
           signature: list.map(inline, inline_to_element(_, Nil))
             |> element.fragment
-            |> element.to_string,
+            |> element.to_string
+            |> todo as "how can we get this to a list of nodes?",
           scope: preprocessor.Scope(
             file: refs.document_parent,
             contract: option.Some(refs.document_id),
@@ -1185,12 +1187,13 @@ fn do_parse_paragraph_statements(
       let topic_id = refs.document_id <> "-" <> int.to_string(max_topic_id)
 
       let declaration =
-        preprocessor.TextDeclaration(
+        topic.TextDeclaration(
           topic_id:,
           name: topic_id,
           signature: list.map(inline, inline_to_element(_, Nil))
             |> element.fragment
-            |> element.to_string,
+            |> element.to_string
+            |> todo as "how can we get this to a list of nodes?",
           scope: preprocessor.Scope(
             file: refs.document_parent,
             contract: option.Some(refs.document_id),

@@ -11,7 +11,8 @@ import gleam/option
 import gleam/result
 import gleam/string
 import gleam/string_tree
-import lib/persistent_concurrent_dict
+import persistent_concurrent_dict
+
 import lib/persistent_concurrent_duplicate_dict
 import lib/snagx
 import lustre
@@ -20,10 +21,10 @@ import o11a/audit_metadata
 import o11a/config
 import o11a/preprocessor
 import o11a/preprocessor_text
-import o11a/server/audit_data
 import o11a/server/discussion
 import o11a/server/preprocessor_sol
 import o11a/server/preprocessor_text as preprocessor_text_server
+import o11a/topic
 import o11a/ui/discussion_component
 import simplifile
 import snag
@@ -47,10 +48,7 @@ pub type Gateway {
     ),
     topic_gateway: concurrent_dict.ConcurrentDict(
       String,
-      persistent_concurrent_dict.PersistentConcurrentDict(
-        String,
-        preprocessor.Declaration,
-      ),
+      persistent_concurrent_dict.PersistentConcurrentDict(String, topic.Topic),
     ),
     merged_topics_gateway: concurrent_dict.ConcurrentDict(
       String,
@@ -70,7 +68,6 @@ pub type Gateway {
       String,
       discussion.Discussion,
     ),
-    audit_data: audit_data.AuditData,
   )
 }
 
@@ -88,11 +85,6 @@ pub fn start_gateway() -> Result(Gateway, snag.Snag) {
   let discussion_gateway = concurrent_dict.new()
   let discussion_component_gateway = concurrent_dict.new()
 
-  use audit_data <- result.try(
-    audit_data.build()
-    |> snag.context("Failed to build audit data"),
-  )
-
   let page_paths = config.get_all_audit_page_paths()
 
   use audit_metadata <- result.try(build_audit_metadata())
@@ -103,7 +95,12 @@ pub fn start_gateway() -> Result(Gateway, snag.Snag) {
       use source_files <- result.try(build_source_files(audit_name))
       concurrent_dict.insert(source_file_gateway, audit_name, source_files)
 
-      use topics <- result.try(build_topics(audit_name))
+      use
+        topics: persistent_concurrent_dict.PersistentConcurrentDict(
+          String,
+          topic.Topic,
+        )
+      <- result.try(build_topics(audit_name))
       concurrent_dict.insert(topic_gateway, audit_name, topics)
 
       use merged_topics <- result.try(build_merged_topics(audit_name))
@@ -122,7 +119,7 @@ pub fn start_gateway() -> Result(Gateway, snag.Snag) {
       use discussion_component_actor <- result.try(
         lustre.start_server_component(discussion_component.app(), #(
           discussion,
-          audit_data,
+          topics
         ))
         |> snag.map_error(string.inspect),
       )
@@ -145,7 +142,6 @@ pub fn start_gateway() -> Result(Gateway, snag.Snag) {
     attack_vectors_gateway:,
     discussion_gateway:,
     discussion_component_gateway:,
-    audit_data:,
   )
 }
 
@@ -303,11 +299,11 @@ fn build_topics(for audit_name) {
     key_encoder: function.identity,
     key_decoder: function.identity,
     val_encoder: fn(val) {
-      preprocessor.encode_declaration(val)
+      topic.topic_to_json(val)
       |> json.to_string
     },
     val_decoder: fn(val) {
-      let assert Ok(val) = json.parse(val, preprocessor.declaration_decoder())
+      let assert Ok(val) = json.parse(val, topic.topic_decoder())
       val
     },
   )

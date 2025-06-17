@@ -14,7 +14,6 @@ import gleam/pair
 import gleam/result
 import gleam/string_tree
 import gleam/uri
-import lib/persistent_concurrent_dict
 import lib/persistent_concurrent_duplicate_dict
 import lib/server_componentx
 import lustre/attribute
@@ -23,11 +22,11 @@ import lustre/element/html
 import mist
 import o11a/attack_vector
 import o11a/config
-import o11a/discussion_topic
 import o11a/note
-import o11a/preprocessor
 import o11a/server/discussion
+import o11a/topic
 import o11a/ui/gateway
+import persistent_concurrent_dict
 import snag
 import tempo/datetime
 import wisp
@@ -116,7 +115,7 @@ fn handle_wisp_request(req, context: Context) {
       |> result.map(fn(topics) {
         persistent_concurrent_dict.to_list(topics)
         |> list.map(pair.second)
-        |> json.array(preprocessor.encode_declaration)
+        |> json.array(topic.topic_to_json)
         |> json.to_string_tree
       })
       |> result.unwrap(string_tree.from_string(
@@ -128,7 +127,7 @@ fn handle_wisp_request(req, context: Context) {
       gateway.get_merged_topics(context.gateway, for: audit_name)
       |> result.map(fn(merged_topics) {
         persistent_concurrent_dict.to_list(merged_topics)
-        |> json.array(discussion_topic.encode_merged_topic)
+        |> json.array(topic.encode_merged_topic)
         |> json.to_string_tree
       })
       |> result.unwrap(string_tree.from_string(
