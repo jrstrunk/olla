@@ -1,6 +1,8 @@
 import concurrent_dict
 import filepath
 import gleam/dynamic/decode
+import gleam/list
+import gleam/pair
 import gleam/result
 import gleam/string
 import o11a/config
@@ -56,6 +58,15 @@ pub fn build(
 
 pub fn get(pcd: PersistentConcurrentDict(key, val), key) {
   concurrent_dict.get(pcd.data, key)
+}
+
+pub fn to_list(pcd: PersistentConcurrentDict(key, val)) {
+  concurrent_dict.to_list(pcd.data)
+}
+
+pub fn values(pcd: PersistentConcurrentDict(key, val)) {
+  concurrent_dict.to_list(pcd.data)
+  |> list.map(pair.second)
 }
 
 pub fn insert(pcd: PersistentConcurrentDict(key, val), key, val) {

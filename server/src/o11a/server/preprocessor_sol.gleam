@@ -2427,8 +2427,8 @@ fn get_signature_line_significance(
       let assert Ok(topic_id) =
         list.find_map(line_nodes, fn(node) {
           case node {
-            preprocessor.PreProcessedDeclaration(topic_id, ..) |
-            preprocessor.PreProcessedReference(topic_id, ..) ->
+            preprocessor.PreProcessedDeclaration(topic_id, ..)
+            | preprocessor.PreProcessedReference(topic_id, ..) ->
               Ok(option.Some(topic_id))
             _ -> Error(Nil)
           }

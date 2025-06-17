@@ -213,10 +213,10 @@ fn build_structured_notes(
     note.NoteSubmission,
     note.Note,
   ),
-  starting_from parent_id: String,
+  starting_from topic_id: String,
 ) {
   let notes =
-    pcd_dict.get(notes_dict, parent_id)
+    pcd_dict.get(notes_dict, topic_id)
     |> list.sort(fn(a, b) { datetime.compare(a.time, b.time) })
 
   let computed_notes =

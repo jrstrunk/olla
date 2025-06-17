@@ -205,7 +205,7 @@ fn file_tree_from_route(
       )
     }
 
-    AuditPageRoute(audit_name:, page_path: current_file_path,..) -> {
+    AuditPageRoute(audit_name:, page_path: current_file_path, ..) -> {
       let in_scope_files =
         dict.get(audit_metadata, audit_name)
         |> result.map(fn(audit_metadata) {
@@ -1137,7 +1137,7 @@ fn fetch_merged_topics(audit_name) {
   rsvp.get(
     "/audit-merged-topics/" <> audit_name,
     rsvp.expect_json(
-      decode.list(discussion_topic.topic_merge_decoder()),
+      decode.list(discussion_topic.merged_topic_decoder()),
       ClientFetchedMergedTopics(audit_name, _),
     ),
   )

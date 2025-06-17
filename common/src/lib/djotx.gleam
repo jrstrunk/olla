@@ -33,7 +33,7 @@ pub type Document {
   )
 }
 
-pub fn add_attribute(
+fn add_attribute(
   attributes: Dict(String, String),
   key: String,
   value: String,
@@ -117,7 +117,11 @@ type Splitters {
 /// This may be useful when you want more control over the HTML to be converted
 /// to, or you wish to convert Djot to some other format.
 ///
-pub fn parse(djot: String, document_id: String, document_parent: String) {
+pub fn parse(
+  source source: String,
+  document_id document_id: String,
+  document_parent document_parent: String,
+) {
   let splitters =
     Splitters(
       verbatim_line_end: splitter.new([" ", "\n"]),
@@ -139,7 +143,7 @@ pub fn parse(djot: String, document_id: String, document_parent: String) {
     )
 
   let #(ast, Refs(urls, footnotes, max_topic_id:, declarations:, ..), _) =
-    djot
+    source
     |> string.replace("\r\n", "\n")
     |> parse_document_content(refs, splitters, [], dict.new())
 

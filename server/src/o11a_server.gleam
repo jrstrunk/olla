@@ -1,5 +1,4 @@
 import argv
-import concurrent_dict
 import filepath
 import gleam/dynamic/decode
 import gleam/erlang
@@ -11,9 +10,12 @@ import gleam/io
 import gleam/json
 import gleam/list
 import gleam/option.{None}
+import gleam/pair
 import gleam/result
 import gleam/string_tree
 import gleam/uri
+import lib/persistent_concurrent_dict
+import lib/persistent_concurrent_duplicate_dict
 import lib/server_componentx
 import lustre/attribute
 import lustre/element
@@ -23,7 +25,7 @@ import o11a/attack_vector
 import o11a/config
 import o11a/discussion_topic
 import o11a/note
-import o11a/server/audit_data
+import o11a/preprocessor
 import o11a/server/discussion
 import o11a/ui/gateway
 import snag
@@ -32,15 +34,7 @@ import wisp
 import wisp/wisp_mist
 
 type Context {
-  Context(
-    config: config.Config,
-    discussion_gateway: concurrent_dict.ConcurrentDict(
-      String,
-      discussion.Discussion,
-    ),
-    discussion_component_gateway: gateway.DiscussionComponentGateway,
-    audit_data: audit_data.AuditData,
-  )
+  Context(config: config.Config, gateway: gateway.Gateway)
 }
 
 pub fn main() {
@@ -52,24 +46,12 @@ pub fn main() {
 
   io.println("o11a is starting!")
 
-  use
-    gateway.Gateway(
-      discussion_gateway:,
-      discussion_component_gateway:,
-      audit_data:,
-    )
-  <- result.map(
+  use gateway <- result.map(
     gateway.start_gateway()
     |> result.map_error(fn(e) { snag.pretty_print(e) |> io.println }),
   )
 
-  let context =
-    Context(
-      config:,
-      discussion_gateway:,
-      discussion_component_gateway:,
-      audit_data:,
-    )
+  let context = Context(config:, gateway:)
 
   let assert Ok(_) =
     handler(_, context)
@@ -99,7 +81,7 @@ fn handler(req, context: Context) {
     ["component-discussion", audit_name] -> {
       let assert Ok(actor) =
         gateway.get_discussion_component_actor(
-          context.discussion_component_gateway,
+          context.gateway.discussion_component_gateway,
           audit_name,
         )
 
@@ -113,44 +95,51 @@ fn handler(req, context: Context) {
 fn handle_wisp_request(req, context: Context) {
   case request.path_segments(req) {
     ["audit-metadata", audit_name] ->
-      audit_data.get_metadata(context.audit_data, for: audit_name)
+      gateway.get_audit_metadata(context.gateway, for: audit_name)
       |> result.unwrap(string_tree.from_string(
         "{\"error\": \"Metadata not found\"}",
       ))
       |> wisp.json_response(200)
 
     ["source-file", ..page_path] ->
-      audit_data.get_source_file(
-        context.audit_data,
-        for: page_path |> list.fold("", filepath.join),
+      gateway.get_source_file(
+        context.gateway,
+        page_path: page_path |> list.fold("", filepath.join),
       )
       |> result.unwrap(string_tree.from_string(
         "{\"error\": \"Source not found\"}",
       ))
       |> wisp.json_response(200)
 
-    ["audit-declarations", audit_name] ->
-      audit_data.get_declarations(context.audit_data, for: audit_name)
+    ["audit-declarations", audit_name] | ["audit-topics", audit_name] ->
+      gateway.get_topics(context.gateway, for: audit_name)
+      |> result.map(fn(topics) {
+        persistent_concurrent_dict.to_list(topics)
+        |> list.map(pair.second)
+        |> json.array(preprocessor.encode_declaration)
+        |> json.to_string_tree
+      })
       |> result.unwrap(string_tree.from_string(
         "{\"error\": \"Declarations not found\"}",
       ))
       |> wisp.json_response(200)
 
-    ["audit-merged-topics", audit_name] -> {
-      use <- wisp.require_method(req, http.Get)
-      audit_data.get_merged_topics(context.audit_data, for: audit_name)
-      |> result.map(discussion_topic.encode_topic_merges)
-      |> result.map(json.to_string_tree)
+    ["audit-merged-topics", audit_name] ->
+      gateway.get_merged_topics(context.gateway, for: audit_name)
+      |> result.map(fn(merged_topics) {
+        persistent_concurrent_dict.to_list(merged_topics)
+        |> json.array(discussion_topic.encode_merged_topic)
+        |> json.to_string_tree
+      })
       |> result.unwrap(string_tree.from_string(
         "{\"error\": \"Topic merges not found\"}",
       ))
       |> wisp.json_response(200)
-    }
 
     ["merge-topics", audit_name, current_topic_id, new_topic_id] -> {
       case
-        audit_data.add_topic_merge(
-          context.audit_data,
+        gateway.merge_topics(
+          context.gateway,
           audit_name:,
           current_topic_id:,
           new_topic_id:,
@@ -166,19 +155,24 @@ fn handle_wisp_request(req, context: Context) {
       }
     }
 
-    ["audit-attack-vectors", audit_name] -> {
-      audit_data.get_attack_vectors(context.audit_data, for: audit_name)
-      |> json.array(attack_vector.attack_vector_to_json)
-      |> json.to_string_tree
+    ["audit-attack-vectors", audit_name] ->
+      gateway.get_attack_vectors(context.gateway, for: audit_name)
+      |> result.map(fn(attack_vectors) {
+        attack_vectors
+        |> persistent_concurrent_duplicate_dict.to_list
+        |> list.map(pair.second)
+        |> json.array(attack_vector.attack_vector_to_json)
+        |> json.to_string_tree
+      })
+      |> result.unwrap(string_tree.from_string(
+        "{\"error\": \"Attack vectors not found\"}",
+      ))
       |> wisp.json_response(200)
-    }
 
     ["add-attack-vector", audit_name, title] -> {
       case uri.percent_decode(title) {
         Ok(title) ->
-          case
-            audit_data.add_attack_vector(context.audit_data, audit_name, title)
-          {
+          case gateway.add_attack_vector(context.gateway, audit_name, title) {
             Ok(..) -> wisp.response(201)
             Error(e) ->
               wisp.json_response(
@@ -202,7 +196,7 @@ fn handle_wisp_request(req, context: Context) {
 
       let result = {
         use discussion <- result.map(
-          gateway.get_discussion(context.discussion_gateway, audit_name)
+          gateway.get_discussion(context.gateway, audit_name)
           |> result.replace_error(snag.new("Failed to get discussion")),
         )
 
@@ -226,7 +220,7 @@ fn handle_wisp_request(req, context: Context) {
 
       let result = {
         use discussion <- result.try(
-          gateway.get_discussion(context.discussion_gateway, audit_name)
+          gateway.get_discussion(context.gateway, audit_name)
           |> result.replace_error(snag.new("Failed to get discussion")),
         )
         use ref_time <- result.map(
@@ -255,7 +249,7 @@ fn handle_wisp_request(req, context: Context) {
 
       let result = {
         use discussion <- result.try(
-          gateway.get_discussion(context.discussion_gateway, audit_name)
+          gateway.get_discussion(context.gateway, audit_name)
           |> result.replace_error(snag.new("Failed to get discussion")),
         )
         use #(topic_id, note_submission) <- result.try(

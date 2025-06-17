@@ -5,14 +5,18 @@ import gleam/list
 import o11a/computed_note
 import o11a/preprocessor
 
-pub fn encode_topic_merges(topic_merges: dict.Dict(String, String)) {
-  dict.to_list(topic_merges)
+pub fn encode_merged_topic(topic_merge: #(String, String)) {
+  json.array([topic_merge.0, topic_merge.1], json.string)
+}
+
+pub fn encode_merged_topics(topic_merges: List(#(String, String))) {
+  topic_merges
   |> json.array(fn(topic_merge) {
     json.array([topic_merge.0, topic_merge.1], json.string)
   })
 }
 
-pub fn topic_merge_decoder() {
+pub fn merged_topic_decoder() {
   use old_topic <- decode.field(0, decode.string)
   use new_topic <- decode.field(1, decode.string)
   decode.success(#(old_topic, new_topic))

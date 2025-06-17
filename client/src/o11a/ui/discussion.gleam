@@ -351,7 +351,10 @@ pub fn topic_signature_view(
   list.map_fold(
     signature,
     line_number_offset,
-    fn(line_number_offset, preprocessed_snippet_line: preprocessor.PreProcessedSnippetLine) {
+    fn(
+      line_number_offset,
+      preprocessed_snippet_line: preprocessor.PreProcessedSnippetLine,
+    ) {
       let new_line_number = line_number_offset + 1
 
       let #(_col_index, new_line) =
@@ -455,10 +458,7 @@ pub fn topic_signature_view(
                 preprocessed_snippet_line.leading_spaces,
                 line_topic_id,
               )
-            option.None -> #(
-              [],
-              [],
-            )
+            option.None -> #([], [])
           }
 
           element.fragment([
