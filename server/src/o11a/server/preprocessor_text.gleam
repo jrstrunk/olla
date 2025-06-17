@@ -2,13 +2,13 @@ import filepath
 import gleam/int
 import gleam/list
 import gleam/result
-import lib/djotx
 import lib/snagx
 import o11a/config
+import o11a/preprocessor_text
 import simplifile
 import snag
 
-pub fn read_asts(for audit_name) {
+pub fn read_asts(for audit_name, source_topics source_topics) {
   // Get all the text files in the audit directory and sub directories
   use text_files <- result.map(
     config.get_audit_page_paths(audit_name:)
@@ -32,6 +32,11 @@ pub fn read_asts(for audit_name) {
 
   list.index_map(text_files, fn(text_file, index) {
     let #(page_path, source) = text_file
-    djotx.parse(source, "ST" <> int.to_string(index + 1), page_path)
+    preprocessor_text.parse(
+      source,
+      "ST" <> int.to_string(index + 1),
+      page_path,
+      topics: source_topics,
+    )
   })
 }

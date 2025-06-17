@@ -119,7 +119,7 @@ pub fn start_gateway() -> Result(Gateway, snag.Snag) {
       use discussion_component_actor <- result.try(
         lustre.start_server_component(discussion_component.app(), #(
           discussion,
-          topics
+          topics,
         ))
         |> snag.map_error(string.inspect),
       )
@@ -468,26 +468,11 @@ fn preprocess_audit_source(for audit_name) {
     preprocessor_sol.read_asts(audit_name)
     |> snag.context("Unable to read sol asts for " <> audit_name),
   )
-  use text_data <- result.try(
-    preprocessor_text_server.read_asts(audit_name)
-    |> snag.context("Unable to read text asts for " <> audit_name),
-  )
-
-  let #(text_asts, text_declarations) =
-    list.fold(text_data, #([], dict.new()), fn(acc, ast) {
-      let #(text_asts, text_declarations) = acc
-      let #(ast, _max_topic_id, declarations) = ast
-      #([ast, ..text_asts], dict.merge(text_declarations, declarations))
-    })
 
   let page_paths = config.get_all_audit_page_paths()
 
   let file_to_sol_ast =
     list.map(sol_asts, fn(ast) { #(ast.absolute_path, ast) })
-    |> dict.from_list
-
-  let file_to_text_ast =
-    list.map(text_asts, fn(ast) { #(ast.document_parent, ast) })
     |> dict.from_list
 
   let max_topic_id = 1
@@ -505,6 +490,25 @@ fn preprocess_audit_source(for audit_name) {
       preprocessor_sol.enumerate_references(declarations, ast)
     })
     |> preprocessor_sol.enumerate_errors
+
+  use text_data <- result.try(
+    preprocessor_text_server.read_asts(
+      audit_name,
+      source_topics: sol_declarations,
+    )
+    |> snag.context("Unable to read text asts for " <> audit_name),
+  )
+
+  let #(text_asts, text_declarations) =
+    list.fold(text_data, #([], dict.new()), fn(acc, ast) {
+      let #(text_asts, text_declarations) = acc
+      let #(ast, _max_topic_id, declarations) = ast
+      #([ast, ..text_asts], dict.merge(text_declarations, declarations))
+    })
+
+  let file_to_text_ast =
+    list.map(text_asts, fn(ast) { #(ast.document_parent, ast) })
+    |> dict.from_list
 
   let all_declarations = dict.merge(text_declarations, sol_declarations)
 
