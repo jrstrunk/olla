@@ -278,7 +278,7 @@ pub fn topic_name(topic: Topic) {
   }
 }
 
-pub fn topic_to_link(topic: Topic) {
+pub fn topic_link(topic: Topic) {
   case topic {
     AuditFile(path:, name:, ..) -> "/" <> path <> "/" <> name
     SourceDeclaration(scope:, name:, ..) | TextDeclaration(scope:, name:, ..) ->
@@ -291,7 +291,7 @@ pub fn topic_to_link(topic: Topic) {
   }
 }
 
-pub fn topic_to_file(topic: Topic) {
+pub fn topic_file(topic: Topic) {
   case topic {
     AuditFile(path:, ..) -> path
     SourceDeclaration(scope:, ..) | TextDeclaration(scope:, ..) -> scope.file

@@ -669,7 +669,7 @@ fn reference_node_attributes(
       discussion_id:,
     )),
     eventx.on_ctrl_click(
-      ctrl_click: UserCtrlClickedNode(uri: topic.topic_to_link(node_declaration)),
+      ctrl_click: UserCtrlClickedNode(uri: topic.topic_link(node_declaration)),
       non_ctrl_click: option.Some(UserClickedDiscussionEntry(discussion_id:)),
     )
       |> event.stop_propagation,
@@ -1164,17 +1164,23 @@ fn reference_header_view(
             [lucide.copy([])],
           )
             |> element.map(map_discussion_overlay_msg(_, model)),
-          html.button(
-            [
-              event.on_click(UserNavigatedToDeclaration(
-                path: topic.topic_to_file(declaration),
-                fragment: topic.topic_qualified_name(declaration),
-              )),
-              attribute.class("icon-button p-[.3rem]"),
-            ],
-            [lucide.square_arrow_right([])],
-          )
-            |> element.map(map_discussion_overlay_msg(_, model)),
+          case declaration {
+            topic.ComputedNote(..)
+            | topic.NoteDeclaration(..)
+            | topic.Unknown(..) -> element.fragment([])
+            _ ->
+              html.button(
+                [
+                  event.on_click(UserNavigatedToDeclaration(
+                    path: "/" <> topic.topic_file(declaration),
+                    fragment: topic.topic_qualified_name(declaration),
+                  )),
+                  attribute.class("icon-button p-[.3rem]"),
+                ],
+                [lucide.square_arrow_right([])],
+              )
+              |> element.map(map_discussion_overlay_msg(_, model))
+          },
           html.button(
             [
               event.on_click(UserToggledReferenceDiscussion),
@@ -1291,17 +1297,23 @@ fn thread_header_view(
                 [lucide.copy([])],
               )
                 |> element.map(map_discussion_overlay_msg(_, model)),
-              html.button(
-                [
-                  event.on_click(UserNavigatedToDeclaration(
-                    path: topic.topic_to_file(declaration),
-                    fragment: topic.topic_qualified_name(declaration),
-                  )),
-                  attribute.class("icon-button p-[.3rem]"),
-                ],
-                [lucide.square_arrow_right([])],
-              )
-                |> element.map(map_discussion_overlay_msg(_, model)),
+              case declaration {
+                topic.ComputedNote(..)
+                | topic.NoteDeclaration(..)
+                | topic.Unknown(..) -> element.fragment([])
+                _ ->
+                  html.button(
+                    [
+                      event.on_click(UserNavigatedToDeclaration(
+                        path: "/" <> topic.topic_file(declaration),
+                        fragment: topic.topic_qualified_name(declaration),
+                      )),
+                      attribute.class("icon-button p-[.3rem]"),
+                    ],
+                    [lucide.square_arrow_right([])],
+                  )
+                  |> element.map(map_discussion_overlay_msg(_, model))
+              },
               html.button(
                 [
                   event.on_click(UserMaximizeThread),
@@ -1580,12 +1592,14 @@ fn get_topic_title(
   declarations declarations: dict.Dict(String, topic.Topic),
   notes notes,
 ) -> element.Element(DiscussionControllerMsg) {
-  todo as "move to the topic module"
-  case dict.get(declarations, model.topic_id) {
-    Ok(topic.SourceDeclaration(signature:, ..)) ->
+  case topic.get_topic(declarations, model.topic_id) {
+    topic.SourceDeclaration(signature:, ..)
+    | topic.TextDeclaration(signature:, ..)
+    | topic.ComputedNote(signature:, ..)
+    | topic.NoteDeclaration(signature:, ..) ->
       element.fragment(topic_signature_view(
         view_id: model.view_id,
-        signature: signature,
+        signature:,
         declarations:,
         discussion: notes,
         suppress_declaration: True,
@@ -1594,9 +1608,9 @@ fn get_topic_title(
         discussion_context:,
       ))
 
-    Ok(topic.TextDeclaration(signature:, ..)) ->
-      html.span([], [html.text(todo)])
-
-    _ -> html.span([], [html.text("unknown")])
+    topic.AuditFile(..) as topic
+    | topic.AttackVector(..) as topic
+    | topic.Unknown(..) as topic ->
+      html.p([], [html.text(topic.topic_qualified_name(topic))])
   }
 }
