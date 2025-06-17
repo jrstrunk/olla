@@ -215,12 +215,12 @@ pub type SourceMap {
   SourceMap(start: Int, length: Int)
 }
 
-fn encode_source_map(source_map: SourceMap) -> json.Json {
+pub fn encode_source_map(source_map: SourceMap) -> json.Json {
   let SourceMap(start:, length:) = source_map
   json.object([#("s", json.int(start)), #("l", json.int(length))])
 }
 
-fn source_map_decoder() -> decode.Decoder(SourceMap) {
+pub fn source_map_decoder() -> decode.Decoder(SourceMap) {
   use start <- decode.field("s", decode.int)
   use length <- decode.field("l", decode.int)
   decode.success(SourceMap(start:, length:))

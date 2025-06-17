@@ -91,7 +91,7 @@ pub type ComputedNoteSignificance {
   InformationalConfirmation
 }
 
-fn significance_to_int(note_significance) {
+pub fn significance_to_int(note_significance) {
   case note_significance {
     Comment -> 0
     UnansweredQuestion -> 1
@@ -114,7 +114,7 @@ fn significance_to_int(note_significance) {
   }
 }
 
-fn significance_from_int(note_significance) {
+pub fn significance_from_int(note_significance) {
   case note_significance {
     0 -> Comment
     1 -> UnansweredQuestion
