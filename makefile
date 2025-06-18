@@ -14,7 +14,7 @@ run:
 
 .PHONY: wipe
 wipe:
-	@(cd server/priv/persist && rm *)
+	@(cd server/priv/persist && rm -r *)
 
 .PHONY: count-lines
 count-lines:
