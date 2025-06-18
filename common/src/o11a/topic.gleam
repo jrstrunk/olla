@@ -245,6 +245,10 @@ pub fn topic_decoder() -> decode.Decoder(Topic) {
       use name <- decode.field("n", decode.string)
       decode.success(AttackVector(topic_id:, name:))
     }
+    "u" -> {
+      use topic_id <- decode.field("t", decode.string)
+      decode.success(Unknown(topic_id:))
+    }
     _ -> decode.failure(AttackVector(topic_id: "", name: ""), "Topic")
   }
 }

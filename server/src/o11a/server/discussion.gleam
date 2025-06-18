@@ -14,23 +14,14 @@ import o11a/note
 import tempo/datetime
 
 /// A per-audit discussion
-pub type Discussion {
-  Discussion(
-    audit_name: String,
-    notes: pcs_dict.PersistentConcurrentStructuredDict(
-      String,
-      note.NoteSubmission,
-      note.Note,
-      String,
-      List(computed_note.ComputedNote),
-    ),
-    votes: pcd_dict.PersistentConcurrentDuplicateDict(
-      String,
-      note.NoteVote,
-      note.NoteVote,
-    ),
+pub type Discussion =
+  pcs_dict.PersistentConcurrentStructuredDict(
+    String,
+    note.NoteSubmission,
+    note.Note,
+    String,
+    List(computed_note.ComputedNote),
   )
-}
 
 pub fn build_audit_discussion(audit_name: String) {
   use notes <- result.try(pcs_dict.build(
@@ -46,17 +37,7 @@ pub fn build_audit_discussion(audit_name: String) {
     builder: build_structured_notes,
   ))
 
-  use votes <- result.try(pcd_dict.build(
-    config.get_votes_persist_path(for: audit_name),
-    function.identity,
-    function.identity,
-    fn(val, _) { val },
-    note.example_note_vote(),
-    note_vote_persist_encoder,
-    note_vote_persist_decoder(),
-  ))
-
-  Discussion(audit_name:, notes:, votes:)
+  notes
   |> Ok
 }
 
@@ -156,7 +137,7 @@ pub fn add_note(
   }
 
   use note <- result.try(pcs_dict.insert(
-    discussion.notes,
+    discussion,
     note_submission.parent_id,
     note_submission,
     rebuild_topics: list.append(
@@ -177,7 +158,7 @@ pub fn add_note(
       )
 
     pcs_dict.insert(
-      discussion.notes,
+      discussion,
       reference_topic_id,
       reference_note,
       rebuild_topics: [reference_topic_id],
@@ -188,7 +169,7 @@ pub fn add_note(
 }
 
 pub fn subscribe_to_note_updates(discussion: Discussion, effect: fn() -> Nil) {
-  pcs_dict.subscribe(discussion.notes, effect)
+  pcs_dict.subscribe(discussion, effect)
 }
 
 pub fn subscribe_to_line_updates(
@@ -196,15 +177,15 @@ pub fn subscribe_to_line_updates(
   line_id topic: String,
   run effect: fn() -> Nil,
 ) {
-  pcs_dict.subscribe_to_topic(discussion.notes, topic, effect)
+  pcs_dict.subscribe_to_topic(discussion, topic, effect)
 }
 
 pub fn get_notes(discussion: Discussion, line_id topic: String) {
-  pcs_dict.get(discussion.notes, topic:)
+  pcs_dict.get(discussion, topic:)
 }
 
 pub fn get_all_notes(discussion: Discussion) {
-  pcs_dict.to_list(discussion.notes)
+  pcs_dict.to_list(discussion)
 }
 
 fn build_structured_notes(
@@ -245,7 +226,7 @@ fn build_structured_notes(
 
 pub fn dump_computed_notes(discussion: Discussion) {
   let notes =
-    pcs_dict.to_list(discussion.notes)
+    pcs_dict.to_list(discussion)
     |> list.map(pair.second)
     |> list.flatten
 
@@ -254,7 +235,7 @@ pub fn dump_computed_notes(discussion: Discussion) {
 
 pub fn dump_computed_notes_since(discussion: Discussion, since ref_time) {
   let notes =
-    pcs_dict.to_list(discussion.notes)
+    pcs_dict.to_list(discussion)
     |> list.map(pair.second)
     |> list.flatten
     |> list.filter(fn(note) {

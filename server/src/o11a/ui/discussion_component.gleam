@@ -18,6 +18,7 @@ import persistent_concurrent_dict
 
 pub fn app() -> lustre.App(
   #(
+    String,
     discussion.Discussion,
     persistent_concurrent_dict.PersistentConcurrentDict(String, topic.Topic),
   ),
@@ -34,16 +35,17 @@ pub type Msg {
 }
 
 pub type Model {
-  Model(discussion: discussion.Discussion)
+  Model(audit_name: String)
 }
 
 pub fn init(
   init_flags: #(
+    String,
     discussion.Discussion,
     persistent_concurrent_dict.PersistentConcurrentDict(String, topic.Topic),
   ),
 ) -> #(Model, effect.Effect(Msg)) {
-  let #(discussion, topics) = init_flags
+  let #(audit_name, discussion, topics) = init_flags
 
   let subscribe_to_note_updates_effect =
     effect.from(fn(dispatch) {
@@ -62,7 +64,7 @@ pub fn init(
     })
 
   #(
-    Model(discussion:),
+    Model(audit_name:),
     effect.batch([
       subscribe_to_note_updates_effect,
       subscribe_to_topic_updates_effect,
@@ -78,9 +80,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         model,
         server_component.emit(
           events.server_updated_discussion,
-          json.object([
-            #("audit_name", json.string(model.discussion.audit_name)),
-          ]),
+          json.object([#("audit_name", json.string(model.audit_name))]),
         ),
       )
     }
@@ -90,9 +90,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         model,
         server_component.emit(
           events.server_updated_topics,
-          json.object([
-            #("audit_name", json.string(model.discussion.audit_name)),
-          ]),
+          json.object([#("audit_name", json.string(model.audit_name))]),
         ),
       )
     }
@@ -102,9 +100,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         model,
         server_component.emit(
           events.server_updated_attack_vectors,
-          json.object([
-            #("audit_name", json.string(model.discussion.audit_name)),
-          ]),
+          json.object([#("audit_name", json.string(model.audit_name))]),
         ),
       )
     }

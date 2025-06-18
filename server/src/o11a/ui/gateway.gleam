@@ -11,6 +11,9 @@ import gleam/option
 import gleam/result
 import gleam/string
 import gleam/string_tree
+import lib/persistent_concurrent_structured_dict
+import o11a/computed_note
+import o11a/note
 import persistent_concurrent_dict
 
 import lib/persistent_concurrent_duplicate_dict
@@ -66,7 +69,13 @@ pub type Gateway {
     discussion_component_gateway: DiscussionComponentGateway,
     discussion_gateway: concurrent_dict.ConcurrentDict(
       String,
-      discussion.Discussion,
+      persistent_concurrent_structured_dict.PersistentConcurrentStructuredDict(
+        String,
+        note.NoteSubmission,
+        note.Note,
+        String,
+        List(computed_note.ComputedNote),
+      ),
     ),
   )
 }
@@ -118,6 +127,7 @@ pub fn start_gateway() -> Result(Gateway, snag.Snag) {
 
       use discussion_component_actor <- result.try(
         lustre.start_server_component(discussion_component.app(), #(
+          audit_name,
           discussion,
           topics,
         ))
