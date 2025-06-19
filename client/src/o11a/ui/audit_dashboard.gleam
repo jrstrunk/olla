@@ -1,4 +1,3 @@
-import o11a/topic
 import filepath
 import gleam/dict
 import gleam/list
@@ -9,6 +8,7 @@ import lustre/attribute
 import lustre/element
 import lustre/element/html
 import o11a/computed_note
+import o11a/topic
 import o11a/ui/discussion
 
 const style = "

@@ -120,7 +120,16 @@ pub fn start_gateway() -> Result(Gateway, snag.Snag) {
   use _ <- result.map(
     dict.keys(page_paths)
     |> list.map(fn(audit_name) {
-      do_gather_audit_data(gateway, for: audit_name, gather_from_source: False)
+      let all_persist_files_exist =
+        check_source_files(for: audit_name)
+        && check_source_declarations(for: audit_name)
+        && check_merged_topics(for: audit_name)
+
+      do_gather_audit_data(
+        gateway,
+        for: audit_name,
+        gather_from_source: !all_persist_files_exist,
+      )
     })
     |> snagx.collect_errors,
   )
@@ -129,13 +138,7 @@ pub fn start_gateway() -> Result(Gateway, snag.Snag) {
 }
 
 pub fn get_audit_metadata(gateway: Gateway, for audit_name) {
-  case concurrent_dict.get(gateway.audit_metadata, audit_name) {
-    Ok(metadata) -> Ok(metadata)
-    Error(Nil) -> {
-      gather_audit_data(gateway, for: audit_name, gather_from_source: True)
-      concurrent_dict.get(gateway.audit_metadata, audit_name)
-    }
-  }
+  concurrent_dict.get(gateway.audit_metadata, audit_name)
 }
 
 pub fn get_source_file(gateway: Gateway, page_path page_path) {
@@ -143,64 +146,18 @@ pub fn get_source_file(gateway: Gateway, page_path page_path) {
 
   case concurrent_dict.get(gateway.source_file_gateway, audit_name) {
     Ok(source_files) -> {
-      case persistent_concurrent_dict.get(source_files, page_path) {
-        Ok(source_file) -> Ok(source_file)
-        Error(Nil) -> {
-          echo "source file not found " <> page_path <> " gathering from source"
-          gather_audit_data(gateway, for: audit_name, gather_from_source: True)
-          |> echo
-          echo "done gathering from source"
-          persistent_concurrent_dict.get(source_files, page_path)
-        }
-      }
+      persistent_concurrent_dict.get(source_files, page_path)
     }
-    Error(Nil) -> {
-      echo "source file not found " <> page_path <> " gathering from source"
-      gather_audit_data(gateway, for: audit_name, gather_from_source: True)
-      |> echo
-      echo "done gathering from source"
-      concurrent_dict.get(gateway.source_file_gateway, audit_name)
-      |> result.try(persistent_concurrent_dict.get(_, page_path))
-    }
+    Error(Nil) -> Error(Nil)
   }
 }
 
 pub fn get_topics(gateway: Gateway, for audit_name) {
-  case concurrent_dict.get(gateway.topic_gateway, audit_name) {
-    Ok(topics) ->
-      case topics |> concurrent_dict.to_list {
-        [] -> {
-          gather_audit_data(gateway, for: audit_name, gather_from_source: True)
-          |> echo
-          echo "done gathering from source"
-          concurrent_dict.get(gateway.topic_gateway, audit_name)
-        }
-        _ -> Ok(topics)
-      }
-    Error(Nil) -> {
-      gather_audit_data(gateway, for: audit_name, gather_from_source: True)
-      concurrent_dict.get(gateway.topic_gateway, audit_name)
-    }
-  }
+  concurrent_dict.get(gateway.topic_gateway, audit_name)
 }
 
 pub fn get_merged_topics(gateway: Gateway, for audit_name) {
-  case concurrent_dict.get(gateway.merged_topics_gateway, audit_name) {
-    Ok(merged_topics) ->
-      case merged_topics |> persistent_concurrent_dict.to_list {
-        [] -> {
-          gather_audit_data(gateway, for: audit_name, gather_from_source: True)
-          |> echo
-          echo "done gathering from source"
-          concurrent_dict.get(gateway.merged_topics_gateway, audit_name)
-        }
-        _ -> Ok(merged_topics)
-      }
-    Error(Nil) -> {
-      gather_audit_data(gateway, for: audit_name, gather_from_source: True)
-      concurrent_dict.get(gateway.merged_topics_gateway, audit_name)
-    }
-  }
+  concurrent_dict.get(gateway.merged_topics_gateway, audit_name)
 }
 
 pub fn add_merged_topic(
@@ -327,9 +284,18 @@ pub fn get_discussion(gateway gateway: Gateway, for audit_name) {
   concurrent_dict.get(gateway.discussion_gateway, audit_name)
 }
 
+const source_file_persist_name = "preprocessed_source_files"
+
+/// Checks if the persist file exists
+fn check_source_files(for audit_name) {
+  config.get_persist_path(for: audit_name <> "/" <> source_file_persist_name)
+  |> simplifile.file_info
+  |> result.is_ok
+}
+
 fn build_source_files(for audit_name) {
   persistent_concurrent_dict.build(
-    config.get_persist_path(for: audit_name <> "/preprocessed_source_files"),
+    config.get_persist_path(for: audit_name <> "/" <> source_file_persist_name),
     key_encoder: function.identity,
     key_decoder: function.identity,
     val_encoder: fn(val) {
@@ -341,9 +307,22 @@ fn build_source_files(for audit_name) {
   )
 }
 
+const source_declaration_persist_name = "source_declarations"
+
+/// Checks if the persist file exists
+fn check_source_declarations(for audit_name) -> Bool {
+  config.get_persist_path(
+    for: audit_name <> "/" <> source_declaration_persist_name,
+  )
+  |> simplifile.file_info
+  |> result.is_ok
+}
+
 fn build_source_declarations(for audit_name) {
   persistent_concurrent_dict.build(
-    config.get_persist_path(for: audit_name <> "/source_declarations"),
+    config.get_persist_path(
+      for: audit_name <> "/" <> source_declaration_persist_name,
+    ),
     key_encoder: function.identity,
     key_decoder: function.identity,
     val_encoder: fn(val) {
@@ -357,9 +336,18 @@ fn build_source_declarations(for audit_name) {
   )
 }
 
+const merged_topic_persist_name = "merged_topics"
+
+/// Checks if the persist file exists
+fn check_merged_topics(for audit_name) -> Bool {
+  config.get_persist_path(for: audit_name <> "/" <> merged_topic_persist_name)
+  |> simplifile.file_info
+  |> result.is_ok
+}
+
 fn build_merged_topics(for audit_name) {
   persistent_concurrent_dict.build(
-    config.get_persist_path(for: audit_name <> "/merged_topics"),
+    config.get_persist_path(for: audit_name <> "/" <> merged_topic_persist_name),
     key_encoder: function.identity,
     key_decoder: function.identity,
     val_encoder: function.identity,
@@ -426,8 +414,6 @@ fn do_gather_audit_data(
   // It is important to always gather metadata first, as that makes sure the
   // audit exists before allocating memory and trying to read source files
   use metadata <- result.try(gather_metadata(for: audit_name))
-
-  echo "gathered metadata " <> string.inspect(metadata)
 
   concurrent_dict.insert(
     gateway.audit_metadata,
