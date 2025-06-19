@@ -1,3 +1,4 @@
+import o11a/topic
 import filepath
 import gleam/dict
 import gleam/list
@@ -7,7 +8,6 @@ import gleam/string
 import lustre/attribute
 import lustre/element
 import lustre/element/html
-import o11a/attack_vector
 import o11a/computed_note
 import o11a/ui/discussion
 
@@ -26,7 +26,7 @@ const view_id = "audit-dashboard"
 
 pub fn view(
   audit_name audit_name,
-  attack_vectors attack_vectors: List(attack_vector.AttackVector),
+  attack_vectors attack_vectors: List(topic.Topic),
   discussion discussion,
   declarations declarations,
   discussion_context discussion_context,
@@ -65,7 +65,7 @@ pub fn view(
               discussion_context:,
               node_view_kind: discussion.DeclarationView,
             ),
-            html.text(" - " <> attack_vector.title),
+            html.text(" - " <> topic.topic_name(attack_vector)),
           ])
         }),
       ),

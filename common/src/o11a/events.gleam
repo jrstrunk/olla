@@ -12,6 +12,4 @@ pub const server_updated_discussion = "sud"
 
 pub const server_updated_topics = "sut"
 
-pub const server_updated_attack_vectors = "suav"
-
 pub const client_mounted_discussion = "lustre-server-component-init"

@@ -5,6 +5,7 @@
 //// server component, where only updates are streamed instead of the whole
 //// discussion every time there is an update.
 
+import concurrent_dict
 import gleam/json
 import lustre
 import lustre/effect
@@ -14,13 +15,12 @@ import lustre/server_component
 import o11a/events
 import o11a/server/discussion
 import o11a/topic
-import persistent_concurrent_dict
 
 pub fn app() -> lustre.App(
   #(
     String,
     discussion.Discussion,
-    persistent_concurrent_dict.PersistentConcurrentDict(String, topic.Topic),
+    concurrent_dict.ConcurrentDict(String, topic.Topic),
   ),
   Model,
   Msg,
@@ -31,20 +31,13 @@ pub fn app() -> lustre.App(
 pub type Msg {
   ServerUpdatedDiscussion
   ServerUpdatedTopics
-  ServerUpdatedAttackVectors
 }
 
 pub type Model {
   Model(audit_name: String)
 }
 
-pub fn init(
-  init_flags: #(
-    String,
-    discussion.Discussion,
-    persistent_concurrent_dict.PersistentConcurrentDict(String, topic.Topic),
-  ),
-) -> #(Model, effect.Effect(Msg)) {
+pub fn init(init_flags) {
   let #(audit_name, discussion, topics) = init_flags
 
   let subscribe_to_note_updates_effect =
@@ -57,9 +50,7 @@ pub fn init(
   let subscribe_to_topic_updates_effect =
     effect.from(fn(dispatch) {
       let assert Ok(Nil) =
-        persistent_concurrent_dict.subscribe(topics, fn() {
-          dispatch(ServerUpdatedTopics)
-        })
+        concurrent_dict.subscribe(topics, fn() { dispatch(ServerUpdatedTopics) })
       Nil
     })
 
@@ -90,16 +81,6 @@ pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         model,
         server_component.emit(
           events.server_updated_topics,
-          json.object([#("audit_name", json.string(model.audit_name))]),
-        ),
-      )
-    }
-    ServerUpdatedAttackVectors -> {
-      echo "Emitting server updated attack vectors"
-      #(
-        model,
-        server_component.emit(
-          events.server_updated_attack_vectors,
           json.object([#("audit_name", json.string(model.audit_name))]),
         ),
       )

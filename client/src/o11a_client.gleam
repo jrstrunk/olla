@@ -15,7 +15,6 @@ import lustre/element/html
 import lustre/event
 import lustre/server_component
 import modem
-import o11a/attack_vector
 import o11a/audit_metadata
 import o11a/client/page_navigation
 import o11a/client/selectors
@@ -60,7 +59,7 @@ pub type Model {
       String,
       Result(dict.Dict(String, topic.Topic), rsvp.Error),
     ),
-    audit_declaration_lists: dict.Dict(
+    audit_source_declarations: dict.Dict(
       String,
       Result(List(topic.Topic), rsvp.Error),
     ),
@@ -72,10 +71,7 @@ pub type Model {
       String,
       Result(dict.Dict(String, String), rsvp.Error),
     ),
-    attack_vectors: dict.Dict(
-      String,
-      Result(List(attack_vector.AttackVector), rsvp.Error),
-    ),
+    attack_vectors: dict.Dict(String, Result(List(topic.Topic), rsvp.Error)),
     discussions: dict.Dict(
       String,
       dict.Dict(String, List(computed_note.ComputedNote)),
@@ -116,7 +112,7 @@ fn init(_) -> #(Model, effect.Effect(Msg)) {
       audit_metadata: dict.new(),
       source_files: dict.new(),
       audit_declarations: dict.new(),
-      audit_declaration_lists: dict.new(),
+      audit_source_declarations: dict.new(),
       merged_topics: dict.new(),
       attack_vectors: dict.new(),
       discussions: dict.new(),
@@ -252,17 +248,12 @@ pub type Msg {
     audit_name: String,
     merged_topics: Result(List(#(String, String)), rsvp.Error),
   )
-  ClientFetchedAttackVectors(
-    audit_name: String,
-    attack_vectors: Result(List(attack_vector.AttackVector), rsvp.Error),
-  )
   ClientFetchedDiscussion(
     audit_name: String,
     discussion: Result(List(computed_note.ComputedNote), rsvp.Error),
   )
   ServerUpdatedMergedTopics(audit_name: String)
   ServerUpdatedDiscussion(audit_name: String)
-  ServerUpdatedAttackVectors(audit_name: String)
   UserEnteredKey(
     browser_event: browser_event.Event(
       browser_event.UIEvent(browser_event.KeyboardEvent),
@@ -304,7 +295,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
             audit_name,
             result.map(metadata, fn(metadata) {
               audit_interface.gather_interface_data(
-                case dict.get(model.audit_declaration_lists, audit_name) {
+                case dict.get(model.audit_source_declarations, audit_name) {
                   Ok(Ok(declarations)) -> declarations
                   _ -> []
                 },
@@ -348,28 +339,34 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     }
 
     ClientFetchedDeclarations(audit_name:, declarations:) -> {
-      let attack_vectors = case dict.get(model.attack_vectors, audit_name) {
-        Ok(Ok(attack_vectors)) -> attack_vectors
-        _ -> []
-      }
-
-      let declarations = case declarations {
-        Ok(declarations) -> {
-          io.println("Successfully fetched declarations " <> audit_name)
-          list.map(attack_vectors, attack_vector.attack_vector_to_declaration(
-            _,
-            audit_name,
-          ))
-          |> list.append(declarations)
-          |> Ok
-        }
+      case declarations {
+        Ok(..) -> Nil
         Error(e) -> {
           io.println_error(
             "Failed to fetch declarations: " <> string.inspect(e),
           )
-          Error(e)
         }
       }
+
+      let attack_vectors =
+        result.map(declarations, fn(declarations) {
+          list.filter(declarations, fn(declaration) {
+            case declaration {
+              topic.AttackVector(..) -> True
+              _ -> False
+            }
+          })
+        })
+
+      let source_declarations =
+        result.map(declarations, fn(declarations) {
+          list.filter(declarations, fn(declaration) {
+            case declaration {
+              topic.SourceDeclaration(..) -> True
+              _ -> False
+            }
+          })
+        })
 
       let merged_declaration_dict = case declarations {
         Ok(declarations) -> {
@@ -380,16 +377,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
               _ -> panic
             }
           })
-          |> topic.build_merged_topics(
-            case dict.get(model.merged_topics, audit_name) {
-              Ok(Ok(merged_topics)) -> merged_topics
-              _ -> dict.new()
-            },
-            get_combined_topics: topic.get_combined_declaration,
-          )
           |> Ok
-          |> option.Some
-          |> add_attack_vector_declarations(attack_vectors, audit_name)
         }
         Error(e) -> Error(e)
       }
@@ -402,15 +390,15 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
             audit_name,
             merged_declaration_dict,
           ),
-          audit_declaration_lists: dict.insert(
-            model.audit_declaration_lists,
+          audit_source_declarations: dict.insert(
+            model.audit_source_declarations,
             audit_name,
             declarations,
           ),
           audit_interface: dict.insert(
             model.audit_interface,
             audit_name,
-            result.map(declarations, fn(declarations) {
+            result.map(source_declarations, fn(declarations) {
               audit_interface.gather_interface_data(
                 declarations,
                 case dict.get(model.audit_metadata, audit_name) {
@@ -419,6 +407,11 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
                 },
               )
             }),
+          ),
+          attack_vectors: dict.insert(
+            model.attack_vectors,
+            audit_name,
+            attack_vectors,
           ),
         ),
         effect.none(),
@@ -445,41 +438,6 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
             audit_name,
             merged_topics,
           ),
-          discussions: dict.upsert(
-            model.discussions,
-            audit_name,
-            fn(discussions) {
-              let discussions = option.unwrap(discussions, dict.new())
-              case merged_topics {
-                Ok(merged_topics) ->
-                  topic.build_merged_topics(
-                    discussions,
-                    merged_topics,
-                    get_combined_topics: topic.get_combined_discussion,
-                  )
-                Error(..) -> discussions
-              }
-            },
-          ),
-          audit_declarations: dict.upsert(
-            model.audit_declarations,
-            audit_name,
-            fn(audit_declarations) {
-              audit_declarations
-              |> option.unwrap(Ok(dict.new()))
-              |> result.map(fn(audit_declarations) {
-                case merged_topics {
-                  Ok(merged_topics) ->
-                    topic.build_merged_topics(
-                      audit_declarations,
-                      merged_topics,
-                      get_combined_topics: topic.get_combined_declaration,
-                    )
-                  Error(..) -> audit_declarations
-                }
-              })
-            },
-          ),
         ),
         effect.none(),
       )
@@ -488,61 +446,6 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     ServerUpdatedMergedTopics(audit_name) -> #(
       model,
       fetch_merged_topics(audit_name),
-    )
-
-    ClientFetchedAttackVectors(audit_name:, attack_vectors:) -> {
-      case attack_vectors {
-        Ok(attack_vectors) -> {
-          io.println("Successfully fetched attack vectors")
-          #(
-            Model(
-              ..model,
-              attack_vectors: dict.insert(
-                model.attack_vectors,
-                audit_name,
-                Ok(attack_vectors),
-              ),
-              audit_declarations: dict.upsert(
-                model.audit_declarations,
-                audit_name,
-                add_attack_vector_declarations(_, attack_vectors, audit_name),
-              ),
-              audit_declaration_lists: dict.upsert(
-                model.audit_declaration_lists,
-                audit_name,
-                add_attack_vector_declaration_list(
-                  _,
-                  attack_vectors,
-                  audit_name,
-                ),
-              ),
-            ),
-            effect.none(),
-          )
-        }
-        Error(e) -> {
-          io.println_error(
-            "Failed to fetch attack vectors: " <> string.inspect(e),
-          )
-
-          #(
-            Model(
-              ..model,
-              attack_vectors: dict.insert(
-                model.attack_vectors,
-                audit_name,
-                attack_vectors,
-              ),
-            ),
-            effect.none(),
-          )
-        }
-      }
-    }
-
-    ServerUpdatedAttackVectors(audit_name) -> #(
-      model,
-      fetch_attack_vectors(audit_name),
     )
 
     ClientFetchedDiscussion(audit_name:, discussion:) ->
@@ -554,14 +457,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
               model.discussions,
               audit_name,
               discussion
-                |> list.group(by: fn(note) { note.parent_id })
-                |> topic.build_merged_topics(
-                  case dict.get(model.merged_topics, audit_name) {
-                    Ok(Ok(merged_topics)) -> merged_topics
-                    _ -> dict.new()
-                  },
-                  get_combined_topics: topic.get_combined_discussion,
-                ),
+                |> list.group(by: fn(note) { note.parent_id }),
             ),
           ),
           effect.none(),
@@ -1024,54 +920,6 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   }
 }
 
-fn add_attack_vector_declarations(
-  declarations,
-  attack_vectors: List(attack_vector.AttackVector),
-  audit_name,
-) {
-  case declarations {
-    option.Some(Ok(declarations)) ->
-      list.fold(attack_vectors, declarations, fn(declarations, attack_vector) {
-        dict.insert(
-          declarations,
-          attack_vector.topic_id,
-          attack_vector.attack_vector_to_declaration(attack_vector, audit_name),
-        )
-      })
-    _ ->
-      list.map(attack_vectors, fn(attack_vector) {
-        #(
-          attack_vector.topic_id,
-          attack_vector.attack_vector_to_declaration(attack_vector, audit_name),
-        )
-      })
-      |> dict.from_list
-  }
-  |> Ok
-}
-
-fn add_attack_vector_declaration_list(
-  declarations,
-  attack_vectors: List(attack_vector.AttackVector),
-  audit_name,
-) {
-  case declarations {
-    option.Some(Ok(declarations)) ->
-      list.fold(attack_vectors, declarations, fn(declarations, attack_vector) {
-        [
-          attack_vector.attack_vector_to_declaration(attack_vector, audit_name),
-          ..declarations
-        ]
-      })
-      |> Ok
-    _ ->
-      list.map(attack_vectors, fn(attack_vector) {
-        attack_vector.attack_vector_to_declaration(attack_vector, audit_name)
-      })
-      |> Ok
-  }
-}
-
 fn route_change_effect(model, new_route route: Route) {
   case route {
     AuditDashboardRoute(audit_name:) | AuditInterfaceRoute(audit_name:) ->
@@ -1080,7 +928,6 @@ fn route_change_effect(model, new_route route: Route) {
         fetch_declarations(audit_name),
         fetch_discussion(audit_name),
         fetch_merged_topics(audit_name),
-        fetch_attack_vectors(audit_name),
       ])
     AuditPageRoute(audit_name:, page_path:, ..) ->
       effect.batch([
@@ -1089,7 +936,6 @@ fn route_change_effect(model, new_route route: Route) {
         fetch_declarations(audit_name),
         fetch_discussion(audit_name),
         fetch_merged_topics(audit_name),
-        fetch_attack_vectors(audit_name),
       ])
     O11aHomeRoute -> effect.none()
   }
@@ -1153,16 +999,6 @@ fn fetch_discussion(audit_name) {
   )
 }
 
-pub fn fetch_attack_vectors(audit_name) {
-  rsvp.get(
-    "/audit-attack-vectors/" <> audit_name,
-    rsvp.expect_json(
-      decode.list(attack_vector.attack_vector_decoder()),
-      ClientFetchedAttackVectors(audit_name, _),
-    ),
-  )
-}
-
 fn submit_note(audit_name, topic_id, note_submission, discussion_model) {
   rsvp.post(
     "/submit-note/" <> audit_name,
@@ -1216,7 +1052,6 @@ fn view(model: Model) {
             server_component.route("/component-discussion/" <> audit_name),
             on_server_updated_discussion(ServerUpdatedDiscussion),
             on_server_updated_merge_topics(ServerUpdatedMergedTopics),
-            on_server_updated_attack_vectors(ServerUpdatedAttackVectors),
           ],
           [],
         ),
@@ -1258,7 +1093,6 @@ fn view(model: Model) {
             server_component.route("/component-discussion/" <> audit_name),
             on_server_updated_discussion(ServerUpdatedDiscussion),
             on_server_updated_merge_topics(ServerUpdatedMergedTopics),
-            on_server_updated_attack_vectors(ServerUpdatedAttackVectors),
           ],
           [],
         ),
@@ -1301,7 +1135,6 @@ fn view(model: Model) {
             server_component.route("/component-discussion/" <> audit_name),
             on_server_updated_discussion(ServerUpdatedDiscussion),
             on_server_updated_merge_topics(ServerUpdatedMergedTopics),
-            on_server_updated_attack_vectors(ServerUpdatedAttackVectors),
           ],
           [],
         ),
@@ -1348,13 +1181,6 @@ fn on_server_updated_discussion(msg) {
 
 fn on_server_updated_merge_topics(msg) {
   event.on(events.server_updated_topics, {
-    use audit_name <- decode.subfield(["detail", "audit_name"], decode.string)
-    decode.success(msg(audit_name))
-  })
-}
-
-fn on_server_updated_attack_vectors(msg) {
-  event.on(events.server_updated_attack_vectors, {
     use audit_name <- decode.subfield(["detail", "audit_name"], decode.string)
     decode.success(msg(audit_name))
   })

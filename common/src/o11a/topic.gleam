@@ -359,7 +359,7 @@ pub fn build_merged_topics(
   })
 }
 
-type TopicMerge {
+pub type TopicMerge {
   TopicMerge(old_topic_id: String, new_topic_id: String)
 }
 

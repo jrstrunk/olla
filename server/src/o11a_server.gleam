@@ -1,4 +1,5 @@
 import argv
+import concurrent_dict
 import filepath
 import gleam/dynamic/decode
 import gleam/erlang
@@ -113,7 +114,7 @@ fn handle_wisp_request(req, context: Context) {
     ["audit-declarations", audit_name] | ["audit-topics", audit_name] ->
       gateway.get_topics(context.gateway, for: audit_name)
       |> result.map(fn(topics) {
-        persistent_concurrent_dict.to_list(topics)
+        concurrent_dict.to_list(topics)
         |> list.map(pair.second)
         |> json.array(topic.topic_to_json)
         |> json.to_string_tree
@@ -137,7 +138,7 @@ fn handle_wisp_request(req, context: Context) {
 
     ["merge-topics", audit_name, current_topic_id, new_topic_id] -> {
       case
-        gateway.merge_topics(
+        gateway.add_merged_topic(
           context.gateway,
           audit_name:,
           current_topic_id:,
@@ -153,20 +154,6 @@ fn handle_wisp_request(req, context: Context) {
           )
       }
     }
-
-    ["audit-attack-vectors", audit_name] ->
-      gateway.get_attack_vectors(context.gateway, for: audit_name)
-      |> result.map(fn(attack_vectors) {
-        attack_vectors
-        |> persistent_concurrent_duplicate_dict.to_list
-        |> list.map(pair.second)
-        |> json.array(attack_vector.attack_vector_to_json)
-        |> json.to_string_tree
-      })
-      |> result.unwrap(string_tree.from_string(
-        "{\"error\": \"Attack vectors not found\"}",
-      ))
-      |> wisp.json_response(200)
 
     ["add-attack-vector", audit_name, title] -> {
       case uri.percent_decode(title) {

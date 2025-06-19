@@ -11,17 +11,14 @@ import gleam/option
 import gleam/result
 import gleam/string
 import gleam/string_tree
-import lib/persistent_concurrent_structured_dict
-import o11a/computed_note
-import o11a/note
-import persistent_concurrent_dict
-
 import lib/persistent_concurrent_duplicate_dict
+import lib/persistent_concurrent_structured_dict
 import lib/snagx
 import lustre
-import o11a/attack_vector
 import o11a/audit_metadata
+import o11a/computed_note
 import o11a/config
+import o11a/note
 import o11a/preprocessor
 import o11a/preprocessor_text
 import o11a/server/discussion
@@ -29,12 +26,15 @@ import o11a/server/preprocessor_sol
 import o11a/server/preprocessor_text as preprocessor_text_server
 import o11a/topic
 import o11a/ui/discussion_component
+import persistent_concurrent_dict
 import simplifile
 import snag
 
 pub type Gateway {
   Gateway(
-    audit_metadata: persistent_concurrent_dict.PersistentConcurrentDict(
+    // Do not persist audit metadata, as it is quickly gathered and gathering
+    // it validates that the audit exists.
+    audit_metadata: concurrent_dict.ConcurrentDict(
       String,
       string_tree.StringTree,
       // Store it as a string tree because we never read it on the server,
@@ -49,7 +49,7 @@ pub type Gateway {
         // but send it to the client as a string tree in a request body.
       ),
     ),
-    topic_gateway: concurrent_dict.ConcurrentDict(
+    source_declaration_gateway: concurrent_dict.ConcurrentDict(
       String,
       persistent_concurrent_dict.PersistentConcurrentDict(String, topic.Topic),
     ),
@@ -62,7 +62,7 @@ pub type Gateway {
       persistent_concurrent_duplicate_dict.PersistentConcurrentDuplicateDict(
         Nil,
         String,
-        attack_vector.AttackVector,
+        topic.Topic,
         // Store attack vectors separately so each audit gets their own id numbering
       ),
     ),
@@ -77,6 +77,13 @@ pub type Gateway {
         List(computed_note.ComputedNote),
       ),
     ),
+    // The topic gateway is made up of a combination of all the other topic
+    // gateways. This way, the other topic types can be persisted in their own
+    // aways, yet still be accessed in one place.
+    topic_gateway: concurrent_dict.ConcurrentDict(
+      String,
+      concurrent_dict.ConcurrentDict(String, topic.Topic),
+    ),
   )
 }
 
@@ -87,80 +94,46 @@ pub type DiscussionComponentGateway =
   )
 
 pub fn start_gateway() -> Result(Gateway, snag.Snag) {
+  let audit_metadata = concurrent_dict.new()
   let source_file_gateway = concurrent_dict.new()
-  let topic_gateway = concurrent_dict.new()
+  let source_declaration_gateway = concurrent_dict.new()
   let merged_topics_gateway = concurrent_dict.new()
   let attack_vectors_gateway = concurrent_dict.new()
   let discussion_gateway = concurrent_dict.new()
   let discussion_component_gateway = concurrent_dict.new()
+  let topic_gateway = concurrent_dict.new()
+
+  let gateway =
+    Gateway(
+      audit_metadata:,
+      source_file_gateway:,
+      source_declaration_gateway:,
+      merged_topics_gateway:,
+      attack_vectors_gateway:,
+      discussion_gateway:,
+      discussion_component_gateway:,
+      topic_gateway:,
+    )
 
   let page_paths = config.get_all_audit_page_paths()
-
-  use audit_metadata <- result.try(build_audit_metadata())
 
   use _ <- result.map(
     dict.keys(page_paths)
     |> list.map(fn(audit_name) {
-      use source_files <- result.try(build_source_files(audit_name))
-      concurrent_dict.insert(source_file_gateway, audit_name, source_files)
-
-      use
-        topics: persistent_concurrent_dict.PersistentConcurrentDict(
-          String,
-          topic.Topic,
-        )
-      <- result.try(build_topics(audit_name))
-      concurrent_dict.insert(topic_gateway, audit_name, topics)
-
-      use merged_topics <- result.try(build_merged_topics(audit_name))
-      concurrent_dict.insert(merged_topics_gateway, audit_name, merged_topics)
-
-      use audit_attack_vectors <- result.try(build_attack_vectors(audit_name))
-      concurrent_dict.insert(
-        attack_vectors_gateway,
-        audit_name,
-        audit_attack_vectors,
-      )
-
-      use discussion <- result.try(discussion.build_audit_discussion(audit_name))
-      concurrent_dict.insert(discussion_gateway, audit_name, discussion)
-
-      use discussion_component_actor <- result.try(
-        lustre.start_server_component(discussion_component.app(), #(
-          audit_name,
-          discussion,
-          topics,
-        ))
-        |> snag.map_error(string.inspect),
-      )
-      concurrent_dict.insert(
-        discussion_component_gateway,
-        audit_name,
-        discussion_component_actor,
-      )
-
-      Ok(Nil)
+      do_gather_audit_data(gateway, for: audit_name, gather_from_source: False)
     })
     |> snagx.collect_errors,
   )
 
-  Gateway(
-    audit_metadata:,
-    source_file_gateway:,
-    topic_gateway:,
-    merged_topics_gateway:,
-    attack_vectors_gateway:,
-    discussion_gateway:,
-    discussion_component_gateway:,
-  )
+  gateway
 }
 
 pub fn get_audit_metadata(gateway: Gateway, for audit_name) {
-  case persistent_concurrent_dict.get(gateway.audit_metadata, audit_name) {
+  case concurrent_dict.get(gateway.audit_metadata, audit_name) {
     Ok(metadata) -> Ok(metadata)
     Error(Nil) -> {
-      gather_audit_data(gateway, for: audit_name)
-      persistent_concurrent_dict.get(gateway.audit_metadata, audit_name)
+      gather_audit_data(gateway, for: audit_name, gather_from_source: True)
+      concurrent_dict.get(gateway.audit_metadata, audit_name)
     }
   }
 }
@@ -169,9 +142,23 @@ pub fn get_source_file(gateway: Gateway, page_path page_path) {
   let audit_name = config.get_audit_name_from_page_path(page_path)
 
   case concurrent_dict.get(gateway.source_file_gateway, audit_name) {
-    Ok(source_files) -> persistent_concurrent_dict.get(source_files, page_path)
+    Ok(source_files) -> {
+      case persistent_concurrent_dict.get(source_files, page_path) {
+        Ok(source_file) -> Ok(source_file)
+        Error(Nil) -> {
+          echo "source file not found " <> page_path <> " gathering from source"
+          gather_audit_data(gateway, for: audit_name, gather_from_source: True)
+          |> echo
+          echo "done gathering from source"
+          persistent_concurrent_dict.get(source_files, page_path)
+        }
+      }
+    }
     Error(Nil) -> {
-      gather_audit_data(gateway, for: audit_name)
+      echo "source file not found " <> page_path <> " gathering from source"
+      gather_audit_data(gateway, for: audit_name, gather_from_source: True)
+      |> echo
+      echo "done gathering from source"
       concurrent_dict.get(gateway.source_file_gateway, audit_name)
       |> result.try(persistent_concurrent_dict.get(_, page_path))
     }
@@ -180,9 +167,18 @@ pub fn get_source_file(gateway: Gateway, page_path page_path) {
 
 pub fn get_topics(gateway: Gateway, for audit_name) {
   case concurrent_dict.get(gateway.topic_gateway, audit_name) {
-    Ok(topics) -> Ok(topics)
+    Ok(topics) ->
+      case topics |> concurrent_dict.to_list {
+        [] -> {
+          gather_audit_data(gateway, for: audit_name, gather_from_source: True)
+          |> echo
+          echo "done gathering from source"
+          concurrent_dict.get(gateway.topic_gateway, audit_name)
+        }
+        _ -> Ok(topics)
+      }
     Error(Nil) -> {
-      gather_audit_data(gateway, for: audit_name)
+      gather_audit_data(gateway, for: audit_name, gather_from_source: True)
       concurrent_dict.get(gateway.topic_gateway, audit_name)
     }
   }
@@ -190,30 +186,52 @@ pub fn get_topics(gateway: Gateway, for audit_name) {
 
 pub fn get_merged_topics(gateway: Gateway, for audit_name) {
   case concurrent_dict.get(gateway.merged_topics_gateway, audit_name) {
-    Ok(merged_topics) -> Ok(merged_topics)
+    Ok(merged_topics) ->
+      case merged_topics |> persistent_concurrent_dict.to_list {
+        [] -> {
+          gather_audit_data(gateway, for: audit_name, gather_from_source: True)
+          |> echo
+          echo "done gathering from source"
+          concurrent_dict.get(gateway.merged_topics_gateway, audit_name)
+        }
+        _ -> Ok(merged_topics)
+      }
     Error(Nil) -> {
-      gather_audit_data(gateway, for: audit_name)
+      gather_audit_data(gateway, for: audit_name, gather_from_source: True)
       concurrent_dict.get(gateway.merged_topics_gateway, audit_name)
     }
   }
 }
 
-pub fn merge_topics(
+pub fn add_merged_topic(
   gateway: Gateway,
   audit_name audit_name,
   current_topic_id current_topic_id,
   new_topic_id new_topic_id,
 ) {
-  case concurrent_dict.get(gateway.merged_topics_gateway, audit_name) {
-    Ok(merged_topics) -> {
-      persistent_concurrent_dict.insert(
+  case
+    concurrent_dict.get(gateway.merged_topics_gateway, audit_name),
+    concurrent_dict.get(gateway.attack_vectors_gateway, audit_name),
+    concurrent_dict.get(gateway.source_declaration_gateway, audit_name)
+  {
+    Ok(merged_topics), Ok(attack_vectors), Ok(source_declarations) -> {
+      use Nil <- result.map(persistent_concurrent_dict.insert(
         merged_topics,
         current_topic_id,
         new_topic_id,
-      )
+      ))
+
+      let combined_topics =
+        combine_topic_sources(
+          source_declarations,
+          attack_vectors,
+          merged_topics,
+        )
+
+      concurrent_dict.insert(gateway.topic_gateway, audit_name, combined_topics)
     }
-    Error(Nil) -> {
-      gather_audit_data(gateway, for: audit_name)
+    _, _, _ -> {
+      gather_audit_data(gateway, for: audit_name, gather_from_source: True)
 
       use merged_topics <- result.try(
         concurrent_dict.get(gateway.merged_topics_gateway, audit_name)
@@ -222,21 +240,36 @@ pub fn merge_topics(
         )),
       )
 
-      persistent_concurrent_dict.insert(
+      use Nil <- result.try(persistent_concurrent_dict.insert(
         merged_topics,
         current_topic_id,
         new_topic_id,
-      )
-    }
-  }
-}
+      ))
 
-pub fn get_attack_vectors(gateway: Gateway, for audit_name) {
-  case concurrent_dict.get(gateway.attack_vectors_gateway, audit_name) {
-    Ok(attack_vectors) -> Ok(attack_vectors)
-    Error(Nil) -> {
-      gather_audit_data(gateway, for: audit_name)
-      concurrent_dict.get(gateway.attack_vectors_gateway, audit_name)
+      use attack_vectors <- result.try(
+        concurrent_dict.get(gateway.attack_vectors_gateway, audit_name)
+        |> result.replace_error(snag.new(
+          "Failed to find attack vectors for " <> audit_name,
+        )),
+      )
+
+      use source_declarations <- result.try(
+        concurrent_dict.get(gateway.source_declaration_gateway, audit_name)
+        |> result.replace_error(snag.new(
+          "Failed to find source declarations for " <> audit_name,
+        )),
+      )
+
+      let combined_topics =
+        combine_topic_sources(
+          source_declarations,
+          attack_vectors,
+          merged_topics,
+        )
+
+      concurrent_dict.insert(gateway.topic_gateway, audit_name, combined_topics)
+
+      Ok(Nil)
     }
   }
 }
@@ -246,20 +279,39 @@ pub fn add_attack_vector(
   audit_name audit_name,
   title title: String,
 ) {
-  case concurrent_dict.get(gateway.attack_vectors_gateway, audit_name) {
-    Ok(attack_vectors) -> {
-      persistent_concurrent_duplicate_dict.insert(attack_vectors, Nil, title)
+  case
+    concurrent_dict.get(gateway.attack_vectors_gateway, audit_name),
+    concurrent_dict.get(gateway.topic_gateway, audit_name)
+  {
+    Ok(attack_vectors), Ok(topics) -> {
+      use attack_vector <- result.map(
+        persistent_concurrent_duplicate_dict.insert(attack_vectors, Nil, title),
+      )
+      concurrent_dict.insert(topics, attack_vector.topic_id, attack_vector)
     }
-    Error(Nil) -> {
-      gather_audit_data(gateway, for: audit_name)
+    _, _ -> {
+      gather_audit_data(gateway, for: audit_name, gather_from_source: True)
 
       use attack_vectors <- result.try(
         concurrent_dict.get(gateway.attack_vectors_gateway, audit_name)
         |> result.replace_error(snag.new(
-          "Failed to find the current attack vectors for " <> audit_name,
+          "Failed to find attack vectors for " <> audit_name,
         )),
       )
-      persistent_concurrent_duplicate_dict.insert(attack_vectors, Nil, title)
+      use topics <- result.try(
+        concurrent_dict.get(gateway.topic_gateway, audit_name)
+        |> result.replace_error(snag.new(
+          "Failed to find topics for " <> audit_name,
+        )),
+      )
+
+      // Add to the attack vectors so it is persisted
+      use attack_vector <- result.map(
+        persistent_concurrent_duplicate_dict.insert(attack_vectors, Nil, title),
+      )
+
+      // Add to the topics so it can be looked up and referenced
+      concurrent_dict.insert(topics, attack_vector.topic_id, attack_vector)
     }
   }
 }
@@ -273,20 +325,6 @@ pub fn get_discussion_component_actor(
 
 pub fn get_discussion(gateway gateway: Gateway, for audit_name) {
   concurrent_dict.get(gateway.discussion_gateway, audit_name)
-}
-
-fn build_audit_metadata() {
-  persistent_concurrent_dict.build(
-    config.get_persist_path(for: "audit_metadata"),
-    key_encoder: function.identity,
-    key_decoder: function.identity,
-    val_encoder: fn(val) {
-      val |> string_tree.to_string |> string.replace("'", "''")
-    },
-    val_decoder: fn(val) {
-      val |> string.replace("''", "'") |> string_tree.from_string
-    },
-  )
 }
 
 fn build_source_files(for audit_name) {
@@ -303,9 +341,9 @@ fn build_source_files(for audit_name) {
   )
 }
 
-fn build_topics(for audit_name) {
+fn build_source_declarations(for audit_name) {
   persistent_concurrent_dict.build(
-    config.get_persist_path(for: audit_name <> "/topics"),
+    config.get_persist_path(for: audit_name <> "/source_declarations"),
     key_encoder: function.identity,
     key_decoder: function.identity,
     val_encoder: fn(val) {
@@ -331,33 +369,48 @@ fn build_merged_topics(for audit_name) {
 
 fn build_attack_vectors(audit_name) {
   persistent_concurrent_duplicate_dict.build(
-    path: config.get_persist_path(for: audit_name <> "/audit_attack_vectors"),
+    path: config.get_persist_path(for: audit_name <> "/attack_vectors"),
     key_encoder: fn(_) { "Nil" },
     key_decoder: fn(_) { Nil },
-    val_encoder: fn(val) {
+    val_encoder: fn(val: topic.Topic) {
       [
-        persistent_concurrent_duplicate_dict.text(val.title),
-        persistent_concurrent_duplicate_dict.text(val.topic_id),
+        persistent_concurrent_duplicate_dict.text(
+          topic.topic_to_json(val)
+          |> json.to_string
+          |> string.replace("'", "''"),
+        ),
       ]
     },
     val_decoder: {
-      use title <- decode.field(0, decode.string)
-      use topic_id <- decode.field(1, decode.string)
-      decode.success(attack_vector.AttackVector(title:, topic_id:))
+      use topic_string <- decode.field(0, decode.string)
+      case
+        json.parse(
+          topic_string |> string.replace("''", "'"),
+          topic.topic_decoder(),
+        )
+      {
+        Ok(topic) -> decode.success(topic)
+        Error(e) ->
+          decode.failure(
+            topic.AttackVector("", ""),
+            "topic - " <> string.inspect(e),
+          )
+      }
     },
-    build_val: fn(title, record_count) {
-      attack_vector.AttackVector(
-        title:,
-        topic_id: "AV" <> int.to_string(record_count),
-      )
+    build_val: fn(name, record_count) {
+      topic.AttackVector(name:, topic_id: "AV" <> int.to_string(record_count))
     },
-    example: attack_vector.AttackVector(title: "Hi", topic_id: "Ex"),
+    example: topic.AttackVector(name: "Hi", topic_id: "Ex"),
   )
 }
 
-fn gather_audit_data(gateway gateway: Gateway, for audit_name) {
+fn gather_audit_data(
+  gateway gateway: Gateway,
+  for audit_name,
+  gather_from_source gather_from_source: Bool,
+) {
   case
-    do_gather_audit_data(gateway:, for: audit_name)
+    do_gather_audit_data(gateway:, for: audit_name, gather_from_source:)
     |> snag.context("Failed to gather audit data for " <> audit_name)
   {
     Ok(Nil) -> Nil
@@ -365,72 +418,121 @@ fn gather_audit_data(gateway gateway: Gateway, for audit_name) {
   }
 }
 
-fn do_gather_audit_data(gateway gateway: Gateway, for audit_name) {
+fn do_gather_audit_data(
+  gateway gateway: Gateway,
+  for audit_name,
+  gather_from_source gather_from_source: Bool,
+) {
+  // It is important to always gather metadata first, as that makes sure the
+  // audit exists before allocating memory and trying to read source files
   use metadata <- result.try(gather_metadata(for: audit_name))
 
-  use Nil <- result.try(persistent_concurrent_dict.insert(
-    gateway.audit_metadata,
-    audit_name,
-    metadata |> audit_metadata.encode_audit_metadata |> json.to_string_tree,
-  ))
-
-  use #(source_files, declarations, merged_topics) <- result.try(
-    preprocess_audit_source(for: audit_name),
-  )
-
-  use source_files_dict <- result.try(build_source_files(audit_name))
-
-  use _nils <- result.try(
-    list.map(source_files, fn(source_file) {
-      persistent_concurrent_dict.insert(
-        source_files_dict,
-        source_file.0,
-        json.array(source_file.1, preprocessor.encode_pre_processed_line)
-          |> json.to_string_tree,
-      )
-    })
-    |> result.all,
-  )
+  echo "gathered metadata " <> string.inspect(metadata)
 
   concurrent_dict.insert(
-    gateway.source_file_gateway,
+    gateway.audit_metadata,
     audit_name,
-    source_files_dict,
+    metadata
+      |> audit_metadata.encode_audit_metadata
+      |> json.to_string_tree,
   )
 
-  use topics_dict <- result.try(build_topics(audit_name))
+  use source_files <- result.try(build_source_files(audit_name))
+  concurrent_dict.insert(gateway.source_file_gateway, audit_name, source_files)
 
-  use _nils <- result.try(
-    list.map(declarations, fn(declaration) {
-      persistent_concurrent_dict.insert(
-        topics_dict,
-        declaration.topic_id,
-        declaration,
-      )
-    })
-    |> result.all,
+  use source_declarations <- result.try(build_source_declarations(audit_name))
+  concurrent_dict.insert(
+    gateway.source_declaration_gateway,
+    audit_name,
+    source_declarations,
   )
 
-  concurrent_dict.insert(gateway.topic_gateway, audit_name, topics_dict)
-
-  use merged_topics_dict <- result.try(build_merged_topics(audit_name))
-
-  use _nils <- result.try(
-    dict.to_list(merged_topics)
-    |> list.map(fn(merged_topic) {
-      persistent_concurrent_dict.insert(
-        merged_topics_dict,
-        merged_topic.0,
-        merged_topic.1,
-      )
-    })
-    |> result.all,
-  )
-
+  use merged_topics <- result.try(build_merged_topics(audit_name))
   concurrent_dict.insert(
     gateway.merged_topics_gateway,
     audit_name,
-    merged_topics_dict,
+    merged_topics,
+  )
+
+  use Nil <- result.try({
+    case gather_from_source {
+      True -> {
+        use
+          #(
+            preprocessed_source_files,
+            preprocessed_declarations,
+            preprocessed_merged_topics,
+          )
+        <- result.try(preprocess_audit_source(for: audit_name))
+
+        use _nils <- result.try(
+          list.map(preprocessed_source_files, fn(source_file) {
+            persistent_concurrent_dict.insert(
+              source_files,
+              source_file.0,
+              json.array(source_file.1, preprocessor.encode_pre_processed_line)
+                |> json.to_string_tree,
+            )
+          })
+          |> result.all,
+        )
+
+        use _nils <- result.try(
+          list.map(preprocessed_declarations, fn(declaration) {
+            persistent_concurrent_dict.insert(
+              source_declarations,
+              declaration.topic_id,
+              declaration,
+            )
+          })
+          |> result.all,
+        )
+
+        use _nils <- result.try(
+          dict.to_list(preprocessed_merged_topics)
+          |> list.map(fn(merged_topic) {
+            persistent_concurrent_dict.insert(
+              merged_topics,
+              merged_topic.0,
+              merged_topic.1,
+            )
+          })
+          |> result.all,
+        )
+
+        Ok(Nil)
+      }
+      False -> Ok(Nil)
+    }
+  })
+
+  use attack_vectors <- result.try(build_attack_vectors(audit_name))
+  concurrent_dict.insert(
+    gateway.attack_vectors_gateway,
+    audit_name,
+    attack_vectors,
+  )
+
+  use discussion <- result.try(discussion.build_audit_discussion(audit_name))
+  concurrent_dict.insert(gateway.discussion_gateway, audit_name, discussion)
+
+  let combined_topics =
+    combine_topic_sources(source_declarations, attack_vectors, merged_topics)
+
+  concurrent_dict.insert(gateway.topic_gateway, audit_name, combined_topics)
+
+  use discussion_component_actor <- result.try(
+    lustre.start_server_component(discussion_component.app(), #(
+      audit_name,
+      discussion,
+      combined_topics,
+    ))
+    |> snag.map_error(string.inspect),
+  )
+  concurrent_dict.insert(
+    gateway.discussion_component_gateway,
+    audit_name,
+    discussion_component_actor,
   )
 
   Ok(Nil)
@@ -638,4 +740,151 @@ fn preprocess_audit_source(for audit_name) {
     |> list.append(addressable_lines)
 
   #(source_files, declarations, merged_topics)
+}
+
+fn combine_topic_sources(
+  source_declarations: persistent_concurrent_dict.PersistentConcurrentDict(
+    String,
+    topic.Topic,
+  ),
+  attack_vectors: persistent_concurrent_duplicate_dict.PersistentConcurrentDuplicateDict(
+    Nil,
+    String,
+    topic.Topic,
+  ),
+  merged_topics: persistent_concurrent_dict.PersistentConcurrentDict(
+    String,
+    String,
+  ),
+) {
+  persistent_concurrent_dict.to_list(source_declarations)
+  |> list.append(
+    persistent_concurrent_duplicate_dict.to_list(attack_vectors)
+    |> list.map(fn(attack_vector_data) {
+      let #(Nil, attack_vector) = attack_vector_data
+      #(attack_vector.topic_id, attack_vector)
+    }),
+  )
+  |> concurrent_dict.from_list
+  |> merge_topics(merged_topics, get_combined_declaration)
+}
+
+fn combine_discussions(discussions, merged_topics) {
+  discussions
+}
+
+fn merge_topics(
+  data data: concurrent_dict.ConcurrentDict(String, a),
+  topic_merges topic_merges: persistent_concurrent_dict.PersistentConcurrentDict(
+    String,
+    String,
+  ),
+  get_combined_topics get_combined_topics,
+) {
+  let topic_merge_list =
+    persistent_concurrent_dict.to_list(topic_merges)
+    |> list.map(fn(topic_merge) {
+      topic.TopicMerge(topic_merge.0, topic_merge.1)
+    })
+
+  find_topic_merge_chain_parents(topic_merge_list)
+  |> list.map(fn(parent_topic_id) {
+    case get_combined_topics(parent_topic_id, data, topic_merges) {
+      Ok(#(combined_decl, updated_topic_ids)) ->
+        list.each(updated_topic_ids, fn(topic_id) {
+          // TODO: If we wanted to not replace the entire old topic, but only 
+          // replace some things (like not replacing the declaration kind),
+          // this would be the place to do it.
+          concurrent_dict.insert(data, topic_id, combined_decl)
+        })
+      Error(Nil) -> Nil
+    }
+  })
+
+  data
+}
+
+fn find_topic_merge_chain_parents(
+  topic_merges topic_merges: List(topic.TopicMerge),
+) {
+  list.map(topic_merges, fn(topic_merge) {
+    do_find_topic_merge_chain_parents(topic_merge.old_topic_id, topic_merges)
+  })
+  |> list.unique
+}
+
+fn do_find_topic_merge_chain_parents(
+  old_topic_id old_topic_id,
+  topic_merges topic_merges: List(topic.TopicMerge),
+) {
+  case
+    list.find(topic_merges, fn(topic_merge) {
+      topic_merge.new_topic_id == old_topic_id
+    })
+  {
+    Ok(topic_merge) ->
+      do_find_topic_merge_chain_parents(topic_merge.old_topic_id, topic_merges)
+    Error(Nil) -> old_topic_id
+  }
+}
+
+pub fn get_combined_declaration(
+  parent_topic_id parent_topic_id,
+  declarations declarations,
+  topic_merges topic_merges,
+) {
+  case concurrent_dict.get(declarations, parent_topic_id) {
+    Ok(declaration) -> {
+      get_topic_chain(parent_topic_id, declarations, topic_merges, [])
+      |> list.reverse
+      |> list.fold(
+        #(declaration, [parent_topic_id]),
+        fn(
+          decl_acc: #(topic.Topic, List(String)),
+          next_decl: #(String, topic.Topic),
+        ) {
+          let #(existing_decl, updated_topic_ids) = decl_acc
+          let #(next_topic_id, next_declaration) = next_decl
+
+          // Combining source declarations is a spceial case because we want
+          // to preserve the references of the original declaration
+          case existing_decl, next_declaration {
+            topic.SourceDeclaration(..), topic.SourceDeclaration(..) -> #(
+              topic.SourceDeclaration(
+                ..next_declaration,
+                references: list.append(
+                  next_declaration.references,
+                  existing_decl.references,
+                ),
+              ),
+              [next_topic_id, ..updated_topic_ids],
+            )
+            _, _ -> decl_acc
+          }
+        },
+      )
+      |> Ok
+    }
+    Error(Nil) -> Error(Nil)
+  }
+}
+
+fn get_topic_chain(
+  parent_topic_id parent_topic_id,
+  data data: concurrent_dict.ConcurrentDict(String, a),
+  topic_merges topic_merges,
+  combined_declarations combined_declarations,
+) {
+  case persistent_concurrent_dict.get(topic_merges, parent_topic_id) {
+    Ok(new_topic_id) ->
+      case concurrent_dict.get(data, new_topic_id) {
+        Ok(new_declaration) ->
+          get_topic_chain(new_topic_id, data, topic_merges, [
+            #(new_topic_id, new_declaration),
+            ..combined_declarations
+          ])
+        Error(Nil) -> combined_declarations
+      }
+    Error(Nil) -> combined_declarations
+  }
 }
