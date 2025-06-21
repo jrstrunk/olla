@@ -23,7 +23,7 @@ pub opaque type PersistentConcurrentStructuredDict(
       pcd_dict.PersistentConcurrentDuplicateDict(key, submission, raw_val),
       topic,
     ) ->
-      structured_val,
+      List(#(topic, structured_val)),
     topic_encoder: fn(topic) -> String,
     topic_subscribers: concurrent_duplicate_dict.ConcurrentDuplicateDict(
       topic,
@@ -50,7 +50,7 @@ pub fn build(
     pcd_dict.PersistentConcurrentDuplicateDict(key, submission, raw_val),
     topic,
   ) ->
-    structured_val,
+    List(#(topic, structured_val)),
 ) {
   use raw_data <- result.map(pcd_dict.build(
     path,
@@ -64,11 +64,16 @@ pub fn build(
 
   let structured_data = concurrent_dict.new()
 
+  // Rebuild all saved topics
   pcd_dict.topics(raw_data)
   |> list.each(fn(topic: String) {
     let topic = topic_decoder(topic)
-    let structured_val = builder(raw_data, topic)
-    concurrent_dict.insert(structured_data, topic, structured_val)
+
+    builder(raw_data, topic)
+    |> list.each(fn(val) {
+      let #(topic, structured_val) = val
+      concurrent_dict.insert(structured_data, topic, structured_val)
+    })
   })
 
   let subscribers = concurrent_duplicate_dict.new()
@@ -138,9 +143,13 @@ pub fn insert(
   use val <- result.map(pcd_dict.insert(psc_dict.raw_data, key, submission))
 
   list.map(topics, fn(topic) {
-    let structured_vals = psc_dict.builder(psc_dict.raw_data, topic)
+    let structured_vals =
+      psc_dict.builder(psc_dict.raw_data, topic)
 
-    concurrent_dict.insert(psc_dict.structured_data, topic, structured_vals)
+    list.each(structured_vals, fn(val) {
+      let #(topic, structured_val) = val
+      concurrent_dict.insert(psc_dict.structured_data, topic, structured_val)
+    })
 
     concurrent_duplicate_dict.get(psc_dict.topic_subscribers, topic)
     |> list.each(fn(effect) { effect() })
