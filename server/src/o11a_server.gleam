@@ -15,13 +15,11 @@ import gleam/pair
 import gleam/result
 import gleam/string_tree
 import gleam/uri
-import lib/persistent_concurrent_duplicate_dict
 import lib/server_componentx
 import lustre/attribute
 import lustre/element
 import lustre/element/html
 import mist
-import o11a/attack_vector
 import o11a/config
 import o11a/note
 import o11a/server/discussion

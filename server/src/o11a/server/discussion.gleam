@@ -1,3 +1,4 @@
+import concurrent_dict
 import gleam/dynamic/decode
 import gleam/function
 import gleam/json
@@ -11,6 +12,7 @@ import lib/persistent_concurrent_structured_dict as pcs_dict
 import o11a/computed_note
 import o11a/config
 import o11a/note
+import o11a/topic
 import tempo/datetime
 
 /// A per-audit discussion
@@ -23,19 +25,26 @@ pub type Discussion =
     List(computed_note.ComputedNote),
   )
 
-pub fn build_audit_discussion(audit_name: String) {
-  use notes <- result.try(pcs_dict.build(
-    config.get_notes_persist_path(for: audit_name),
-    function.identity,
-    function.identity,
-    note.build_note,
-    note.example_note(),
-    note_persist_encoder,
-    note_persist_decoder(),
-    function.identity,
-    function.identity,
-    builder: build_structured_notes,
-  ))
+pub fn build_audit_discussion(
+  audit_name: String,
+  topics topics: concurrent_dict.ConcurrentDict(String, topic.Topic),
+) {
+  use notes <- result.try(
+    pcs_dict.build(
+      config.get_notes_persist_path(for: audit_name),
+      function.identity,
+      function.identity,
+      note.build_note,
+      note.example_note(),
+      note_persist_encoder,
+      note_persist_decoder(),
+      function.identity,
+      function.identity,
+      builder: fn(notes_dict, starting_from) {
+        build_structured_notes(notes_dict, starting_from, topics:)
+      },
+    ),
+  )
 
   notes
   |> Ok
@@ -195,6 +204,7 @@ fn build_structured_notes(
     note.Note,
   ),
   starting_from topic_id: String,
+  topics topics: concurrent_dict.ConcurrentDict(String, topic.Topic),
 ) {
   let notes =
     pcd_dict.get(notes_dict, topic_id)
@@ -213,15 +223,38 @@ fn build_structured_notes(
       computed_note.from_note(note, pcd_dict.get(notes_dict, thread_id))
     })
 
-  case computed_notes {
+  let computed_notes = case computed_notes {
     [] -> []
     _ ->
       list.map(computed_notes, fn(computed_note) {
-        build_structured_notes(notes_dict, computed_note.note_id)
+        build_structured_notes(notes_dict, computed_note.note_id, topics:)
       })
       |> list.flatten
       |> list.append(computed_notes)
   }
+
+  list.map(computed_notes, fn(note) {
+    #(note.note_id, computed_note_to_topic(note))
+  })
+  |> concurrent_dict.insert_many(topics, _)
+
+  computed_notes
+}
+
+fn computed_note_to_topic(computed_note: computed_note.ComputedNote) {
+  topic.ComputedNote(
+    topic_id: computed_note.note_id,
+    signature: [],
+    parent_topic_id: computed_note.parent_id,
+    significance: computed_note.significance,
+    user_name: computed_note.user_name,
+    message: computed_note.message,
+    expanded_message: computed_note.expanded_message,
+    time: computed_note.time,
+    referenced_topic_ids: computed_note.referenced_topic_ids,
+    edited: False,
+    referee_topic_id: option.None,
+  )
 }
 
 pub fn dump_computed_notes(discussion: Discussion) {

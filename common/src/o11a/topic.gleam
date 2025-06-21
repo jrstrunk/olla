@@ -405,44 +405,6 @@ fn get_topic_chain(
   }
 }
 
-pub fn get_combined_declaration(
-  parent_topic_id parent_topic_id,
-  declarations declarations: dict.Dict(String, Topic),
-  topic_merges topic_merges,
-) {
-  case dict.get(declarations, parent_topic_id) {
-    Ok(declaration) -> {
-      get_topic_chain(parent_topic_id, declarations, topic_merges, [])
-      |> list.reverse
-      |> list.fold(
-        #(declaration, [parent_topic_id]),
-        fn(decl_acc: #(Topic, List(String)), next_decl: #(String, Topic)) {
-          let #(existing_decl, updated_topic_ids) = decl_acc
-          let #(next_topic_id, next_declaration) = next_decl
-
-          // Combining source declarations is a spceial case because we want
-          // to preserve the references of the original declaration
-          case existing_decl, next_declaration {
-            SourceDeclaration(..), SourceDeclaration(..) -> #(
-              SourceDeclaration(
-                ..next_declaration,
-                references: list.append(
-                  next_declaration.references,
-                  existing_decl.references,
-                ),
-              ),
-              [next_topic_id, ..updated_topic_ids],
-            )
-            _, _ -> decl_acc
-          }
-        },
-      )
-      |> Ok
-    }
-    Error(Nil) -> Error(Nil)
-  }
-}
-
 pub fn get_combined_discussion(
   parent_topic_id parent_topic_id,
   discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),

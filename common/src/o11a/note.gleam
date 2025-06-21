@@ -51,9 +51,6 @@ pub type Note {
   )
 }
 
-pub type NoteCollection =
-  dict.Dict(String, List(Note))
-
 pub type NoteSignificance {
   Comment
   Question

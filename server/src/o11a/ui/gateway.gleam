@@ -4,7 +4,6 @@ import gleam/dict
 import gleam/dynamic/decode
 import gleam/function
 import gleam/int
-import gleam/io
 import gleam/json
 import gleam/list
 import gleam/option
@@ -77,6 +76,10 @@ pub type Gateway {
         List(computed_note.ComputedNote),
       ),
     ),
+    computed_note_gateway: concurrent_dict.ConcurrentDict(
+      String,
+      concurrent_dict.ConcurrentDict(String, topic.Topic),
+    ),
     // The topic gateway is made up of a combination of all the other topic
     // gateways. This way, the other topic types can be persisted in their own
     // aways, yet still be accessed in one place.
@@ -94,25 +97,17 @@ pub type DiscussionComponentGateway =
   )
 
 pub fn start_gateway() -> Result(Gateway, snag.Snag) {
-  let audit_metadata = concurrent_dict.new()
-  let source_file_gateway = concurrent_dict.new()
-  let source_declaration_gateway = concurrent_dict.new()
-  let merged_topics_gateway = concurrent_dict.new()
-  let attack_vectors_gateway = concurrent_dict.new()
-  let discussion_gateway = concurrent_dict.new()
-  let discussion_component_gateway = concurrent_dict.new()
-  let topic_gateway = concurrent_dict.new()
-
   let gateway =
     Gateway(
-      audit_metadata:,
-      source_file_gateway:,
-      source_declaration_gateway:,
-      merged_topics_gateway:,
-      attack_vectors_gateway:,
-      discussion_gateway:,
-      discussion_component_gateway:,
-      topic_gateway:,
+      audit_metadata: concurrent_dict.new(),
+      source_file_gateway: concurrent_dict.new(),
+      source_declaration_gateway: concurrent_dict.new(),
+      merged_topics_gateway: concurrent_dict.new(),
+      attack_vectors_gateway: concurrent_dict.new(),
+      discussion_gateway: concurrent_dict.new(),
+      discussion_component_gateway: concurrent_dict.new(),
+      computed_note_gateway: concurrent_dict.new(),
+      topic_gateway: concurrent_dict.new(),
     )
 
   let page_paths = config.get_all_audit_page_paths()
@@ -124,12 +119,144 @@ pub fn start_gateway() -> Result(Gateway, snag.Snag) {
         check_source_files(for: audit_name)
         && check_source_declarations(for: audit_name)
         && check_merged_topics(for: audit_name)
+      let gather_from_source = !all_persist_files_exist
 
-      do_gather_audit_data(
-        gateway,
-        for: audit_name,
-        gather_from_source: !all_persist_files_exist,
+      // It is important to always gather metadata first, as that makes sure the
+      // audit exists before allocating memory and trying to read source files
+      use metadata <- result.try(gather_metadata(for: audit_name))
+
+      concurrent_dict.insert(
+        gateway.audit_metadata,
+        audit_name,
+        metadata
+          |> audit_metadata.encode_audit_metadata
+          |> json.to_string_tree,
       )
+
+      use source_files <- result.try(build_source_files(audit_name))
+      concurrent_dict.insert(
+        gateway.source_file_gateway,
+        audit_name,
+        source_files,
+      )
+
+      use source_declarations <- result.try(build_source_declarations(
+        audit_name,
+      ))
+      concurrent_dict.insert(
+        gateway.source_declaration_gateway,
+        audit_name,
+        source_declarations,
+      )
+
+      use merged_topics <- result.try(build_merged_topics(audit_name))
+      concurrent_dict.insert(
+        gateway.merged_topics_gateway,
+        audit_name,
+        merged_topics,
+      )
+
+      use Nil <- result.try({
+        case gather_from_source {
+          True -> {
+            use
+              #(
+                preprocessed_source_files,
+                preprocessed_declarations,
+                preprocessed_merged_topics,
+              )
+            <- result.try(preprocess_audit_source(for: audit_name))
+
+            use _nils <- result.try(
+              list.map(preprocessed_source_files, fn(source_file) {
+                persistent_concurrent_dict.insert(
+                  source_files,
+                  source_file.0,
+                  json.array(
+                    source_file.1,
+                    preprocessor.encode_pre_processed_line,
+                  )
+                    |> json.to_string_tree,
+                )
+              })
+              |> result.all,
+            )
+
+            use _nils <- result.try(
+              list.map(preprocessed_declarations, fn(declaration) {
+                persistent_concurrent_dict.insert(
+                  source_declarations,
+                  declaration.topic_id,
+                  declaration,
+                )
+              })
+              |> result.all,
+            )
+
+            use _nils <- result.try(
+              dict.to_list(preprocessed_merged_topics)
+              |> list.map(fn(merged_topic) {
+                persistent_concurrent_dict.insert(
+                  merged_topics,
+                  merged_topic.0,
+                  merged_topic.1,
+                )
+              })
+              |> result.all,
+            )
+
+            Ok(Nil)
+          }
+          False -> Ok(Nil)
+        }
+      })
+
+      use attack_vectors <- result.try(build_attack_vectors(audit_name))
+      concurrent_dict.insert(
+        gateway.attack_vectors_gateway,
+        audit_name,
+        attack_vectors,
+      )
+
+      let computed_notes = concurrent_dict.new()
+
+      use discussion <- result.try(discussion.build_audit_discussion(
+        audit_name,
+        computed_notes,
+      ))
+      concurrent_dict.insert(gateway.discussion_gateway, audit_name, discussion)
+
+      concurrent_dict.insert(
+        gateway.computed_note_gateway,
+        audit_name,
+        computed_notes,
+      )
+
+      let combined_topics =
+        combine_topic_sources(
+          source_declarations,
+          attack_vectors,
+          computed_notes,
+          merged_topics,
+        )
+
+      concurrent_dict.insert(gateway.topic_gateway, audit_name, combined_topics)
+
+      use discussion_component_actor <- result.try(
+        lustre.start_server_component(discussion_component.app(), #(
+          audit_name,
+          discussion,
+          combined_topics,
+        ))
+        |> snag.map_error(string.inspect),
+      )
+      concurrent_dict.insert(
+        gateway.discussion_component_gateway,
+        audit_name,
+        discussion_component_actor,
+      )
+
+      Ok(Nil)
     })
     |> snagx.collect_errors,
   )
@@ -169,9 +296,14 @@ pub fn add_merged_topic(
   case
     concurrent_dict.get(gateway.merged_topics_gateway, audit_name),
     concurrent_dict.get(gateway.attack_vectors_gateway, audit_name),
-    concurrent_dict.get(gateway.source_declaration_gateway, audit_name)
+    concurrent_dict.get(gateway.source_declaration_gateway, audit_name),
+    concurrent_dict.get(gateway.computed_note_gateway, audit_name)
   {
-    Ok(merged_topics), Ok(attack_vectors), Ok(source_declarations) -> {
+    Ok(merged_topics),
+      Ok(attack_vectors),
+      Ok(source_declarations),
+      Ok(computed_notes)
+    -> {
       use Nil <- result.map(persistent_concurrent_dict.insert(
         merged_topics,
         current_topic_id,
@@ -182,52 +314,18 @@ pub fn add_merged_topic(
         combine_topic_sources(
           source_declarations,
           attack_vectors,
+          computed_notes,
           merged_topics,
         )
 
       concurrent_dict.insert(gateway.topic_gateway, audit_name, combined_topics)
     }
-    _, _, _ -> {
-      gather_audit_data(gateway, for: audit_name, gather_from_source: True)
-
-      use merged_topics <- result.try(
-        concurrent_dict.get(gateway.merged_topics_gateway, audit_name)
-        |> result.replace_error(snag.new(
-          "Failed to find the current merged topics for " <> audit_name,
-        )),
+    _, _, _, _ ->
+      snag.error(
+        "Failed to find the current merged topics for "
+        <> audit_name
+        <> ", cannot add merged topic",
       )
-
-      use Nil <- result.try(persistent_concurrent_dict.insert(
-        merged_topics,
-        current_topic_id,
-        new_topic_id,
-      ))
-
-      use attack_vectors <- result.try(
-        concurrent_dict.get(gateway.attack_vectors_gateway, audit_name)
-        |> result.replace_error(snag.new(
-          "Failed to find attack vectors for " <> audit_name,
-        )),
-      )
-
-      use source_declarations <- result.try(
-        concurrent_dict.get(gateway.source_declaration_gateway, audit_name)
-        |> result.replace_error(snag.new(
-          "Failed to find source declarations for " <> audit_name,
-        )),
-      )
-
-      let combined_topics =
-        combine_topic_sources(
-          source_declarations,
-          attack_vectors,
-          merged_topics,
-        )
-
-      concurrent_dict.insert(gateway.topic_gateway, audit_name, combined_topics)
-
-      Ok(Nil)
-    }
   }
 }
 
@@ -246,30 +344,12 @@ pub fn add_attack_vector(
       )
       concurrent_dict.insert(topics, attack_vector.topic_id, attack_vector)
     }
-    _, _ -> {
-      gather_audit_data(gateway, for: audit_name, gather_from_source: True)
-
-      use attack_vectors <- result.try(
-        concurrent_dict.get(gateway.attack_vectors_gateway, audit_name)
-        |> result.replace_error(snag.new(
-          "Failed to find attack vectors for " <> audit_name,
-        )),
+    _, _ ->
+      snag.error(
+        "Failed to find attack vectors for "
+        <> audit_name
+        <> ", cannot add attack vector",
       )
-      use topics <- result.try(
-        concurrent_dict.get(gateway.topic_gateway, audit_name)
-        |> result.replace_error(snag.new(
-          "Failed to find topics for " <> audit_name,
-        )),
-      )
-
-      // Add to the attack vectors so it is persisted
-      use attack_vector <- result.map(
-        persistent_concurrent_duplicate_dict.insert(attack_vectors, Nil, title),
-      )
-
-      // Add to the topics so it can be looked up and referenced
-      concurrent_dict.insert(topics, attack_vector.topic_id, attack_vector)
-    }
   }
 }
 
@@ -390,138 +470,6 @@ fn build_attack_vectors(audit_name) {
     },
     example: topic.AttackVector(name: "Hi", topic_id: "Ex"),
   )
-}
-
-fn gather_audit_data(
-  gateway gateway: Gateway,
-  for audit_name,
-  gather_from_source gather_from_source: Bool,
-) {
-  case
-    do_gather_audit_data(gateway:, for: audit_name, gather_from_source:)
-    |> snag.context("Failed to gather audit data for " <> audit_name)
-  {
-    Ok(Nil) -> Nil
-    Error(e) -> io.println(e |> snag.line_print)
-  }
-}
-
-fn do_gather_audit_data(
-  gateway gateway: Gateway,
-  for audit_name,
-  gather_from_source gather_from_source: Bool,
-) {
-  // It is important to always gather metadata first, as that makes sure the
-  // audit exists before allocating memory and trying to read source files
-  use metadata <- result.try(gather_metadata(for: audit_name))
-
-  concurrent_dict.insert(
-    gateway.audit_metadata,
-    audit_name,
-    metadata
-      |> audit_metadata.encode_audit_metadata
-      |> json.to_string_tree,
-  )
-
-  use source_files <- result.try(build_source_files(audit_name))
-  concurrent_dict.insert(gateway.source_file_gateway, audit_name, source_files)
-
-  use source_declarations <- result.try(build_source_declarations(audit_name))
-  concurrent_dict.insert(
-    gateway.source_declaration_gateway,
-    audit_name,
-    source_declarations,
-  )
-
-  use merged_topics <- result.try(build_merged_topics(audit_name))
-  concurrent_dict.insert(
-    gateway.merged_topics_gateway,
-    audit_name,
-    merged_topics,
-  )
-
-  use Nil <- result.try({
-    case gather_from_source {
-      True -> {
-        use
-          #(
-            preprocessed_source_files,
-            preprocessed_declarations,
-            preprocessed_merged_topics,
-          )
-        <- result.try(preprocess_audit_source(for: audit_name))
-
-        use _nils <- result.try(
-          list.map(preprocessed_source_files, fn(source_file) {
-            persistent_concurrent_dict.insert(
-              source_files,
-              source_file.0,
-              json.array(source_file.1, preprocessor.encode_pre_processed_line)
-                |> json.to_string_tree,
-            )
-          })
-          |> result.all,
-        )
-
-        use _nils <- result.try(
-          list.map(preprocessed_declarations, fn(declaration) {
-            persistent_concurrent_dict.insert(
-              source_declarations,
-              declaration.topic_id,
-              declaration,
-            )
-          })
-          |> result.all,
-        )
-
-        use _nils <- result.try(
-          dict.to_list(preprocessed_merged_topics)
-          |> list.map(fn(merged_topic) {
-            persistent_concurrent_dict.insert(
-              merged_topics,
-              merged_topic.0,
-              merged_topic.1,
-            )
-          })
-          |> result.all,
-        )
-
-        Ok(Nil)
-      }
-      False -> Ok(Nil)
-    }
-  })
-
-  use attack_vectors <- result.try(build_attack_vectors(audit_name))
-  concurrent_dict.insert(
-    gateway.attack_vectors_gateway,
-    audit_name,
-    attack_vectors,
-  )
-
-  use discussion <- result.try(discussion.build_audit_discussion(audit_name))
-  concurrent_dict.insert(gateway.discussion_gateway, audit_name, discussion)
-
-  let combined_topics =
-    combine_topic_sources(source_declarations, attack_vectors, merged_topics)
-
-  concurrent_dict.insert(gateway.topic_gateway, audit_name, combined_topics)
-
-  use discussion_component_actor <- result.try(
-    lustre.start_server_component(discussion_component.app(), #(
-      audit_name,
-      discussion,
-      combined_topics,
-    ))
-    |> snag.map_error(string.inspect),
-  )
-  concurrent_dict.insert(
-    gateway.discussion_component_gateway,
-    audit_name,
-    discussion_component_actor,
-  )
-
-  Ok(Nil)
 }
 
 fn gather_metadata(for audit_name) {
@@ -738,6 +686,7 @@ fn combine_topic_sources(
     String,
     topic.Topic,
   ),
+  computed_notes: concurrent_dict.ConcurrentDict(String, topic.Topic),
   merged_topics: persistent_concurrent_dict.PersistentConcurrentDict(
     String,
     String,
@@ -751,11 +700,12 @@ fn combine_topic_sources(
       #(attack_vector.topic_id, attack_vector)
     }),
   )
+  |> list.append(concurrent_dict.to_list(computed_notes))
   |> concurrent_dict.from_list
   |> merge_topics(merged_topics, get_combined_declaration)
 }
 
-fn combine_discussions(discussions, merged_topics) {
+fn combine_discussions(discussions, _merged_topics) {
   discussions
 }
 
