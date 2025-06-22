@@ -2,12 +2,9 @@ import gleam/dict
 import gleam/dynamic/decode
 import gleam/json
 import gleam/list
-import gleam/option
 import gleam/result
 import o11a/computed_note
 import o11a/preprocessor
-import tempo
-import tempo/datetime
 
 pub type Topic {
   AuditFile(topic_id: String, path: String, name: String)
@@ -29,19 +26,7 @@ pub type Topic {
     signature: List(preprocessor.PreProcessedSnippetLine),
     scope: preprocessor.Scope,
   )
-  ComputedNote(
-    topic_id: String,
-    signature: List(preprocessor.PreProcessedSnippetLine),
-    parent_topic_id: String,
-    significance: computed_note.ComputedNoteSignificance,
-    user_name: String,
-    message: String,
-    expanded_message: option.Option(String),
-    time: tempo.DateTime,
-    referenced_topic_ids: List(String),
-    edited: Bool,
-    referee_topic_id: option.Option(String),
-  )
+  ComputedNote(topic_id: String, computed_note: computed_note.ComputedNote)
   NoteDeclaration(
     topic_id: String,
     signature: List(preprocessor.PreProcessedSnippetLine),
@@ -99,38 +84,11 @@ pub fn topic_to_json(topic: Topic) -> json.Json {
         ),
         #("s", preprocessor.encode_scope(scope)),
       ])
-    ComputedNote(
-      topic_id:,
-      signature:,
-      parent_topic_id:,
-      significance:,
-      user_name:,
-      message:,
-      expanded_message:,
-      time:,
-      referenced_topic_ids:,
-      edited:,
-      referee_topic_id:,
-    ) ->
+    ComputedNote(topic_id:, computed_note:) ->
       json.object([
         #("v", json.string("c")),
-        #("n", json.string(topic_id)),
-        #(
-          "g",
-          json.array(signature, preprocessor.pre_processed_snippet_line_to_json),
-        ),
-        #("p", json.string(parent_topic_id)),
-        #("s", json.int(computed_note.significance_to_int(significance))),
-        #("u", json.string(user_name)),
-        #("m", json.string(message)),
-        #("x", case expanded_message {
-          option.None -> json.null()
-          option.Some(value) -> json.string(value)
-        }),
-        #("t", json.int(datetime.to_unix_milli(time))),
-        #("e", json.bool(edited)),
-        #("r", json.array(referenced_topic_ids, json.string)),
-        #("f", json.nullable(referee_topic_id, json.string)),
+        #("t", json.string(topic_id)),
+        #("c", computed_note.encode_computed_note(computed_note)),
       ])
     NoteDeclaration(topic_id:, signature:, parent_topic_id:) ->
       json.object([
@@ -203,33 +161,12 @@ pub fn topic_decoder() -> decode.Decoder(Topic) {
       decode.success(TextDeclaration(topic_id:, name:, signature:, scope:))
     }
     "c" -> {
-      use topic_id <- decode.field("n", decode.string)
-      use signature <- decode.field(
-        "g",
-        decode.list(preprocessor.pre_processed_snippet_line_decoder()),
+      use topic_id <- decode.field("t", decode.string)
+      use computed_note <- decode.field(
+        "c",
+        computed_note.computed_note_decoder(),
       )
-      use parent_topic_id <- decode.field("p", decode.string)
-      use significance <- decode.field("s", decode.int)
-      use user_name <- decode.field("u", decode.string)
-      use message <- decode.field("m", decode.string)
-      use expanded_message <- decode.field("x", decode.optional(decode.string))
-      use time <- decode.field("t", decode.int)
-      use edited <- decode.field("e", decode.bool)
-      use referenced_topic_ids <- decode.field("r", decode.list(decode.string))
-      use referee_topic_id <- decode.field("f", decode.optional(decode.string))
-      decode.success(ComputedNote(
-        topic_id:,
-        signature:,
-        parent_topic_id:,
-        significance: computed_note.significance_from_int(significance),
-        user_name:,
-        message:,
-        expanded_message:,
-        time: datetime.from_unix_milli(time),
-        referenced_topic_ids:,
-        edited:,
-        referee_topic_id:,
-      ))
+      decode.success(ComputedNote(topic_id:, computed_note:))
     }
     "n" -> {
       use topic_id <- decode.field("t", decode.string)
@@ -268,19 +205,7 @@ fn topic_to_computed_note(topic: Topic) {
     AuditFile(..) -> Error(Nil)
     SourceDeclaration(..) -> Error(Nil)
     TextDeclaration(..) -> Error(Nil)
-    ComputedNote(..) ->
-      Ok(computed_note.ComputedNote(
-        note_id: topic.topic_id,
-        parent_id: topic.parent_topic_id,
-        significance: topic.significance,
-        user_name: topic.user_name,
-        message: topic.message,
-        expanded_message: option.None,
-        time: topic.time,
-        referenced_topic_ids: [],
-        edited: False,
-        referee_topic_id: option.None,
-      ))
+    ComputedNote(computed_note:, ..) -> Ok(computed_note)
     NoteDeclaration(..) -> Error(Nil)
     AttackVector(..) -> Error(Nil)
     Unknown(..) -> Error(Nil)

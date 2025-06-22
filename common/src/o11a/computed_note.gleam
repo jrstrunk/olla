@@ -7,6 +7,7 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import o11a/note
+import o11a/preprocessor
 import tempo
 import tempo/datetime
 
@@ -14,6 +15,7 @@ import tempo/datetime
 pub type ComputedNote {
   ComputedNote(
     note_id: String,
+    signature: List(preprocessor.PreProcessedSnippetLine),
     parent_id: String,
     significance: ComputedNoteSignificance,
     user_name: String,
@@ -28,6 +30,7 @@ pub type ComputedNote {
 
 pub const empty_computed_note = ComputedNote(
   note_id: "",
+  signature: [],
   parent_id: "",
   significance: Informational,
   user_name: "empty",
@@ -42,6 +45,13 @@ pub const empty_computed_note = ComputedNote(
 pub fn encode_computed_note(computed_note: ComputedNote) -> json.Json {
   json.object([
     #("n", json.string(computed_note.note_id)),
+    #(
+      "g",
+      json.array(
+        computed_note.signature,
+        preprocessor.pre_processed_snippet_line_to_json,
+      ),
+    ),
     #("p", json.string(computed_note.parent_id)),
     #("s", json.int(significance_to_int(computed_note.significance))),
     #("u", json.string(computed_note.user_name)),
@@ -59,6 +69,10 @@ pub fn encode_computed_note(computed_note: ComputedNote) -> json.Json {
 
 pub fn computed_note_decoder() -> decode.Decoder(ComputedNote) {
   use note_id <- decode.field("n", decode.string)
+  use signature <- decode.field(
+    "g",
+    decode.list(preprocessor.pre_processed_snippet_line_decoder()),
+  )
   use parent_id <- decode.field("p", decode.string)
   use significance <- decode.field("s", decode.int)
   use user_name <- decode.field("u", decode.string)
@@ -71,6 +85,7 @@ pub fn computed_note_decoder() -> decode.Decoder(ComputedNote) {
 
   decode.success(ComputedNote(
     note_id:,
+    signature:,
     parent_id:,
     significance: significance_from_int(significance),
     user_name:,
@@ -339,6 +354,7 @@ pub fn from_note(original_note: note.Note, thread_notes: List(note.Note)) {
 
   Ok(ComputedNote(
     note_id: note.note_id,
+    signature: [],
     parent_id: note.parent_id,
     significance:,
     user_name: note.user_name,

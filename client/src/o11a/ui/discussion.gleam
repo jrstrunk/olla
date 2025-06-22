@@ -1608,7 +1608,13 @@ fn get_topic_title(
   case topic.get_topic(declarations, model.topic_id) {
     topic.SourceDeclaration(signature:, ..)
     | topic.TextDeclaration(signature:, ..)
-    | topic.ComputedNote(signature:, ..)
+    | topic.ComputedNote(
+        computed_note: computed_note.ComputedNote(
+          signature:,
+          ..,
+        ),
+        ..,
+      )
     | topic.NoteDeclaration(signature:, ..) ->
       element.fragment(topic_signature_view(
         view_id: model.view_id,

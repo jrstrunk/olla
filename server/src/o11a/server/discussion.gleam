@@ -4,7 +4,6 @@ import gleam/dynamic/decode
 import gleam/function
 import gleam/json
 import gleam/list
-import gleam/option
 import gleam/pair
 import gleam/result
 import gleam/string
@@ -275,19 +274,7 @@ fn do_build_structured_notes(
 }
 
 fn computed_note_to_topic(computed_note: computed_note.ComputedNote) {
-  topic.ComputedNote(
-    topic_id: computed_note.note_id,
-    signature: [],
-    parent_topic_id: computed_note.parent_id,
-    significance: computed_note.significance,
-    user_name: computed_note.user_name,
-    message: computed_note.message,
-    expanded_message: computed_note.expanded_message,
-    time: computed_note.time,
-    referenced_topic_ids: computed_note.referenced_topic_ids,
-    edited: False,
-    referee_topic_id: option.None,
-  )
+  topic.ComputedNote(topic_id: computed_note.note_id, computed_note:)
 }
 
 pub fn dump_computed_notes(discussion: Discussion) {
