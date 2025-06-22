@@ -7,7 +7,7 @@ import gleam/string
 import lustre/attribute
 import lustre/element
 import lustre/element/html
-import o11a/computed_note
+import o11a/note
 import o11a/preprocessor
 import o11a/topic
 import o11a/ui/discussion
@@ -113,7 +113,7 @@ fn contract_members_view(
   contract: String,
   declarations_of_type: List(topic.Topic),
   declarations: dict.Dict(String, topic.Topic),
-  discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
+  discussion discussion: dict.Dict(String, List(note.NoteStub)),
   active_discussion active_discussion,
   discussion_context discussion_context,
   line_number_offset line_number_offset,

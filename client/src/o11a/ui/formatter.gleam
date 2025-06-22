@@ -6,26 +6,28 @@ import gleam/pair
 import gleam/result
 import gleam/string
 import o11a/computed_note
+import o11a/note
+import o11a/topic
 
 pub fn get_notes(
-  discussion: dict.Dict(String, List(computed_note.ComputedNote)),
+  discussion: dict.Dict(String, List(note.NoteStub)),
   leading_spaces leading_spaces,
   topic_id topic_id,
+  topics topics,
 ) {
   let parent_notes =
     dict.get(discussion, topic_id)
     |> result.unwrap([])
-    |> list.filter_map(fn(note) {
-      case note.parent_id == topic_id {
-        True -> Ok(note)
-        False -> Error(Nil)
-      }
-    })
+  // todo as "why what this filtering notes that had a parent id of the topic?"
 
   let info_notes =
     parent_notes
-    |> list.filter(fn(computed_note) {
-      computed_note.significance == computed_note.Informational
+    |> list.filter_map(fn(note) {
+      case note.kind {
+        note.InformationalNoteStub ->
+          topic.get_computed_note(topics, note.topic_id)
+        _ -> Error(Nil)
+      }
     })
     |> list.map(split_info_note(_, leading_spaces))
     |> list.flatten

@@ -1,4 +1,5 @@
 import concurrent_dict
+import gleam/dict
 import gleam/dynamic/decode
 import gleam/function
 import gleam/json
@@ -15,6 +16,13 @@ import o11a/note
 import o11a/topic
 import tempo/datetime
 
+pub type MentionCollection {
+  MentionCollection(
+    mentions_by_self: List(note.NoteStub),
+    mentions_to_self: List(note.NoteStub),
+  )
+}
+
 /// A per-audit discussion
 pub type Discussion =
   pcs_dict.PersistentConcurrentStructuredDict(
@@ -22,16 +30,20 @@ pub type Discussion =
     note.NoteSubmission,
     note.Note,
     String,
-    List(computed_note.ComputedNote),
+    List(note.NoteStub),
   )
 
 pub fn build_audit_discussion(
   audit_name: String,
-  topics topics: concurrent_dict.ConcurrentDict(String, topic.Topic),
+  computed_notes computed_notes: concurrent_dict.ConcurrentDict(
+    String,
+    topic.Topic,
+  ),
+  mentions mentions: concurrent_dict.ConcurrentDict(String, MentionCollection),
 ) {
   use notes <- result.try(
     pcs_dict.build(
-      config.get_notes_persist_path(for: audit_name),
+      config.get_persist_path(for: audit_name <> "/notes"),
       function.identity,
       function.identity,
       note.build_note,
@@ -41,7 +53,12 @@ pub fn build_audit_discussion(
       function.identity,
       function.identity,
       builder: fn(notes_dict, starting_from) {
-        build_structured_notes(notes_dict, starting_from, topics:)
+        build_structured_notes(
+          notes_dict,
+          starting_from,
+          computed_notes:,
+          mentions:,
+        )
       },
     ),
   )
@@ -119,64 +136,6 @@ pub fn note_vote_persist_decoder() {
   |> decode.success
 }
 
-pub fn add_note(
-  discussion: Discussion,
-  note_submission: note.NoteSubmission,
-  topic_id topic,
-) {
-  let #(removed_references, existing_references, new_references) = case
-    note_submission.prior_referenced_topic_ids
-  {
-    option.Some(prior_referenced_topic_ids) -> {
-      #(
-        list.filter(prior_referenced_topic_ids, fn(prior_ref) {
-          !list.contains(note_submission.referenced_topic_ids, prior_ref)
-        }),
-        list.filter(note_submission.referenced_topic_ids, fn(ref) {
-          list.contains(prior_referenced_topic_ids, ref)
-        }),
-        list.filter(note_submission.referenced_topic_ids, fn(ref) {
-          !list.contains(prior_referenced_topic_ids, ref)
-        }),
-      )
-    }
-    option.None -> {
-      #([], [], note_submission.referenced_topic_ids)
-    }
-  }
-
-  use note <- result.try(pcs_dict.insert(
-    discussion,
-    note_submission.parent_id,
-    note_submission,
-    rebuild_topics: list.append(
-      [topic, ..removed_references],
-      existing_references,
-    ),
-  ))
-
-  echo "added note to discussion " <> string.inspect(note)
-
-  // If the note made any new references, add them to their respective topics
-  list.map(new_references, fn(reference_topic_id) {
-    let reference_note =
-      note.NoteSubmission(
-        ..note_submission,
-        parent_id: reference_topic_id,
-        modifier: note.Reference(note.note_id),
-      )
-
-    pcs_dict.insert(
-      discussion,
-      reference_topic_id,
-      reference_note,
-      rebuild_topics: [reference_topic_id],
-    )
-  })
-  |> result.all
-  |> result.replace(Nil)
-}
-
 pub fn subscribe_to_note_updates(discussion: Discussion, effect: fn() -> Nil) {
   pcs_dict.subscribe(discussion, effect)
 }
@@ -204,41 +163,115 @@ fn build_structured_notes(
     note.Note,
   ),
   starting_from topic_id: String,
+  computed_notes computed_notes_dict: concurrent_dict.ConcurrentDict(
+    String,
+    topic.Topic,
+  ),
+  mentions mentions: concurrent_dict.ConcurrentDict(String, MentionCollection),
+) {
+  let computed_notes =
+    do_build_structured_notes(notes_dict, topic_id, computed_notes_dict)
+
+  list.map(computed_notes, fn(note) {
+    #(note.note_id, computed_note_to_topic(note))
+  })
+  |> concurrent_dict.insert_many(computed_notes_dict, _)
+
+  let prior_mentions =
+    list.map(computed_notes, fn(note) {
+      {
+        concurrent_dict.get(mentions, note.note_id)
+        |> result.unwrap(
+          MentionCollection(mentions_by_self: [], mentions_to_self: []),
+        )
+      }.mentions_by_self
+      |> list.map(fn(stub) { stub.topic_id })
+    })
+
+  let current_mentions =
+    list.map(computed_notes, fn(_note) {
+      // TODO: map the references in the message and the expanded message
+      // and add create a mention stub for each
+      let mention_subs = []
+      mention_subs
+      // TODO: Add the mentions to the mentions by self properties of the 
+      // mentions dict, then remove any old mentions that are no longer valid 
+      // from the mentions to self properties of past mentioned topics. This
+      // cannot be done with a concurrent dict, a new syncronized dict
+      // will be needed.
+    })
+
+  let dependent_topics =
+    list.unique(list.append(prior_mentions, current_mentions) |> list.flatten)
+
+  let dependent_computed_notes =
+    list.map(dependent_topics, fn(topic_id) {
+      // We have to either do a full rebuild or get the previous computed notes
+      // or stubs from somewhere, as plain notes can be deleted. If we try to
+      // to a lighter version of this function where we don't recompute the
+      // notes, but just build the stubs, we may end up adding back deleted
+      // notes.
+      do_build_structured_notes(notes_dict, topic_id, computed_notes_dict)
+    })
+    |> list.flatten
+
+  list.append(computed_notes, dependent_computed_notes)
+  |> list.map(fn(note) {
+    [
+      #(
+        note.parent_id,
+        note.NoteStub(
+          topic_id: note.note_id,
+          time: note.time,
+          kind: note.CommentNoteStub,
+        ),
+      ),
+      ..{
+        concurrent_dict.get(mentions, note.note_id)
+        |> result.unwrap(
+          MentionCollection(mentions_by_self: [], mentions_to_self: []),
+        )
+      }.mentions_to_self
+      |> list.map(fn(stub) { #(note.note_id, stub) })
+    ]
+    |> list.sort(fn(a, b) { datetime.compare({ a.1 }.time, { b.1 }.time) })
+  })
+  |> list.flatten
+  |> list.group(by: fn(stub) { stub.0 })
+  |> dict.map_values(fn(_key, stub_data) {
+    list.map(stub_data, fn(stub_data) { stub_data.1 })
+  })
+  |> dict.to_list
+}
+
+fn do_build_structured_notes(
+  notes_dict: pcd_dict.PersistentConcurrentDuplicateDict(
+    String,
+    note.NoteSubmission,
+    note.Note,
+  ),
+  topic_id topic_id: String,
   topics topics: concurrent_dict.ConcurrentDict(String, topic.Topic),
 ) {
-  let notes =
-    pcd_dict.get(notes_dict, topic_id)
-    |> list.sort(fn(a, b) { datetime.compare(a.time, b.time) })
+  let notes = pcd_dict.get(notes_dict, topic_id)
 
   let computed_notes =
     list.filter(notes, fn(note) {
       note.modifier != note.Edit && note.modifier != note.Delete
     })
     |> list.filter_map(fn(note) {
-      let thread_id = case note.modifier {
-        note.Reference(original_note_id) -> original_note_id
-        _ -> note.note_id
-      }
-
-      computed_note.from_note(note, pcd_dict.get(notes_dict, thread_id))
+      computed_note.from_note(note, pcd_dict.get(notes_dict, note.note_id))
     })
 
-  let computed_notes = case computed_notes {
+  case computed_notes {
     [] -> []
     _ ->
       list.map(computed_notes, fn(computed_note) {
-        build_structured_notes(notes_dict, computed_note.note_id, topics:)
+        do_build_structured_notes(notes_dict, computed_note.note_id, topics:)
       })
       |> list.flatten
       |> list.append(computed_notes)
   }
-
-  list.map(computed_notes, fn(note) {
-    #(note.note_id, computed_note_to_topic(note))
-  })
-  |> concurrent_dict.insert_many(topics, _)
-
-  computed_notes
 }
 
 fn computed_note_to_topic(computed_note: computed_note.ComputedNote) {
@@ -258,12 +291,14 @@ fn computed_note_to_topic(computed_note: computed_note.ComputedNote) {
 }
 
 pub fn dump_computed_notes(discussion: Discussion) {
-  let notes =
-    pcs_dict.to_list(discussion)
-    |> list.map(pair.second)
-    |> list.flatten
+  let notes = pcs_dict.to_list(discussion)
 
-  json.array(notes, computed_note.encode_computed_note)
+  json.array(notes, fn(note) {
+    json.preprocessed_array([
+      json.string(note.0),
+      json.array(note.1, note.note_stub_to_json),
+    ])
+  })
 }
 
 pub fn dump_computed_notes_since(discussion: Discussion, since ref_time) {
@@ -275,5 +310,5 @@ pub fn dump_computed_notes_since(discussion: Discussion, since ref_time) {
       note.time |> datetime.is_later_or_equal(to: ref_time)
     })
 
-  json.array(notes, computed_note.encode_computed_note)
+  json.array(notes, note.note_stub_to_json)
 }

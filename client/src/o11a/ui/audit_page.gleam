@@ -32,7 +32,7 @@ pub type Model {
 
 pub fn view(
   preprocessed_source preprocessed_source: List(preprocessor.PreProcessedLine),
-  discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
+  discussion discussion: dict.Dict(String, List(note.NoteStub)),
   declarations declarations: dict.Dict(String, topic.Topic),
   discussion_context discussion_context,
   source_kind source_kind,
@@ -62,7 +62,7 @@ pub fn view(
 
 fn loc_view(
   loc: preprocessor.PreProcessedLine,
-  discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
+  discussion discussion: dict.Dict(String, List(note.NoteStub)),
   declarations declarations,
   active_discussion active_discussion: option.Option(
     discussion.DiscussionReference,
@@ -102,7 +102,7 @@ fn loc_view(
       case loc.kind {
         preprocessor.Solidity -> {
           let #(parent_notes, info_notes) =
-            formatter.get_notes(discussion, loc.level, topic_id)
+            formatter.get_notes(discussion, loc.level, topic_id, declarations)
 
           let column_count = loc.columns + 1
 
@@ -213,7 +213,7 @@ fn text_line_level_to_header_size_class(level) {
 }
 
 fn inline_comment_preview_view(
-  parent_notes parent_notes: List(computed_note.ComputedNote),
+  parent_notes parent_notes: List(note.NoteStub),
   topic_id topic_id: String,
   element_line_number line_number,
   element_column_number column_number,
@@ -227,8 +227,16 @@ fn inline_comment_preview_view(
   let note_result =
     // This operation is expensive and it happens every line on the page, maybe
     // we should calculate this in the update function and pass it in
-    list.find(parent_notes, fn(note) {
-      note.significance != computed_note.Informational
+    list.find_map(parent_notes, fn(note) {
+      case note.kind {
+        note.InformationalNoteStub -> Error(Nil)
+        note.MentionNoteStub -> Error(Nil)
+        note.CommentNoteStub ->
+          case topic.get_computed_note(declarations, note.topic_id) {
+            Ok(computed_note) -> Ok(computed_note)
+            Error(..) -> Error(Nil)
+          }
+      }
     })
 
   case note_result {
@@ -271,7 +279,7 @@ fn inline_comment_preview_view(
 
 fn preprocessed_nodes_view(
   loc: preprocessor.PreProcessedLine,
-  discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
+  discussion discussion,
   declarations declarations: dict.Dict(String, topic.Topic),
   active_discussion active_discussion: option.Option(
     discussion.DiscussionReference,

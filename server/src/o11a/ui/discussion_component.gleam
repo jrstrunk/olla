@@ -7,19 +7,27 @@
 
 import concurrent_dict
 import gleam/json
+import lib/persistent_concurrent_structured_dict as pcs_dict
 import lustre
 import lustre/effect
 import lustre/element
 import lustre/element/html
 import lustre/server_component
 import o11a/events
+import o11a/note
 import o11a/server/discussion
 import o11a/topic
 
 pub fn app() -> lustre.App(
   #(
     String,
-    discussion.Discussion,
+    pcs_dict.PersistentConcurrentStructuredDict(
+      String,
+      note.NoteSubmission,
+      note.Note,
+      String,
+      List(note.NoteStub),
+    ),
     concurrent_dict.ConcurrentDict(String, topic.Topic),
   ),
   Model,

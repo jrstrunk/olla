@@ -9,13 +9,13 @@ import lustre/element/html
 import o11a/computed_note
 import o11a/ui/audit_dashboard as dashboard
 
-pub fn view(notes, page_path) {
+pub fn view(notes, page_path, topics) {
   let #(
     incomplete_todos,
     unanswered_questions,
     unconfirmed_findings,
     confirmed_findings,
-  ) = dashboard.find_open_notes(notes, for: Some(page_path))
+  ) = dashboard.find_open_notes(notes, for: Some(page_path), topics:)
 
   html.div([], [
     html.div([attribute.class("p-[.5rem]")], [

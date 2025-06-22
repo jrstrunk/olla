@@ -19,7 +19,6 @@ import o11a/audit_metadata
 import o11a/client/page_navigation
 import o11a/client/selectors
 import o11a/client/storage
-import o11a/computed_note
 import o11a/events
 import o11a/note
 import o11a/preprocessor
@@ -72,10 +71,7 @@ pub type Model {
       Result(dict.Dict(String, String), rsvp.Error),
     ),
     attack_vectors: dict.Dict(String, Result(List(topic.Topic), rsvp.Error)),
-    discussions: dict.Dict(
-      String,
-      dict.Dict(String, List(computed_note.ComputedNote)),
-    ),
+    discussions: dict.Dict(String, dict.Dict(String, List(note.NoteStub))),
     discussion_models: dict.Dict(
       discussion.DiscussionId,
       discussion.DiscussionOverlayModel,
@@ -250,7 +246,7 @@ pub type Msg {
   )
   ClientFetchedDiscussion(
     audit_name: String,
-    discussion: Result(List(computed_note.ComputedNote), rsvp.Error),
+    discussion: Result(List(#(String, List(note.NoteStub))), rsvp.Error),
   )
   ServerUpdatedMergedTopics(audit_name: String)
   ServerUpdatedDiscussion(audit_name: String)
@@ -456,8 +452,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
             discussions: dict.insert(
               model.discussions,
               audit_name,
-              discussion
-                |> list.group(by: fn(note) { note.parent_id }),
+              discussion |> dict.from_list,
             ),
           ),
           effect.none(),
@@ -470,7 +465,10 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 
     ServerUpdatedDiscussion(audit_name:) -> #(
       model,
-      fetch_discussion(audit_name),
+      effect.batch([
+        fetch_discussion(audit_name),
+        fetch_declarations(audit_name),
+      ]),
     )
 
     UserEnteredKey(browser_event:) -> {
@@ -798,17 +796,12 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
             discussion.update(discussion_model, discussion_msg)
 
           case effect {
-            discussion.SubmitNote(note_submission, topic_id) -> {
+            discussion.SubmitNote(note_submission) -> {
               #(model, case model.route {
                 AuditPageRoute(audit_name:, ..)
                 | AuditDashboardRoute(audit_name:)
                 | AuditInterfaceRoute(audit_name:) -> {
-                  submit_note(
-                    audit_name,
-                    topic_id,
-                    note_submission,
-                    discussion_model,
-                  )
+                  submit_note(audit_name, note_submission, discussion_model)
                 }
                 O11aHomeRoute -> effect.none()
               })
@@ -993,17 +986,20 @@ fn fetch_discussion(audit_name) {
   rsvp.get(
     "/audit-discussion/" <> audit_name,
     rsvp.expect_json(
-      decode.list(computed_note.computed_note_decoder()),
+      decode.list({
+        use parent_id <- decode.field(0, decode.string)
+        use note_stub <- decode.field(1, decode.list(note.note_stub_decoder()))
+        decode.success(#(parent_id, note_stub))
+      }),
       ClientFetchedDiscussion(audit_name, _),
     ),
   )
 }
 
-fn submit_note(audit_name, topic_id, note_submission, discussion_model) {
+fn submit_note(audit_name, note_submission, discussion_model) {
   rsvp.post(
     "/submit-note/" <> audit_name,
     json.object([
-      #("topic_id", json.string(topic_id)),
       #("note_submission", note.encode_note_submission(note_submission)),
     ]),
     rsvp.expect_json(
@@ -1147,7 +1143,7 @@ fn view(model: Model) {
             source_kind:,
           )
             |> element.map(DiscussionControllerSentMsg),
-          audit_page_dashboard.view(discussion, page_path)
+          audit_page_dashboard.view(discussion, page_path, declarations)
             |> option.Some,
           model.file_tree,
           audit_name,

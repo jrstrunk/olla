@@ -131,6 +131,57 @@ pub fn note_modifier_decoder() -> decode.Decoder(NoteModifier) {
   }
 }
 
+/// Represents a note in the discussion list, but does not contain the actual
+/// note data.
+pub type NoteStub {
+  NoteStub(topic_id: String, time: tempo.DateTime, kind: NoteStubKind)
+}
+
+pub fn note_stub_to_json(note_stub: NoteStub) -> json.Json {
+  let NoteStub(topic_id:, time:, kind:) = note_stub
+  json.object([
+    #("i", json.string(topic_id)),
+    #("t", json.int(datetime.to_unix_seconds(time))),
+    #("k", json.string(note_stub_kind_to_string(kind))),
+  ])
+}
+
+pub fn note_stub_decoder() -> decode.Decoder(NoteStub) {
+  use topic_id <- decode.field("i", decode.string)
+  use time <- decode.field(
+    "t",
+    decode.int |> decode.map(datetime.from_unix_seconds),
+  )
+  use kind <- decode.field(
+    "k",
+    decode.string |> decode.map(note_stub_kind_from_string),
+  )
+  decode.success(NoteStub(topic_id:, time:, kind:))
+}
+
+pub type NoteStubKind {
+  CommentNoteStub
+  InformationalNoteStub
+  MentionNoteStub
+}
+
+fn note_stub_kind_to_string(note_stub_kind) {
+  case note_stub_kind {
+    CommentNoteStub -> "c"
+    InformationalNoteStub -> "i"
+    MentionNoteStub -> "m"
+  }
+}
+
+fn note_stub_kind_from_string(note_stub_kind) {
+  case note_stub_kind {
+    "c" -> CommentNoteStub
+    "i" -> InformationalNoteStub
+    "m" -> MentionNoteStub
+    _ -> panic as "Invalid note stub kind"
+  }
+}
+
 pub type NoteVoteSigficance {
   UpVote
   DownVote

@@ -2,12 +2,12 @@ import filepath
 import gleam/dict
 import gleam/list
 import gleam/option.{None, Some}
-import gleam/pair
 import gleam/string
 import lustre/attribute
 import lustre/element
 import lustre/element/html
 import o11a/computed_note
+import o11a/note
 import o11a/topic
 import o11a/ui/discussion
 
@@ -39,7 +39,7 @@ pub fn view(
     unanswered_questions,
     unconfirmed_findings,
     confirmed_findings,
-  ) = find_open_notes(discussion, for: None)
+  ) = find_open_notes(discussion, for: None, topics: declarations)
 
   html.div([attribute.style("margin-left", "2rem")], [
     html.style([], style),
@@ -99,23 +99,34 @@ fn notes_view(notes) {
   )
 }
 
-pub fn find_open_notes(in notes, for page_path) {
+pub fn find_open_notes(
+  in notes: dict.Dict(String, List(note.NoteStub)),
+  for page_path,
+  topics topics: dict.Dict(String, topic.Topic),
+) {
   let all_notes =
     case page_path {
       Some(page_path) ->
         dict.to_list(notes)
-        |> list.filter_map(fn(note_data) {
+        |> list.map(fn(note_data) {
           // The note_id will be the page path + the line number, but we want
           // everything in the page path
           case string.starts_with(note_data.0, page_path) {
-            True -> Ok(note_data.1)
-            False -> Error(Nil)
+            True ->
+              list.filter_map(note_data.1, fn(note: note.NoteStub) {
+                topic.get_computed_note(topics, note.topic_id)
+              })
+            False -> []
           }
         })
 
       None ->
         dict.to_list(notes)
-        |> list.map(pair.second)
+        |> list.map(fn(note_data) {
+          list.filter_map(note_data.1, fn(note: note.NoteStub) {
+            topic.get_computed_note(topics, note.topic_id)
+          })
+        })
     }
     |> list.flatten
 

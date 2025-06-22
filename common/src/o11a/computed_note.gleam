@@ -26,6 +26,19 @@ pub type ComputedNote {
   )
 }
 
+pub const empty_computed_note = ComputedNote(
+  note_id: "",
+  parent_id: "",
+  significance: Informational,
+  user_name: "empty",
+  message: "",
+  expanded_message: option.None,
+  time: datetime.unix_epoch,
+  referenced_topic_ids: [],
+  edited: False,
+  referee_topic_id: option.None,
+)
+
 pub fn encode_computed_note(computed_note: ComputedNote) -> json.Json {
   json.object([
     #("n", json.string(computed_note.note_id)),
@@ -208,7 +221,8 @@ pub fn decode_computed_notes(notes: dynamic.Dynamic) {
 pub fn from_note(original_note: note.Note, thread_notes: List(note.Note)) {
   // When we are searching for compound values, search from the end of the
   // list first to get the most recently added note.
-  let thread_notes = list.reverse(thread_notes)
+  let thread_notes =
+    list.sort(thread_notes, fn(a, b) { datetime.compare(b.time, a.time) })
 
   // If the note has been deleted, return a nil error so it can be filtered out
   use Nil <- given.ok(

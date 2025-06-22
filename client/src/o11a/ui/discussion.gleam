@@ -343,7 +343,7 @@ pub fn topic_signature_view(
   view_id view_id: String,
   signature signature: List(preprocessor.PreProcessedSnippetLine),
   declarations declarations: dict.Dict(String, topic.Topic),
-  discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
+  discussion discussion: dict.Dict(String, List(note.NoteStub)),
   suppress_declaration suppress_declaration: Bool,
   line_number_offset line_number_offset: Int,
   active_discussion active_discussion: option.Option(DiscussionReference),
@@ -458,6 +458,7 @@ pub fn topic_signature_view(
                 discussion,
                 preprocessed_snippet_line.leading_spaces,
                 line_topic_id,
+                declarations,
               )
             option.None -> #([], [])
           }
@@ -517,7 +518,7 @@ pub type NodeWithDiscussionViewKind {
 pub fn node_with_discussion_view(
   topic_id topic_id: String,
   tokens tokens: String,
-  discussion discussion: dict.Dict(String, List(computed_note.ComputedNote)),
+  discussion discussion: dict.Dict(String, List(note.NoteStub)),
   declarations declarations: dict.Dict(String, topic.Topic),
   discussion_id discussion_id: DiscussionId,
   active_discussion active_discussion: option.Option(DiscussionReference),
@@ -819,7 +820,7 @@ pub type DiscussionOverlayMsg {
 }
 
 pub type DiscussionOverlayEffect {
-  SubmitNote(note: note.NoteSubmission, topic_id: String)
+  SubmitNote(note: note.NoteSubmission)
   FocusDiscussionInput(discussion_id: DiscussionId)
   FocusExpandedDiscussionInput(discussion_id: DiscussionId)
   UnfocusDiscussionInput(discussion_id: DiscussionId)
@@ -886,6 +887,8 @@ pub fn update(model: DiscussionOverlayModel, msg: DiscussionOverlayMsg) {
           prior_referenced_topic_ids:,
         )
 
+      echo "submitting note: " <> string.inspect(note)
+
       #(
         DiscussionOverlayModel(
           ..model,
@@ -894,7 +897,7 @@ pub fn update(model: DiscussionOverlayModel, msg: DiscussionOverlayMsg) {
           show_expanded_message_box: False,
           editing_note: option.None,
         ),
-        SubmitNote(note:, topic_id: model.topic_id),
+        SubmitNote(note:),
       )
     }
     UserSwitchedToThread(new_thread_id:, parent_note:) -> #(
@@ -1017,7 +1020,7 @@ pub fn update(model: DiscussionOverlayModel, msg: DiscussionOverlayMsg) {
 
 pub fn overlay_view(
   model: DiscussionOverlayModel,
-  notes notes: dict.Dict(String, List(computed_note.ComputedNote)),
+  notes notes: dict.Dict(String, List(note.NoteStub)),
   declarations declarations: dict.Dict(String, topic.Topic),
   discussion_context discussion_context,
 ) -> element.Element(DiscussionControllerMsg) {
@@ -1068,10 +1071,10 @@ pub fn overlay_view(
                 option.is_some(model.active_thread)
                 || list.length(current_thread_notes) > 0
               {
-                True -> comments_view(model, current_thread_notes)
+                True -> comments_view(model, current_thread_notes, declarations)
                 False -> element.fragment([])
               },
-              new_message_input_view(model, current_thread_notes),
+              new_message_input_view(model, current_thread_notes, declarations),
             ]),
             expanded_message_view(model),
           ])
@@ -1115,10 +1118,10 @@ pub fn panel_view(
       option.is_some(model.active_thread)
       || list.length(current_thread_notes) > 0
     {
-      True -> comments_view(model, current_thread_notes)
+      True -> comments_view(model, current_thread_notes, declarations)
       False -> element.fragment([])
     },
-    new_message_input_view(model, current_thread_notes),
+    new_message_input_view(model, current_thread_notes, declarations),
     case model.show_expanded_message_box {
       True -> expand_message_input_view(model)
       False -> element.fragment([])
@@ -1194,26 +1197,27 @@ fn reference_header_view(
     ),
     html.div(
       [attribute.class("flex flex-col overflow-auto max-h-[30rem] gap-[.5rem]")],
-      list.filter_map(
-        current_thread_notes,
-        fn(note: computed_note.ComputedNote) {
-          case note.significance == computed_note.Informational {
-            True ->
-              Ok(
-                html.p([], [
-                  html.text(
-                    note.message
-                    <> case option.is_some(note.expanded_message) {
-                      True -> "^"
-                      False -> ""
-                    },
-                  ),
-                ]),
-              )
-            False -> Error(Nil)
+      list.filter_map(current_thread_notes, fn(note: note.NoteStub) {
+        case note.kind {
+          note.InformationalNoteStub -> {
+            use note <- result.map(topic.get_computed_note(
+              declarations,
+              note.topic_id,
+            ))
+
+            html.p([], [
+              html.text(
+                note.message
+                <> case option.is_some(note.expanded_message) {
+                  True -> "^"
+                  False -> ""
+                },
+              ),
+            ])
           }
-        },
-      ),
+          _ -> Error(Nil)
+        }
+      }),
     ),
   ])
 }
@@ -1378,7 +1382,8 @@ fn reference_group_view(references: List(preprocessor.Reference), group_kind) {
 
 fn comments_view(
   model: DiscussionOverlayModel,
-  current_thread_notes: List(computed_note.ComputedNote),
+  current_thread_notes: List(note.NoteStub),
+  topics topics: dict.Dict(String, topic.Topic),
 ) {
   html.div(
     [
@@ -1387,6 +1392,10 @@ fn comments_view(
       ),
     ],
     list.map(current_thread_notes, fn(note) {
+      let note =
+        topic.get_computed_note(topics, note.topic_id)
+        |> result.unwrap(computed_note.empty_computed_note)
+
       html.div([attribute.class("line-discussion-item")], [
         // Comment header
         html.div([attribute.class("flex justify-between mb-[.2rem]")], [
@@ -1469,7 +1478,8 @@ fn significance_badge_view(sig: computed_note.ComputedNoteSignificance) {
 
 fn new_message_input_view(
   model: DiscussionOverlayModel,
-  current_thread_notes,
+  current_thread_notes: List(note.NoteStub),
+  topics,
 ) -> element.Element(DiscussionControllerMsg) {
   html.div([attribute.class("flex justify-between items-center gap-[.35rem]")], [
     html.button(
@@ -1508,7 +1518,10 @@ fn new_message_input_view(
       event.on_blur(UserUnfocusedInput),
       on_input_keydown(
         UserSubmittedNote,
-        UserEditedNote(list.first(current_thread_notes)),
+        UserEditedNote({
+          use first <- result.try(list.first(current_thread_notes))
+          topic.get_computed_note(topics, first.topic_id)
+        }),
       ),
       attribute.value(model.current_note_draft),
     ])

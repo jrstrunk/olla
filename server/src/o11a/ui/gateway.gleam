@@ -15,7 +15,6 @@ import lib/persistent_concurrent_structured_dict
 import lib/snagx
 import lustre
 import o11a/audit_metadata
-import o11a/computed_note
 import o11a/config
 import o11a/note
 import o11a/preprocessor
@@ -73,12 +72,16 @@ pub type Gateway {
         note.NoteSubmission,
         note.Note,
         String,
-        List(computed_note.ComputedNote),
+        List(note.NoteStub),
       ),
     ),
     computed_note_gateway: concurrent_dict.ConcurrentDict(
       String,
       concurrent_dict.ConcurrentDict(String, topic.Topic),
+    ),
+    mentions_gateway: concurrent_dict.ConcurrentDict(
+      String,
+      concurrent_dict.ConcurrentDict(String, discussion.MentionCollection),
     ),
     // The topic gateway is made up of a combination of all the other topic
     // gateways. This way, the other topic types can be persisted in their own
@@ -107,6 +110,7 @@ pub fn start_gateway() -> Result(Gateway, snag.Snag) {
       discussion_gateway: concurrent_dict.new(),
       discussion_component_gateway: concurrent_dict.new(),
       computed_note_gateway: concurrent_dict.new(),
+      mentions_gateway: concurrent_dict.new(),
       topic_gateway: concurrent_dict.new(),
     )
 
@@ -219,10 +223,12 @@ pub fn start_gateway() -> Result(Gateway, snag.Snag) {
       )
 
       let computed_notes = concurrent_dict.new()
+      let mentions = concurrent_dict.new()
 
       use discussion <- result.try(discussion.build_audit_discussion(
         audit_name,
         computed_notes,
+        mentions,
       ))
       concurrent_dict.insert(gateway.discussion_gateway, audit_name, discussion)
 
@@ -350,6 +356,44 @@ pub fn add_attack_vector(
         <> audit_name
         <> ", cannot add attack vector",
       )
+  }
+}
+
+pub fn add_note(
+  gateway: Gateway,
+  audit_name audit_name,
+  note_submission note_submission: note.NoteSubmission,
+) {
+  case
+    concurrent_dict.get(gateway.discussion_gateway, audit_name),
+    concurrent_dict.get(gateway.computed_note_gateway, audit_name),
+    concurrent_dict.get(gateway.topic_gateway, audit_name)
+  {
+    Ok(discussion), Ok(computed_notes), Ok(topics) -> {
+      use #(note, _note_stubs) <- result.try(
+        persistent_concurrent_structured_dict.insert(
+          discussion,
+          note_submission.parent_id,
+          note_submission,
+          topic: note_submission.parent_id,
+        ),
+      )
+
+      use computed_note <- result.try(
+        concurrent_dict.get(computed_notes, note.note_id)
+        |> result.replace_error(snag.new(
+          "Failed to get computed note after inserting submission",
+        )),
+      )
+
+      concurrent_dict.insert(topics, computed_note.topic_id, computed_note)
+
+      echo "added note to discussion " <> string.inspect(note)
+
+      Ok(Nil)
+    }
+    _, _, _ ->
+      snag.error("Failed to find discussion or topics for " <> audit_name)
   }
 }
 

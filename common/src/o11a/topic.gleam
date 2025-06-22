@@ -258,6 +258,35 @@ pub fn get_topic(topics, topic_id topic_id) {
   |> result.unwrap(Unknown(topic_id:))
 }
 
+pub fn get_computed_note(topics, topic_id topic_id) {
+  dict.get(topics, topic_id)
+  |> result.try(topic_to_computed_note)
+}
+
+fn topic_to_computed_note(topic: Topic) {
+  case topic {
+    AuditFile(..) -> Error(Nil)
+    SourceDeclaration(..) -> Error(Nil)
+    TextDeclaration(..) -> Error(Nil)
+    ComputedNote(..) ->
+      Ok(computed_note.ComputedNote(
+        note_id: topic.topic_id,
+        parent_id: topic.parent_topic_id,
+        significance: topic.significance,
+        user_name: topic.user_name,
+        message: topic.message,
+        expanded_message: option.None,
+        time: topic.time,
+        referenced_topic_ids: [],
+        edited: False,
+        referee_topic_id: option.None,
+      ))
+    NoteDeclaration(..) -> Error(Nil)
+    AttackVector(..) -> Error(Nil)
+    Unknown(..) -> Error(Nil)
+  }
+}
+
 pub fn topic_qualified_name(topic: Topic) {
   case topic {
     AuditFile(path:, name:, ..) -> path <> "/" <> name

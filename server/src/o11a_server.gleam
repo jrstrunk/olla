@@ -232,23 +232,18 @@ fn handle_wisp_request(req, context: Context) {
       use json <- wisp.require_json(req)
 
       let result = {
-        use discussion <- result.try(
-          gateway.get_discussion(context.gateway, audit_name)
-          |> result.replace_error(snag.new("Failed to get discussion")),
-        )
-        use #(topic_id, note_submission) <- result.try(
+        use note_submission <- result.try(
           decode.run(json, {
-            use topic_id <- decode.field("topic_id", decode.string)
             use note_submission <- decode.field(
               "note_submission",
               note.note_submission_decoder(),
             )
-            decode.success(#(topic_id, note_submission))
+            decode.success(note_submission)
           })
           |> result.replace_error(snag.new("Failed to decode note submission")),
         )
 
-        discussion.add_note(discussion, note_submission, topic_id)
+        gateway.add_note(context.gateway, audit_name, note_submission)
         |> result.replace_error(snag.new("Failed to add note"))
       }
 
