@@ -225,10 +225,27 @@ pub fn start_gateway() -> Result(Gateway, snag.Snag) {
       let computed_notes = concurrent_dict.new()
       let mentions = concurrent_dict.new()
 
+      // TODO: this is to gather all declarations before processing the audit
+      // discussion where notes need to be able to look up declarations by name.
+      // Doing this is faulty because the note declarations are not yet 
+      // populated, so notes will be not able to reference other notes 
+      // consistently. The real fix is to do a first pass and gather a list of
+      // declaration names to topic ids, then do a second pass and give the 
+      // notes parser the list of declarations to lookup in when determining
+      // references.
+      let temp_combined_topics =
+        combine_topic_sources(
+          source_declarations,
+          attack_vectors,
+          computed_notes,
+          merged_topics,
+        )
+
       use discussion <- result.try(discussion.build_audit_discussion(
         audit_name,
-        computed_notes,
-        mentions,
+        computed_notes:,
+        declarations: temp_combined_topics,
+        mentions:,
       ))
       concurrent_dict.insert(gateway.discussion_gateway, audit_name, discussion)
 

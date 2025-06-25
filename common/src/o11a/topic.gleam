@@ -259,9 +259,7 @@ pub fn topic_file(topic: Topic) {
 }
 
 pub fn find_reference_topic(for value: String, with topics: List(Topic)) {
-  echo "finding reference topic for " <> value
   list.find(topics, fn(topic) {
-    echo "checking " <> topic_qualified_name(topic)
     topic_qualified_name(topic) == value
   })
   |> result.try_recover(fn(_) {

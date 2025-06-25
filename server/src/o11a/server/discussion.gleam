@@ -42,6 +42,7 @@ pub fn build_audit_discussion(
     String,
     topic.Topic,
   ),
+  declarations declarations: concurrent_dict.ConcurrentDict(String, topic.Topic),
   mentions mentions: concurrent_dict.ConcurrentDict(String, MentionCollection),
 ) {
   use notes <- result.try(
@@ -60,6 +61,7 @@ pub fn build_audit_discussion(
           notes_dict,
           starting_from,
           computed_notes:,
+          declarations:,
           mentions:,
         )
       },
@@ -170,10 +172,16 @@ fn build_structured_notes(
     String,
     topic.Topic,
   ),
+  declarations declarations: concurrent_dict.ConcurrentDict(String, topic.Topic),
   mentions mentions: concurrent_dict.ConcurrentDict(String, MentionCollection),
 ) {
   let computed_notes =
-    do_build_structured_notes(notes_dict, topic_id, computed_notes_dict)
+    do_build_structured_notes(
+      notes_dict,
+      topic_id,
+      declarations:,
+      computed_notes_dict:,
+    )
 
   list.map(computed_notes, fn(note) {
     #(note.note_id, computed_note_to_topic(note))
@@ -214,7 +222,12 @@ fn build_structured_notes(
       // to a lighter version of this function where we don't recompute the
       // notes, but just build the stubs, we may end up adding back deleted
       // notes.
-      do_build_structured_notes(notes_dict, topic_id, computed_notes_dict)
+      do_build_structured_notes(
+        notes_dict,
+        topic_id,
+        declarations:,
+        computed_notes_dict:,
+      )
     })
     |> list.flatten
 
@@ -254,7 +267,11 @@ fn do_build_structured_notes(
     note.Note,
   ),
   topic_id topic_id: String,
-  topics topics: concurrent_dict.ConcurrentDict(String, topic.Topic),
+  declarations declarations: concurrent_dict.ConcurrentDict(String, topic.Topic),
+  computed_notes_dict computed_notes_dict: concurrent_dict.ConcurrentDict(
+    String,
+    topic.Topic,
+  ),
 ) {
   let notes = pcd_dict.get(notes_dict, topic_id)
 
@@ -266,7 +283,8 @@ fn do_build_structured_notes(
       computed_note_from_note(
         note,
         pcd_dict.get(notes_dict, note.note_id),
-        topics,
+        declarations:,
+        computed_notes_dict:,
       )
     })
 
@@ -274,7 +292,12 @@ fn do_build_structured_notes(
     [] -> []
     _ ->
       list.map(computed_notes, fn(computed_note) {
-        do_build_structured_notes(notes_dict, computed_note.note_id, topics:)
+        do_build_structured_notes(
+          notes_dict,
+          computed_note.note_id,
+          declarations:,
+          computed_notes_dict:,
+        )
       })
       |> list.flatten
       |> list.append(computed_notes)
@@ -311,7 +334,11 @@ pub fn dump_computed_notes_since(discussion: Discussion, since ref_time) {
 fn computed_note_from_note(
   original_note: note.Note,
   thread_notes: List(note.Note),
-  topics: concurrent_dict.ConcurrentDict(String, topic.Topic),
+  declarations declarations: concurrent_dict.ConcurrentDict(String, topic.Topic),
+  computed_notes_dict computed_notes_dict: concurrent_dict.ConcurrentDict(
+    String,
+    topic.Topic,
+  ),
 ) {
   // When we are searching for compound values, search from the end of the
   // list first to get the most recently added note.
@@ -435,7 +462,7 @@ fn computed_note_from_note(
     note.InformationalConfirmation -> computed_note.InformationalConfirmation
   }
 
-  let topics_list = concurrent_dict.to_list(topics) |> list.map(pair.second)
+  let topics = concurrent_dict.to_list(declarations) |> list.map(pair.second)
 
   let #(document, max_topic_id, declarations) =
     preprocessor_text.parse(
@@ -443,11 +470,11 @@ fn computed_note_from_note(
       document_id: note.note_id,
       document_parent: note.parent_id,
       max_topic_id: 0,
-      topics: topics_list,
+      topics:,
     )
 
   let message =
-    preprocessor_text.preprocess_source(document, topics_list)
+    preprocessor_text.preprocess_source(document, topics)
     |> list.map(fn(line) { preprocessor.TextSnippetLine(line.elements) })
 
   let #(expanded_message, expanded_declarations) = case note.expanded_message {
@@ -458,11 +485,11 @@ fn computed_note_from_note(
           document_id: note.note_id,
           document_parent: note.parent_id,
           max_topic_id:,
-          topics: topics_list,
+          topics:,
         )
 
       let expanded_message =
-        preprocessor_text.preprocess_source(document, topics_list)
+        preprocessor_text.preprocess_source(document, topics)
         |> list.map(fn(line) { preprocessor.TextSnippetLine(line.elements) })
         |> option.Some
 
@@ -474,7 +501,7 @@ fn computed_note_from_note(
   let _all_declarations =
     dict.merge(declarations, expanded_declarations)
     |> dict.to_list
-    |> concurrent_dict.insert_many(topics, _)
+    |> concurrent_dict.insert_many(computed_notes_dict, _)
 
   Ok(computed_note.ComputedNote(
     note_id: note.note_id,
