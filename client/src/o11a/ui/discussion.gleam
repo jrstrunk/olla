@@ -1388,7 +1388,7 @@ fn comments_view(
   html.div(
     [
       attribute.class(
-        "flex flex-col-reverse overflow-auto max-h-[30rem] gap-[.5rem] mb-[.5rem]",
+        "gap-[.5rem] mb-[.5rem]",
       ),
     ],
     list.map(current_thread_notes, fn(note) {
