@@ -36,7 +36,7 @@ pub fn get_notes(
 }
 
 fn split_info_note(note: computed_note.ComputedNote, leading_spaces) {
-  note.message
+  note.message_text
   |> split_info_comment(note.expanded_message != option.None, leading_spaces)
   |> list.index_map(fn(comment, index) {
     #(note.note_id <> int.to_string(index), comment)

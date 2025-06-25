@@ -1,9 +1,11 @@
 import concurrent_dict
+import given
 import gleam/dict
 import gleam/dynamic/decode
 import gleam/function
 import gleam/json
 import gleam/list
+import gleam/option
 import gleam/pair
 import gleam/result
 import gleam/string
@@ -12,6 +14,8 @@ import lib/persistent_concurrent_structured_dict as pcs_dict
 import o11a/computed_note
 import o11a/config
 import o11a/note
+import o11a/preprocessor
+import o11a/preprocessor_text
 import o11a/topic
 import tempo/datetime
 
@@ -259,7 +263,11 @@ fn do_build_structured_notes(
       note.modifier != note.Edit && note.modifier != note.Delete
     })
     |> list.filter_map(fn(note) {
-      computed_note.from_note(note, pcd_dict.get(notes_dict, note.note_id))
+      computed_note_from_note(
+        note,
+        pcd_dict.get(notes_dict, note.note_id),
+        topics,
+      )
     })
 
   case computed_notes {
@@ -298,4 +306,188 @@ pub fn dump_computed_notes_since(discussion: Discussion, since ref_time) {
     })
 
   json.array(notes, note.note_stub_to_json)
+}
+
+fn computed_note_from_note(
+  original_note: note.Note,
+  thread_notes: List(note.Note),
+  topics: concurrent_dict.ConcurrentDict(String, topic.Topic),
+) {
+  // When we are searching for compound values, search from the end of the
+  // list first to get the most recently added note.
+  let thread_notes =
+    list.sort(thread_notes, fn(a, b) { datetime.compare(b.time, a.time) })
+
+  // If the note has been deleted, return a nil error so it can be filtered out
+  use Nil <- given.ok(
+    list.find(thread_notes, fn(thread_note) {
+      thread_note.modifier == note.Delete
+    }),
+    return: fn(_) { Error(Nil) },
+  )
+
+  // Find the most recent edit of the note
+  let edited_note =
+    list.find(thread_notes, fn(thread_note) {
+      thread_note.modifier == note.Edit
+    })
+
+  // Update the note with the most recent edited messages, if any
+  let #(note, edited) = case edited_note {
+    Ok(edit) -> #(
+      note.Note(
+        ..original_note,
+        message: edit.message,
+        expanded_message: edit.expanded_message,
+        significance: edit.significance,
+        referenced_topic_ids: edit.referenced_topic_ids,
+      ),
+      True,
+    )
+    Error(Nil) -> #(original_note, False)
+  }
+
+  // If this note is a reference note, then it should have a reference to its
+  // topic in its references list. If it does not, then an edit must have been
+  // made to the note that removed the reference. In this case, return a
+  // nil error so it can be filtered out.
+  use referee_topic_id <- given.ok(
+    case note.modifier {
+      note.Reference(referee_topic_id:) ->
+        list.find(note.referenced_topic_ids, fn(reference_topic_id) {
+          reference_topic_id == note.parent_id
+        })
+        |> result.replace(option.Some(referee_topic_id))
+
+      _ -> Ok(option.None)
+    },
+    else_return: fn(_) { Error(Nil) },
+  )
+
+  let significance = case note.significance {
+    note.Comment -> computed_note.Comment
+    note.Question ->
+      case
+        list.find(thread_notes, fn(thread_note) {
+          thread_note.significance == note.Answer
+        })
+      {
+        Ok(..) -> computed_note.AnsweredQuestion
+        Error(Nil) -> computed_note.UnansweredQuestion
+      }
+    note.DevelperQuestion ->
+      case
+        list.find(thread_notes, fn(thread_note) {
+          thread_note.significance == note.Answer
+        })
+      {
+        Ok(..) -> computed_note.AnsweredDeveloperQuestion
+        Error(Nil) -> computed_note.UnansweredDeveloperQuestion
+      }
+    note.Answer -> computed_note.Answer
+    note.ToDo ->
+      case
+        list.find(thread_notes, fn(thread_note) {
+          thread_note.significance == note.ToDoCompletion
+        })
+      {
+        Ok(..) -> computed_note.CompleteToDo
+        Error(Nil) -> computed_note.IncompleteToDo
+      }
+    note.ToDoCompletion -> computed_note.ToDoCompletion
+    note.FindingLead ->
+      case
+        list.find_map(thread_notes, fn(thread_note) {
+          case thread_note.significance {
+            note.FindingRejection -> Ok(computed_note.FindingRejection)
+            note.FindingConfirmation -> Ok(computed_note.FindingConfirmation)
+            _ -> Error(Nil)
+          }
+        })
+      {
+        Ok(computed_note.FindingRejection) -> computed_note.RejectedFinding
+        Ok(computed_note.FindingConfirmation) -> computed_note.ConfirmedFinding
+        Ok(..) -> computed_note.UnconfirmedFinding
+        Error(Nil) -> computed_note.UnconfirmedFinding
+      }
+    note.FindingConfirmation -> computed_note.FindingConfirmation
+    note.FindingRejection -> computed_note.FindingRejection
+    note.Informational ->
+      case
+        list.find_map(thread_notes, fn(thread_note) {
+          case thread_note.significance {
+            note.InformationalRejection ->
+              Ok(computed_note.InformationalRejection)
+            note.InformationalConfirmation ->
+              Ok(computed_note.InformationalConfirmation)
+            _ -> Error(Nil)
+          }
+        })
+      {
+        Ok(computed_note.InformationalRejection) ->
+          computed_note.RejectedInformational
+        Ok(computed_note.InformationalConfirmation) ->
+          computed_note.Informational
+        Ok(..) -> computed_note.Informational
+        Error(Nil) -> computed_note.Informational
+      }
+    note.InformationalRejection -> computed_note.InformationalRejection
+    note.InformationalConfirmation -> computed_note.InformationalConfirmation
+  }
+
+  let topics_list = concurrent_dict.to_list(topics) |> list.map(pair.second)
+
+  let #(document, max_topic_id, declarations) =
+    preprocessor_text.parse(
+      source: note.message,
+      document_id: note.note_id,
+      document_parent: note.parent_id,
+      max_topic_id: 0,
+      topics: topics_list,
+    )
+
+  let message =
+    preprocessor_text.preprocess_source(document, topics_list)
+    |> list.map(fn(line) { preprocessor.TextSnippetLine(line.elements) })
+
+  let #(expanded_message, expanded_declarations) = case note.expanded_message {
+    option.Some(expanded_message) -> {
+      let #(document, _max_topic_id, declarations) =
+        preprocessor_text.parse(
+          source: expanded_message,
+          document_id: note.note_id,
+          document_parent: note.parent_id,
+          max_topic_id:,
+          topics: topics_list,
+        )
+
+      let expanded_message =
+        preprocessor_text.preprocess_source(document, topics_list)
+        |> list.map(fn(line) { preprocessor.TextSnippetLine(line.elements) })
+        |> option.Some
+
+      #(expanded_message, declarations)
+    }
+    option.None -> #(option.None, dict.new())
+  }
+
+  let _all_declarations =
+    dict.merge(declarations, expanded_declarations)
+    |> dict.to_list
+    |> concurrent_dict.insert_many(topics, _)
+
+  Ok(computed_note.ComputedNote(
+    note_id: note.note_id,
+    parent_id: note.parent_id,
+    significance:,
+    user_name: note.user_name,
+    message:,
+    message_text: note.message,
+    expanded_message: expanded_message,
+    expanded_message_text: note.expanded_message,
+    time: note.time,
+    edited:,
+    referenced_topic_ids: note.referenced_topic_ids,
+    referee_topic_id:,
+  ))
 }

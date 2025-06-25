@@ -1,4 +1,3 @@
-import given
 import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/json
@@ -6,7 +5,6 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
-import o11a/note
 import o11a/preprocessor
 import tempo
 import tempo/datetime
@@ -15,12 +13,13 @@ import tempo/datetime
 pub type ComputedNote {
   ComputedNote(
     note_id: String,
-    signature: List(preprocessor.PreProcessedSnippetLine),
     parent_id: String,
     significance: ComputedNoteSignificance,
     user_name: String,
-    message: String,
-    expanded_message: Option(String),
+    message: List(preprocessor.PreProcessedSnippetLine),
+    message_text: String,
+    expanded_message: Option(List(preprocessor.PreProcessedSnippetLine)),
+    expanded_message_text: Option(String),
     time: tempo.DateTime,
     referenced_topic_ids: List(String),
     edited: Bool,
@@ -30,12 +29,13 @@ pub type ComputedNote {
 
 pub const empty_computed_note = ComputedNote(
   note_id: "",
-  signature: [],
   parent_id: "",
   significance: Informational,
   user_name: "empty",
-  message: "",
+  message: [],
+  message_text: "",
   expanded_message: option.None,
+  expanded_message_text: option.None,
   time: datetime.unix_epoch,
   referenced_topic_ids: [],
   edited: False,
@@ -45,21 +45,25 @@ pub const empty_computed_note = ComputedNote(
 pub fn encode_computed_note(computed_note: ComputedNote) -> json.Json {
   json.object([
     #("n", json.string(computed_note.note_id)),
-    #(
-      "g",
-      json.array(
-        computed_note.signature,
-        preprocessor.pre_processed_snippet_line_to_json,
-      ),
-    ),
     #("p", json.string(computed_note.parent_id)),
     #("s", json.int(significance_to_int(computed_note.significance))),
     #("u", json.string(computed_note.user_name)),
-    #("m", json.string(computed_note.message)),
-    #("x", case computed_note.expanded_message {
-      option.None -> json.null()
-      option.Some(value) -> json.string(value)
-    }),
+    #(
+      "m",
+      json.array(
+        computed_note.message,
+        preprocessor.pre_processed_snippet_line_to_json,
+      ),
+    ),
+    #("mt", json.string(computed_note.message_text)),
+    #(
+      "x",
+      json.nullable(computed_note.expanded_message, json.array(
+        _,
+        preprocessor.pre_processed_snippet_line_to_json,
+      )),
+    ),
+    #("xt", json.nullable(computed_note.expanded_message_text, json.string)),
     #("t", json.int(datetime.to_unix_milli(computed_note.time))),
     #("e", json.bool(computed_note.edited)),
     #("r", json.array(computed_note.referenced_topic_ids, json.string)),
@@ -69,15 +73,24 @@ pub fn encode_computed_note(computed_note: ComputedNote) -> json.Json {
 
 pub fn computed_note_decoder() -> decode.Decoder(ComputedNote) {
   use note_id <- decode.field("n", decode.string)
-  use signature <- decode.field(
-    "g",
-    decode.list(preprocessor.pre_processed_snippet_line_decoder()),
-  )
   use parent_id <- decode.field("p", decode.string)
   use significance <- decode.field("s", decode.int)
   use user_name <- decode.field("u", decode.string)
-  use message <- decode.field("m", decode.string)
-  use expanded_message <- decode.field("x", decode.optional(decode.string))
+  use message <- decode.field(
+    "m",
+    decode.list(preprocessor.pre_processed_snippet_line_decoder()),
+  )
+  use message_text <- decode.field("mt", decode.string)
+  use expanded_message <- decode.field(
+    "x",
+    decode.optional(
+      decode.list(preprocessor.pre_processed_snippet_line_decoder()),
+    ),
+  )
+  use expanded_message_text <- decode.field(
+    "xt",
+    decode.optional(decode.string),
+  )
   use time <- decode.field("t", decode.int)
   use edited <- decode.field("e", decode.bool)
   use referenced_topic_ids <- decode.field("r", decode.list(decode.string))
@@ -85,12 +98,13 @@ pub fn computed_note_decoder() -> decode.Decoder(ComputedNote) {
 
   decode.success(ComputedNote(
     note_id:,
-    signature:,
     parent_id:,
     significance: significance_from_int(significance),
     user_name:,
     message:,
+    message_text:,
     expanded_message:,
+    expanded_message_text:,
     time: datetime.from_unix_milli(time),
     referenced_topic_ids:,
     edited:,
@@ -231,138 +245,4 @@ pub fn decode_computed_notes(notes: dynamic.Dynamic) {
   )
 
   list.group(notes, by: fn(note) { note.parent_id })
-}
-
-pub fn from_note(original_note: note.Note, thread_notes: List(note.Note)) {
-  // When we are searching for compound values, search from the end of the
-  // list first to get the most recently added note.
-  let thread_notes =
-    list.sort(thread_notes, fn(a, b) { datetime.compare(b.time, a.time) })
-
-  // If the note has been deleted, return a nil error so it can be filtered out
-  use Nil <- given.ok(
-    list.find(thread_notes, fn(thread_note) {
-      thread_note.modifier == note.Delete
-    }),
-    return: fn(_) { Error(Nil) },
-  )
-
-  // Find the most recent edit of the note
-  let edited_note =
-    list.find(thread_notes, fn(thread_note) {
-      thread_note.modifier == note.Edit
-    })
-
-  // Update the note with the most recent edited messages, if any
-  let #(note, edited) = case edited_note {
-    Ok(edit) -> #(
-      note.Note(
-        ..original_note,
-        message: edit.message,
-        expanded_message: edit.expanded_message,
-        significance: edit.significance,
-        referenced_topic_ids: edit.referenced_topic_ids,
-      ),
-      True,
-    )
-    Error(Nil) -> #(original_note, False)
-  }
-
-  // If this note is a reference note, then it should have a reference to its
-  // topic in its references list. If it does not, then an edit must have been
-  // made to the note that removed the reference. In this case, return a
-  // nil error so it can be filtered out.
-  use referee_topic_id <- given.ok(
-    case note.modifier {
-      note.Reference(referee_topic_id:) ->
-        list.find(note.referenced_topic_ids, fn(reference_topic_id) {
-          reference_topic_id == note.parent_id
-        })
-        |> result.replace(option.Some(referee_topic_id))
-
-      _ -> Ok(option.None)
-    },
-    else_return: fn(_) { Error(Nil) },
-  )
-
-  let significance = case note.significance {
-    note.Comment -> Comment
-    note.Question ->
-      case
-        list.find(thread_notes, fn(thread_note) {
-          thread_note.significance == note.Answer
-        })
-      {
-        Ok(..) -> AnsweredQuestion
-        Error(Nil) -> UnansweredQuestion
-      }
-    note.DevelperQuestion ->
-      case
-        list.find(thread_notes, fn(thread_note) {
-          thread_note.significance == note.Answer
-        })
-      {
-        Ok(..) -> AnsweredDeveloperQuestion
-        Error(Nil) -> UnansweredDeveloperQuestion
-      }
-    note.Answer -> Answer
-    note.ToDo ->
-      case
-        list.find(thread_notes, fn(thread_note) {
-          thread_note.significance == note.ToDoCompletion
-        })
-      {
-        Ok(..) -> CompleteToDo
-        Error(Nil) -> IncompleteToDo
-      }
-    note.ToDoCompletion -> ToDoCompletion
-    note.FindingLead ->
-      case
-        list.find_map(thread_notes, fn(thread_note) {
-          case thread_note.significance {
-            note.FindingRejection -> Ok(FindingRejection)
-            note.FindingConfirmation -> Ok(FindingConfirmation)
-            _ -> Error(Nil)
-          }
-        })
-      {
-        Ok(FindingRejection) -> RejectedFinding
-        Ok(FindingConfirmation) -> ConfirmedFinding
-        Ok(..) -> UnconfirmedFinding
-        Error(Nil) -> UnconfirmedFinding
-      }
-    note.FindingConfirmation -> FindingConfirmation
-    note.FindingRejection -> FindingRejection
-    note.Informational ->
-      case
-        list.find_map(thread_notes, fn(thread_note) {
-          case thread_note.significance {
-            note.InformationalRejection -> Ok(InformationalRejection)
-            note.InformationalConfirmation -> Ok(InformationalConfirmation)
-            _ -> Error(Nil)
-          }
-        })
-      {
-        Ok(InformationalRejection) -> RejectedInformational
-        Ok(InformationalConfirmation) -> Informational
-        Ok(..) -> Informational
-        Error(Nil) -> Informational
-      }
-    note.InformationalRejection -> InformationalRejection
-    note.InformationalConfirmation -> InformationalConfirmation
-  }
-
-  Ok(ComputedNote(
-    note_id: note.note_id,
-    signature: [],
-    parent_id: note.parent_id,
-    significance:,
-    user_name: note.user_name,
-    message: note.message,
-    expanded_message: note.expanded_message,
-    time: note.time,
-    edited:,
-    referenced_topic_ids: note.referenced_topic_ids,
-    referee_topic_id:,
-  ))
 }

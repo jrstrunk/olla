@@ -33,9 +33,10 @@ pub fn read_asts(for audit_name, source_topics source_topics) {
   list.index_map(text_files, fn(text_file, index) {
     let #(page_path, source) = text_file
     preprocessor_text.parse(
-      source,
-      "ST" <> int.to_string(index + 1),
-      page_path,
+      source:,
+      document_id: "T" <> int.to_string(index + 1),
+      document_parent: page_path,
+      max_topic_id: 0,
       topics: source_topics,
     )
   })

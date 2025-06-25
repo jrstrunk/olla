@@ -70,18 +70,33 @@ pub fn view(
         }),
       ),
       html.h2([], [html.text("Incomplete todos")]),
-      notes_view(incomplete_todos),
+      notes_view(incomplete_todos, declarations, discussion, discussion_context),
       html.h2([], [html.text("Unanswered questions")]),
-      notes_view(unanswered_questions),
+      notes_view(
+        unanswered_questions,
+        declarations,
+        discussion,
+        discussion_context,
+      ),
       html.h2([], [html.text("Unconfirmed findings")]),
-      notes_view(unconfirmed_findings),
+      notes_view(
+        unconfirmed_findings,
+        declarations,
+        discussion,
+        discussion_context,
+      ),
       html.h2([], [html.text("Confirmed findings")]),
-      notes_view(confirmed_findings),
+      notes_view(
+        confirmed_findings,
+        declarations,
+        discussion,
+        discussion_context,
+      ),
     ]),
   ])
 }
 
-fn notes_view(notes) {
+fn notes_view(notes, topics, discussion, discussion_context) {
   html.ul(
     [],
     list.map(notes, fn(note: computed_note.ComputedNote) {
@@ -93,7 +108,17 @@ fn notes_view(notes) {
           ],
           [html.text(note.parent_id |> filepath.base_name)],
         ),
-        html.text(" - " <> note.message),
+        html.text(" - "),
+        ..discussion.topic_signature_view(
+          view_id:,
+          signature: note.message,
+          declarations: topics,
+          discussion:,
+          suppress_declaration: True,
+          line_number_offset: 0,
+          active_discussion: option.None,
+          discussion_context: discussion_context,
+        )
       ])
     }),
   )

@@ -258,16 +258,15 @@ pub fn topic_file(topic: Topic) {
   }
 }
 
-pub fn find_reference_topic(
-  for value: String,
-  with topics: dict.Dict(String, Topic),
-) {
-  let declarations = dict.values(topics)
-
-  list.find(declarations, fn(topic) { topic_qualified_name(topic) == value })
+pub fn find_reference_topic(for value: String, with topics: List(Topic)) {
+  echo "finding reference topic for " <> value
+  list.find(topics, fn(topic) {
+    echo "checking " <> topic_qualified_name(topic)
+    topic_qualified_name(topic) == value
+  })
   |> result.try_recover(fn(_) {
     // If exactly one declaration matches the unqualified name, use it
-    case list.filter(declarations, fn(topic) { topic_name(topic) == value }) {
+    case list.filter(topics, fn(topic) { topic_name(topic) == value }) {
       [unique_topic] -> Ok(unique_topic)
       _ -> Error(Nil)
     }

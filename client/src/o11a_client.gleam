@@ -1143,7 +1143,14 @@ fn view(model: Model) {
             source_kind:,
           )
             |> element.map(DiscussionControllerSentMsg),
-          audit_page_dashboard.view(discussion, page_path, declarations)
+          audit_page_dashboard.view(
+            discussion,
+            page_path,
+            declarations,
+            discussion,
+            discussion_context,
+          )
+            |> element.map(DiscussionControllerSentMsg)
             |> option.Some,
           model.file_tree,
           audit_name,

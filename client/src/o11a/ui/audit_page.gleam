@@ -243,9 +243,9 @@ fn inline_comment_preview_view(
     Ok(note) ->
       discussion.node_with_discussion_view(
         topic_id:,
-        tokens: case string.length(note.message) > 40 {
-          True -> note.message |> string.slice(0, length: 37) <> "⋯"
-          False -> note.message |> string.slice(0, length: 40)
+        tokens: case string.length(note.message_text) > 40 {
+          True -> note.message_text |> string.slice(0, length: 37) <> "⋯"
+          False -> note.message_text |> string.slice(0, length: 40)
         },
         discussion:,
         declarations:,

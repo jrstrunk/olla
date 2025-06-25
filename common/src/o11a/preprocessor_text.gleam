@@ -1,4 +1,4 @@
-import gleam/dict.{type Dict}
+import gleam/dict
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -122,7 +122,7 @@ pub fn main() {
 
 This is what I have to say.
 "
-  |> parse("main", "main", dict.new())
+  |> parse("main", "main", 0, [])
   |> fn(doc) { doc.0 }
   |> djot_document_to_elements
   |> element.fragment
@@ -136,17 +136,17 @@ import splitter.{type Splitter}
 pub type Document {
   Document(
     nodes: List(Container),
-    references: Dict(String, String),
-    footnotes: Dict(String, List(Container)),
+    references: dict.Dict(String, String),
+    footnotes: dict.Dict(String, List(Container)),
     document_parent: String,
   )
 }
 
 fn add_attribute(
-  attributes: Dict(String, String),
+  attributes: dict.Dict(String, String),
   key: String,
   value: String,
-) -> Dict(String, String) {
+) -> dict.Dict(String, String) {
   case key {
     "class" ->
       dict.upsert(attributes, key, fn(previous) {
@@ -161,10 +161,14 @@ fn add_attribute(
 
 pub type Container {
   ThematicBreak
-  Paragraph(attributes: Dict(String, String), statements: List(Statement))
-  Heading(attributes: Dict(String, String), level: Int, inlines: List(Inline))
+  Paragraph(attributes: dict.Dict(String, String), statements: List(Statement))
+  Heading(
+    attributes: dict.Dict(String, String),
+    level: Int,
+    inlines: List(Inline),
+  )
   Codeblock(
-    attributes: Dict(String, String),
+    attributes: dict.Dict(String, String),
     language: Option(String),
     content: String,
   )
@@ -202,12 +206,13 @@ pub type Destination {
 
 type Refs {
   Refs(
-    urls: Dict(String, String),
-    footnotes: Dict(String, List(Container)),
+    urls: dict.Dict(String, String),
+    footnotes: dict.Dict(String, List(Container)),
     document_id: String,
     document_parent: String,
     max_topic_id: Int,
-    declarations: Dict(String, topic.Topic),
+    declarations: dict.Dict(String, topic.Topic),
+    topics: List(topic.Topic),
   )
 }
 
@@ -221,6 +226,12 @@ type Splitters {
   )
 }
 
+// pub type dict.Dict {
+//   dict.Dict(
+//     insert: fn(String, String) -> dict.Dict,
+//   )
+// }
+
 /// Convert a string of Djot into a tree of records.
 ///
 /// This may be useful when you want more control over the HTML to be converted
@@ -230,7 +241,8 @@ pub fn parse(
   source source: String,
   document_id document_id: String,
   document_parent document_parent: String,
-  topics topics: dict.Dict(String, topic.Topic),
+  max_topic_id max_topic_id: Int,
+  topics topics: List(topic.Topic),
 ) {
   let splitters =
     Splitters(
@@ -248,8 +260,9 @@ pub fn parse(
       dict.new(),
       document_id:,
       document_parent:,
-      max_topic_id: 0,
-      declarations: topics,
+      max_topic_id:,
+      declarations: dict.new(),
+      topics:,
     )
 
   let #(ast, Refs(urls, footnotes, max_topic_id:, declarations:, ..), _) =
@@ -286,7 +299,7 @@ fn parse_document_content(
   refs: Refs,
   splitters: Splitters,
   ast: List(Container),
-  attrs: Dict(String, String),
+  attrs: dict.Dict(String, String),
 ) -> #(List(Container), Refs, String) {
   let in = drop_lines(in)
   let #(in, spaces_count) = count_drop_spaces(in, 0)
@@ -321,7 +334,7 @@ fn parse_block(
   refs: Refs,
   splitters: Splitters,
   ast: List(Container),
-  attrs: Dict(String, String),
+  attrs: dict.Dict(String, String),
   required_spaces: Int,
 ) -> #(List(Container), Refs, String) {
   let in = drop_lines(in)
@@ -353,7 +366,7 @@ fn parse_block_after_indent_checked(
   refs: Refs,
   splitters: Splitters,
   ast: List(Container),
-  attrs: Dict(String, String),
+  attrs: dict.Dict(String, String),
   required_spaces required_spaces: Int,
   indentation indentation: Int,
 ) -> #(List(Container), Refs, String) {
@@ -373,9 +386,9 @@ fn parse_container(
   in: String,
   refs: Refs,
   splitters: Splitters,
-  attrs: Dict(String, String),
+  attrs: dict.Dict(String, String),
   indentation: Int,
-) -> #(String, Refs, Option(Container), Dict(String, String)) {
+) -> #(String, Refs, Option(Container), dict.Dict(String, String)) {
   case in {
     "" -> #(in, refs, None, dict.new())
 
@@ -470,7 +483,7 @@ fn parse_thematic_break(count: Int, in: String) -> Option(#(Container, String)) 
 
 fn parse_codeblock(
   in: String,
-  attrs: Dict(String, String),
+  attrs: dict.Dict(String, String),
   delim: String,
   indentation: Int,
   splitters: Splitters,
@@ -645,8 +658,8 @@ fn parse_footnote_def(
 
 fn parse_attributes(
   in: String,
-  attrs: Dict(String, String),
-) -> Option(#(Dict(String, String), String)) {
+  attrs: dict.Dict(String, String),
+) -> Option(#(dict.Dict(String, String), String)) {
   let in = drop_spaces(in)
   case in {
     "" -> None
@@ -737,8 +750,8 @@ fn parse_attributes_id_or_class(
 
 fn parse_attributes_end(
   in: String,
-  attrs: Dict(String, String),
-) -> Option(#(Dict(String, String), String)) {
+  attrs: dict.Dict(String, String),
+) -> Option(#(dict.Dict(String, String), String)) {
   case in {
     "" -> Some(#(attrs, ""))
     "\n" <> in -> Some(#(attrs, in))
@@ -751,7 +764,7 @@ fn parse_heading(
   in: String,
   refs: Refs,
   splitters: Splitters,
-  attrs: Dict(String, String),
+  attrs: dict.Dict(String, String),
 ) -> #(Container, Refs, String) {
   case heading_level(in, 1) {
     Some(#(level, in)) -> {
@@ -1232,7 +1245,7 @@ pub fn take_inline_text(inlines: List(Inline), acc: String) -> String {
 fn parse_paragraph(
   in: String,
   refs: Refs,
-  attrs: Dict(String, String),
+  attrs: dict.Dict(String, String),
   splitters: Splitters,
 ) -> #(Container, Refs, String) {
   let #(inline_in, in) = take_paragraph_chars(in)
@@ -1253,7 +1266,7 @@ fn parse_paragraph(
 fn do_parse_paragraph_statements(
   inline_in: String,
   refs: Refs,
-  attrs: Dict(String, String),
+  attrs: dict.Dict(String, String),
   splitters,
   statements: List(Statement),
 ) {
@@ -1271,7 +1284,7 @@ fn do_parse_paragraph_statements(
           name: topic_id,
           signature: [
             preprocessor.TextSnippetLine(
-              elements: list.map(inline, inline_to_node(_, refs.declarations)),
+              elements: list.map(inline, inline_to_node(_, refs.topics)),
             ),
           ],
           scope: preprocessor.Scope(
@@ -1302,7 +1315,7 @@ fn do_parse_paragraph_statements(
           name: topic_id,
           signature: [
             preprocessor.TextSnippetLine(
-              elements: list.map(inline, inline_to_node(_, refs.declarations)),
+              elements: list.map(inline, inline_to_node(_, refs.topics)),
             ),
           ],
           scope: preprocessor.Scope(
@@ -1333,7 +1346,7 @@ fn do_parse_paragraph_statements(
 fn parse_bullet_list(
   in: String,
   refs: Refs,
-  attrs: Dict(String, String),
+  attrs: dict.Dict(String, String),
   style: String,
   layout: ListLayout,
   items: List(List(Container)),
@@ -1351,7 +1364,7 @@ fn parse_bullet_list(
 fn parse_list_item(
   in: String,
   refs: Refs,
-  attrs: Dict(String, String),
+  attrs: dict.Dict(String, String),
   splitters: Splitters,
   children: List(Container),
 ) -> List(Container) {
@@ -1454,7 +1467,7 @@ pub fn container_to_elements(container: Container, refs) -> element.Element(msg)
   }
 }
 
-fn dict_to_attributes(dict: Dict(String, String)) {
+fn dict_to_attributes(dict: dict.Dict(String, String)) {
   dict
   |> dict.to_list
   |> list.map(fn(pair) { attribute.attribute(pair.0, pair.1) })

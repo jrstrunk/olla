@@ -978,8 +978,8 @@ pub fn update(model: DiscussionOverlayModel, msg: DiscussionOverlayMsg) {
             current_note_draft: get_message_classification_prefix(
                 note.significance,
               )
-              <> note.message,
-            current_expanded_message_draft: note.expanded_message,
+              <> note.message_text,
+            current_expanded_message_draft: note.expanded_message_text,
             editing_note: option.Some(note),
             show_expanded_message_box: case note.expanded_message {
               option.Some(..) -> True
@@ -1071,7 +1071,15 @@ pub fn overlay_view(
                 option.is_some(model.active_thread)
                 || list.length(current_thread_notes) > 0
               {
-                True -> comments_view(model, current_thread_notes, declarations)
+                True ->
+                  comments_view(
+                    model,
+                    current_thread_notes,
+                    declarations,
+                    notes,
+                    active_discussion,
+                    discussion_context,
+                  )
                 False -> element.fragment([])
               },
               new_message_input_view(model, current_thread_notes, declarations),
@@ -1118,7 +1126,15 @@ pub fn panel_view(
       option.is_some(model.active_thread)
       || list.length(current_thread_notes) > 0
     {
-      True -> comments_view(model, current_thread_notes, declarations)
+      True ->
+        comments_view(
+          model,
+          current_thread_notes,
+          declarations,
+          notes,
+          active_discussion,
+          discussion_context,
+        )
       False -> element.fragment([])
     },
     new_message_input_view(model, current_thread_notes, declarations),
@@ -1207,7 +1223,7 @@ fn reference_header_view(
 
             html.p([], [
               html.text(
-                note.message
+                note.message_text
                 <> case option.is_some(note.expanded_message) {
                   True -> "^"
                   False -> ""
@@ -1247,11 +1263,29 @@ fn thread_header_view(
           |> element.map(map_discussion_overlay_msg(_, model)),
         ]),
         html.text("Current Thread: "),
-        html.text(active_thread.parent_note.message),
+        element.fragment(topic_signature_view(
+          view_id: model.view_id,
+          signature: active_thread.parent_note.message,
+          declarations: declarations,
+          discussion: notes,
+          suppress_declaration: False,
+          line_number_offset: 0,
+          active_discussion:,
+          discussion_context: discussion_context,
+        )),
         case active_thread.parent_note.expanded_message {
           option.Some(expanded_message) ->
             html.div([attribute.class("mt-[.5rem]")], [
-              html.p([], [html.text(expanded_message)]),
+              element.fragment(topic_signature_view(
+                view_id: model.view_id,
+                signature: expanded_message,
+                declarations: declarations,
+                discussion: notes,
+                suppress_declaration: False,
+                line_number_offset: 0,
+                active_discussion:,
+                discussion_context: discussion_context,
+              )),
             ])
           option.None -> element.fragment([])
         },
@@ -1384,13 +1418,12 @@ fn comments_view(
   model: DiscussionOverlayModel,
   current_thread_notes: List(note.NoteStub),
   topics topics: dict.Dict(String, topic.Topic),
+  discussion discussion,
+  active_discussion active_discussion,
+  discussion_context discussion_context,
 ) {
   html.div(
-    [
-      attribute.class(
-        "gap-[.5rem] mb-[.5rem]",
-      ),
-    ],
+    [attribute.class("gap-[.5rem] mb-[.5rem]")],
     list.map(current_thread_notes, fn(note) {
       let note =
         topic.get_computed_note(topics, note.topic_id)
@@ -1449,12 +1482,30 @@ fn comments_view(
           ]),
         ]),
         // Comment main text
-        html.p([], [html.text(note.message)]),
+        element.fragment(topic_signature_view(
+          view_id: model.view_id,
+          signature: note.message,
+          declarations: topics,
+          discussion:,
+          suppress_declaration: False,
+          line_number_offset: 0,
+          active_discussion:,
+          discussion_context:,
+        )),
         // Comment expanded text
         case set.contains(model.expanded_messages, note.note_id) {
           True ->
             html.div([attribute.class("mt-[.5rem]")], [
-              html.p([], [html.text(note.expanded_message |> option.unwrap(""))]),
+              element.fragment(topic_signature_view(
+                view_id: model.view_id,
+                signature: note.expanded_message |> option.unwrap([]),
+                declarations: topics,
+                discussion:,
+                suppress_declaration: False,
+                line_number_offset: 0,
+                active_discussion:,
+                discussion_context:,
+              )),
             ])
           False -> element.fragment([])
         },
@@ -1610,7 +1661,7 @@ fn get_topic_title(
     | topic.TextDeclaration(signature:, ..)
     | topic.ComputedNote(
         computed_note: computed_note.ComputedNote(
-          signature:,
+          message: signature,
           ..,
         ),
         ..,

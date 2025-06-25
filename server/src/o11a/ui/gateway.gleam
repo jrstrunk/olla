@@ -584,7 +584,7 @@ fn preprocess_audit_source(for audit_name) {
   use text_data <- result.try(
     preprocessor_text_server.read_asts(
       audit_name,
-      source_topics: sol_declarations,
+      source_topics: sol_declarations |> dict.values(),
     )
     |> snag.context("Unable to read text asts for " <> audit_name),
   )
@@ -600,7 +600,8 @@ fn preprocess_audit_source(for audit_name) {
     list.map(text_asts, fn(ast) { #(ast.document_parent, ast) })
     |> dict.from_list
 
-  let all_declarations = dict.merge(text_declarations, sol_declarations)
+  let all_declarations =
+    dict.merge(text_declarations, sol_declarations) |> dict.values
 
   use #(_max_topic_id, source_files, addressable_lines, merged_topics) <- result.map(
     dict.get(page_paths, audit_name)
@@ -714,7 +715,7 @@ fn preprocess_audit_source(for audit_name) {
     })
 
   let declarations =
-    dict.values(all_declarations)
+    all_declarations
     |> list.append(addressable_lines)
 
   #(source_files, declarations, merged_topics)
