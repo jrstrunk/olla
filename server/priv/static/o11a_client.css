@@ -596,6 +596,10 @@ video {
   margin-bottom: 2rem;
 }
 
+.ml-\[\.5rem\] {
+  margin-left: .5rem;
+}
+
 .ml-\[1rem\] {
   margin-left: 1rem;
 }

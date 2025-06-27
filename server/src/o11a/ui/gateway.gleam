@@ -4,6 +4,7 @@ import gleam/dict
 import gleam/dynamic/decode
 import gleam/function
 import gleam/int
+import gleam/io
 import gleam/json
 import gleam/list
 import gleam/option
@@ -119,6 +120,7 @@ pub fn start_gateway() -> Result(Gateway, snag.Snag) {
   use _ <- result.map(
     dict.keys(page_paths)
     |> list.map(fn(audit_name) {
+      io.println("Building audit " <> audit_name)
       let all_persist_files_exist =
         check_source_files(for: audit_name)
         && check_source_declarations(for: audit_name)

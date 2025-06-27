@@ -58,6 +58,7 @@ pub fn view(
               declarations:,
               discussion_id: discussion.DiscussionId(
                 view_id:,
+                container_id: option.None,
                 line_number: index,
                 column_number: 0,
               ),

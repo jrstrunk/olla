@@ -259,9 +259,7 @@ pub fn topic_file(topic: Topic) {
 }
 
 pub fn find_reference_topic(for value: String, with topics: List(Topic)) {
-  list.find(topics, fn(topic) {
-    topic_qualified_name(topic) == value
-  })
+  list.find(topics, fn(topic) { topic_qualified_name(topic) == value })
   |> result.try_recover(fn(_) {
     // If exactly one declaration matches the unqualified name, use it
     case list.filter(topics, fn(topic) { topic_name(topic) == value }) {

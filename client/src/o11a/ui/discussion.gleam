@@ -26,14 +26,21 @@ import plinth/javascript/global
 // Discussion Controller -------------------------------------------------------
 
 pub type DiscussionId {
-  DiscussionId(view_id: String, line_number: Int, column_number: Int)
+  DiscussionId(
+    view_id: String,
+    container_id: option.Option(String),
+    line_number: Int,
+    column_number: Int,
+  )
 }
 
 pub fn nested_view_id(from discussion_id: DiscussionId) {
   discussion_id.view_id
-  <> "L"
+  <> case discussion_id.container_id {
+    option.Some(container_id) -> container_id
+    option.None -> ""
+  }
   <> int.to_string(discussion_id.line_number)
-  <> "C"
   <> int.to_string(discussion_id.column_number)
 }
 
@@ -378,6 +385,7 @@ pub fn topic_signature_view(
                       declarations:,
                       discussion_id: DiscussionId(
                         view_id:,
+                        container_id: option.Some("signature"),
                         line_number: new_line_number,
                         column_number: new_column_number,
                       ),
@@ -402,6 +410,7 @@ pub fn topic_signature_view(
                   declarations:,
                   discussion_id: DiscussionId(
                     view_id:,
+                    container_id: option.Some("signature"),
                     line_number: new_line_number,
                     column_number: new_column_number,
                   ),
@@ -1424,61 +1433,79 @@ fn comments_view(
 ) {
   html.div(
     [attribute.class("gap-[.5rem] mb-[.5rem]")],
-    list.map(current_thread_notes, fn(note) {
+    list.index_map(current_thread_notes, fn(note, index) {
+      let index = index + 1
       let note =
         topic.get_computed_note(topics, note.topic_id)
         |> result.unwrap(computed_note.empty_computed_note)
 
       html.div([attribute.class("line-discussion-item")], [
         // Comment header
-        html.div([attribute.class("flex justify-between mb-[.2rem]")], [
-          html.div([attribute.class("flex gap-[.5rem] items-start")], [
-            html.p([], [html.text(note.user_name)]),
-            significance_badge_view(note.significance),
-          ]),
-          html.div([attribute.class("flex gap-[.5rem]")], [
-            case note.referee_topic_id {
-              option.Some(..) ->
-                html.p([attribute.class("italic")], [html.text("Reference")])
-              _ ->
-                html.button(
-                  [
-                    attribute.id("edit-message-button"),
-                    attribute.class("icon-button p-[.3rem]"),
-                    event.on_click(UserEditedNote(Ok(note))),
-                  ],
-                  [lucide.pencil([])],
-                )
-                |> element.map(map_discussion_overlay_msg(_, model))
-            },
-            case note.expanded_message {
-              option.Some(_) ->
-                html.button(
-                  [
-                    attribute.id("expand-message-button"),
-                    attribute.class("icon-button p-[.3rem]"),
-                    event.on_click(UserToggledExpandedMessage(note.note_id)),
-                  ],
-                  [lucide.list_collapse([])],
-                )
-                |> element.map(map_discussion_overlay_msg(_, model))
+        node_with_discussion_view(
+          note.note_id,
+          note.note_id,
+          discussion:,
+          declarations: topics,
+          discussion_id: DiscussionId(
+            view_id: model.view_id,
+            container_id: option.Some(note.note_id),
+            line_number: index,
+            column_number: 1,
+          ),
+          active_discussion:,
+          discussion_context:,
+          node_view_kind: DeclarationView,
+        ),
+        html.div([attribute.class("ml-[.5rem] inline-block")], [
+          html.div([attribute.class("flex justify-between mb-[.2rem]")], [
+            html.div([attribute.class("flex gap-[.5rem] items-start")], [
+              html.p([], [html.text(note.user_name)]),
+              significance_badge_view(note.significance),
+            ]),
+            html.div([attribute.class("flex gap-[.5rem]")], [
+              case note.referee_topic_id {
+                option.Some(..) ->
+                  html.p([attribute.class("italic")], [html.text("Reference")])
+                _ ->
+                  html.button(
+                    [
+                      attribute.id("edit-message-button"),
+                      attribute.class("icon-button p-[.3rem]"),
+                      event.on_click(UserEditedNote(Ok(note))),
+                    ],
+                    [lucide.pencil([])],
+                  )
+                  |> element.map(map_discussion_overlay_msg(_, model))
+              },
+              case note.expanded_message {
+                option.Some(_) ->
+                  html.button(
+                    [
+                      attribute.id("expand-message-button"),
+                      attribute.class("icon-button p-[.3rem]"),
+                      event.on_click(UserToggledExpandedMessage(note.note_id)),
+                    ],
+                    [lucide.list_collapse([])],
+                  )
+                  |> element.map(map_discussion_overlay_msg(_, model))
 
-              option.None -> element.fragment([])
-            },
-            case computed_note.is_significance_threadable(note.significance) {
-              True ->
-                html.button(
-                  [
-                    attribute.id("switch-thread-button"),
-                    attribute.class("icon-button p-[.3rem]"),
-                    event.on_click(UserSwitchedToThread(note.note_id, note)),
-                  ],
-                  [lucide.messages_square([])],
-                )
-                |> element.map(map_discussion_overlay_msg(_, model))
+                option.None -> element.fragment([])
+              },
+              case computed_note.is_significance_threadable(note.significance) {
+                True ->
+                  html.button(
+                    [
+                      attribute.id("switch-thread-button"),
+                      attribute.class("icon-button p-[.3rem]"),
+                      event.on_click(UserSwitchedToThread(note.note_id, note)),
+                    ],
+                    [lucide.messages_square([])],
+                  )
+                  |> element.map(map_discussion_overlay_msg(_, model))
 
-              False -> element.fragment([])
-            },
+                False -> element.fragment([])
+              },
+            ]),
           ]),
         ]),
         // Comment main text
@@ -1488,7 +1515,7 @@ fn comments_view(
           declarations: topics,
           discussion:,
           suppress_declaration: False,
-          line_number_offset: 0,
+          line_number_offset: index + 1,
           active_discussion:,
           discussion_context:,
         )),
@@ -1502,7 +1529,7 @@ fn comments_view(
                 declarations: topics,
                 discussion:,
                 suppress_declaration: False,
-                line_number_offset: 0,
+                line_number_offset: index + 2,
                 active_discussion:,
                 discussion_context:,
               )),

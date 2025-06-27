@@ -251,6 +251,7 @@ fn inline_comment_preview_view(
         declarations:,
         discussion_id: discussion.DiscussionId(
           view_id:,
+          container_id: option.None,
           line_number:,
           column_number:,
         ),
@@ -267,6 +268,7 @@ fn inline_comment_preview_view(
         declarations:,
         discussion_id: discussion.DiscussionId(
           view_id:,
+          container_id: option.None,
           line_number:,
           column_number:,
         ),
@@ -297,6 +299,7 @@ fn preprocessed_nodes_view(
             tokens:,
             discussion_id: discussion.DiscussionId(
               view_id:,
+              container_id: option.None,
               line_number: loc.line_number,
               column_number: new_column_index,
             ),
@@ -318,6 +321,7 @@ fn preprocessed_nodes_view(
             tokens:,
             discussion_id: discussion.DiscussionId(
               view_id:,
+              container_id: option.None,
               line_number: loc.line_number,
               column_number: new_column_index,
             ),
