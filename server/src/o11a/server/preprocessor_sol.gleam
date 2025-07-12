@@ -1,3 +1,28 @@
+//// Some audits with a lot of contracts (probably unused dependencies) can
+//// get so big that all contract ASTs do not fit in memory (on the 32GB memory 
+//// server this is being deployed on), so we need to take an approach to 
+//// preprocessing where each AST can be read one at a time.
+//// 
+//// To process the audit, we do the following:
+//// 1. Read and parse each AST into memory one at a time, storing its
+//// declarations in an accumulating simple declaration dictionary that stores 
+//// all declarations in the audit, with a list of the other nodes each 
+//// references in its body and a list of errors and revert statements it calls,
+//// making note of whether the node is from an in-scope ast or not.
+//// 2. Loop over all the publicy in-scope declarations gathered, storing them
+//// in a new dictionary that stores all publicly in-scope declarations 
+//// in the audit and the nodes that reference it. When a declaration is 
+//// found to be publicly in-scope, add it to the in-scope declaration 
+//// dictionary with the node that referenced it and look up its references in 
+//// the previously generated dictionary. Add each one of its references to 
+//// the accumulating dictionary, then check them recursively for their 
+//// references, adding them and so on.
+//// 3. Now with a dictionary of all in-scope and used by in-scope 
+//// declarations, we can parse each AST in scope into memory one at a 
+//// time, checking each declaratin for inclusion in the in-scope 
+//// dictionary. If it is, we add it to an accumulating dictionary of 
+//// detailed declarations.
+
 import filepath
 import given
 import gleam/bit_array
@@ -793,7 +818,694 @@ fn do_linearize_nodes_multi(linearized_nodes: List(Node), nodes: List(Node)) {
   list.fold(nodes, linearized_nodes, do_linearize_nodes)
 }
 
-pub fn enumerate_declarations(declarations, in ast: AST) {
+pub type DeclarationStub {
+  DeclarationStub(
+    publicly_in_scope: Bool,
+    referenced_nodes: List(Int),
+    errors: List(ErrorCondition),
+  )
+  FlatDeclarationStub(publicly_in_scope: Bool)
+}
+
+pub type ErrorCondition {
+  RevertError(Int)
+  RequireCondition(String)
+}
+
+pub fn find_declarations(
+  declarations: dict.Dict(Int, DeclarationStub),
+  in ast: AST,
+  in_scope in_scope,
+) {
+  list.fold(ast.nodes, declarations, fn(declarations, node) {
+    do_find_declarations(declarations, node, in_scope)
+  })
+}
+
+fn do_find_declarations(
+  declarations: dict.Dict(Int, DeclarationStub),
+  node: Node,
+  in_scope,
+) {
+  case node {
+    ArrayTypeName(..)
+    | BaseContract(..)
+    | BinaryOperation(..)
+    | EmitStatementNode(..)
+    | ElementaryTypeNameExpression(..)
+    | IdentifierPath(..)
+    | ImportDirectiveNode(..)
+    | Literal(..)
+    | Mapping(..)
+    | MemberAccess(..)
+    | Modifier(..)
+    | FunctionCall(..)
+    | FunctionCallOptions(..)
+    | NamedNode(..)
+    | NewExpression(..)
+    | Node(..)
+    | RevertStatementNode(..)
+    | StructuredDocumentationNode(..)
+    | UsingForDirective(..)
+    | UserDefinedTypeName(..) -> declarations
+
+    Assignment(left_hand_side: body, ..) | ForStatementNode(body:, ..) ->
+      do_find_declarations(declarations, body, in_scope)
+
+    BlockNode(nodes:, statements:, expression:, ..) ->
+      list.fold(nodes, declarations, fn(declarations, node) {
+        do_find_declarations(declarations, node, in_scope)
+      })
+      |> list.fold(statements, _, fn(declarations, node) {
+        do_find_declarations(declarations, node, in_scope)
+      })
+      |> fn(declarations) {
+        case expression {
+          option.Some(expression) ->
+            do_find_declarations(declarations, expression, in_scope)
+          option.None -> declarations
+        }
+      }
+
+    Conditional(false_expression:, true_expression:, ..) ->
+      do_find_declarations(declarations, false_expression, in_scope)
+      |> do_find_declarations(true_expression, in_scope)
+
+    ContractDefinitionNode(id:, nodes:, ..) -> {
+      let declarations =
+        dict.insert(declarations, id, FlatDeclarationStub(in_scope))
+
+      list.fold(nodes, declarations, fn(declarations, node) {
+        do_find_declarations(declarations, node, in_scope)
+      })
+    }
+
+    EnumValue(id:, ..)
+    | ErrorDefinitionNode(id:, ..)
+    | EventDefinitionNode(id:, ..) -> {
+      dict.insert(declarations, id, FlatDeclarationStub(in_scope))
+    }
+
+    Expression(expression:, ..)
+    | ExpressionStatementNode(expression:, ..)
+    | Identifier(expression:, ..) ->
+      case expression {
+        option.Some(node) -> do_find_declarations(declarations, node, in_scope)
+        option.None -> declarations
+      }
+
+    FunctionDefinitionNode(
+      id:,
+      parameters:,
+      modifiers:,
+      return_parameters:,
+      nodes:,
+      body:,
+      visibility:,
+      ..,
+    ) -> {
+      let declarations = case body {
+        Some(body) -> {
+          let #(referenced_nodes, errors) =
+            do_find_containing_nodes_and_errors(#([], []), body)
+
+          dict.insert(
+            declarations,
+            id,
+            DeclarationStub(
+              referenced_nodes:,
+              errors:,
+              publicly_in_scope: in_scope && is_publicly_accessible(visibility),
+            ),
+          )
+        }
+        option.None -> declarations
+      }
+
+      do_find_declarations(declarations, parameters, in_scope)
+      |> list.fold(modifiers, _, fn(declarations, node) {
+        do_find_declarations(declarations, node, in_scope)
+      })
+      |> do_find_declarations(return_parameters, in_scope)
+      |> list.fold(nodes, _, fn(declarations, node) {
+        do_find_declarations(declarations, node, in_scope)
+      })
+      |> fn(declarations) {
+        case body {
+          option.Some(body) ->
+            do_find_declarations(declarations, body, in_scope)
+          option.None -> declarations
+        }
+      }
+    }
+
+    IfStatementNode(condition:, true_body:, false_body:, ..) ->
+      do_find_declarations(declarations, condition, in_scope)
+      |> do_find_declarations(true_body, in_scope)
+      |> fn(declarations) {
+        case false_body {
+          option.Some(false_body) ->
+            do_find_declarations(declarations, false_body, in_scope)
+          option.None -> declarations
+        }
+      }
+
+    IndexAccess(base:, index:, ..) ->
+      do_find_declarations(declarations, base, in_scope)
+      |> fn(declarations) {
+        case index {
+          option.Some(index) ->
+            do_find_declarations(declarations, index, in_scope)
+          option.None -> declarations
+        }
+      }
+
+    ModifierDefinitionNode(id:, parameters:, nodes:, body:, visibility:, ..) -> {
+      let declarations = case body {
+        Some(body) -> {
+          let #(referenced_nodes, errors) =
+            do_find_containing_nodes_and_errors(#([], []), body)
+
+          dict.insert(
+            declarations,
+            id,
+            DeclarationStub(
+              referenced_nodes:,
+              errors:,
+              publicly_in_scope: in_scope && is_publicly_accessible(visibility),
+            ),
+          )
+        }
+        option.None -> declarations
+      }
+
+      list.fold(nodes, declarations, fn(declarations, node) {
+        do_find_declarations(declarations, node, in_scope)
+      })
+      |> do_find_declarations(parameters, in_scope)
+      |> fn(declarations) {
+        case body {
+          option.Some(body) ->
+            do_find_declarations(declarations, body, in_scope)
+          option.None -> declarations
+        }
+      }
+    }
+    ParameterListNode(parameters:, ..) ->
+      list.fold(parameters, declarations, fn(declarations, node) {
+        do_find_declarations(declarations, node, in_scope)
+      })
+
+    EnumDefinition(id:, nodes:, members:, visibility:, ..)
+    | StructDefinition(id:, nodes:, members:, visibility:, ..) -> {
+      let declarations = {
+        let referenced_nodes =
+          list.fold(members, [], fn(acc, node) {
+            let #(ref_nodes, _errors) =
+              do_find_containing_nodes_and_errors(#([], []), node)
+            list.append(ref_nodes, acc)
+          })
+
+        dict.insert(
+          declarations,
+          id,
+          // Struct definitions cannot call errors
+          DeclarationStub(
+            referenced_nodes:,
+            errors: [],
+            publicly_in_scope: in_scope && is_publicly_accessible(visibility),
+          ),
+        )
+      }
+
+      list.fold(members, declarations, fn(declarations, node) {
+        do_find_declarations(declarations, node, in_scope)
+      })
+      |> list.fold(nodes, _, fn(declarations, node) {
+        do_find_declarations(declarations, node, in_scope)
+      })
+    }
+    TupleExpression(nodes:, ..) -> {
+      list.fold(nodes, declarations, fn(declarations, node) {
+        do_find_declarations(declarations, node, in_scope)
+      })
+    }
+    UnaryOperation(expression:, ..) -> {
+      do_find_declarations(declarations, expression, in_scope)
+    }
+    VariableDeclarationNode(id:, visibility:, ..) -> {
+      dict.insert(
+        declarations,
+        id,
+        FlatDeclarationStub(
+          publicly_in_scope: in_scope && is_publicly_accessible(visibility),
+        ),
+      )
+    }
+    VariableDeclarationStatementNode(declarations: variable_declarations, ..) ->
+      list.fold(variable_declarations, declarations, fn(declarations, node) {
+        case node {
+          option.Some(node) ->
+            do_find_declarations(declarations, node, in_scope)
+          option.None -> declarations
+        }
+      })
+  }
+}
+
+fn is_publicly_accessible(visibility) {
+  case visibility {
+    "public" | "external" -> True
+    _ -> False
+  }
+}
+
+fn do_find_containing_nodes_and_errors(
+  declarations_and_errors: #(List(Int), List(ErrorCondition)),
+  node,
+) {
+  case node {
+    Node(nodes:, ..) ->
+      list.fold(
+        nodes,
+        declarations_and_errors,
+        do_find_containing_nodes_and_errors,
+      )
+    ArrayTypeName(id:, ..) -> {
+      let #(declarations, errors) = declarations_and_errors
+      #([id, ..declarations], errors)
+    }
+    Assignment(left_hand_side:, right_hand_side:, ..) -> {
+      do_find_containing_nodes_and_errors(
+        declarations_and_errors,
+        left_hand_side,
+      )
+      |> do_find_containing_nodes_and_errors(right_hand_side)
+    }
+    BaseContract(reference_id:, ..) -> {
+      let #(declarations, errors) = declarations_and_errors
+      #([reference_id, ..declarations], errors)
+    }
+    BinaryOperation(left_expression:, right_expression:, ..) -> {
+      do_find_containing_nodes_and_errors(
+        declarations_and_errors,
+        left_expression,
+      )
+      |> do_find_containing_nodes_and_errors(right_expression)
+    }
+    BlockNode(nodes:, statements:, expression:, ..) -> {
+      list.fold(
+        nodes,
+        declarations_and_errors,
+        do_find_containing_nodes_and_errors,
+      )
+      |> list.fold(statements, _, do_find_containing_nodes_and_errors)
+      |> fn(declarations_and_errors) {
+        case expression {
+          option.Some(expression) ->
+            do_find_containing_nodes_and_errors(
+              declarations_and_errors,
+              expression,
+            )
+          option.None -> declarations_and_errors
+        }
+      }
+    }
+    Conditional(condition:, false_expression:, true_expression:, ..) -> {
+      do_find_containing_nodes_and_errors(declarations_and_errors, condition)
+      |> do_find_containing_nodes_and_errors(false_expression)
+      |> do_find_containing_nodes_and_errors(true_expression)
+    }
+    ContractDefinitionNode(id:, base_contracts:, nodes:, ..) -> {
+      let #(declarations, errors) = declarations_and_errors
+      let declarations_and_errors = #([id, ..declarations], errors)
+
+      list.fold(
+        base_contracts,
+        declarations_and_errors,
+        do_find_containing_nodes_and_errors,
+      )
+      |> list.fold(nodes, _, do_find_containing_nodes_and_errors)
+    }
+    ElementaryTypeNameExpression(..) -> declarations_and_errors
+    EmitStatementNode(event_call:, ..) ->
+      do_find_containing_nodes_and_errors(declarations_and_errors, event_call)
+    EnumDefinition(id:, nodes:, members:, ..) -> {
+      let #(declarations, errors) = declarations_and_errors
+      let declarations_and_errors = #([id, ..declarations], errors)
+
+      list.fold(
+        members,
+        declarations_and_errors,
+        do_find_containing_nodes_and_errors,
+      )
+      |> list.fold(nodes, _, do_find_containing_nodes_and_errors)
+    }
+    EnumValue(id:, ..)
+    | ErrorDefinitionNode(id:, ..)
+    | EventDefinitionNode(id:, ..) -> {
+      let #(declarations, errors) = declarations_and_errors
+      #([id, ..declarations], errors)
+    }
+    Expression(expression:, ..) | ExpressionStatementNode(expression:, ..) -> {
+      case expression {
+        option.Some(expression) ->
+          do_find_containing_nodes_and_errors(
+            declarations_and_errors,
+            expression,
+          )
+        option.None -> declarations_and_errors
+      }
+    }
+    ForStatementNode(body:, ..) -> {
+      do_find_containing_nodes_and_errors(declarations_and_errors, body)
+    }
+    FunctionCall(arguments:, expression:, ..) -> {
+      list.fold(
+        arguments,
+        declarations_and_errors,
+        do_find_containing_nodes_and_errors,
+      )
+      |> fn(declarations_and_errors) {
+        case expression {
+          option.Some(expression) ->
+            do_find_containing_nodes_and_errors(
+              declarations_and_errors,
+              expression,
+            )
+          option.None -> declarations_and_errors
+        }
+      }
+    }
+    FunctionCallOptions(expression:, options:, ..) -> {
+      case expression {
+        option.Some(expression) -> {
+          do_find_containing_nodes_and_errors(
+            declarations_and_errors,
+            expression,
+          )
+        }
+        option.None -> declarations_and_errors
+      }
+      |> list.fold(options, _, do_find_containing_nodes_and_errors)
+    }
+    FunctionDefinitionNode(
+      id:,
+      parameters:,
+      modifiers:,
+      return_parameters:,
+      base_functions:,
+      nodes:,
+      body:,
+      ..,
+    ) -> {
+      let #(declarations, errors) = declarations_and_errors
+      let declarations_and_errors = #(
+        base_functions |> list.append([id, ..declarations]),
+        errors,
+      )
+
+      do_find_containing_nodes_and_errors(declarations_and_errors, parameters)
+      |> do_find_containing_nodes_and_errors(return_parameters)
+      |> list.fold(modifiers, _, do_find_containing_nodes_and_errors)
+      |> list.fold(nodes, _, do_find_containing_nodes_and_errors)
+      |> fn(declarations_and_errors) {
+        case body {
+          Some(body) ->
+            do_find_containing_nodes_and_errors(declarations_and_errors, body)
+          option.None -> declarations_and_errors
+        }
+      }
+    }
+    Identifier(reference_id:, expression:, ..) -> {
+      let #(declarations, errors) = declarations_and_errors
+      let declarations_and_errors = #([reference_id, ..declarations], errors)
+
+      case expression {
+        option.Some(expression) ->
+          do_find_containing_nodes_and_errors(
+            declarations_and_errors,
+            expression,
+          )
+        option.None -> declarations_and_errors
+      }
+    }
+    IdentifierPath(reference_id:, ..) -> {
+      let #(declarations, errors) = declarations_and_errors
+      #([reference_id, ..declarations], errors)
+    }
+    IfStatementNode(condition:, true_body:, false_body:, ..) -> {
+      do_find_containing_nodes_and_errors(declarations_and_errors, condition)
+      |> do_find_containing_nodes_and_errors(true_body)
+      |> fn(declarations_and_errors) {
+        case false_body {
+          Some(false_body) ->
+            do_find_containing_nodes_and_errors(
+              declarations_and_errors,
+              false_body,
+            )
+          option.None -> declarations_and_errors
+        }
+      }
+    }
+    ImportDirectiveNode(..) | Literal(..) -> declarations_and_errors
+    IndexAccess(base:, index:, ..) -> {
+      do_find_containing_nodes_and_errors(declarations_and_errors, base)
+      |> fn(declarations_and_errors) {
+        case index {
+          option.Some(index) ->
+            do_find_containing_nodes_and_errors(declarations_and_errors, index)
+          option.None -> declarations_and_errors
+        }
+      }
+    }
+    Mapping(id:, ..) -> {
+      let #(declarations, errors) = declarations_and_errors
+      #([id, ..declarations], errors)
+    }
+    MemberAccess(reference_id:, expression:, ..) -> {
+      let declarations_and_errors = case reference_id {
+        option.Some(reference_id) -> {
+          let #(declarations, errors) = declarations_and_errors
+          #([reference_id, ..declarations], errors)
+        }
+        option.None -> declarations_and_errors
+      }
+
+      case expression {
+        option.Some(expression) ->
+          do_find_containing_nodes_and_errors(
+            declarations_and_errors,
+            expression,
+          )
+        option.None -> declarations_and_errors
+      }
+    }
+    Modifier(reference_id:, arguments:, ..) -> {
+      let #(declarations, errors) = declarations_and_errors
+      let declarations_and_errors = #([reference_id, ..declarations], errors)
+
+      case arguments {
+        Some(args) ->
+          list.fold(
+            args,
+            declarations_and_errors,
+            fn(declarations_and_errors, arg) {
+              do_find_containing_nodes_and_errors(declarations_and_errors, arg)
+            },
+          )
+        option.None -> declarations_and_errors
+      }
+    }
+    ModifierDefinitionNode(..) -> declarations_and_errors
+    NamedNode(nodes:, ..) ->
+      list.fold(
+        nodes,
+        declarations_and_errors,
+        do_find_containing_nodes_and_errors,
+      )
+    NewExpression(type_name:, arguments:, ..) -> {
+      do_find_containing_nodes_and_errors(declarations_and_errors, type_name)
+      |> fn(declarations_and_errors) {
+        case arguments {
+          Some(arguments) ->
+            list.fold(
+              arguments,
+              declarations_and_errors,
+              do_find_containing_nodes_and_errors,
+            )
+          option.None -> declarations_and_errors
+        }
+      }
+    }
+    ParameterListNode(parameters:, ..) -> {
+      list.fold(
+        parameters,
+        declarations_and_errors,
+        do_find_containing_nodes_and_errors,
+      )
+    }
+    RevertStatementNode(expression:, ..) -> {
+      case expression {
+        option.Some(expression) -> {
+          let #(declarations, errors) = declarations_and_errors
+          let new_errors =
+            do_enumerate_function_calls([], expression, CalledError)
+            |> list.map(fn(item) {
+              let #(reference_id, _kind) = item
+              RevertError(reference_id)
+            })
+
+          #(declarations, list.append(new_errors, errors))
+        }
+        _ -> declarations_and_errors
+      }
+    }
+    StructDefinition(id:, nodes:, members:, ..) -> {
+      let #(declarations, errors) = declarations_and_errors
+      let declarations_and_errors = #([id, ..declarations], errors)
+
+      list.fold(
+        nodes,
+        declarations_and_errors,
+        do_find_containing_nodes_and_errors,
+      )
+      |> list.fold(members, _, do_find_containing_nodes_and_errors)
+    }
+    StructuredDocumentationNode(..) -> declarations_and_errors
+    TupleExpression(nodes:, ..) -> {
+      list.fold(
+        nodes,
+        declarations_and_errors,
+        do_find_containing_nodes_and_errors,
+      )
+    }
+    UnaryOperation(expression:, ..) -> {
+      do_find_containing_nodes_and_errors(declarations_and_errors, expression)
+    }
+    UserDefinedTypeName(path_node:, ..) -> {
+      do_find_containing_nodes_and_errors(declarations_and_errors, path_node)
+    }
+    UsingForDirective(library_name:, type_name:, ..) -> {
+      do_find_containing_nodes_and_errors(declarations_and_errors, library_name)
+      |> do_find_containing_nodes_and_errors(type_name)
+    }
+    VariableDeclarationNode(id:, type_name:, ..) -> {
+      let #(declarations, errors) = declarations_and_errors
+      let declarations_and_errors = #([id, ..declarations], errors)
+
+      do_find_containing_nodes_and_errors(declarations_and_errors, type_name)
+    }
+    VariableDeclarationStatementNode(declarations: variable_declarations, ..) -> {
+      list.fold(
+        variable_declarations,
+        declarations_and_errors,
+        fn(declarations_and_errors, declaration) {
+          case declaration {
+            option.Some(declaration) ->
+              do_find_containing_nodes_and_errors(
+                declarations_and_errors,
+                declaration,
+              )
+            option.None -> declarations_and_errors
+          }
+        },
+      )
+    }
+  }
+}
+
+pub type InScopeDeclarationStub {
+  InScopeDeclarationStub(references: List(Int), errors: List(ErrorCondition))
+  InScopeFlatDeclarationStub(references: List(Int))
+}
+
+pub fn find_in_scope_declarations(
+  in_scope_declarations: dict.Dict(Int, InScopeDeclarationStub),
+  all_declarations: dict.Dict(Int, DeclarationStub),
+) {
+  dict.to_list(all_declarations)
+  |> list.fold(in_scope_declarations, fn(in_scope_declarations, decl) {
+    case { decl.1 }.publicly_in_scope {
+      True ->
+        do_find_in_scope_declarations(
+          in_scope_declarations,
+          all_declarations,
+          decl,
+          option.None,
+        )
+      False -> in_scope_declarations
+    }
+  })
+}
+
+pub fn do_find_in_scope_declarations(
+  in_scope_declarations: dict.Dict(Int, InScopeDeclarationStub),
+  all_declarations: dict.Dict(Int, DeclarationStub),
+  decl: #(Int, DeclarationStub),
+  ref: option.Option(Int),
+) {
+  let #(current_node_id, decl) = decl
+
+  case decl {
+    DeclarationStub(referenced_nodes:, errors:, ..) -> {
+      let in_scope_declarations =
+        dict.upsert(in_scope_declarations, current_node_id, fn(decl) {
+          case decl, ref {
+            Some(decl), option.None -> decl
+            Some(decl), Some(ref) ->
+              InScopeDeclarationStub(
+                references: [ref, ..decl.references],
+                errors:,
+              )
+            option.None, Some(ref) ->
+              InScopeDeclarationStub(references: [ref], errors:)
+            option.None, option.None ->
+              InScopeDeclarationStub(references: [], errors:)
+          }
+        })
+
+      list.fold(
+        referenced_nodes,
+        in_scope_declarations,
+        fn(in_scope_declarations, referenced_node_id) {
+          case dict.get(all_declarations, referenced_node_id) {
+            Ok(referenced_node_decl) ->
+              do_find_in_scope_declarations(
+                in_scope_declarations,
+                all_declarations,
+                #(referenced_node_id, referenced_node_decl),
+                option.Some(current_node_id),
+              )
+            Error(Nil) -> in_scope_declarations
+          }
+        },
+      )
+    }
+
+    FlatDeclarationStub(..) ->
+      dict.upsert(in_scope_declarations, current_node_id, fn(decl) {
+        case decl, ref {
+          option.Some(decl), option.Some(ref) ->
+            InScopeFlatDeclarationStub(references: [ref, ..decl.references])
+          option.Some(decl), option.None -> decl
+          option.None, option.Some(ref) ->
+            InScopeFlatDeclarationStub(references: [ref])
+          option.None, option.None -> InScopeFlatDeclarationStub(references: [])
+        }
+      })
+  }
+}
+
+pub fn enumerate_declarations(
+  declarations: #(
+    Int,
+    dict.Dict(String, topic.Topic),
+    dict.Dict(String, String),
+  ),
+  in ast: AST,
+  in_scope_declaration_stubs in_scope_declaration_stubs,
+) -> #(Int, dict.Dict(String, topic.Topic), dict.Dict(String, String)) {
   list.fold(ast.nodes, declarations, fn(declarations, node) {
     do_enumerate_node_declarations(
       declarations,
@@ -803,6 +1515,7 @@ pub fn enumerate_declarations(declarations, in ast: AST) {
         contract: option.None,
         member: option.None,
       ),
+      in_scope_declaration_stubs:,
     )
   })
 }
@@ -815,51 +1528,75 @@ fn do_enumerate_node_declarations(
   ),
   node: Node,
   parent_scope parent_scope: preprocessor.Scope,
+  in_scope_declaration_stubs in_scope_declaration_stubs: dict.Dict(
+    Int,
+    InScopeDeclarationStub,
+  ),
 ) {
   case node {
     Node(nodes:, ..) ->
       list.fold(nodes, declarations, fn(declarations, node) {
-        do_enumerate_node_declarations(declarations, node, parent_scope)
+        do_enumerate_node_declarations(
+          declarations,
+          node,
+          parent_scope,
+          in_scope_declaration_stubs,
+        )
       })
     NamedNode(nodes:, ..) ->
       list.fold(nodes, declarations, fn(declarations, node) {
-        do_enumerate_node_declarations(declarations, node, parent_scope)
+        do_enumerate_node_declarations(
+          declarations,
+          node,
+          parent_scope,
+          in_scope_declaration_stubs,
+        )
       })
     ImportDirectiveNode(..) | StructuredDocumentationNode(..) -> declarations
-    ContractDefinitionNode(id:, name:, nodes:, contract_kind:, source_map:, ..) -> {
-      let children_scope =
-        preprocessor.Scope(..parent_scope, contract: option.Some(name))
+    ContractDefinitionNode(id:, name:, nodes:, contract_kind:, source_map:, ..) ->
+      case dict.get(in_scope_declaration_stubs, id) {
+        Ok(InScopeDeclarationStub(references:, errors:)) -> {
+          let children_scope =
+            preprocessor.Scope(..parent_scope, contract: option.Some(name))
 
-      let #(signature, calls, errors) = analyze_node_body(node)
+          let #(signature, calls, errors) = analyze_node_body(node)
 
-      let #(id_acc, declarations, merged_topics) = declarations
-      let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
-      let declarations = #(
-        int.max(id_acc, id + 1),
-        dict.insert(
-          declarations,
-          topic_id,
-          topic.SourceDeclaration(
-            id:,
-            topic_id:,
-            name:,
-            // The parent of a contract is the file it is defined in
-            scope: parent_scope,
-            signature:,
-            kind: preprocessor.ContractDeclaration(contract_kind),
-            source_map:,
-            references: [],
-            calls:,
-            errors:,
-          ),
-        ),
-        merged_topics,
-      )
+          let #(id_acc, declarations, merged_topics) = declarations
+          let topic_id =
+            preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
+          let declarations = #(
+            int.max(id_acc, id + 1),
+            dict.insert(
+              declarations,
+              topic_id,
+              topic.SourceDeclaration(
+                id:,
+                topic_id:,
+                name:,
+                // The parent of a contract is the file it is defined in
+                scope: parent_scope,
+                signature:,
+                kind: preprocessor.ContractDeclaration(contract_kind),
+                source_map:,
+                references: todo,
+                calls:,
+                errors:,
+              ),
+            ),
+            merged_topics,
+          )
 
-      list.fold(nodes, declarations, fn(declarations, node) {
-        do_enumerate_node_declarations(declarations, node, children_scope)
-      })
-    }
+          list.fold(nodes, declarations, fn(declarations, node) {
+            do_enumerate_node_declarations(
+              declarations,
+              node,
+              children_scope,
+              in_scope_declaration_stubs,
+            )
+          })
+        }
+        _ -> declarations
+      }
     FunctionDefinitionNode(
       id:,
       name:,
@@ -870,54 +1607,77 @@ fn do_enumerate_node_declarations(
       body:,
       source_map:,
       ..,
-    ) -> {
-      let name = case function_kind {
-        preprocessor.Function -> name
-        preprocessor.Constructor -> "constructor"
-        preprocessor.Fallback -> "fallback"
-        preprocessor.Receive -> "receive"
+    ) ->
+      case dict.get(in_scope_declaration_stubs, id) {
+        Ok(InScopeDeclarationStub(references:, errors:)) -> {
+          let name = case function_kind {
+            preprocessor.Function -> name
+            preprocessor.Constructor -> "constructor"
+            preprocessor.Fallback -> "fallback"
+            preprocessor.Receive -> "receive"
+          }
+          let children_scope =
+            preprocessor.Scope(..parent_scope, member: option.Some(name))
+
+          let #(signature, calls, errors) = analyze_node_body(node)
+
+          let #(id_acc, declarations, merged_topics) = declarations
+          let topic_id =
+            preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
+          let declarations = #(
+            int.max(id_acc, id + 1),
+            dict.insert(
+              declarations,
+              topic_id,
+              topic.SourceDeclaration(
+                id:,
+                topic_id:,
+                name:,
+                scope: parent_scope,
+                signature:,
+                kind: preprocessor.FunctionDeclaration(function_kind),
+                source_map:,
+                references: [],
+                calls:,
+                errors:,
+              ),
+            ),
+            merged_topics,
+          )
+
+          let declarations =
+            list.fold(nodes, declarations, fn(declarations, node) {
+              do_enumerate_node_declarations(
+                declarations,
+                node,
+                children_scope,
+                in_scope_declaration_stubs,
+              )
+            })
+            |> do_enumerate_node_declarations(
+              parameters,
+              children_scope,
+              in_scope_declaration_stubs,
+            )
+            |> do_enumerate_node_declarations(
+              return_parameters,
+              children_scope,
+              in_scope_declaration_stubs,
+            )
+
+          case body {
+            Some(body) ->
+              do_enumerate_node_declarations(
+                declarations,
+                body,
+                children_scope,
+                in_scope_declaration_stubs,
+              )
+            option.None -> declarations
+          }
+        }
+        _ -> declarations
       }
-      let children_scope =
-        preprocessor.Scope(..parent_scope, member: option.Some(name))
-
-      let #(signature, calls, errors) = analyze_node_body(node)
-
-      let #(id_acc, declarations, merged_topics) = declarations
-      let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
-      let declarations = #(
-        int.max(id_acc, id + 1),
-        dict.insert(
-          declarations,
-          topic_id,
-          topic.SourceDeclaration(
-            id:,
-            topic_id:,
-            name:,
-            scope: parent_scope,
-            signature:,
-            kind: preprocessor.FunctionDeclaration(function_kind),
-            source_map:,
-            references: [],
-            calls:,
-            errors:,
-          ),
-        ),
-        merged_topics,
-      )
-
-      let declarations =
-        list.fold(nodes, declarations, fn(declarations, node) {
-          do_enumerate_node_declarations(declarations, node, children_scope)
-        })
-        |> do_enumerate_node_declarations(parameters, children_scope)
-        |> do_enumerate_node_declarations(return_parameters, children_scope)
-
-      case body {
-        Some(body) ->
-          do_enumerate_node_declarations(declarations, body, children_scope)
-        option.None -> declarations
-      }
-    }
     ModifierDefinitionNode(
       id:,
       parameters:,
@@ -926,159 +1686,226 @@ fn do_enumerate_node_declarations(
       name:,
       source_map:,
       ..,
-    ) -> {
-      let children_scope =
-        preprocessor.Scope(..parent_scope, member: option.Some(name))
+    ) ->
+      case dict.get(in_scope_declaration_stubs, id) {
+        Ok(InScopeDeclarationStub(references:, errors:)) -> {
+          let children_scope =
+            preprocessor.Scope(..parent_scope, member: option.Some(name))
 
-      let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
+          let topic_id =
+            preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
-      let #(signature, calls, errors) = analyze_node_body(node)
+          let #(signature, calls, errors) = analyze_node_body(node)
 
-      let #(id_acc, declarations, merged_topics) = declarations
-      let declarations = #(
-        int.max(id_acc, id + 1),
-        dict.insert(
-          declarations,
-          topic_id,
-          topic.SourceDeclaration(
-            id:,
-            topic_id:,
-            name:,
-            scope: parent_scope,
-            signature:,
-            kind: preprocessor.ModifierDeclaration,
-            source_map:,
-            references: [],
-            calls:,
-            errors:,
-          ),
-        ),
-        merged_topics,
-      )
+          let #(id_acc, declarations, merged_topics) = declarations
+          let declarations = #(
+            int.max(id_acc, id + 1),
+            dict.insert(
+              declarations,
+              topic_id,
+              topic.SourceDeclaration(
+                id:,
+                topic_id:,
+                name:,
+                scope: parent_scope,
+                signature:,
+                kind: preprocessor.ModifierDeclaration,
+                source_map:,
+                references: todo,
+                calls:,
+                errors:,
+              ),
+            ),
+            merged_topics,
+          )
 
-      let declarations =
-        list.fold(nodes, declarations, fn(declarations, node) {
-          do_enumerate_node_declarations(declarations, node, children_scope)
-        })
-        |> do_enumerate_node_declarations(parameters, children_scope)
+          let declarations =
+            list.fold(nodes, declarations, fn(declarations, node) {
+              do_enumerate_node_declarations(
+                declarations,
+                node,
+                children_scope,
+                in_scope_declaration_stubs,
+              )
+            })
+            |> do_enumerate_node_declarations(
+              parameters,
+              children_scope,
+              in_scope_declaration_stubs,
+            )
 
-      case body {
-        Some(body) ->
-          do_enumerate_node_declarations(declarations, body, children_scope)
-        option.None -> declarations
+          case body {
+            Some(body) ->
+              do_enumerate_node_declarations(
+                declarations,
+                body,
+                children_scope,
+                in_scope_declaration_stubs,
+              )
+            option.None -> declarations
+          }
+        }
+        _ -> declarations
       }
-    }
     ParameterListNode(parameters:, ..) -> {
       list.fold(parameters, declarations, fn(declarations, parameter) {
-        do_enumerate_node_declarations(declarations, parameter, parent_scope)
+        do_enumerate_node_declarations(
+          declarations,
+          parameter,
+          parent_scope,
+          in_scope_declaration_stubs,
+        )
       })
     }
-    ErrorDefinitionNode(id:, name:, nodes:, parameters:, source_map:) -> {
-      let childern_scope =
-        preprocessor.Scope(..parent_scope, member: option.Some(name))
+    ErrorDefinitionNode(id:, name:, nodes:, parameters:, source_map:) ->
+      case dict.get(in_scope_declaration_stubs, id) {
+        Ok(decl) -> {
+          let childern_scope =
+            preprocessor.Scope(..parent_scope, member: option.Some(name))
 
-      let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
+          let topic_id =
+            preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
-      let #(signature, calls, errors) = analyze_node_body(node)
+          let #(signature, calls, errors) = analyze_node_body(node)
 
-      let #(id_acc, declarations, merged_topics) = declarations
-      let declarations = #(
-        int.max(id_acc, id + 1),
-        dict.insert(
-          declarations,
-          topic_id,
-          topic.SourceDeclaration(
-            id:,
-            topic_id:,
-            name:,
-            scope: parent_scope,
-            signature:,
-            kind: preprocessor.ErrorDeclaration,
-            source_map:,
-            references: [],
-            calls:,
-            errors:,
-          ),
-        ),
-        merged_topics,
-      )
+          let #(id_acc, declarations, merged_topics) = declarations
+          let declarations = #(
+            int.max(id_acc, id + 1),
+            dict.insert(
+              declarations,
+              topic_id,
+              topic.SourceDeclaration(
+                id:,
+                topic_id:,
+                name:,
+                scope: parent_scope,
+                signature:,
+                kind: preprocessor.ErrorDeclaration,
+                source_map:,
+                references: todo,
+                calls:,
+                errors:,
+              ),
+            ),
+            merged_topics,
+          )
 
-      list.fold(nodes, declarations, fn(declarations, node) {
-        do_enumerate_node_declarations(declarations, node, childern_scope)
-      })
-      |> do_enumerate_node_declarations(parameters, childern_scope)
-    }
-    EventDefinitionNode(id:, name:, nodes:, parameters:, source_map:) -> {
-      let childern_scope =
-        preprocessor.Scope(..parent_scope, member: option.Some(name))
+          list.fold(nodes, declarations, fn(declarations, node) {
+            do_enumerate_node_declarations(
+              declarations,
+              node,
+              childern_scope,
+              in_scope_declaration_stubs,
+            )
+          })
+          |> do_enumerate_node_declarations(
+            parameters,
+            childern_scope,
+            in_scope_declaration_stubs,
+          )
+        }
+        _ -> declarations
+      }
+    EventDefinitionNode(id:, name:, nodes:, parameters:, source_map:) ->
+      case dict.get(in_scope_declaration_stubs, id) {
+        Ok(decl) -> {
+          let childern_scope =
+            preprocessor.Scope(..parent_scope, member: option.Some(name))
 
-      let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
+          let topic_id =
+            preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
-      let #(signature, calls, errors) = analyze_node_body(node)
+          let #(signature, calls, errors) = analyze_node_body(node)
 
-      let #(id_acc, declarations, merged_topics) = declarations
-      let declarations = #(
-        int.max(id_acc, id + 1),
-        dict.insert(
-          declarations,
-          topic_id,
-          topic.SourceDeclaration(
-            id:,
-            topic_id:,
-            name:,
-            scope: parent_scope,
-            signature:,
-            kind: preprocessor.EventDeclaration,
-            source_map:,
-            references: [],
-            calls:,
-            errors:,
-          ),
-        ),
-        merged_topics,
-      )
+          let #(id_acc, declarations, merged_topics) = declarations
+          let declarations = #(
+            int.max(id_acc, id + 1),
+            dict.insert(
+              declarations,
+              topic_id,
+              topic.SourceDeclaration(
+                id:,
+                topic_id:,
+                name:,
+                scope: parent_scope,
+                signature:,
+                kind: preprocessor.EventDeclaration,
+                source_map:,
+                references: todo,
+                calls:,
+                errors:,
+              ),
+            ),
+            merged_topics,
+          )
 
-      list.fold(nodes, declarations, fn(declarations, node) {
-        do_enumerate_node_declarations(declarations, node, childern_scope)
-      })
-      |> do_enumerate_node_declarations(parameters, childern_scope)
-    }
-    VariableDeclarationNode(id:, name:, constant:, source_map:, ..) -> {
-      let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
+          list.fold(nodes, declarations, fn(declarations, node) {
+            do_enumerate_node_declarations(
+              declarations,
+              node,
+              childern_scope,
+              in_scope_declaration_stubs,
+            )
+          })
+          |> do_enumerate_node_declarations(
+            parameters,
+            childern_scope,
+            in_scope_declaration_stubs,
+          )
+        }
+        _ -> declarations
+      }
+    VariableDeclarationNode(id:, name:, constant:, source_map:, ..) ->
+      case dict.get(in_scope_declaration_stubs, id) {
+        Ok(decl) -> {
+          let topic_id =
+            preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
-      let #(signature, calls, errors) = analyze_node_body(node)
+          let #(signature, calls, errors) = analyze_node_body(node)
 
-      let #(id_acc, declarations, merged_topics) = declarations
-      #(
-        int.max(id_acc, id + 1),
-        dict.insert(
-          declarations,
-          topic_id,
-          topic.SourceDeclaration(
-            id:,
-            topic_id:,
-            name:,
-            scope: parent_scope,
-            signature:,
-            kind: case constant {
-              True -> preprocessor.ConstantDeclaration
-              False -> preprocessor.VariableDeclaration
-            },
-            source_map:,
-            references: [],
-            calls:,
-            errors:,
-          ),
-        ),
-        merged_topics,
-      )
-    }
+          let #(id_acc, declarations, merged_topics) = declarations
+          #(
+            int.max(id_acc, id + 1),
+            dict.insert(
+              declarations,
+              topic_id,
+              topic.SourceDeclaration(
+                id:,
+                topic_id:,
+                name:,
+                scope: parent_scope,
+                signature:,
+                kind: case constant {
+                  True -> preprocessor.ConstantDeclaration
+                  False -> preprocessor.VariableDeclaration
+                },
+                source_map:,
+                references: todo,
+                calls:,
+                errors:,
+              ),
+            ),
+            merged_topics,
+          )
+        }
+        _ -> declarations
+      }
     BlockNode(nodes:, statements:, ..) -> {
       list.fold(nodes, declarations, fn(declarations, node) {
-        do_enumerate_node_declarations(declarations, node, parent_scope)
+        do_enumerate_node_declarations(
+          declarations,
+          node,
+          parent_scope,
+          in_scope_declaration_stubs,
+        )
       })
       |> list.fold(statements, _, fn(declarations, statement) {
-        do_enumerate_node_declarations(declarations, statement, parent_scope)
+        do_enumerate_node_declarations(
+          declarations,
+          statement,
+          parent_scope,
+          in_scope_declaration_stubs,
+        )
       })
     }
     VariableDeclarationStatementNode(declarations: declaration_nodes, ..) ->
@@ -1089,135 +1916,191 @@ fn do_enumerate_node_declarations(
               declarations,
               declaration,
               parent_scope,
+              in_scope_declaration_stubs,
             )
           option.None -> declarations
         }
       })
     IfStatementNode(true_body:, false_body:, ..) -> {
       let declarations =
-        do_enumerate_node_declarations(declarations, true_body, parent_scope)
+        do_enumerate_node_declarations(
+          declarations,
+          true_body,
+          parent_scope,
+          in_scope_declaration_stubs,
+        )
 
       case false_body {
         Some(false_body) ->
-          do_enumerate_node_declarations(declarations, false_body, parent_scope)
+          do_enumerate_node_declarations(
+            declarations,
+            false_body,
+            parent_scope,
+            in_scope_declaration_stubs,
+          )
         option.None -> declarations
       }
     }
     ForStatementNode(initialization_expression:, body:, ..) -> {
       let declarations = case initialization_expression {
         option.Some(init) ->
-          do_enumerate_node_declarations(declarations, init, parent_scope)
+          do_enumerate_node_declarations(
+            declarations,
+            init,
+            parent_scope,
+            in_scope_declaration_stubs,
+          )
         option.None -> declarations
       }
 
-      do_enumerate_node_declarations(declarations, body, parent_scope)
-    }
-    EnumDefinition(id:, name:, members:, nodes:, source_map:) -> {
-      let children_scope =
-        preprocessor.Scope(..parent_scope, member: option.Some(name))
-
-      let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
-
-      let #(signature, calls, errors) = analyze_node_body(node)
-
-      let #(id_acc, declarations, merged_topics) = declarations
-      let declarations = #(
-        int.max(id_acc, id + 1),
-        dict.insert(
-          declarations,
-          topic_id,
-          topic.SourceDeclaration(
-            id:,
-            topic_id:,
-            name:,
-            scope: parent_scope,
-            signature:,
-            kind: preprocessor.EnumDeclaration,
-            source_map:,
-            references: [],
-            calls:,
-            errors:,
-          ),
-        ),
-        merged_topics,
-      )
-
-      list.fold(nodes, declarations, fn(declarations, statement) {
-        do_enumerate_node_declarations(declarations, statement, children_scope)
-      })
-      |> list.fold(members, _, fn(declarations, statement) {
-        do_enumerate_node_declarations(declarations, statement, children_scope)
-      })
-    }
-    EnumValue(id:, name:, source_map:) -> {
-      let #(signature, calls, errors) = analyze_node_body(node)
-
-      let #(id_acc, declarations, merged_topics) = declarations
-      let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
-      #(
-        int.max(id_acc, id + 1),
-        dict.insert(
-          declarations,
-          topic_id,
-          topic.SourceDeclaration(
-            id:,
-            topic_id:,
-            name:,
-            scope: parent_scope,
-            signature:,
-            kind: preprocessor.EnumValueDeclaration,
-            source_map:,
-            references: [],
-            calls:,
-            errors:,
-          ),
-        ),
-        merged_topics,
+      do_enumerate_node_declarations(
+        declarations,
+        body,
+        parent_scope,
+        in_scope_declaration_stubs,
       )
     }
-    StructDefinition(id:, name:, members:, nodes:, source_map:) -> {
-      let children_scope =
-        preprocessor.Scope(..parent_scope, member: option.Some(name))
+    EnumDefinition(id:, name:, members:, nodes:, source_map:, ..) ->
+      case dict.get(in_scope_declaration_stubs, id) {
+        Ok(decl) -> {
+          let children_scope =
+            preprocessor.Scope(..parent_scope, member: option.Some(name))
 
-      let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
+          let topic_id =
+            preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
-      let #(signature, calls, errors) = analyze_node_body(node)
+          let #(signature, calls, errors) = analyze_node_body(node)
 
-      let #(id_acc, declarations, merged_topics) = declarations
-      let declarations = #(
-        int.max(id_acc, id + 1),
-        dict.insert(
-          declarations,
-          topic_id,
-          topic.SourceDeclaration(
-            id:,
-            topic_id:,
-            name:,
-            scope: parent_scope,
-            signature:,
-            kind: preprocessor.StructDeclaration,
-            source_map:,
-            references: [],
-            calls:,
-            errors:,
-          ),
-        ),
-        merged_topics,
-      )
+          let #(id_acc, declarations, merged_topics) = declarations
+          let declarations = #(
+            int.max(id_acc, id + 1),
+            dict.insert(
+              declarations,
+              topic_id,
+              topic.SourceDeclaration(
+                id:,
+                topic_id:,
+                name:,
+                scope: parent_scope,
+                signature:,
+                kind: preprocessor.EnumDeclaration,
+                source_map:,
+                references: todo,
+                calls:,
+                errors:,
+              ),
+            ),
+            merged_topics,
+          )
 
-      list.fold(nodes, declarations, fn(declarations, statement) {
-        do_enumerate_node_declarations(declarations, statement, children_scope)
-      })
-      |> list.fold(members, _, fn(declarations, statement) {
-        do_enumerate_node_declarations(declarations, statement, children_scope)
-      })
-    }
+          list.fold(nodes, declarations, fn(declarations, statement) {
+            do_enumerate_node_declarations(
+              declarations,
+              statement,
+              children_scope,
+              in_scope_declaration_stubs,
+            )
+          })
+          |> list.fold(members, _, fn(declarations, statement) {
+            do_enumerate_node_declarations(
+              declarations,
+              statement,
+              children_scope,
+              in_scope_declaration_stubs,
+            )
+          })
+        }
+        _ -> declarations
+      }
+    EnumValue(id:, name:, source_map:) ->
+      case dict.get(in_scope_declaration_stubs, id) {
+        Ok(decl) -> {
+          let #(signature, calls, errors) = analyze_node_body(node)
+
+          let #(id_acc, declarations, merged_topics) = declarations
+          let topic_id =
+            preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
+          #(
+            int.max(id_acc, id + 1),
+            dict.insert(
+              declarations,
+              topic_id,
+              topic.SourceDeclaration(
+                id:,
+                topic_id:,
+                name:,
+                scope: parent_scope,
+                signature:,
+                kind: preprocessor.EnumValueDeclaration,
+                source_map:,
+                references: [],
+                calls:,
+                errors:,
+              ),
+            ),
+            merged_topics,
+          )
+        }
+        _ -> declarations
+      }
+    StructDefinition(id:, name:, members:, nodes:, source_map:, ..) ->
+      case dict.get(in_scope_declaration_stubs, id) {
+        Ok(decl) -> {
+          let children_scope =
+            preprocessor.Scope(..parent_scope, member: option.Some(name))
+
+          let topic_id =
+            preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
+
+          let #(signature, calls, errors) = analyze_node_body(node)
+
+          let #(id_acc, declarations, merged_topics) = declarations
+          let declarations = #(
+            int.max(id_acc, id + 1),
+            dict.insert(
+              declarations,
+              topic_id,
+              topic.SourceDeclaration(
+                id:,
+                topic_id:,
+                name:,
+                scope: parent_scope,
+                signature:,
+                kind: preprocessor.StructDeclaration,
+                source_map:,
+                references: todo,
+                calls:,
+                errors:,
+              ),
+            ),
+            merged_topics,
+          )
+
+          list.fold(nodes, declarations, fn(declarations, statement) {
+            do_enumerate_node_declarations(
+              declarations,
+              statement,
+              children_scope,
+              in_scope_declaration_stubs,
+            )
+          })
+          |> list.fold(members, _, fn(declarations, statement) {
+            do_enumerate_node_declarations(
+              declarations,
+              statement,
+              children_scope,
+              in_scope_declaration_stubs,
+            )
+          })
+        }
+        _ -> declarations
+      }
 
     _ -> declarations
   }
 }
 
-pub fn enumerate_references(declarations, in ast: AST) {
+pub fn enumerate_references(declarations, in ast: AST, in_scope in_scope) {
   list.fold(ast.nodes, declarations, fn(declarations, node) {
     do_enumerate_node_references(
       declarations,
@@ -1229,6 +2112,7 @@ pub fn enumerate_references(declarations, in ast: AST) {
       ),
       "",
       preprocessor.AccessReference,
+      in_scope,
     )
   })
 }
@@ -1239,6 +2123,7 @@ fn do_enumerate_node_references(
   parent_scope: preprocessor.Scope,
   parent_topic_id: String,
   parent_reference_kind: preprocessor.NodeReferenceKind,
+  in_scope in_scope,
 ) {
   case node {
     Node(nodes:, ..)
@@ -1255,6 +2140,7 @@ fn do_enumerate_node_references(
         parent_scope,
         parent_topic_id,
         parent_reference_kind,
+        in_scope,
       )
 
     ImportDirectiveNode(..)
@@ -1276,12 +2162,14 @@ fn do_enumerate_node_references(
         children_scope,
         topic_id,
         parent_reference_kind,
+        in_scope,
       )
       |> do_count_node_references_multi(
         base_contracts,
         children_scope,
         topic_id,
         parent_reference_kind,
+        in_scope,
       )
     }
 
@@ -1309,45 +2197,55 @@ fn do_enumerate_node_references(
 
       let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
-      let declarations =
-        list.fold(nodes, declarations, fn(declarations, node) {
-          do_enumerate_node_references(
-            declarations,
-            node,
-            children_scope,
-            topic_id,
-            parent_reference_kind,
-          )
-        })
-        |> do_enumerate_node_references(
-          parameters,
-          children_scope,
-          topic_id,
-          parent_reference_kind,
-        )
-        |> do_enumerate_node_references(
-          return_parameters,
-          children_scope,
-          topic_id,
-          parent_reference_kind,
-        )
-        |> do_count_node_references_multi(
-          modifiers,
-          children_scope,
-          topic_id,
-          parent_reference_kind,
-        )
+      case in_scope {
+        True -> {
+          let declarations =
+            list.fold(nodes, declarations, fn(declarations, node) {
+              do_enumerate_node_references(
+                declarations,
+                node,
+                children_scope,
+                topic_id,
+                parent_reference_kind,
+                in_scope,
+              )
+            })
+            |> do_enumerate_node_references(
+              parameters,
+              children_scope,
+              topic_id,
+              parent_reference_kind,
+              in_scope,
+            )
+            |> do_enumerate_node_references(
+              return_parameters,
+              children_scope,
+              topic_id,
+              parent_reference_kind,
+              in_scope,
+            )
+            |> do_count_node_references_multi(
+              modifiers,
+              children_scope,
+              topic_id,
+              parent_reference_kind,
+              in_scope,
+            )
 
-      case body {
-        Some(body) ->
-          do_enumerate_node_references(
-            declarations,
-            body,
-            children_scope,
-            topic_id,
-            parent_reference_kind,
-          )
-        option.None -> declarations
+          case body {
+            Some(body) ->
+              do_enumerate_node_references(
+                declarations,
+                body,
+                children_scope,
+                topic_id,
+                parent_reference_kind,
+                in_scope,
+              )
+            option.None -> declarations
+          }
+        }
+        False -> declarations
       }
     }
     ModifierDefinitionNode(id:, nodes:, parameters:, body:, name:, ..) -> {
@@ -1356,31 +2254,39 @@ fn do_enumerate_node_references(
 
       let topic_id = preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
-      let declarations =
-        do_count_node_references_multi(
-          declarations,
-          nodes,
-          children_scope,
-          topic_id,
-          parent_reference_kind,
-        )
-        |> do_enumerate_node_references(
-          parameters,
-          children_scope,
-          topic_id,
-          parent_reference_kind,
-        )
+      case in_scope {
+        True -> {
+          let declarations =
+            do_count_node_references_multi(
+              declarations,
+              nodes,
+              children_scope,
+              topic_id,
+              parent_reference_kind,
+              in_scope,
+            )
+            |> do_enumerate_node_references(
+              parameters,
+              children_scope,
+              topic_id,
+              parent_reference_kind,
+              in_scope,
+            )
 
-      case body {
-        Some(body) ->
-          do_enumerate_node_references(
-            declarations,
-            body,
-            children_scope,
-            topic_id,
-            parent_reference_kind,
-          )
-        option.None -> declarations
+          case body {
+            Some(body) ->
+              do_enumerate_node_references(
+                declarations,
+                body,
+                children_scope,
+                topic_id,
+                parent_reference_kind,
+                in_scope,
+              )
+            option.None -> declarations
+          }
+        }
+        False -> declarations
       }
     }
     BlockNode(nodes:, statements:, ..) -> {
@@ -1390,12 +2296,14 @@ fn do_enumerate_node_references(
         parent_scope,
         parent_topic_id,
         parent_reference_kind,
+        in_scope,
       )
       |> do_count_node_references_multi(
         statements,
         parent_scope,
         parent_topic_id,
         parent_reference_kind,
+        in_scope,
       )
     }
     ExpressionStatementNode(expression:, ..) ->
@@ -1407,6 +2315,7 @@ fn do_enumerate_node_references(
             parent_scope,
             parent_topic_id,
             parent_reference_kind,
+            in_scope,
           )
         option.None -> declarations
       }
@@ -1417,6 +2326,7 @@ fn do_enumerate_node_references(
         parent_scope,
         parent_topic_id,
         parent_reference_kind,
+        in_scope,
       )
 
     VariableDeclarationStatementNode(initial_value:, ..) ->
@@ -1428,6 +2338,7 @@ fn do_enumerate_node_references(
             parent_scope,
             parent_topic_id,
             parent_reference_kind,
+            in_scope,
           )
         option.None -> declarations
       }
@@ -1439,12 +2350,14 @@ fn do_enumerate_node_references(
           parent_scope,
           parent_topic_id,
           parent_reference_kind,
+          in_scope,
         )
         |> do_enumerate_node_references(
           true_body,
           parent_scope,
           parent_topic_id,
           parent_reference_kind,
+          in_scope,
         )
 
       case false_body {
@@ -1455,6 +2368,7 @@ fn do_enumerate_node_references(
             parent_scope,
             parent_topic_id,
             parent_reference_kind,
+            in_scope,
           )
         option.None -> declarations
       }
@@ -1474,6 +2388,7 @@ fn do_enumerate_node_references(
             parent_scope,
             parent_topic_id,
             parent_reference_kind,
+            in_scope,
           )
         option.None -> declarations
       }
@@ -1486,6 +2401,7 @@ fn do_enumerate_node_references(
               parent_scope,
               parent_topic_id,
               parent_reference_kind,
+              in_scope,
             )
           option.None -> declarations
         }
@@ -1499,6 +2415,7 @@ fn do_enumerate_node_references(
               parent_scope,
               parent_topic_id,
               parent_reference_kind,
+              in_scope,
             )
           option.None -> declarations
         }
@@ -1508,6 +2425,7 @@ fn do_enumerate_node_references(
         parent_scope,
         parent_topic_id,
         parent_reference_kind,
+        in_scope,
       )
     RevertStatementNode(expression:, ..) ->
       case expression {
@@ -1518,6 +2436,7 @@ fn do_enumerate_node_references(
             parent_scope,
             parent_topic_id,
             parent_reference_kind,
+            in_scope,
           )
         option.None -> declarations
       }
@@ -1531,6 +2450,7 @@ fn do_enumerate_node_references(
             parent_scope,
             parent_topic_id,
             parent_reference_kind,
+            in_scope,
           )
         option.None -> declarations
       }
@@ -1544,6 +2464,7 @@ fn do_enumerate_node_references(
             parent_scope,
             parent_topic_id,
             parent_reference_kind,
+            in_scope,
           )
         option.None -> declarations
       }
@@ -1581,6 +2502,7 @@ fn do_enumerate_node_references(
               parent_scope,
               parent_topic_id,
               parent_reference_kind,
+              in_scope,
             )
           option.None -> declarations
         }
@@ -1595,6 +2517,7 @@ fn do_enumerate_node_references(
             parent_scope,
             parent_topic_id,
             preprocessor.CallReference,
+            in_scope,
           )
         option.None -> declarations
       }
@@ -1603,6 +2526,7 @@ fn do_enumerate_node_references(
         parent_scope,
         parent_topic_id,
         parent_reference_kind,
+        in_scope,
       )
     Assignment(left_hand_side:, right_hand_side:, ..) ->
       do_enumerate_node_references(
@@ -1611,12 +2535,14 @@ fn do_enumerate_node_references(
         parent_scope,
         parent_topic_id,
         preprocessor.MutationReference,
+        in_scope,
       )
       |> do_enumerate_node_references(
         right_hand_side,
         parent_scope,
         parent_topic_id,
         parent_reference_kind,
+        in_scope,
       )
 
     BinaryOperation(left_expression:, right_expression:, ..) ->
@@ -1626,12 +2552,14 @@ fn do_enumerate_node_references(
         parent_scope,
         parent_topic_id,
         parent_reference_kind,
+        in_scope,
       )
       |> do_enumerate_node_references(
         right_expression,
         parent_scope,
         parent_topic_id,
         parent_reference_kind,
+        in_scope,
       )
 
     UnaryOperation(expression:, ..) ->
@@ -1641,6 +2569,7 @@ fn do_enumerate_node_references(
         parent_scope,
         parent_topic_id,
         parent_reference_kind,
+        in_scope,
       )
 
     IndexAccess(base:, index:, ..) ->
@@ -1652,6 +2581,7 @@ fn do_enumerate_node_references(
             parent_scope,
             parent_topic_id,
             parent_reference_kind,
+            in_scope,
           )
         option.None -> declarations
       }
@@ -1660,6 +2590,7 @@ fn do_enumerate_node_references(
         parent_scope,
         parent_topic_id,
         parent_reference_kind,
+        in_scope,
       )
 
     Modifier(reference_id:, arguments:, ..) ->
@@ -1682,6 +2613,7 @@ fn do_enumerate_node_references(
               parent_scope,
               parent_topic_id,
               parent_reference_kind,
+              in_scope,
             )
           option.None -> declarations
         }
@@ -1715,18 +2647,21 @@ fn do_enumerate_node_references(
         parent_scope,
         parent_topic_id,
         parent_reference_kind,
+        in_scope,
       )
       |> do_enumerate_node_references(
         true_expression,
         parent_scope,
         parent_topic_id,
         parent_reference_kind,
+        in_scope,
       )
       |> do_enumerate_node_references(
         false_expression,
         parent_scope,
         parent_topic_id,
         parent_reference_kind,
+        in_scope,
       )
     UserDefinedTypeName(path_node:, ..) ->
       do_enumerate_node_references(
@@ -1735,6 +2670,7 @@ fn do_enumerate_node_references(
         parent_scope,
         parent_topic_id,
         preprocessor.TypeReference,
+        in_scope,
       )
     NewExpression(type_name:, arguments:, ..) ->
       do_enumerate_node_references(
@@ -1743,6 +2679,7 @@ fn do_enumerate_node_references(
         parent_scope,
         parent_topic_id,
         preprocessor.TypeReference,
+        in_scope,
       )
       |> fn(declarations) {
         case arguments {
@@ -1753,6 +2690,7 @@ fn do_enumerate_node_references(
               parent_scope,
               parent_topic_id,
               parent_reference_kind,
+              in_scope,
             )
           option.None -> declarations
         }
@@ -1764,6 +2702,7 @@ fn do_enumerate_node_references(
         parent_scope,
         parent_topic_id,
         preprocessor.TypeReference,
+        in_scope,
       )
     FunctionCallOptions(options:, expression:, ..) ->
       case expression {
@@ -1774,6 +2713,7 @@ fn do_enumerate_node_references(
             parent_scope,
             parent_topic_id,
             preprocessor.CallReference,
+            in_scope,
           )
         option.None -> declarations
       }
@@ -1782,6 +2722,7 @@ fn do_enumerate_node_references(
         parent_scope,
         parent_topic_id,
         parent_reference_kind,
+        in_scope,
       )
     Mapping(key_type:, value_type:, ..) ->
       do_enumerate_node_references(
@@ -1790,12 +2731,14 @@ fn do_enumerate_node_references(
         parent_scope,
         parent_topic_id,
         preprocessor.TypeReference,
+        in_scope,
       )
       |> do_enumerate_node_references(
         value_type,
         parent_scope,
         parent_topic_id,
         preprocessor.TypeReference,
+        in_scope,
       )
     UsingForDirective(library_name:, ..) ->
       do_enumerate_node_references(
@@ -1804,6 +2747,7 @@ fn do_enumerate_node_references(
         parent_scope,
         parent_topic_id,
         preprocessor.UsingReference,
+        in_scope,
       )
   }
 }
@@ -1846,6 +2790,7 @@ fn do_count_node_references_multi(
   parent_scope,
   parent_topic_id: String,
   parent_reference_kind: preprocessor.NodeReferenceKind,
+  in_scope,
 ) {
   list.fold(nodes, declarations, fn(declarations, node) {
     do_enumerate_node_references(
@@ -1854,6 +2799,7 @@ fn do_count_node_references_multi(
       parent_scope,
       parent_topic_id,
       parent_reference_kind,
+      in_scope,
     )
   })
 }
@@ -2443,6 +3389,13 @@ fn get_signature_line_significance(
 
 fn enumerate_function_calls(node) {
   do_enumerate_function_calls([], node, CalledFunction)
+  |> list.map(fn(item) {
+    let #(reference_id, kind) = item
+    #(
+      preprocessor.node_id_to_topic_id(reference_id, preprocessor.Solidity),
+      kind,
+    )
+  })
 }
 
 fn do_enumerate_function_calls(acc, node, kind) {
@@ -2471,8 +3424,12 @@ fn do_enumerate_function_calls(acc, node, kind) {
       }
     }
 
-    ForStatementNode(loop_expression: option.Some(loop_expression), ..) ->
-      do_enumerate_function_calls(acc, loop_expression, kind)
+    FunctionCall(expression: option.Some(expression), ..)
+    | ForStatementNode(loop_expression: option.Some(expression), ..)
+    | ExpressionStatementNode(expression: option.Some(expression), ..)
+    | Expression(expression: option.Some(expression), ..)
+    | MemberAccess(expression: option.Some(expression), ..) ->
+      do_enumerate_function_calls(acc, expression, kind)
 
     RevertStatementNode(expression: option.Some(expression), ..) ->
       do_enumerate_function_calls(acc, expression, CalledError)
@@ -2483,23 +3440,8 @@ fn do_enumerate_function_calls(acc, node, kind) {
     NewExpression(type_name:, ..) ->
       do_enumerate_function_calls(acc, type_name, CalledConstructor)
 
-    FunctionCall(expression: option.Some(expression), ..) ->
-      do_enumerate_function_calls(acc, expression, kind)
-
-    ExpressionStatementNode(expression: option.Some(expression), ..) ->
-      do_enumerate_function_calls(acc, expression, kind)
-
-    Expression(expression: option.Some(expression), ..) ->
-      do_enumerate_function_calls(acc, expression, kind)
-
-    MemberAccess(expression: option.Some(expression), ..) ->
-      do_enumerate_function_calls(acc, expression, kind)
-
     Identifier(reference_id:, ..) | IdentifierPath(reference_id:, ..) -> [
-      #(
-        preprocessor.node_id_to_topic_id(reference_id, preprocessor.Solidity),
-        kind,
-      ),
+      #(reference_id, kind),
       ..acc
     ]
 
@@ -2693,6 +3635,7 @@ pub type Node {
     nodes: List(Node),
     body: option.Option(Node),
     documentation: option.Option(Node),
+    visibility: String,
   )
   ParameterListNode(
     id: Int,
@@ -2848,6 +3791,7 @@ pub type Node {
     name: String,
     nodes: List(Node),
     members: List(Node),
+    visibility: String,
   )
   EnumValue(id: Int, source_map: preprocessor.SourceMap, name: String)
   StructDefinition(
@@ -2856,6 +3800,7 @@ pub type Node {
     name: String,
     nodes: List(Node),
     members: List(Node),
+    visibility: String,
   )
   UserDefinedTypeName(
     id: Int,
@@ -3150,6 +4095,7 @@ fn node_decoder() -> decode.Decoder(Node) {
         option.None,
         decode.optional(node_decoder()),
       )
+      use visibility <- decode.field("visibility", decode.string)
       decode.success(ModifierDefinitionNode(
         id:,
         source_map: source_map_from_string(src),
@@ -3158,6 +4104,7 @@ fn node_decoder() -> decode.Decoder(Node) {
         nodes:,
         body:,
         documentation:,
+        visibility:,
       ))
     }
     "ParameterList" -> {
@@ -3522,12 +4469,14 @@ fn node_decoder() -> decode.Decoder(Node) {
       use name <- decode.field("name", decode.string)
       use nodes <- decode.field("nodes", decode.list(node_decoder()))
       use members <- decode.field("members", decode.list(node_decoder()))
+      use visibility <- decode.field("visibility", decode.string)
       decode.success(EnumDefinition(
         id:,
         source_map: source_map_from_string(src),
         name:,
         nodes:,
         members:,
+        visibility:,
       ))
     }
     "EnumValue" -> {
@@ -3546,12 +4495,14 @@ fn node_decoder() -> decode.Decoder(Node) {
       use name <- decode.field("name", decode.string)
       use nodes <- decode.field("nodes", decode.list(node_decoder()))
       use members <- decode.field("members", decode.list(node_decoder()))
+      use visibility <- decode.field("visibility", decode.string)
       decode.success(StructDefinition(
         id:,
         source_map: source_map_from_string(src),
         name:,
         nodes:,
         members:,
+        visibility:,
       ))
     }
     "UserDefinedTypeName" -> {
