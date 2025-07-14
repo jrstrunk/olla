@@ -821,10 +821,19 @@ fn do_linearize_nodes_multi(linearized_nodes: List(Node), nodes: List(Node)) {
 pub type DeclarationStub {
   DeclarationStub(
     publicly_in_scope: Bool,
-    referenced_nodes: List(Int),
+    referenced_nodes: List(ReferencedNode),
     errors: List(ErrorCondition),
   )
   FlatDeclarationStub(publicly_in_scope: Bool)
+}
+
+pub type ReferencedNode {
+  NodeReference(id: Int, kind: preprocessor.NodeReferenceKind)
+  NodeDeclaration(id: Int)
+}
+
+pub type Reference {
+  Reference(id: Int, kind: preprocessor.NodeReferenceKind)
 }
 
 pub type ErrorCondition {
@@ -927,7 +936,7 @@ fn do_find_declarations(
       let declarations = case body {
         Some(body) -> {
           let #(referenced_nodes, errors) =
-            do_find_containing_nodes_and_errors(#([], []), body)
+            find_containing_nodes_and_errors(body)
 
           dict.insert(
             declarations,
@@ -984,7 +993,7 @@ fn do_find_declarations(
       let declarations = case body {
         Some(body) -> {
           let #(referenced_nodes, errors) =
-            do_find_containing_nodes_and_errors(#([], []), body)
+            find_containing_nodes_and_errors(body)
 
           dict.insert(
             declarations,
@@ -1021,8 +1030,7 @@ fn do_find_declarations(
       let declarations = {
         let referenced_nodes =
           list.fold(members, [], fn(acc, node) {
-            let #(ref_nodes, _errors) =
-              do_find_containing_nodes_and_errors(#([], []), node)
+            let #(ref_nodes, _errors) = find_containing_nodes_and_errors(node)
             list.append(ref_nodes, acc)
           })
 
@@ -1080,111 +1088,70 @@ fn is_publicly_accessible(visibility) {
   }
 }
 
+fn find_containing_nodes_and_errors(node) {
+  do_find_containing_nodes_and_errors(
+    #([], []),
+    node,
+    preprocessor.AccessReference,
+  )
+}
+
 fn do_find_containing_nodes_and_errors(
-  declarations_and_errors: #(List(Int), List(ErrorCondition)),
+  declarations_and_errors: #(List(ReferencedNode), List(ErrorCondition)),
   node,
+  parent_reference_kind,
 ) {
   case node {
-    Node(nodes:, ..) ->
-      list.fold(
-        nodes,
-        declarations_and_errors,
-        do_find_containing_nodes_and_errors,
-      )
-    ArrayTypeName(id:, ..) -> {
-      let #(declarations, errors) = declarations_and_errors
-      #([id, ..declarations], errors)
-    }
-    Assignment(left_hand_side:, right_hand_side:, ..) -> {
+    ImportDirectiveNode(..)
+    | StructuredDocumentationNode(..)
+    | ElementaryTypeNameExpression(..)
+    | Literal(..) -> declarations_and_errors
+
+    UnaryOperation(expression: body, ..) | ForStatementNode(body:, ..) -> {
       do_find_containing_nodes_and_errors(
         declarations_and_errors,
-        left_hand_side,
+        body,
+        parent_reference_kind,
       )
-      |> do_find_containing_nodes_and_errors(right_hand_side)
     }
-    BaseContract(reference_id:, ..) -> {
-      let #(declarations, errors) = declarations_and_errors
-      #([reference_id, ..declarations], errors)
-    }
-    BinaryOperation(left_expression:, right_expression:, ..) -> {
-      do_find_containing_nodes_and_errors(
-        declarations_and_errors,
-        left_expression,
-      )
-      |> do_find_containing_nodes_and_errors(right_expression)
-    }
-    BlockNode(nodes:, statements:, expression:, ..) -> {
-      list.fold(
-        nodes,
-        declarations_and_errors,
-        do_find_containing_nodes_and_errors,
-      )
-      |> list.fold(statements, _, do_find_containing_nodes_and_errors)
-      |> fn(declarations_and_errors) {
-        case expression {
-          option.Some(expression) ->
-            do_find_containing_nodes_and_errors(
-              declarations_and_errors,
-              expression,
-            )
-          option.None -> declarations_and_errors
-        }
-      }
-    }
-    Conditional(condition:, false_expression:, true_expression:, ..) -> {
-      do_find_containing_nodes_and_errors(declarations_and_errors, condition)
-      |> do_find_containing_nodes_and_errors(false_expression)
-      |> do_find_containing_nodes_and_errors(true_expression)
-    }
-    ContractDefinitionNode(id:, base_contracts:, nodes:, ..) -> {
-      let #(declarations, errors) = declarations_and_errors
-      let declarations_and_errors = #([id, ..declarations], errors)
 
-      list.fold(
-        base_contracts,
-        declarations_and_errors,
-        do_find_containing_nodes_and_errors,
-      )
-      |> list.fold(nodes, _, do_find_containing_nodes_and_errors)
-    }
-    ElementaryTypeNameExpression(..) -> declarations_and_errors
-    EmitStatementNode(event_call:, ..) ->
-      do_find_containing_nodes_and_errors(declarations_and_errors, event_call)
-    EnumDefinition(id:, nodes:, members:, ..) -> {
-      let #(declarations, errors) = declarations_and_errors
-      let declarations_and_errors = #([id, ..declarations], errors)
-
-      list.fold(
-        members,
-        declarations_and_errors,
-        do_find_containing_nodes_and_errors,
-      )
-      |> list.fold(nodes, _, do_find_containing_nodes_and_errors)
-    }
-    EnumValue(id:, ..)
-    | ErrorDefinitionNode(id:, ..)
-    | EventDefinitionNode(id:, ..) -> {
-      let #(declarations, errors) = declarations_and_errors
-      #([id, ..declarations], errors)
-    }
     Expression(expression:, ..) | ExpressionStatementNode(expression:, ..) -> {
       case expression {
         option.Some(expression) ->
           do_find_containing_nodes_and_errors(
             declarations_and_errors,
             expression,
+            parent_reference_kind,
           )
         option.None -> declarations_and_errors
       }
     }
-    ForStatementNode(body:, ..) -> {
-      do_find_containing_nodes_and_errors(declarations_and_errors, body)
-    }
-    FunctionCall(arguments:, expression:, ..) -> {
-      list.fold(
-        arguments,
+
+    Node(nodes:, ..)
+    | NamedNode(nodes:, ..)
+    | ParameterListNode(parameters: nodes, ..)
+    | TupleExpression(nodes:, ..) ->
+      declarations_and_errors
+      |> fold_find_containing_nodes_and_errors(nodes, parent_reference_kind)
+
+    BinaryOperation(left_expression:, right_expression:, ..) -> {
+      do_find_containing_nodes_and_errors(
         declarations_and_errors,
-        do_find_containing_nodes_and_errors,
+        left_expression,
+        parent_reference_kind,
+      )
+      |> do_find_containing_nodes_and_errors(
+        right_expression,
+        parent_reference_kind,
+      )
+    }
+
+    BlockNode(nodes:, statements:, expression:, ..) -> {
+      declarations_and_errors
+      |> fold_find_containing_nodes_and_errors(nodes, parent_reference_kind)
+      |> fold_find_containing_nodes_and_errors(
+        statements,
+        parent_reference_kind,
       )
       |> fn(declarations_and_errors) {
         case expression {
@@ -1192,23 +1159,134 @@ fn do_find_containing_nodes_and_errors(
             do_find_containing_nodes_and_errors(
               declarations_and_errors,
               expression,
+              parent_reference_kind,
             )
           option.None -> declarations_and_errors
         }
       }
     }
+
+    Conditional(condition:, false_expression:, true_expression:, ..) -> {
+      do_find_containing_nodes_and_errors(
+        declarations_and_errors,
+        condition,
+        parent_reference_kind,
+      )
+      |> do_find_containing_nodes_and_errors(
+        false_expression,
+        parent_reference_kind,
+      )
+      |> do_find_containing_nodes_and_errors(
+        true_expression,
+        parent_reference_kind,
+      )
+    }
+
+    VariableDeclarationStatementNode(declarations: variable_declarations, ..) -> {
+      list.fold(
+        variable_declarations,
+        declarations_and_errors,
+        fn(declarations_and_errors, declaration) {
+          case declaration {
+            option.Some(declaration) ->
+              do_find_containing_nodes_and_errors(
+                declarations_and_errors,
+                declaration,
+                parent_reference_kind,
+              )
+            option.None -> declarations_and_errors
+          }
+        },
+      )
+    }
+
+    ArrayTypeName(id:, ..) -> {
+      let #(declarations, errors) = declarations_and_errors
+      #([NodeReference(id, preprocessor.TypeReference), ..declarations], errors)
+    }
+
+    Assignment(left_hand_side:, right_hand_side:, ..) -> {
+      do_find_containing_nodes_and_errors(
+        declarations_and_errors,
+        left_hand_side,
+        preprocessor.MutationReference,
+      )
+      |> do_find_containing_nodes_and_errors(
+        right_hand_side,
+        parent_reference_kind,
+      )
+    }
+
+    BaseContract(reference_id: id, ..) -> {
+      let #(declarations, errors) = declarations_and_errors
+      #(
+        [NodeReference(id, preprocessor.InheritanceReference), ..declarations],
+        errors,
+      )
+    }
+
+    ContractDefinitionNode(id:, base_contracts:, nodes:, ..) -> {
+      let #(declarations, errors) = declarations_and_errors
+      let declarations_and_errors = #([NodeDeclaration(id), ..declarations], errors)
+
+      declarations_and_errors
+      |> fold_find_containing_nodes_and_errors(
+        base_contracts,
+        parent_reference_kind,
+      )
+      |> fold_find_containing_nodes_and_errors(nodes, parent_reference_kind)
+    }
+
+    EmitStatementNode(event_call:, ..) ->
+      do_find_containing_nodes_and_errors(
+        declarations_and_errors,
+        event_call,
+        preprocessor.CallReference,
+      )
+
+    EnumDefinition(id:, nodes:, members:, ..) -> {
+      let #(declarations, errors) = declarations_and_errors
+      let declarations_and_errors = #([NodeDeclaration(id), ..declarations], errors)
+
+      declarations_and_errors
+      |> fold_find_containing_nodes_and_errors(nodes, parent_reference_kind)
+      |> fold_find_containing_nodes_and_errors(members, parent_reference_kind)
+    }
+
+    EnumValue(id:, ..)
+    | ErrorDefinitionNode(id:, ..)
+    | EventDefinitionNode(id:, ..) -> {
+      let #(declarations, errors) = declarations_and_errors
+      #([NodeDeclaration(id), ..declarations], errors)
+    }
+
+    FunctionCall(expression:, arguments:, ..) -> {
+      case expression {
+        option.Some(expression) ->
+          do_find_containing_nodes_and_errors(
+            declarations_and_errors,
+            expression,
+            preprocessor.CallReference,
+          )
+        option.None -> declarations_and_errors
+      }
+      |> fold_find_containing_nodes_and_errors(arguments, parent_reference_kind)
+    }
+
     FunctionCallOptions(expression:, options:, ..) -> {
       case expression {
         option.Some(expression) -> {
           do_find_containing_nodes_and_errors(
             declarations_and_errors,
             expression,
+            parent_reference_kind,
           )
         }
         option.None -> declarations_and_errors
       }
-      |> list.fold(options, _, do_find_containing_nodes_and_errors)
+      |> fold_find_containing_nodes_and_errors(options, parent_reference_kind)
     }
+
     FunctionDefinitionNode(
       id:,
       parameters:,
@@ -1221,73 +1299,111 @@ fn do_find_containing_nodes_and_errors(
     ) -> {
       let #(declarations, errors) = declarations_and_errors
       let declarations_and_errors = #(
-        base_functions |> list.append([id, ..declarations]),
+        base_functions
+          |> list.map(fn(id) {
+            NodeReference(id, preprocessor.InheritanceReference)
+          })
+          |> list.append([NodeDeclaration(id), ..declarations]),
         errors,
       )
 
-      do_find_containing_nodes_and_errors(declarations_and_errors, parameters)
-      |> do_find_containing_nodes_and_errors(return_parameters)
-      |> list.fold(modifiers, _, do_find_containing_nodes_and_errors)
-      |> list.fold(nodes, _, do_find_containing_nodes_and_errors)
+      declarations_and_errors
+      |> do_find_containing_nodes_and_errors(parameters, parent_reference_kind)
+      |> do_find_containing_nodes_and_errors(
+        return_parameters,
+        parent_reference_kind,
+      )
+      |> fold_find_containing_nodes_and_errors(modifiers, parent_reference_kind)
+      |> fold_find_containing_nodes_and_errors(nodes, parent_reference_kind)
       |> fn(declarations_and_errors) {
         case body {
           Some(body) ->
-            do_find_containing_nodes_and_errors(declarations_and_errors, body)
+            do_find_containing_nodes_and_errors(
+              declarations_and_errors,
+              body,
+              parent_reference_kind,
+            )
           option.None -> declarations_and_errors
         }
       }
     }
+
     Identifier(reference_id:, expression:, ..) -> {
       let #(declarations, errors) = declarations_and_errors
-      let declarations_and_errors = #([reference_id, ..declarations], errors)
+      let declarations_and_errors = #(
+        [NodeReference(reference_id, parent_reference_kind), ..declarations],
+        errors,
+      )
 
       case expression {
         option.Some(expression) ->
           do_find_containing_nodes_and_errors(
             declarations_and_errors,
             expression,
+            parent_reference_kind,
           )
         option.None -> declarations_and_errors
       }
     }
+
     IdentifierPath(reference_id:, ..) -> {
       let #(declarations, errors) = declarations_and_errors
-      #([reference_id, ..declarations], errors)
+      #(
+        [NodeReference(reference_id, parent_reference_kind), ..declarations],
+        errors,
+      )
     }
     IfStatementNode(condition:, true_body:, false_body:, ..) -> {
-      do_find_containing_nodes_and_errors(declarations_and_errors, condition)
-      |> do_find_containing_nodes_and_errors(true_body)
+      do_find_containing_nodes_and_errors(
+        declarations_and_errors,
+        condition,
+        parent_reference_kind,
+      )
+      |> do_find_containing_nodes_and_errors(true_body, parent_reference_kind)
       |> fn(declarations_and_errors) {
         case false_body {
           Some(false_body) ->
             do_find_containing_nodes_and_errors(
               declarations_and_errors,
               false_body,
+              parent_reference_kind,
             )
           option.None -> declarations_and_errors
         }
       }
     }
-    ImportDirectiveNode(..) | Literal(..) -> declarations_and_errors
     IndexAccess(base:, index:, ..) -> {
-      do_find_containing_nodes_and_errors(declarations_and_errors, base)
+      do_find_containing_nodes_and_errors(
+        declarations_and_errors,
+        base,
+        parent_reference_kind,
+      )
       |> fn(declarations_and_errors) {
         case index {
           option.Some(index) ->
-            do_find_containing_nodes_and_errors(declarations_and_errors, index)
+            do_find_containing_nodes_and_errors(
+              declarations_and_errors,
+              index,
+              parent_reference_kind,
+            )
           option.None -> declarations_and_errors
         }
       }
     }
+
     Mapping(id:, ..) -> {
       let #(declarations, errors) = declarations_and_errors
-      #([id, ..declarations], errors)
+      #([NodeDeclaration(id), ..declarations], errors)
     }
+
     MemberAccess(reference_id:, expression:, ..) -> {
       let declarations_and_errors = case reference_id {
         option.Some(reference_id) -> {
           let #(declarations, errors) = declarations_and_errors
-          #([reference_id, ..declarations], errors)
+          #(
+            [NodeReference(reference_id, parent_reference_kind), ..declarations],
+            errors,
+          )
         }
         option.None -> declarations_and_errors
       }
@@ -1297,13 +1413,17 @@ fn do_find_containing_nodes_and_errors(
           do_find_containing_nodes_and_errors(
             declarations_and_errors,
             expression,
+            parent_reference_kind,
           )
         option.None -> declarations_and_errors
       }
     }
     Modifier(reference_id:, arguments:, ..) -> {
       let #(declarations, errors) = declarations_and_errors
-      let declarations_and_errors = #([reference_id, ..declarations], errors)
+      let declarations_and_errors = #(
+        [NodeReference(reference_id, preprocessor.CallReference), ..declarations],
+        errors,
+      )
 
       case arguments {
         Some(args) ->
@@ -1311,39 +1431,34 @@ fn do_find_containing_nodes_and_errors(
             args,
             declarations_and_errors,
             fn(declarations_and_errors, arg) {
-              do_find_containing_nodes_and_errors(declarations_and_errors, arg)
+              do_find_containing_nodes_and_errors(
+                declarations_and_errors,
+                arg,
+                parent_reference_kind,
+              )
             },
           )
         option.None -> declarations_and_errors
       }
     }
     ModifierDefinitionNode(..) -> declarations_and_errors
-    NamedNode(nodes:, ..) ->
-      list.fold(
-        nodes,
-        declarations_and_errors,
-        do_find_containing_nodes_and_errors,
-      )
     NewExpression(type_name:, arguments:, ..) -> {
-      do_find_containing_nodes_and_errors(declarations_and_errors, type_name)
+      do_find_containing_nodes_and_errors(
+        declarations_and_errors,
+        type_name,
+        preprocessor.CallReference,
+      )
       |> fn(declarations_and_errors) {
         case arguments {
           Some(arguments) ->
-            list.fold(
-              arguments,
+            fold_find_containing_nodes_and_errors(
               declarations_and_errors,
-              do_find_containing_nodes_and_errors,
+              arguments,
+              preprocessor.CallReference,
             )
           option.None -> declarations_and_errors
         }
       }
-    }
-    ParameterListNode(parameters:, ..) -> {
-      list.fold(
-        parameters,
-        declarations_and_errors,
-        do_find_containing_nodes_and_errors,
-      )
     }
     RevertStatementNode(expression:, ..) -> {
       case expression {
@@ -1357,67 +1472,80 @@ fn do_find_containing_nodes_and_errors(
             })
 
           #(declarations, list.append(new_errors, errors))
+          |> do_find_containing_nodes_and_errors(
+            expression,
+            parent_reference_kind,
+          )
         }
         _ -> declarations_and_errors
       }
     }
     StructDefinition(id:, nodes:, members:, ..) -> {
       let #(declarations, errors) = declarations_and_errors
-      let declarations_and_errors = #([id, ..declarations], errors)
+      let declarations_and_errors = #([NodeDeclaration(id), ..declarations], errors)
 
-      list.fold(
-        nodes,
+      fold_find_containing_nodes_and_errors(
         declarations_and_errors,
-        do_find_containing_nodes_and_errors,
-      )
-      |> list.fold(members, _, do_find_containing_nodes_and_errors)
-    }
-    StructuredDocumentationNode(..) -> declarations_and_errors
-    TupleExpression(nodes:, ..) -> {
-      list.fold(
         nodes,
-        declarations_and_errors,
-        do_find_containing_nodes_and_errors,
+        parent_reference_kind,
       )
+      |> fold_find_containing_nodes_and_errors(members, parent_reference_kind)
     }
-    UnaryOperation(expression:, ..) -> {
-      do_find_containing_nodes_and_errors(declarations_and_errors, expression)
-    }
+
     UserDefinedTypeName(path_node:, ..) -> {
-      do_find_containing_nodes_and_errors(declarations_and_errors, path_node)
+      do_find_containing_nodes_and_errors(
+        declarations_and_errors,
+        path_node,
+        parent_reference_kind,
+      )
     }
+
     UsingForDirective(library_name:, type_name:, ..) -> {
-      do_find_containing_nodes_and_errors(declarations_and_errors, library_name)
-      |> do_find_containing_nodes_and_errors(type_name)
+      do_find_containing_nodes_and_errors(
+        declarations_and_errors,
+        library_name,
+        preprocessor.UsingReference,
+      )
+      |> do_find_containing_nodes_and_errors(
+        type_name,
+        preprocessor.UsingReference,
+      )
     }
+
     VariableDeclarationNode(id:, type_name:, ..) -> {
       let #(declarations, errors) = declarations_and_errors
-      let declarations_and_errors = #([id, ..declarations], errors)
+      let declarations_and_errors = #([NodeDeclaration(id), ..declarations], errors)
 
-      do_find_containing_nodes_and_errors(declarations_and_errors, type_name)
-    }
-    VariableDeclarationStatementNode(declarations: variable_declarations, ..) -> {
-      list.fold(
-        variable_declarations,
+      do_find_containing_nodes_and_errors(
         declarations_and_errors,
-        fn(declarations_and_errors, declaration) {
-          case declaration {
-            option.Some(declaration) ->
-              do_find_containing_nodes_and_errors(
-                declarations_and_errors,
-                declaration,
-              )
-            option.None -> declarations_and_errors
-          }
-        },
+        type_name,
+        preprocessor.TypeReference,
       )
     }
   }
 }
 
+fn fold_find_containing_nodes_and_errors(
+  declarations_and_errors,
+  nodes,
+  parent_reference_kind,
+) {
+  list.fold(
+    nodes,
+    declarations_and_errors,
+    fn(declarations_and_errors, base_contract) {
+      do_find_containing_nodes_and_errors(
+        declarations_and_errors,
+        base_contract,
+        parent_reference_kind,
+      )
+    },
+  )
+}
+
 pub type InScopeDeclarationStub {
-  InScopeDeclarationStub(references: List(Int), errors: List(ErrorCondition))
-  InScopeFlatDeclarationStub(references: List(Int))
+  InScopeDeclarationStub(references: List(Reference), errors: List(ErrorCondition))
+  InScopeFlatDeclarationStub(references: List(Reference))
 }
 
 pub fn find_in_scope_declarations(
@@ -1443,7 +1571,7 @@ pub fn do_find_in_scope_declarations(
   in_scope_declarations: dict.Dict(Int, InScopeDeclarationStub),
   all_declarations: dict.Dict(Int, DeclarationStub),
   decl: #(Int, DeclarationStub),
-  ref: option.Option(Int),
+  ref: option.Option(Reference),
 ) {
   let #(current_node_id, decl) = decl
 
@@ -1468,14 +1596,17 @@ pub fn do_find_in_scope_declarations(
       list.fold(
         referenced_nodes,
         in_scope_declarations,
-        fn(in_scope_declarations, referenced_node_id) {
-          case dict.get(all_declarations, referenced_node_id) {
+        fn(in_scope_declarations, referenced_node) {
+          case dict.get(all_declarations, referenced_node.id) {
             Ok(referenced_node_decl) ->
               do_find_in_scope_declarations(
                 in_scope_declarations,
                 all_declarations,
-                #(referenced_node_id, referenced_node_decl),
-                option.Some(current_node_id),
+                #(referenced_node.id, referenced_node_decl),
+                case referenced_node {
+                  NodeReference(id, kind) -> option.Some(Reference(id, kind))
+                  NodeDeclaration(..) -> option.None
+                }
               )
             Error(Nil) -> in_scope_declarations
           }
@@ -1534,7 +1665,7 @@ fn do_enumerate_node_declarations(
   ),
 ) {
   case node {
-    Node(nodes:, ..) ->
+    Node(nodes:, ..) | NamedNode(nodes:, ..) ->
       list.fold(nodes, declarations, fn(declarations, node) {
         do_enumerate_node_declarations(
           declarations,
@@ -1543,16 +1674,9 @@ fn do_enumerate_node_declarations(
           in_scope_declaration_stubs,
         )
       })
-    NamedNode(nodes:, ..) ->
-      list.fold(nodes, declarations, fn(declarations, node) {
-        do_enumerate_node_declarations(
-          declarations,
-          node,
-          parent_scope,
-          in_scope_declaration_stubs,
-        )
-      })
+
     ImportDirectiveNode(..) | StructuredDocumentationNode(..) -> declarations
+
     ContractDefinitionNode(id:, name:, nodes:, contract_kind:, source_map:, ..) ->
       case dict.get(in_scope_declaration_stubs, id) {
         Ok(InScopeDeclarationStub(references:, errors:)) -> {
@@ -1578,7 +1702,16 @@ fn do_enumerate_node_declarations(
                 signature:,
                 kind: preprocessor.ContractDeclaration(contract_kind),
                 source_map:,
-                references: todo,
+                references: list.map(references, fn(reference) {
+                  preprocessor.Reference(
+                    parent_topic_id: preprocessor.node_id_to_topic_id(
+                      reference.id,
+                      preprocessor.Solidity,
+                    ),
+                    scope: parent_scope,
+                    kind: reference.kind,
+                  )
+                }),
                 calls:,
                 errors:,
               ),
@@ -2474,7 +2607,6 @@ fn do_enumerate_node_references(
           parent_topic_id:,
           scope: parent_scope,
           kind: parent_reference_kind,
-          source: preprocessor.Solidity,
         ),
       )
 
@@ -2488,7 +2620,6 @@ fn do_enumerate_node_references(
               scope: parent_scope,
               parent_topic_id:,
               kind: parent_reference_kind,
-              source: preprocessor.Solidity,
             ),
           )
         option.None -> declarations
@@ -2528,6 +2659,7 @@ fn do_enumerate_node_references(
         parent_reference_kind,
         in_scope,
       )
+
     Assignment(left_hand_side:, right_hand_side:, ..) ->
       do_enumerate_node_references(
         declarations,
@@ -2601,7 +2733,6 @@ fn do_enumerate_node_references(
           scope: parent_scope,
           parent_topic_id:,
           kind: preprocessor.CallReference,
-          source: preprocessor.Solidity,
         ),
       )
       |> fn(declarations) {
@@ -2626,7 +2757,6 @@ fn do_enumerate_node_references(
           scope: parent_scope,
           parent_topic_id:,
           kind: parent_reference_kind,
-          source: preprocessor.Solidity,
         ),
       )
     BaseContract(reference_id:, ..) ->
@@ -2637,7 +2767,6 @@ fn do_enumerate_node_references(
           scope: parent_scope,
           parent_topic_id:,
           kind: preprocessor.InheritanceReference,
-          source: preprocessor.Solidity,
         ),
       )
     Conditional(condition:, true_expression:, false_expression:, ..) ->
