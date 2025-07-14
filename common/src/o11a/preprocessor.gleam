@@ -70,21 +70,6 @@ pub fn declaration_to_qualified_name(scope: Scope, name: String) {
   }
 }
 
-pub fn reference_to_link(reference: Reference) {
-  "/"
-  <> reference.scope.file
-  <> "#"
-  <> case reference.scope.contract {
-    option.Some(contract) ->
-      contract
-      <> case reference.scope.member {
-        option.Some(member) -> "." <> member
-        option.None -> ""
-      }
-    option.None -> ""
-  }
-}
-
 pub type SourceMap {
   SourceMap(start: Int, length: Int)
 }
@@ -237,27 +222,21 @@ pub fn function_kind_from_string(kind) {
 /// A reference to a node in the AST, only possible to be done in the source
 /// code
 pub type Reference {
-  Reference(
-    parent_topic_id: String,
-    scope: Scope,
-    kind: NodeReferenceKind,
-  )
+  Reference(parent_topic_id: String, kind: NodeReferenceKind)
 }
 
 pub fn encode_reference(node_reference: Reference) {
-  let Reference(parent_topic_id:, scope:, kind:) = node_reference
+  let Reference(parent_topic_id:, kind:) = node_reference
   json.object([
     #("i", json.string(parent_topic_id)),
-    #("s", encode_scope(scope)),
     #("k", encode_node_reference_kind(kind)),
   ])
 }
 
 pub fn reference_decoder() {
   use parent_topic_id <- decode.field("i", decode.string)
-  use scope <- decode.field("s", scope_decoder())
   use kind <- decode.field("k", node_reference_kind_decoder())
-  decode.success(Reference(scope:, parent_topic_id:, kind:))
+  decode.success(Reference(parent_topic_id:, kind:))
 }
 
 pub type NodeReferenceKind {
