@@ -842,7 +842,7 @@ fn referenced_node_to_reference(referenced_node: ReferencedNode) {
 }
 
 pub type ErrorCondition {
-  RevertError(Int)
+  RevertError(referenced_id: Int, name: String)
   RequireCondition(String)
 }
 
@@ -1432,14 +1432,17 @@ fn do_find_containing_nodes_and_errors(
       case expression {
         option.Some(expression) -> {
           let #(declarations, errors) = declarations_and_errors
-          let new_errors =
-            do_enumerate_function_calls([], expression, CalledError)
-            |> list.map(fn(item) {
-              let #(reference_id, _kind) = item
-              RevertError(reference_id)
+          let new_error =
+            find_error_reference(expression)
+            |> option.map(fn(reference) {
+              let #(id, name) = reference
+              RevertError(id, name)
             })
 
-          #(declarations, list.append(new_errors, errors))
+          #(declarations, case new_error {
+            option.Some(new_error) -> [new_error, ..errors]
+            option.None -> errors
+          })
           |> do_find_containing_nodes_and_errors(
             expression,
             parent_reference_kind,
@@ -1495,6 +1498,22 @@ fn fold_find_containing_nodes_and_errors(
       )
     },
   )
+}
+
+fn find_error_reference(node) {
+  case node {
+    ExpressionStatementNode(expression: option.Some(expression), ..)
+    | Expression(expression: option.Some(expression), ..)
+    | MemberAccess(expression: option.Some(expression), ..)
+    | FunctionCall(expression: option.Some(expression), ..) ->
+      find_error_reference(expression)
+
+    Identifier(reference_id:, name:, ..)
+    | IdentifierPath(reference_id:, name:, ..) ->
+      option.Some(#(reference_id, name))
+
+    _ -> option.None
+  }
 }
 
 pub type InScopeDeclarationStub {
@@ -1633,11 +1652,13 @@ fn do_enumerate_node_declarations(
 
     ContractDefinitionNode(id:, name:, nodes:, contract_kind:, source_map:, ..) ->
       case dict.get(in_scope_declaration_stubs, id) {
-        Ok(InScopeDeclarationStub(references:, errors:)) -> {
+        // Contracts will not have nested errors, but they could reference
+        // base contracts
+        Ok(InScopeDeclarationStub(references:, ..)) -> {
           let children_scope =
             preprocessor.Scope(..parent_scope, contract: option.Some(name))
 
-          let #(signature, calls, errors) = analyze_node_body(node)
+          let signature = analyze_node_body(node, option.None)
 
           let #(id_acc, declarations, merged_topics) = declarations
           let topic_id =
@@ -1657,8 +1678,8 @@ fn do_enumerate_node_declarations(
                 kind: preprocessor.ContractDeclaration(contract_kind),
                 source_map:,
                 references: list.map(references, referenced_node_to_reference),
-                calls:,
-                errors:,
+                calls: [],
+                errors: [],
               ),
             ),
             merged_topics,
@@ -1697,7 +1718,7 @@ fn do_enumerate_node_declarations(
           let children_scope =
             preprocessor.Scope(..parent_scope, member: option.Some(name))
 
-          let #(signature, calls, errors) = analyze_node_body(node)
+          let signature = analyze_node_body(node, option.Some(errors))
 
           let #(id_acc, declarations, merged_topics) = declarations
           let topic_id =
@@ -1716,8 +1737,8 @@ fn do_enumerate_node_declarations(
                 kind: preprocessor.FunctionDeclaration(function_kind),
                 source_map:,
                 references: list.map(references, referenced_node_to_reference),
-                calls:,
-                errors:,
+                calls: [],
+                errors: [],
               ),
             ),
             merged_topics,
@@ -1773,7 +1794,7 @@ fn do_enumerate_node_declarations(
           let topic_id =
             preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
-          let #(signature, calls, errors) = analyze_node_body(node)
+          let signature = analyze_node_body(node, option.Some(errors))
 
           let #(id_acc, declarations, merged_topics) = declarations
           let declarations = #(
@@ -1790,8 +1811,8 @@ fn do_enumerate_node_declarations(
                 kind: preprocessor.ModifierDeclaration,
                 source_map:,
                 references: list.map(references, referenced_node_to_reference),
-                calls:,
-                errors:,
+                calls: [],
+                errors: [],
               ),
             ),
             merged_topics,
@@ -1844,7 +1865,7 @@ fn do_enumerate_node_declarations(
           let topic_id =
             preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
-          let #(signature, calls, errors) = analyze_node_body(node)
+          let signature = analyze_node_body(node, option.None)
 
           let #(id_acc, declarations, merged_topics) = declarations
           let declarations = #(
@@ -1864,8 +1885,8 @@ fn do_enumerate_node_declarations(
                   decl.references,
                   referenced_node_to_reference,
                 ),
-                calls:,
-                errors:,
+                calls: [],
+                errors: [],
               ),
             ),
             merged_topics,
@@ -1896,7 +1917,7 @@ fn do_enumerate_node_declarations(
           let topic_id =
             preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
-          let #(signature, calls, errors) = analyze_node_body(node)
+          let signature = analyze_node_body(node, option.None)
 
           let #(id_acc, declarations, merged_topics) = declarations
           let declarations = #(
@@ -1916,8 +1937,8 @@ fn do_enumerate_node_declarations(
                   decl.references,
                   referenced_node_to_reference,
                 ),
-                calls:,
-                errors:,
+                calls: [],
+                errors: [],
               ),
             ),
             merged_topics,
@@ -1945,7 +1966,7 @@ fn do_enumerate_node_declarations(
           let topic_id =
             preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
-          let #(signature, calls, errors) = analyze_node_body(node)
+          let signature = analyze_node_body(node, option.None)
 
           let #(id_acc, declarations, merged_topics) = declarations
           #(
@@ -1968,8 +1989,8 @@ fn do_enumerate_node_declarations(
                   decl.references,
                   referenced_node_to_reference,
                 ),
-                calls:,
-                errors:,
+                calls: [],
+                errors: [],
               ),
             ),
             merged_topics,
@@ -2056,7 +2077,7 @@ fn do_enumerate_node_declarations(
           let topic_id =
             preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
-          let #(signature, calls, errors) = analyze_node_body(node)
+          let signature = analyze_node_body(node, option.None)
 
           let #(id_acc, declarations, merged_topics) = declarations
           let declarations = #(
@@ -2076,8 +2097,8 @@ fn do_enumerate_node_declarations(
                   decl.references,
                   referenced_node_to_reference,
                 ),
-                calls:,
-                errors:,
+                calls: [],
+                errors: [],
               ),
             ),
             merged_topics,
@@ -2105,7 +2126,7 @@ fn do_enumerate_node_declarations(
     EnumValue(id:, name:, source_map:) ->
       case dict.get(in_scope_declaration_stubs, id) {
         Ok(decl) -> {
-          let #(signature, calls, errors) = analyze_node_body(node)
+          let signature = analyze_node_body(node, option.None)
 
           let #(id_acc, declarations, merged_topics) = declarations
           let topic_id =
@@ -2127,8 +2148,8 @@ fn do_enumerate_node_declarations(
                   decl.references,
                   referenced_node_to_reference,
                 ),
-                calls:,
-                errors:,
+                calls: [],
+                errors: [],
               ),
             ),
             merged_topics,
@@ -2145,7 +2166,7 @@ fn do_enumerate_node_declarations(
           let topic_id =
             preprocessor.node_id_to_topic_id(id, preprocessor.Solidity)
 
-          let #(signature, calls, errors) = analyze_node_body(node)
+          let signature = analyze_node_body(node, option.None)
 
           let #(id_acc, declarations, merged_topics) = declarations
           let declarations = #(
@@ -2165,8 +2186,8 @@ fn do_enumerate_node_declarations(
                   decl.references,
                   referenced_node_to_reference,
                 ),
-                calls:,
-                errors:,
+                calls: [],
+                errors: [],
               ),
             ),
             merged_topics,
@@ -2954,40 +2975,45 @@ pub type CalledFunctionKind {
   CalledConstructor
 }
 
-fn analyze_node_body(node) {
-  let signature_lines =
-    do_node_to_signature_nodes(node, top_level: TopLevel)
-    |> split_lines(indent_num: 0)
-
-  case node {
-    FunctionDefinitionNode(body: option.Some(body), ..)
-    | ModifierDefinitionNode(body: option.Some(body), ..) -> {
-      let calls = enumerate_function_calls(body)
-
-      let errors =
-        list.filter_map(calls, fn(call) {
-          case call {
-            #(reference_id, CalledError) -> Ok(reference_id)
-            _ -> Error(Nil)
-          }
-        })
-
-      let other =
-        list.filter_map(calls, fn(call) {
-          case call {
-            #(reference_id, CalledFunction) -> Ok(reference_id)
-            #(reference_id, CalledConstructor) -> Ok(reference_id)
-            _ -> Error(Nil)
-          }
-        })
-
-      #(signature_lines, other, errors)
-    }
-    _ -> #(signature_lines, [], [])
-  }
+fn analyze_node_body(node, errors) {
+  do_node_to_signature_nodes(node, errors, top_level: TopLevel)
+  |> split_lines(indent_num: 0)
 }
 
-fn do_node_to_signature_nodes(node, top_level top_level: BlockLevel) {
+fn errors_to_signature_node(errors: List(ErrorCondition)) {
+  [
+    preprocessor.FormatterNewline,
+    preprocessor.FormatterBlock(
+      list.map(errors, fn(error) {
+        case error {
+          RequireCondition(message) -> [
+            preprocessor.PreProcessedNode(
+              element: element.fragment([
+                html.span([attribute.class("keyword")], [html.text("require ")]),
+                html.text(message),
+              ])
+              |> element.to_string,
+            ),
+            preprocessor.FormatterNewline,
+          ]
+          RevertError(id, name) -> [
+            preprocessor.PreProcessedReference(
+              topic_id: preprocessor.node_id_to_topic_id(
+                id,
+                preprocessor.Solidity,
+              ),
+              tokens: name,
+            ),
+            preprocessor.FormatterNewline,
+          ]
+        }
+      })
+      |> list.flatten,
+    ),
+  ]
+}
+
+fn do_node_to_signature_nodes(node, errors, top_level top_level: BlockLevel) {
   case node {
     ErrorDefinitionNode(id:, name:, parameters:, ..) ->
       [
@@ -3001,7 +3027,11 @@ fn do_node_to_signature_nodes(node, top_level top_level: BlockLevel) {
         ),
         preprocessor.PreProcessedNode(element: "("),
       ]
-      |> list.append(do_node_to_signature_nodes(parameters, top_level: Nested))
+      |> list.append(do_node_to_signature_nodes(
+        parameters,
+        errors,
+        top_level: Nested,
+      ))
       |> list.append([preprocessor.PreProcessedNode(element: ")")])
 
     StructDefinition(id:, name:, members:, ..) ->
@@ -3021,7 +3051,11 @@ fn do_node_to_signature_nodes(node, top_level top_level: BlockLevel) {
       ]
       |> list.append([
         preprocessor.FormatterBlock(
-          list.map(members, do_node_to_signature_nodes(_, top_level: Nested))
+          list.map(members, do_node_to_signature_nodes(
+            _,
+            errors,
+            top_level: Nested,
+          ))
           |> list.intersperse([
             preprocessor.PreProcessedNode(element: ";"),
             preprocessor.FormatterNewline,
@@ -3046,7 +3080,11 @@ fn do_node_to_signature_nodes(node, top_level top_level: BlockLevel) {
       ]
       |> list.append([
         preprocessor.FormatterBlock(
-          list.map(members, do_node_to_signature_nodes(_, top_level: Nested))
+          list.map(members, do_node_to_signature_nodes(
+            _,
+            errors,
+            top_level: Nested,
+          ))
           |> list.intersperse([
             preprocessor.PreProcessedNode(element: ","),
             preprocessor.FormatterNewline,
@@ -3122,7 +3160,11 @@ fn do_node_to_signature_nodes(node, top_level top_level: BlockLevel) {
         ]
       }
       |> list.append([preprocessor.PreProcessedNode(element: "(")])
-      |> list.append(do_node_to_signature_nodes(parameters, top_level: Nested))
+      |> list.append(do_node_to_signature_nodes(
+        parameters,
+        errors,
+        top_level: Nested,
+      ))
       |> list.append([
         preprocessor.PreProcessedNode(
           element: element.fragment([
@@ -3141,7 +3183,11 @@ fn do_node_to_signature_nodes(node, top_level top_level: BlockLevel) {
         True ->
           [preprocessor.FormatterNewline]
           |> list.append(
-            list.map(modifiers, do_node_to_signature_nodes(_, top_level: Nested))
+            list.map(modifiers, do_node_to_signature_nodes(
+              _,
+              errors,
+              top_level: Nested,
+            ))
             |> list.intersperse([preprocessor.FormatterNewline])
             |> list.flatten,
           )
@@ -3158,7 +3204,26 @@ fn do_node_to_signature_nodes(node, top_level top_level: BlockLevel) {
               |> element.to_string,
             ),
           ]
-          |> list.append(do_node_to_signature_nodes(return_parameters, Nested))
+          |> list.append(do_node_to_signature_nodes(
+            return_parameters,
+            errors,
+            Nested,
+          ))
+          |> list.append([preprocessor.PreProcessedNode(element: ")")])
+        _ -> []
+      })
+      |> list.append(case errors {
+        option.Some([_, ..] as errors) ->
+          [
+            preprocessor.PreProcessedNode(
+              element: element.fragment([
+                html.span([attribute.class("keyword")], [html.text(" reverts ")]),
+                html.text("("),
+              ])
+              |> element.to_string,
+            ),
+          ]
+          |> list.append(errors_to_signature_node(errors))
           |> list.append([preprocessor.PreProcessedNode(element: ")")])
         _ -> []
       })
@@ -3177,8 +3242,27 @@ fn do_node_to_signature_nodes(node, top_level top_level: BlockLevel) {
         ),
         preprocessor.PreProcessedNode(element: "("),
       ]
-      |> list.append(do_node_to_signature_nodes(parameters, top_level: Nested))
+      |> list.append(do_node_to_signature_nodes(
+        parameters,
+        errors,
+        top_level: Nested,
+      ))
       |> list.append([preprocessor.PreProcessedNode(element: ")")])
+      |> list.append(case errors {
+        option.Some([_, ..] as errors) ->
+          [
+            preprocessor.PreProcessedNode(
+              element: element.fragment([
+                html.span([attribute.class("keyword")], [html.text(" reverts ")]),
+                html.text("("),
+              ])
+              |> element.to_string,
+            ),
+          ]
+          |> list.append(errors_to_signature_node(errors))
+          |> list.append([preprocessor.PreProcessedNode(element: ")")])
+        _ -> []
+      })
 
     ContractDefinitionNode(id:, name:, contract_kind:, base_contracts:, ..) -> [
       preprocessor.PreProcessedNode(
@@ -3201,6 +3285,7 @@ fn do_node_to_signature_nodes(node, top_level top_level: BlockLevel) {
           ..{
             list.map(base_contracts, do_node_to_signature_nodes(
               _,
+              errors,
               top_level: Nested,
             ))
             |> list.intersperse([preprocessor.PreProcessedNode(element: ", ")])
@@ -3232,7 +3317,11 @@ fn do_node_to_signature_nodes(node, top_level top_level: BlockLevel) {
         ),
         preprocessor.PreProcessedNode(element: "("),
       ]
-      |> list.append(do_node_to_signature_nodes(parameters, top_level: Nested))
+      |> list.append(do_node_to_signature_nodes(
+        parameters,
+        errors,
+        top_level: Nested,
+      ))
       |> list.append([preprocessor.PreProcessedNode(element: ")")])
 
     ParameterListNode(parameters:, ..) ->
@@ -3243,6 +3332,7 @@ fn do_node_to_signature_nodes(node, top_level top_level: BlockLevel) {
           preprocessor.FormatterBlock(
             list.map(parameters, do_node_to_signature_nodes(
               _,
+              errors,
               top_level: Nested,
             ))
             |> list.intersperse([
@@ -3312,7 +3402,7 @@ fn do_node_to_signature_nodes(node, top_level top_level: BlockLevel) {
             element: html.span([attribute.class("operator")], [html.text(" = ")])
             |> element.to_string,
           ),
-          ..do_node_to_signature_nodes(value, Nested)
+          ..do_node_to_signature_nodes(value, errors, Nested)
         ]
 
         _, _ -> []
@@ -3334,10 +3424,14 @@ fn do_node_to_signature_nodes(node, top_level top_level: BlockLevel) {
     ]
 
     FunctionCall(expression: option.Some(expr), arguments:, ..) ->
-      do_node_to_signature_nodes(expr, Nested)
+      do_node_to_signature_nodes(expr, errors, Nested)
       |> list.append([preprocessor.PreProcessedNode(element: "(")])
       |> list.append(
-        list.map(arguments, do_node_to_signature_nodes(_, top_level: Nested))
+        list.map(arguments, do_node_to_signature_nodes(
+          _,
+          errors,
+          top_level: Nested,
+        ))
         |> list.intersperse([preprocessor.PreProcessedNode(element: ", ")])
         |> list.flatten,
       )
@@ -3388,7 +3482,11 @@ fn do_node_to_signature_nodes(node, top_level top_level: BlockLevel) {
         Some(args) ->
           [preprocessor.PreProcessedNode(element: "(")]
           |> list.append(
-            list.map(args, do_node_to_signature_nodes(_, top_level: Nested))
+            list.map(args, do_node_to_signature_nodes(
+              _,
+              errors,
+              top_level: Nested,
+            ))
             |> list.intersperse([preprocessor.PreProcessedNode(element: ", ")])
             |> list.flatten,
           )
@@ -3401,7 +3499,10 @@ fn do_node_to_signature_nodes(node, top_level top_level: BlockLevel) {
   }
 }
 
-fn split_lines(nodes, indent_num indent_num) {
+fn split_lines(
+  nodes: List(preprocessor.PreProcessedNode),
+  indent_num indent_num: Int,
+) -> List(preprocessor.PreProcessedSnippetLine) {
   let #(current_line, block_lines) =
     list.fold(nodes, #([], []), fn(acc, node) {
       let #(current_line, block_lines) = acc
@@ -3465,70 +3566,6 @@ fn get_signature_line_significance(
       topic_id
     }
     False -> option.None
-  }
-}
-
-fn enumerate_function_calls(node) {
-  do_enumerate_function_calls([], node, CalledFunction)
-  |> list.map(fn(item) {
-    let #(reference_id, kind) = item
-    #(
-      preprocessor.node_id_to_topic_id(reference_id, preprocessor.Solidity),
-      kind,
-    )
-  })
-}
-
-fn do_enumerate_function_calls(acc, node, kind) {
-  case node {
-    BlockNode(nodes:, statements:, expression:, ..) ->
-      case expression {
-        option.Some(expression) ->
-          do_enumerate_function_calls(acc, expression, kind)
-        option.None -> acc
-      }
-      |> list.fold(nodes, _, fn(acc, node) {
-        do_enumerate_function_calls(acc, node, kind)
-      })
-      |> list.reverse
-      |> list.fold(statements, _, fn(acc, statement) {
-        do_enumerate_function_calls(acc, statement, kind)
-      })
-      |> list.reverse
-
-    IfStatementNode(true_body:, false_body:, ..) -> {
-      case false_body {
-        option.Some(false_body) ->
-          do_enumerate_function_calls(acc, true_body, kind)
-          |> do_enumerate_function_calls(false_body, kind)
-        option.None -> do_enumerate_function_calls(acc, true_body, kind)
-      }
-    }
-
-    ForStatementNode(loop_expression: option.Some(expression), ..)
-    | ExpressionStatementNode(expression: option.Some(expression), ..)
-    | Expression(expression: option.Some(expression), ..)
-    | MemberAccess(expression: option.Some(expression), ..) ->
-      do_enumerate_function_calls(acc, expression, kind)
-
-    FunctionCall(expression: option.Some(expression), ..) ->
-      do_enumerate_function_calls(acc, expression, CalledFunction)
-
-    RevertStatementNode(expression: option.Some(expression), ..) ->
-      do_enumerate_function_calls(acc, expression, CalledError)
-
-    EmitStatementNode(event_call:, ..) ->
-      do_enumerate_function_calls(acc, event_call, CalledEvent)
-
-    NewExpression(type_name:, ..) ->
-      do_enumerate_function_calls(acc, type_name, CalledConstructor)
-
-    Identifier(reference_id:, ..) | IdentifierPath(reference_id:, ..) -> [
-      #(reference_id, kind),
-      ..acc
-    ]
-
-    _ -> acc
   }
 }
 
