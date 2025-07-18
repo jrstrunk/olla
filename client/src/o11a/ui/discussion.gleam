@@ -1382,29 +1382,57 @@ fn thread_header_view(
             ),
             references:,
             ..,
-          ) -> references_view(references)
+          ) -> references_view(references, declarations)
           _ -> element.fragment([])
         },
       ])
   }
 }
 
-fn references_view(references) {
+fn references_view(references, declarations) {
   case list.length(references) > 0 {
     True ->
       html.div([attribute.class("mb-[.75rem]")], [
-        reference_group_view(references, preprocessor.UsingReference),
-        reference_group_view(references, preprocessor.InheritanceReference),
-        reference_group_view(references, preprocessor.CallReference),
-        reference_group_view(references, preprocessor.AccessReference),
-        reference_group_view(references, preprocessor.MutationReference),
-        reference_group_view(references, preprocessor.TypeReference),
+        reference_group_view(
+          references,
+          preprocessor.UsingReference,
+          declarations,
+        ),
+        reference_group_view(
+          references,
+          preprocessor.InheritanceReference,
+          declarations,
+        ),
+        reference_group_view(
+          references,
+          preprocessor.CallReference,
+          declarations,
+        ),
+        reference_group_view(
+          references,
+          preprocessor.AccessReference,
+          declarations,
+        ),
+        reference_group_view(
+          references,
+          preprocessor.MutationReference,
+          declarations,
+        ),
+        reference_group_view(
+          references,
+          preprocessor.TypeReference,
+          declarations,
+        ),
       ])
     False -> element.fragment([])
   }
 }
 
-fn reference_group_view(references: List(preprocessor.Reference), group_kind) {
+fn reference_group_view(
+  references: List(preprocessor.Reference),
+  group_kind,
+  declarations,
+) {
   case list.filter(references, fn(reference) { reference.kind == group_kind }) {
     [] -> element.fragment([])
     references ->
@@ -1413,11 +1441,19 @@ fn reference_group_view(references: List(preprocessor.Reference), group_kind) {
           html.text(preprocessor.node_reference_kind_to_annotation(group_kind)),
         ]),
         ..list.map(references, fn(reference) {
-          html.p([attribute.class("pl-[.25rem]")], [
-            html.a([attribute.href(preprocessor.reference_to_link(reference))], [
-              html.text(preprocessor.contract_scope_to_string(reference.scope)),
-            ]),
-          ])
+          case dict.get(declarations, reference.parent_topic_id) {
+            Ok(topic.SourceDeclaration(scope:, name:, ..)) ->
+              html.p([attribute.class("pl-[.25rem]")], [
+                html.a(
+                  [
+                    attribute.href(preprocessor.declaration_to_link(scope, name)),
+                  ],
+                  [html.text(preprocessor.contract_scope_to_string(scope))],
+                ),
+              ])
+
+            _ -> element.fragment([])
+          }
         })
       ])
   }

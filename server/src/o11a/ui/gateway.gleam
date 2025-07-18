@@ -171,7 +171,10 @@ pub fn start_gateway() -> Result(Gateway, snag.Snag) {
                 preprocessed_declarations,
                 preprocessed_merged_topics,
               )
-            <- result.try(preprocess_audit_source(for: audit_name))
+            <- result.try(preprocess_audit_source(
+              for: audit_name,
+              in_scope_files: metadata.in_scope_files,
+            ))
 
             use _nils <- result.try(
               list.map(preprocessed_source_files, fn(source_file) {
@@ -572,33 +575,57 @@ fn gather_metadata(for audit_name) {
   ))
 }
 
-fn preprocess_audit_source(for audit_name) {
-  use sol_asts <- result.try(
-    preprocessor_sol.read_asts(audit_name)
+fn preprocess_audit_source(for audit_name, in_scope_files in_scope_files) {
+  use sol_ast_paths <- result.try(
+    preprocessor_sol.read_ast_paths(audit_name)
     |> snag.context("Unable to read sol asts for " <> audit_name),
   )
 
-  let page_paths = config.get_all_audit_page_paths()
+  let all_declarations =
+    list.fold(sol_ast_paths, dict.new(), fn(declarations, ast_path) {
+      case preprocessor_sol.read_ast(ast_path, audit_name:) {
+        Ok(ast) -> {
+          let in_scope = list.contains(in_scope_files, any: ast.absolute_path)
+          preprocessor_sol.find_declarations(declarations, ast, in_scope)
+        }
+        Error(e) -> {
+          io.println(snag.pretty_print(e))
+          declarations
+        }
+      }
+    })
 
-  let file_to_sol_ast =
-    list.map(sol_asts, fn(ast) { #(ast.absolute_path, ast) })
-    |> dict.from_list
+  let in_scope_declarations =
+    all_declarations
+    |> preprocessor_sol.find_in_scope_declarations
 
   let max_topic_id = 1
   let merged_topics = dict.new()
 
-  let #(max_topic_id, sol_declarations, merged_topics) =
-    #(max_topic_id, dict.new(), merged_topics)
-    |> list.fold(sol_asts, _, fn(declarations, ast) {
-      preprocessor_sol.enumerate_declarations(declarations, ast)
+  let #(#(max_topic_id, sol_declarations, merged_topics), file_to_sol_ast) =
+    #(#(max_topic_id, dict.new(), merged_topics), dict.new())
+    |> list.fold(sol_ast_paths, _, fn(acc, ast_path) {
+      let #(declarations, file_to_sol_ast) = acc
+
+      case preprocessor_sol.read_ast(ast_path, audit_name:) {
+        Ok(ast) -> {
+          #(
+            preprocessor_sol.enumerate_declarations(
+              declarations,
+              ast,
+              in_scope_declarations,
+            ),
+            dict.insert(file_to_sol_ast, ast.absolute_path, ast_path),
+          )
+        }
+        Error(e) -> {
+          io.println(snag.pretty_print(e))
+          acc
+        }
+      }
     })
 
-  let sol_declarations =
-    sol_declarations
-    |> list.fold(sol_asts, _, fn(declarations, ast) {
-      preprocessor_sol.enumerate_references(declarations, ast)
-    })
-    |> preprocessor_sol.enumerate_errors
+  let page_paths = config.get_all_audit_page_paths()
 
   use text_data <- result.try(
     preprocessor_text_server.read_asts(
@@ -637,6 +664,10 @@ fn preprocess_audit_source(for audit_name) {
             case
               config.get_full_page_path(for: page_path) |> simplifile.read,
               dict.get(file_to_sol_ast, page_path)
+              |> result.try(fn(ast_path) {
+                preprocessor_sol.read_ast(ast_path, audit_name:)
+                |> result.replace_error(Nil)
+              })
             {
               Ok(source), Ok(ast) -> {
                 let nodes = preprocessor_sol.linearize_nodes(ast)

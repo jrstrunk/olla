@@ -37,7 +37,6 @@ import gleam/regexp
 import gleam/result
 import gleam/string
 import lib/enumerate
-import lib/snagx
 import lustre/attribute
 import lustre/element
 import lustre/element/html
@@ -1045,8 +1044,8 @@ fn do_find_declarations(
         do_find_declarations(declarations, node, in_scope)
       })
 
-    EnumDefinition(id:, nodes:, members:, visibility:, ..)
-    | StructDefinition(id:, nodes:, members:, visibility:, ..) -> {
+    EnumDefinition(id:, nodes:, members:, ..)
+    | StructDefinition(id:, nodes:, members:, ..) -> {
       let declarations = {
         let referenced_nodes =
           list.fold(members, [], fn(acc, node) {
@@ -1061,7 +1060,7 @@ fn do_find_declarations(
           DeclarationStub(
             referenced_nodes:,
             errors: [],
-            publicly_in_scope: in_scope && is_publicly_accessible(visibility),
+            publicly_in_scope: in_scope,
           ),
         )
       }
@@ -1525,11 +1524,10 @@ pub type InScopeDeclarationStub {
 }
 
 pub fn find_in_scope_declarations(
-  in_scope_declarations: dict.Dict(Int, InScopeDeclarationStub),
   all_declarations: dict.Dict(Int, DeclarationStub),
 ) {
   dict.to_list(all_declarations)
-  |> list.fold(in_scope_declarations, fn(in_scope_declarations, decl) {
+  |> list.fold(dict.new(), fn(in_scope_declarations, decl) {
     case { decl.1 }.publicly_in_scope {
       True ->
         do_find_in_scope_declarations(
@@ -1543,7 +1541,7 @@ pub fn find_in_scope_declarations(
   })
 }
 
-pub fn do_find_in_scope_declarations(
+fn do_find_in_scope_declarations(
   in_scope_declarations: dict.Dict(Int, InScopeDeclarationStub),
   all_declarations: dict.Dict(Int, DeclarationStub),
   decl: #(Int, DeclarationStub),
@@ -2068,7 +2066,7 @@ fn do_enumerate_node_declarations(
         in_scope_declaration_stubs,
       )
     }
-    EnumDefinition(id:, name:, members:, nodes:, source_map:, ..) ->
+    EnumDefinition(id:, name:, members:, nodes:, source_map:) ->
       case dict.get(in_scope_declaration_stubs, id) {
         Ok(decl) -> {
           let children_scope =
@@ -2157,7 +2155,7 @@ fn do_enumerate_node_declarations(
         }
         _ -> declarations
       }
-    StructDefinition(id:, name:, members:, nodes:, source_map:, ..) ->
+    StructDefinition(id:, name:, members:, nodes:, source_map:) ->
       case dict.get(in_scope_declaration_stubs, id) {
         Ok(decl) -> {
           let children_scope =
@@ -3612,55 +3610,44 @@ fn style_type_string(typename) {
   typename
 }
 
-pub fn read_asts(for audit_name: String) {
+pub fn read_ast_paths(for audit_name: String) {
   // The AST is stored in a file called "out/<FileName>.sol/<ContractName>.json, ..."
   let out_dir = config.get_audit_path(for: audit_name) |> filepath.join("out")
 
-  use build_dirs <- result.try(
+  use build_dirs <- result.map(
     simplifile.read_directory(out_dir)
     |> snag.map_error(simplifile.describe_error)
     |> snag.context("Failed to read build files for " <> audit_name),
   )
 
-  let build_dirs =
-    list.filter(build_dirs, fn(file_name) {
-      case filepath.extension(file_name) {
-        Ok("sol") -> True
-        _ -> False
-      }
-    })
-
-  let res = {
-    use file_name <- list.map(build_dirs)
+  list.filter(build_dirs, fn(file_name) {
+    case filepath.extension(file_name) {
+      Ok("sol") -> True
+      _ -> False
+    }
+  })
+  |> list.map(fn(file_name) {
     let build_dir = out_dir |> filepath.join(file_name)
 
-    let build_files =
-      build_dir
-      |> simplifile.read_directory
-      |> result.unwrap([])
-
-    use build_file <- list.map(build_files)
-
-    use source_file_contents <- result.try(
-      filepath.join(build_dir, build_file)
-      |> simplifile.read
-      |> snag.map_error(simplifile.describe_error)
-      |> snag.context(
-        "Failed to read build file " <> build_file <> " for " <> file_name,
-      ),
-    )
-
-    json.parse(
-      source_file_contents,
-      decode.at(["ast"], ast_decoder(audit_name)),
-    )
-    |> snag.map_error(string.inspect)
-    |> snag.context("Failed to parse build file for " <> file_name)
-  }
-
-  res
+    build_dir
+    |> simplifile.read_directory
+    |> result.unwrap([])
+    |> list.map(fn(build_file) { filepath.join(build_dir, build_file) })
+  })
   |> list.flatten
-  |> snagx.collect_errors
+}
+
+pub fn read_ast(file_path, audit_name audit_name) {
+  use source_file_contents <- result.try(
+    file_path
+    |> simplifile.read
+    |> snag.map_error(simplifile.describe_error)
+    |> snag.context("Failed to read build file " <> file_path),
+  )
+
+  json.parse(source_file_contents, decode.at(["ast"], ast_decoder(audit_name)))
+  |> snag.map_error(string.inspect)
+  |> snag.context("Failed to parse build file for " <> file_path)
 }
 
 pub type AST {
@@ -3911,7 +3898,6 @@ pub type Node {
     name: String,
     nodes: List(Node),
     members: List(Node),
-    visibility: String,
   )
   EnumValue(id: Int, source_map: preprocessor.SourceMap, name: String)
   StructDefinition(
@@ -3920,7 +3906,6 @@ pub type Node {
     name: String,
     nodes: List(Node),
     members: List(Node),
-    visibility: String,
   )
   UserDefinedTypeName(
     id: Int,
@@ -4589,14 +4574,12 @@ fn node_decoder() -> decode.Decoder(Node) {
       use name <- decode.field("name", decode.string)
       use nodes <- decode.field("nodes", decode.list(node_decoder()))
       use members <- decode.field("members", decode.list(node_decoder()))
-      use visibility <- decode.field("visibility", decode.string)
       decode.success(EnumDefinition(
         id:,
         source_map: source_map_from_string(src),
         name:,
         nodes:,
         members:,
-        visibility:,
       ))
     }
     "EnumValue" -> {
@@ -4615,14 +4598,12 @@ fn node_decoder() -> decode.Decoder(Node) {
       use name <- decode.field("name", decode.string)
       use nodes <- decode.field("nodes", decode.list(node_decoder()))
       use members <- decode.field("members", decode.list(node_decoder()))
-      use visibility <- decode.field("visibility", decode.string)
       decode.success(StructDefinition(
         id:,
         source_map: source_map_from_string(src),
         name:,
         nodes:,
         members:,
-        visibility:,
       ))
     }
     "UserDefinedTypeName" -> {
